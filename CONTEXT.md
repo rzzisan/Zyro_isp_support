@@ -27,3 +27,11 @@
 - `training/simulations/2026-10-04-whatsapp-support-simulations.md`: ৪টি অনুমোদিত বট কথোপকথন (লাইভ ডেটা, যুক্তি, উত্তর) + বটের নিয়ম। AI ট্রেনিং/প্রম্পট উদাহরণ। ব্যবহারকারী git-এ রাখার অনুমতি দিয়েছেন।
 - টেস্ট টিকেট #57237 (bp.apon, SMS off) খোলা হয়েছিল, ticket create endpoint যাচাই করতে।
 - লাইভ single-customer endpoint: `GetCustomerOtherData/{headerId}`, `customer/GetOLTInfo?macAddress=`, `Customer/AjaxReceivedHistory/{headerId}`; ticket create: POST `/ClientSupport/DailyComplainList`।
+
+## WhatsApp webhook (2026-10-04)
+- Meta: portfolio Zareen Natural Foods (verified), app **Zyrotech BSOL** (1900768904642203, Live), Independent Tech Provider অনবোর্ডিং শুরু; advanced permission App Review "In review"। লক্ষ্য: বর্তমান কোম্পানি নম্বর Coexistence মোডে।
+- `app/main.py` (FastAPI): `GET /webhook` verify (WA_VERIFY_TOKEN), `POST /webhook` X-Hub-Signature-256 যাচাই (META_APP_SECRET না থাকলে সব POST 403), সব event `data/messages.db`-এ (events, messages; `smb_message_echoes` = Business অ্যাপ থেকে পাঠানো)। `handle_message` এখনো শুধু লগ করে।
+- সার্ভিস: `zyro-support.service` (uvicorn 127.0.0.1:8993), nginx `support.zyrotechbd.com` (wildcard cert), www → redirect। ফাইল `deploy/`-এ।
+- `.env` (600, git-ignored): WA_VERIFY_TOKEN জেনারেট করা; META_APP_SECRET, WA_ACCESS_TOKEN, WA_PHONE_NUMBER_ID, ISPDIGITAL_* বাকি। নমুনা `.env.example`।
+- python3.12-venv apt দিয়ে ইনস্টল করা হয়েছে, venv `.venv/`।
+- বাকি: META_APP_SECRET বসানো, Meta-তে webhook URL/verify token ও `messages` + `smb_message_echoes` subscribe, Embedded Signup লিংক, বিলিং লুকআপ + AI রিপ্লাই।
