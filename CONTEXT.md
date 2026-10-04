@@ -13,3 +13,17 @@
 
 ## স্ট্যাটাস
 - রিপো তৈরি ও `origin` (`rzzisan/zyro_isp_support`) সংযুক্ত। এখনো কোনো কোড নেই।
+
+## বিলিং গবেষণা (2026-10-04)
+- বিলিং: ISP Digital v8.2.4 (SoftifyBD), https://centurylink.ispdigital.cloud — ASP.NET MVC, অফিসিয়াল API নেই, ক্যাপচা নেই।
+- লগইন: POST `/Account/LoginChecker` (`__RequestVerificationToken`, `Username`, `Password`, `VmAuthTracer.*`)।
+- লগইনের পর JSON endpoint (DataTables; `start`, `length`, `search[value]` = মোবাইল/শেষ ৮ ডিজিট/PPPoE username):
+  - `/Customer/AjaxCustomerList` — নাম, মোবাইল, username, প্যাকেজ, মাসিক বিল, Status, IsOnline, সার্ভার, জোন, MAC
+  - `/Billing/AjaxCustomerBillList` — PayabaleBill, PaidAmount, BalanceDue, PaymentDate
+  - `/ClientSupport/AjaxDailyComplainList` — টিকেট
+- সতর্কতা: রেসপন্সে PPPoE পাসওয়ার্ড plaintext আসে, বট কখনো দেখাবে না/লগ করবে না।
+- বাকি: WhatsApp অপশন ঠিক করা, read-only স্টাফ ইউজার বানানো, টিকেট তৈরির endpoint ম্যাপ করা।
+## সিমুলেশন চ্যাট (2026-10-04)
+- `training/simulations/2026-10-04-whatsapp-support-simulations.md`: ৪টি অনুমোদিত বট কথোপকথন (লাইভ ডেটা, যুক্তি, উত্তর) + বটের নিয়ম। AI ট্রেনিং/প্রম্পট উদাহরণ। ব্যবহারকারী git-এ রাখার অনুমতি দিয়েছেন।
+- টেস্ট টিকেট #57237 (bp.apon, SMS off) খোলা হয়েছিল, ticket create endpoint যাচাই করতে।
+- লাইভ single-customer endpoint: `GetCustomerOtherData/{headerId}`, `customer/GetOLTInfo?macAddress=`, `Customer/AjaxReceivedHistory/{headerId}`; ticket create: POST `/ClientSupport/DailyComplainList`।
