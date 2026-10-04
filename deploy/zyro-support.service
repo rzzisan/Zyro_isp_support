@@ -6,7 +6,7 @@ After=network.target
 User=claude-dev
 WorkingDirectory=/var/www/zyro_isp_support
 EnvironmentFile=/var/www/zyro_isp_support/.env
-ExecStart=/var/www/zyro_isp_support/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8993 --proxy-headers
+ExecStart=/var/www/zyro_isp_support/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8993 --proxy-headers --no-access-log
 Restart=always
 RestartSec=3
 
