@@ -16,6 +16,17 @@ PASSWORD = os.environ.get("ISPDIGITAL_PASSWORD", "")
 
 SECRET_FIELDS = {"Password", "LoginPassword"}
 
+# The panel logs a session straight out unless the requests look like the browser's
+# (Referer/Origin/Accept + the empty VmAuthTracer fields of the login form).
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+    "Accept": "text/html,application/json;q=0.9,*/*;q=0.8",
+    "Referer": f"{BASE_URL}/Account/Login",
+    "Origin": BASE_URL,
+}
+TRACER_FIELDS = ["IPAddress", "CountryName", "Region", "CityName", "PostalCode",
+                 "Latitude", "Longitude", "TimeZone", "Organization"]
+
 
 class LoginError(RuntimeError):
     pass
@@ -23,7 +34,7 @@ class LoginError(RuntimeError):
 
 class ISPDigital:
     def __init__(self):
-        self._client = httpx.Client(base_url=BASE_URL, timeout=20, follow_redirects=False)
+        self._client = httpx.Client(base_url=BASE_URL, timeout=20, follow_redirects=False, headers=BROWSER_HEADERS)
         self._lock = threading.Lock()
         self._logged_in = False
 
@@ -35,17 +46,20 @@ class ISPDigital:
         m = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"', page.text)
         if not m:
             raise LoginError("anti-forgery token not found on login page")
-        r = self._client.post(
-            "/Account/LoginChecker",
-            data={
-                "__RequestVerificationToken": m.group(1),
-                "Username": USERNAME,
-                "Password": PASSWORD,
-                "RememberMe": "false",
-            },
-        )
-        if r.status_code not in (200, 302) or "/Account/Login" in r.headers.get("location", ""):
+        form = {
+            "__RequestVerificationToken": m.group(1),
+            "Username": USERNAME,
+            "Password": PASSWORD,
+            "RememberMe": "false",
+        }
+        form.update({f"VmAuthTracer.{k}": "" for k in TRACER_FIELDS})
+        r = self._client.post("/Account/LoginChecker", data=form)
+        if r.status_code != 302 or "Dashboard" not in r.headers.get("location", ""):
             raise LoginError(f"login failed (HTTP {r.status_code})")
+        # open the dashboard once like the browser does, so the session is accepted
+        d = self._client.get("/EmployeeDashboard/Index")
+        if d.status_code != 200:
+            raise LoginError(f"dashboard rejected session (HTTP {d.status_code})")
         self._logged_in = True
 
     def _get(self, path: str, params: dict | None = None):
