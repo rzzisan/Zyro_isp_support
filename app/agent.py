@@ -1,9 +1,17 @@
-"""Draft a Bangla support reply with Claude from live billing/network data."""
+"""Draft a Bangla support reply from live billing/network data.
+
+AI_PROVIDER=claude (Anthropic API) or grok (xAI, OpenAI-compatible endpoint).
+"""
 import json
+import os
 
 import anthropic
+import httpx
 
-MODEL = "claude-opus-5-5"
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "claude")
+MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5-5")
+XAI_MODEL = os.environ.get("XAI_MODEL", "grok-4")
+XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 
 SYSTEM_PROMPT = """তুমি Century Link Network (একটি ISP)-এর WhatsApp সাপোর্ট সহকারী। কাস্টমারের সাথে সহজ, ভদ্র বাংলায় কথা বলো; কাস্টমার Banglish লিখলেও উত্তর বাংলায়।
 
@@ -39,6 +47,8 @@ def draft_reply(history: list[dict], context: dict | None) -> str | None:
         "role": "user",
         "content": f"<live_data>\n{ctx}\n</live_data>\n\nকাস্টমারের মেসেজ:\n{history[-1]['content']}",
     }
+    if AI_PROVIDER == "grok":
+        return _grok(messages)
     response = client().beta.messages.create(
         model=MODEL,
         max_tokens=2000,
@@ -51,4 +61,20 @@ def draft_reply(history: list[dict], context: dict | None) -> str | None:
     if response.stop_reason == "refusal":
         return None
     text = "".join(b.text for b in response.content if b.type == "text").strip()
+    return text or None
+
+
+def _grok(messages: list[dict]) -> str | None:
+    r = httpx.post(
+        "https://api.x.ai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {XAI_API_KEY}"},
+        json={
+            "model": XAI_MODEL,
+            "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+            "max_tokens": 2000,
+        },
+        timeout=60,
+    )
+    r.raise_for_status()
+    text = (r.json()["choices"][0]["message"].get("content") or "").strip()
     return text or None
