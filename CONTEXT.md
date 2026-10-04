@@ -35,3 +35,9 @@
 - `.env` (600, git-ignored): WA_VERIFY_TOKEN জেনারেট করা; META_APP_SECRET, WA_ACCESS_TOKEN, WA_PHONE_NUMBER_ID, ISPDIGITAL_* বাকি। নমুনা `.env.example`।
 - python3.12-venv apt দিয়ে ইনস্টল করা হয়েছে, venv `.venv/`।
 - বাকি: META_APP_SECRET বসানো, Meta-তে webhook URL/verify token ও `messages` + `smb_message_echoes` subscribe, Embedded Signup লিংক, বিলিং লুকআপ + AI রিপ্লাই।
+
+## বট: বিলিং লুকআপ + AI খসড়া (2026-10-04)
+- `app/ispdigital.py`: bot ইউজার `supportassistant` দিয়ে লগইন (ব্রাউজারের মতো header + VmAuthTracer ঘর না দিলে প্যানেল logoff করে দেয়)। `find_customer_by_whatsapp` (8801… → 01…), `diagnose` (বিল → ONU → PPPoE)। লাইভ টেস্ট ৩টি সিমুলেশন নম্বরে পাস।
+- `app/agent.py`: Claude (`claude-opus-5-5`, effort low, server-side fallbacks "default") দিয়ে বাংলা খসড়া উত্তর; system prompt = সিমুলেশনের নিয়ম।
+- `app/main.py`: নতুন মেসেজ → আলাদা thread-এ লুকআপ + খসড়া → `drafts` টেবিল। `BOT_MODE=shadow` = কিছু পাঠায় না। Meta retry ডুপ্লিকেট বাদ। echo মেসেজে `from_number` = কাস্টমারের নম্বর (`to`)।
+- বাকি: `ANTHROPIC_API_KEY` (.env), আসল নম্বর Coexistence-এ যুক্ত, খসড়া দেখার পেজ, live মোডে পাঠানো (WA_ACCESS_TOKEN, WA_PHONE_NUMBER_ID), টিকেট খোলা।
