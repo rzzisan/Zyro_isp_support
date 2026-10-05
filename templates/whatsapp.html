@@ -50,7 +50,18 @@ window.fbAsyncInit = function () {
 
 document.getElementById('connect').addEventListener('click', () => {
   if (typeof FB === 'undefined') { log('Facebook SDK লোড হয়নি, পেজ রিফ্রেশ করুন।'); return; }
-  FB.login(async (response) => {
+  log('Meta পপআপ খোলা হচ্ছে... (না খুললে ব্রাউজারের পপআপ ব্লক বন্ধ করুন)');
+  // FB.login rejects async callbacks, so hand off to an async function
+  try { FB.login(function (response) { finish(response); }, {
+    config_id: '{{ config_id }}',
+    response_type: 'code',
+    override_default_response_type: true,
+    extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
+  }); } catch (e) { log('ত্রুটি: ' + e); }
+});
+
+async function finish(response) {
+    log('Meta উত্তর: ' + (response && response.status));
     if (!response.authResponse || !response.authResponse.code) { log('সংযোগ বাতিল বা অসম্পূর্ণ।'); return; }
     // the session message can arrive a moment after the login callback
     for (let i = 0; i < 20 && !session.waba_id; i++) await new Promise(r => setTimeout(r, 250));
@@ -63,13 +74,7 @@ document.getElementById('connect').addEventListener('click', () => {
     const j = await r.json();
     if (j.ok) { log('সম্পন্ন! পেজ রিফ্রেশ হচ্ছে...'); setTimeout(() => location.reload(), 1500); }
     else log('ব্যর্থ: ' + (j.error || r.status));
-  }, {
-    config_id: '{{ config_id }}',
-    response_type: 'code',
-    override_default_response_type: true,
-    extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
-  });
-});
+}
 </script>
 <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
 {% endblock %}
