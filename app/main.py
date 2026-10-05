@@ -1,13 +1,14 @@
 """Zyro ISP Support — WhatsApp Cloud API webhook + admin dashboard."""
 import hashlib
 import hmac
+import html
 import json
 import logging
 import os
 import threading
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import store
@@ -41,6 +42,17 @@ def root():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/meta/callback")
+def meta_callback(request: Request):
+    """Redirect target of the Meta-hosted Embedded Signup. The number is connected on Meta's side;
+    we only note that the flow finished (the code itself is not needed for our own WABA)."""
+    q = request.query_params
+    log.info("embedded signup callback: code=%s error=%s", "yes" if q.get("code") else "no", q.get("error"))
+    ok = not q.get("error")
+    text = "WhatsApp সংযোগ সম্পন্ন হয়েছে। এই পেজ বন্ধ করে দিতে পারেন।" if ok else "সংযোগ সম্পন্ন হয়নি: " + q.get("error_description", q.get("error", ""))
+    return HTMLResponse(f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><body style="font-family:sans-serif;padding:40px;text-align:center"><h2>{html.escape(text)}</h2></body>')
 
 
 @app.get("/webhook")
