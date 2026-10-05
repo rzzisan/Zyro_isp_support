@@ -152,6 +152,17 @@ def recent_history(conn, wa_number: str, limit: int = 12) -> list[dict]:
     return merged
 
 
+def should_send(mode: str, wa: str) -> bool:
+    """live = reply automatically, but only to allow-listed numbers when a list is set."""
+    if mode != "live":
+        return False
+    allow = [n.strip() for n in (store.get_setting("live_allowlist") or "").replace("\n", ",").split(",") if n.strip()]
+    if not allow:
+        return True
+    from app.ispdigital import normalize_bd_mobile
+    return normalize_bd_mobile(wa) in {normalize_bd_mobile(n) for n in allow}
+
+
 def handle_message(message: dict, contact_name: str | None) -> None:
     """Identify customer, check billing/ONU/PPPoE, draft a reply (shadow mode stores it only)."""
     wa = message.get("from")
@@ -171,6 +182,14 @@ def handle_message(message: dict, contact_name: str | None) -> None:
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": (message.get("text") or {}).get("body", "")})
         draft, provider, model = draft_reply(history, context)
+        if draft and should_send(mode, wa):
+            from app import whatsapp
+            res = whatsapp.send_text(wa, draft)
+            mode = "sent"
+            with store.connect() as conn:
+                # keep our reply in the history so the next turn has context
+                conn.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                             (res.get("messages", [{}])[0].get("id"), store.now(), None, wa, None, "text", draft, 1))
     except Exception as e:
         log.exception("draft failed for %s", message.get("id"))
         error = str(e)[:500]

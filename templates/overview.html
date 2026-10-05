@@ -7,7 +7,7 @@
     <span>বিলিং: {% if billing_ok %}<span class="badge">সেট করা</span>{% else %}<a class="badge err" href="/admin/billing">সেট করা হয়নি</a>{% endif %}</span>
     <span>ডিফল্ট AI: <span class="badge">{{ provider }} / {{ model }}</span>
       {% if stats.ai_keys == 0 %}<a class="badge err" href="/admin/ai">key নেই</a>{% endif %}</span>
-    <span>বট মোড: {% if bot_mode == 'shadow' %}<span class="badge warn">চুপ মোড (শুধু খসড়া)</span>{% else %}<span class="badge err">বন্ধ</span>{% endif %}</span>
+    <span>বট মোড: {% if bot_mode == 'shadow' %}<span class="badge warn">চুপ মোড (শুধু খসড়া)</span>{% elif bot_mode == 'live' %}<span class="badge">চালু (উত্তর পাঠাচ্ছে)</span>{% else %}<span class="badge err">বন্ধ</span>{% endif %}</span>
   </div>
 </div>
 <div class="grid">
@@ -25,7 +25,7 @@
       <td class="muted">{{ d.created_at[:16].replace('T', ' ') }}</td>
       <td>{{ d.contact_name or '' }}<br><span class="muted">{{ d.from_number }}</span></td>
       <td>{{ d.customer_text or '' }}</td>
-      <td>{% if d.error %}<span class="badge err">ব্যর্থ</span> <span class="muted">{{ d.error }}</span>{% else %}<pre>{{ d.draft or '' }}</pre><span class="muted">{{ d.provider }} / {{ d.model }}</span>{% endif %}</td>
+      <td>{% if d.error %}<span class="badge err">ব্যর্থ</span> <span class="muted">{{ d.error }}</span>{% else %}<pre>{{ d.draft or '' }}</pre><span class="muted">{{ d.provider }} / {{ d.model }}</span>{% if d.mode == 'sent' %} <span class="badge">পাঠানো হয়েছে</span>{% endif %}{% endif %}</td>
     </tr>
     {% endfor %}
   </table></div>

@@ -18,8 +18,11 @@
     <label>বট মোড</label>
     <select name="bot_mode">
       <option value="shadow" {{ 'selected' if bot_mode == 'shadow' }}>চুপ মোড: শুধু খসড়া বানাবে, কাস্টমারকে কিছু পাঠাবে না</option>
+      <option value="live" {{ 'selected' if bot_mode == 'live' }}>চালু: কাস্টমারকে নিজেই উত্তর পাঠাবে</option>
       <option value="off" {{ 'selected' if bot_mode == 'off' }}>বন্ধ</option>
     </select>
+    <label>চালু মোডে শুধু এই নম্বরগুলোকে উত্তর দেবে <span class="muted">(কমা দিয়ে আলাদা; খালি রাখলে সবাইকে। বাকিদের জন্য শুধু খসড়া হবে)</span></label>
+    <input name="live_allowlist" value="{{ live_allowlist or '' }}" placeholder="01782703244, 01XXXXXXXXX">
     <label>অতিরিক্ত নির্দেশনা <span class="muted">(ঐচ্ছিক, যেমন পেমেন্টের বিকাশ নম্বর, অফিসের সময়)</span></label>
     <textarea name="extra_prompt">{{ extra_prompt or '' }}</textarea>
     <button>সেভ করুন</button>
