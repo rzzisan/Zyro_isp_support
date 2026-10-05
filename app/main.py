@@ -179,16 +179,20 @@ def handle_message(message: dict, contact_name: str | None) -> None:
         with store.connect() as conn:
             history = recent_history(conn, wa)
             link = conn.execute("SELECT value FROM settings WHERE key = ?", (f"link:{wa}",)).fetchone()
-        customer = find_customer_by_whatsapp(billing(), wa)
+        # priority: an ID/mobile/username in the newest message (customer may ask about another line),
+        # then the sender's own WhatsApp number, then the customer we talked about last
+        current_text = (message.get("text") or {}).get("body", "")
+        customer = find_customer_by_text(billing(), current_text)
+        if not customer and link and link["value"]:
+            customer = find_customer_by_text(billing(), link["value"])
         if not customer:
-            # look for an ID / mobile / username the customer typed (newest message first)
+            customer = find_customer_by_whatsapp(billing(), wa)
+        if not customer:
             for h in reversed(history):
                 if h["role"] == "user":
                     customer = find_customer_by_text(billing(), h["content"])
                     if customer:
                         break
-        if not customer and link:
-            customer = find_customer_by_text(billing(), link["value"])
         if customer:
             store.set_setting(f"link:{wa}", customer.get("CustomerId") or "")
         context = diagnose(billing(), customer) if customer else None
