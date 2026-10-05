@@ -62,6 +62,37 @@ def sync(phone_number_id: str, sync_type: str) -> dict:
     return _check(r)
 
 
+def send_text(to: str, body: str) -> dict:
+    """Free-form text (works inside the 24h customer-service window)."""
+    r = httpx.post(f"{GRAPH}/{store.get_setting('wa_phone_number_id')}/messages",
+                   json={"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": body}},
+                   headers={"Authorization": f"Bearer {token()}"}, timeout=30)
+    return _check(r)
+
+
+def send_template(to: str, name: str, language: str) -> dict:
+    r = httpx.post(f"{GRAPH}/{store.get_setting('wa_phone_number_id')}/messages",
+                   json={"messaging_product": "whatsapp", "to": to, "type": "template",
+                         "template": {"name": name, "language": {"code": language}}},
+                   headers={"Authorization": f"Bearer {token()}"}, timeout=30)
+    return _check(r)
+
+
+def create_template(name: str, language: str, category: str, body: str) -> dict:
+    r = httpx.post(f"{GRAPH}/{store.get_setting('wa_waba_id')}/message_templates",
+                   json={"name": name, "language": language, "category": category,
+                         "components": [{"type": "BODY", "text": body}]},
+                   headers={"Authorization": f"Bearer {token()}"}, timeout=30)
+    return _check(r)
+
+
+def list_templates() -> list[dict]:
+    r = httpx.get(f"{GRAPH}/{store.get_setting('wa_waba_id')}/message_templates",
+                  params={"fields": "name,language,status,category", "limit": 50},
+                  headers={"Authorization": f"Bearer {token()}"}, timeout=30)
+    return _check(r).get("data", [])
+
+
 def complete_onboarding(code: str, waba_id: str, phone_number_id: str | None) -> dict:
     access_token = exchange_code(code)
     store.set_setting("wa_access_token", access_token)

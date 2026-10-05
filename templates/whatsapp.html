@@ -23,6 +23,53 @@
 </div>
 
 <div class="card">
+  <h2>মেসেজ পাঠান</h2>
+  <form method="post" action="/admin/whatsapp/send">
+    <div class="grid">
+      <div><label>প্রাপকের নম্বর</label><input name="to" required placeholder="01XXXXXXXXX"></div>
+      <div><label>Template নাম (ঐচ্ছিক)</label><input name="template" placeholder="hello_world"></div>
+      <div><label>Template ভাষা</label><input name="language" value="en_US"></div>
+    </div>
+    <label>মেসেজ (Template না দিলে; কাস্টমার গত ২৪ ঘণ্টায় মেসেজ দিয়ে থাকলে কাজ করে)</label>
+    <textarea name="text"></textarea>
+    <button>পাঠান</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Message template তৈরি</h2>
+  <form method="post" action="/admin/whatsapp/templates">
+    <div class="grid">
+      <div><label>নাম (ছোট হাতের, _ দিয়ে)</label><input name="name" required placeholder="bill_reminder"></div>
+      <div><label>ভাষা</label><input name="language" value="bn"></div>
+      <div><label>ধরন</label><select name="category"><option>UTILITY</option><option>MARKETING</option></select></div>
+    </div>
+    <label>লেখা</label>
+    <textarea name="body" required placeholder="আপনার ইন্টারনেট বিল পরিশোধের শেষ তারিখ আগামীকাল।"></textarea>
+    <button>Template জমা দিন</button>
+  </form>
+  {% if templates_list %}
+  <div class="tablewrap"><table>
+    <tr><th>নাম</th><th>ভাষা</th><th>ধরন</th><th>অবস্থা</th></tr>
+    {% for t in templates_list %}<tr><td>{{ t.name }}</td><td>{{ t.language }}</td><td>{{ t.category }}</td><td>{{ t.status }}</td></tr>{% endfor %}
+  </table></div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Cloud API-তে থাকা নম্বর ম্যানুয়ালি সেট করুন</h2>
+  <p class="muted">WhatsApp Manager-এ আগে থেকেই Cloud API-তে যুক্ত নম্বরের জন্য। Access token হিসেবে Business Settings → System users থেকে whatsapp_business_messaging ও whatsapp_business_management অনুমতিসহ token দিন। token এনক্রিপ্ট করে রাখা হয়{% if has_token %}, এখন একটা সেট করা আছে (বদলাতে না চাইলে খালি রাখুন){% endif %}।</p>
+  <form method="post" action="/admin/whatsapp/manual">
+    <div class="grid">
+      <div><label>WABA ID</label><input name="waba_id" value="{{ waba_id or '' }}" required></div>
+      <div><label>Phone number ID</label><input name="phone_number_id" value="{{ phone_number_id or '' }}" required></div>
+      <div><label>Access token</label><input name="access_token" type="password" autocomplete="off" {% if not has_token %}required{% endif %}></div>
+    </div>
+    <button>সেভ করুন</button>
+  </form>
+</div>
+
+<div class="card">
   <h2>কোম্পানির WhatsApp Business অ্যাপের নম্বর যুক্ত করুন</h2>
   <p class="muted">বোতাম চাপলে Meta-র একটা পপআপ খুলবে। নম্বরের ধাপে <b>"Connect your existing WhatsApp Business app"</b> বাছবেন, তারপর ফোনের Business অ্যাপ থেকে অনুমতি দেবেন। নম্বর Business অ্যাপেও আগের মতোই চলবে।</p>
   <button id="connect">WhatsApp যুক্ত করুন</button>

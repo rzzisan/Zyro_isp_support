@@ -321,7 +321,14 @@ def whatsapp_page(request: Request):
             status = whatsapp.phone_status(pnid)
         except Exception as e:
             status = {"error": str(e)[:300]}
+    templates_list = None
+    if store.get_setting("wa_waba_id") and store.get_setting("wa_access_token"):
+        try:
+            templates_list = whatsapp.list_templates()
+        except Exception:
+            templates_list = None
     return render(request, "whatsapp.html", app_id=whatsapp.APP_ID, config_id=whatsapp.CONFIG_ID,
+                  templates_list=templates_list, has_token=bool(store.get_setting("wa_access_token")),
                   waba_id=store.get_setting("wa_waba_id"), phone_number_id=pnid,
                   onboarded_at=store.get_setting("wa_onboarded_at"), status=status,
                   last=store.get_setting("wa_last_onboarding"))
@@ -341,6 +348,56 @@ async def whatsapp_complete(request: Request):
         return {"ok": True, "result": result}
     except Exception as e:
         return {"ok": False, "error": str(e)[:500]}
+
+
+@router.post("/whatsapp/manual")
+def whatsapp_manual(request: Request, waba_id: str = Form(...), phone_number_id: str = Form(...),
+                    access_token: str = Form("")):
+    """Use a number that is already on Cloud API (e.g. from WhatsApp Manager) with a system-user token."""
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    store.set_setting("wa_waba_id", waba_id.strip())
+    store.set_setting("wa_phone_number_id", phone_number_id.strip())
+    if access_token.strip():
+        store.set_setting("wa_access_token", access_token.strip())
+    store.set_setting("wa_onboarded_at", store.now())
+    flash(request, "WhatsApp সেটিংস সেভ হয়েছে।")
+    return back("/admin/whatsapp")
+
+
+@router.post("/whatsapp/send")
+def whatsapp_send(request: Request, to: str = Form(...), text: str = Form(""), template: str = Form(""),
+                  language: str = Form("en_US")):
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    from app import whatsapp
+    to_num = "".join(ch for ch in to if ch.isdigit())
+    if to_num.startswith("01") and len(to_num) == 11:
+        to_num = "88" + to_num
+    try:
+        res = whatsapp.send_template(to_num, template.strip(), language.strip()) if template.strip() \
+            else whatsapp.send_text(to_num, text)
+        flash(request, f"পাঠানো হয়েছে: {to_num} · message id {res.get('messages', [{}])[0].get('id')}")
+    except Exception as e:
+        flash(request, f"ব্যর্থ: {str(e)[:300]}", "err")
+    return back("/admin/whatsapp")
+
+
+@router.post("/whatsapp/templates")
+def whatsapp_create_template(request: Request, name: str = Form(...), language: str = Form("bn"),
+                             category: str = Form("UTILITY"), body: str = Form(...)):
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    from app import whatsapp
+    try:
+        res = whatsapp.create_template(name.strip().lower(), language.strip(), category, body)
+        flash(request, f"Template জমা হয়েছে: id {res.get('id')} · status {res.get('status')}")
+    except Exception as e:
+        flash(request, f"ব্যর্থ: {str(e)[:300]}", "err")
+    return back("/admin/whatsapp")
 
 
 @router.post("/whatsapp/sync")
