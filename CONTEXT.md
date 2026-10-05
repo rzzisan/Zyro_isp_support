@@ -41,3 +41,12 @@
 - `app/agent.py`: Claude (`claude-opus-5-5`, effort low, server-side fallbacks "default") দিয়ে বাংলা খসড়া উত্তর; system prompt = সিমুলেশনের নিয়ম।
 - `app/main.py`: নতুন মেসেজ → আলাদা thread-এ লুকআপ + খসড়া → `drafts` টেবিল। `BOT_MODE=shadow` = কিছু পাঠায় না। Meta retry ডুপ্লিকেট বাদ। echo মেসেজে `from_number` = কাস্টমারের নম্বর (`to`)।
 - বাকি: `ANTHROPIC_API_KEY` (.env), আসল নম্বর Coexistence-এ যুক্ত, খসড়া দেখার পেজ, live মোডে পাঠানো (WA_ACCESS_TOKEN, WA_PHONE_NUMBER_ID), টিকেট খোলা।
+
+## অ্যাডমিন ড্যাশবোর্ড (2026-10-05)
+- https://support.zyrotechbd.com/admin (FastAPI + Jinja2, `app/admin.py`, `templates/`)। BSOL-এর multi-AI নকশা অনুসরণ।
+- প্রথম অ্যাডমিন: `/admin/setup`-এ `.env`-এর `ADMIN_SETUP_TOKEN` দিয়ে (একবারই)। পাসওয়ার্ড scrypt হ্যাশ, সেশন কুকি (SameSite strict, https), POST-এ Origin চেক, লগইনে ১০ মিনিটে ৫ বার ভুলের সীমা।
+- **বিলিং পেজ**: URL/ইউজার/পাসওয়ার্ড DB-তে (পাসওয়ার্ড Fernet এনক্রিপ্টেড, `DATA_ENCRYPTION_KEY`), "পরীক্ষা করুন" দিয়ে লাইভ লগইন + সার্চ। `.env`-এর ISPDIGITAL_* শুধু fallback।
+- **AI এজেন্ট পেজ**: প্রোভাইডার Claude / Grok / Gemini / Groq / OpenAI / OpenRouter; প্রতিটায় একাধিক key (এনক্রিপ্টেড, masked দেখায়), প্রতি key-তে পরীক্ষা + লাইভ মডেল তালিকা। ডিফল্ট প্রোভাইডার + মডেল + বট মোড (shadow/off) + অতিরিক্ত নির্দেশনা। 401/403/429-এ key ৬০ সেকেন্ড cooldown, পরের key।
+- **টেস্ট পেজ**: নম্বর + মেসেজ দিয়ে পুরো পথ (বিলিং → AI খসড়া), কিছু পাঠায় না।
+- ড্যাশবোর্ডে সাম্প্রতিক খসড়া (provider/model/error সহ)।
+- `.env`-এ নতুন: DATA_ENCRYPTION_KEY (হারালে সেভ করা key/পাসওয়ার্ড আর পড়া যাবে না), SESSION_SECRET, ADMIN_SETUP_TOKEN।

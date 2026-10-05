@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}প্রথম সেটআপ{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h1>অ্যাডমিন অ্যাকাউন্ট তৈরি</h1>
+  <p class="muted">সার্ভারের <code>.env</code> ফাইলের <code>ADMIN_SETUP_TOKEN</code> দিন। এই পেজ শুধু একবারই কাজ করে।</p>
+  <form method="post">
+    <label>সেটআপ টোকেন</label><input name="token" required autocomplete="off">
+    <label>ইউজারনেম</label><input name="username" required>
+    <label>পাসওয়ার্ড (কমপক্ষে ১০ অক্ষর)</label><input name="password" type="password" required minlength="10" autocomplete="new-password">
+    <label>আবার পাসওয়ার্ড</label><input name="password2" type="password" required minlength="10" autocomplete="new-password">
+    <button>অ্যাকাউন্ট তৈরি করুন</button>
+  </form>
+</div>
+{% endblock %}

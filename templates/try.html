@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}টেস্ট{% endblock %}
+{% block content %}
+<h1>কাস্টমার মেসেজ টেস্ট</h1>
+<div class="card">
+  <p class="muted">একটা কাস্টমারের নম্বর আর মেসেজ দিন। বট ঠিক WhatsApp-এর মতোই বিলিং চেক করে ডিফল্ট AI দিয়ে উত্তর বানাবে। কাউকে কিছু পাঠানো হবে না।</p>
+  <form method="post">
+    <label>কাস্টমারের মোবাইল নম্বর</label><input name="phone" required placeholder="01917651068" value="{{ result.phone if result else '' }}">
+    <label>মেসেজ</label><textarea name="text" required placeholder="hi amar line ta bondho, dekhen to ki somossa?">{{ result.text if result else '' }}</textarea>
+    <button>চালান</button>
+  </form>
+</div>
+{% if result %}
+<div class="card">
+  {% if result.error %}<div class="flash err">ব্যর্থ: {{ result.error }}</div>{% endif %}
+  {% if result.draft %}
+  <h2>খসড়া উত্তর <span class="muted">({{ result.provider }} / {{ result.model }})</span></h2>
+  <pre>{{ result.draft }}</pre>
+  {% endif %}
+  {% if result.context %}
+  <h2>বিলিং থেকে পাওয়া তথ্য</h2>
+  <pre>{{ result.context }}</pre>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

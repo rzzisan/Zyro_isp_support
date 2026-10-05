@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}লগইন{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h1>অ্যাডমিন লগইন</h1>
+  <form method="post">
+    <label>ইউজারনেম</label><input name="username" required autocomplete="username">
+    <label>পাসওয়ার্ড</label><input name="password" type="password" required autocomplete="current-password">
+    <button>লগইন</button>
+  </form>
+</div>
+{% endblock %}

@@ -10,20 +10,30 @@ import threading
 
 import httpx
 
-BASE_URL = os.environ.get("ISPDIGITAL_BASE_URL", "https://centurylink.ispdigital.cloud")
-USERNAME = os.environ.get("ISPDIGITAL_USERNAME", "")
-PASSWORD = os.environ.get("ISPDIGITAL_PASSWORD", "")
+from app import store
+
+DEFAULT_BASE_URL = "https://centurylink.ispdigital.cloud"
 
 SECRET_FIELDS = {"Password", "LoginPassword"}
 
-# The panel logs a session straight out unless the requests look like the browser's
-# (Referer/Origin/Accept + the empty VmAuthTracer fields of the login form).
-BROWSER_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
-    "Accept": "text/html,application/json;q=0.9,*/*;q=0.8",
-    "Referer": f"{BASE_URL}/Account/Login",
-    "Origin": BASE_URL,
-}
+
+def config() -> tuple[str, str, str]:
+    """Credentials from the admin dashboard, falling back to .env."""
+    base = store.get_setting("billing_base_url") or os.environ.get("ISPDIGITAL_BASE_URL", DEFAULT_BASE_URL)
+    user = store.get_setting("billing_username") or os.environ.get("ISPDIGITAL_USERNAME", "")
+    password = store.get_setting("billing_password") or os.environ.get("ISPDIGITAL_PASSWORD", "")
+    return base.rstrip("/"), user, password
+
+
+def browser_headers(base_url: str) -> dict:
+    # The panel logs a session straight out unless the requests look like the browser's
+    # (Referer/Origin/Accept + the empty VmAuthTracer fields of the login form).
+    return {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+        "Accept": "text/html,application/json;q=0.9,*/*;q=0.8",
+        "Referer": f"{base_url}/Account/Login",
+        "Origin": base_url,
+    }
 TRACER_FIELDS = ["IPAddress", "CountryName", "Region", "CityName", "PostalCode",
                  "Latitude", "Longitude", "TimeZone", "Organization"]
 
@@ -33,15 +43,21 @@ class LoginError(RuntimeError):
 
 
 class ISPDigital:
-    def __init__(self):
-        self._client = httpx.Client(base_url=BASE_URL, timeout=20, follow_redirects=False, headers=BROWSER_HEADERS)
+    def __init__(self, base_url: str | None = None, username: str | None = None, password: str | None = None):
+        cfg_base, cfg_user, cfg_pass = config()
+        self.base_url = (base_url or cfg_base).rstrip("/")
+        self._username = username if username is not None else cfg_user
+        self._password = password if password is not None else cfg_pass
+        self._client = httpx.Client(base_url=self.base_url, timeout=20, follow_redirects=False,
+                                    headers=browser_headers(self.base_url))
         self._lock = threading.Lock()
         self._logged_in = False
 
     # --- session -------------------------------------------------------------
     def login(self) -> None:
-        if not USERNAME or not PASSWORD:
-            raise LoginError("ISPDIGITAL_USERNAME / ISPDIGITAL_PASSWORD not set")
+        if not self._username or not self._password:
+            raise LoginError("billing username / password not set")
+        USERNAME, PASSWORD = self._username, self._password
         page = self._client.get("/Account/Login")
         m = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"', page.text)
         if not m:

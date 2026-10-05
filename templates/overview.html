@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}ড্যাশবোর্ড{% endblock %}
+{% block content %}
+<h1>ড্যাশবোর্ড</h1>
+<div class="card">
+  <div class="row">
+    <span>বিলিং: {% if billing_ok %}<span class="badge">সেট করা</span>{% else %}<a class="badge err" href="/admin/billing">সেট করা হয়নি</a>{% endif %}</span>
+    <span>ডিফল্ট AI: <span class="badge">{{ provider }} / {{ model }}</span>
+      {% if stats.ai_keys == 0 %}<a class="badge err" href="/admin/ai">key নেই</a>{% endif %}</span>
+    <span>বট মোড: {% if bot_mode == 'shadow' %}<span class="badge warn">চুপ মোড (শুধু খসড়া)</span>{% else %}<span class="badge err">বন্ধ</span>{% endif %}</span>
+  </div>
+</div>
+<div class="grid">
+  <div class="card stat"><b>{{ stats.messages }}</b><span>কাস্টমারের মেসেজ</span></div>
+  <div class="card stat"><b>{{ stats.drafts }}</b><span>AI খসড়া</span></div>
+  <div class="card stat"><b>{{ stats.errors }}</b><span>ব্যর্থ খসড়া</span></div>
+</div>
+<div class="card">
+  <h2>সাম্প্রতিক খসড়া</h2>
+  {% if not drafts %}<p class="muted">এখনো কোনো খসড়া নেই। WhatsApp নম্বর যুক্ত হলে এখানে দেখা যাবে, অথবা <a href="/admin/try">টেস্ট</a> পেজ থেকে চেষ্টা করুন।</p>{% else %}
+  <div class="tablewrap"><table>
+    <tr><th>সময় (UTC)</th><th>কাস্টমার</th><th>মেসেজ</th><th>খসড়া উত্তর</th></tr>
+    {% for d in drafts %}
+    <tr>
+      <td class="muted">{{ d.created_at[:16].replace('T', ' ') }}</td>
+      <td>{{ d.contact_name or '' }}<br><span class="muted">{{ d.from_number }}</span></td>
+      <td>{{ d.customer_text or '' }}</td>
+      <td>{% if d.error %}<span class="badge err">ব্যর্থ</span> <span class="muted">{{ d.error }}</span>{% else %}<pre>{{ d.draft or '' }}</pre><span class="muted">{{ d.provider }} / {{ d.model }}</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+</div>
+{% endblock %}

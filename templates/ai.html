@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}AI এজেন্ট{% endblock %}
+{% block content %}
+<h1>AI এজেন্ট</h1>
+
+<div class="card">
+  <h2>ডিফল্ট AI ও বটের সেটিংস</h2>
+  <form method="post" action="/admin/ai/settings">
+    <label>যে AI দিয়ে সাপোর্ট চলবে</label>
+    <select name="provider" id="provider">
+      {% for pid, p in providers.items() %}
+      <option value="{{ pid }}" {{ 'selected' if pid == active_provider }}>{{ p.name }}{% if not keys[pid] %} (key নেই){% endif %}</option>
+      {% endfor %}
+    </select>
+    <label>মডেল <span class="muted">(খালি রাখলে প্রোভাইডারের সাজেস্টেড মডেল)</span></label>
+    <input name="model" id="model" value="{{ active_model }}">
+    <p class="muted" id="model-hint"></p>
+    <label>বট মোড</label>
+    <select name="bot_mode">
+      <option value="shadow" {{ 'selected' if bot_mode == 'shadow' }}>চুপ মোড: শুধু খসড়া বানাবে, কাস্টমারকে কিছু পাঠাবে না</option>
+      <option value="off" {{ 'selected' if bot_mode == 'off' }}>বন্ধ</option>
+    </select>
+    <label>অতিরিক্ত নির্দেশনা <span class="muted">(ঐচ্ছিক, যেমন পেমেন্টের বিকাশ নম্বর, অফিসের সময়)</span></label>
+    <textarea name="extra_prompt">{{ extra_prompt or '' }}</textarea>
+    <button>সেভ করুন</button>
+  </form>
+</div>
+
+{% if models %}
+<div class="card">
+  <h2>{{ models.provider }}: পাওয়া মডেল ({{ models.names|length }})</h2>
+  <pre>{{ models.names|join('\n') }}</pre>
+</div>
+{% endif %}
+
+{% for pid, p in providers.items() %}
+<div class="card">
+  <div class="row"><h2 style="margin:0">{{ p.name }}</h2>
+    {% if p.note %}<span class="badge">{{ p.note }}</span>{% endif %}
+    {% if pid == active_provider %}<span class="badge warn">ডিফল্ট</span>{% endif %}
+  </div>
+  {% if p.suggested %}<p class="muted">সাজেস্টেড মডেল: {{ p.suggested }}</p>{% endif %}
+  <ul class="keys">
+    {% for k in keys[pid] %}
+    <li>
+      <span>{{ k.label or 'Key #' ~ k.id }}</span><span class="muted">{{ k.preview }}</span>
+      {% if k.model %}<span class="muted">মডেল: {{ k.model }}</span>{% endif %}
+      {% if k.cooldown %}<span class="badge err" title="{{ k.cooldown }}">সাম্প্রতিক ব্যর্থতা</span>{% endif %}
+      <form method="post" action="/admin/ai/keys/{{ k.id }}/test"><button class="ghost">পরীক্ষা</button></form>
+      <form method="post" action="/admin/ai/keys/{{ k.id }}/models"><button class="ghost">মডেল তালিকা</button></form>
+      <form method="post" action="/admin/ai/keys/{{ k.id }}/delete" onsubmit="return confirm('এই key মুছবেন?')"><button class="ghost danger">মুছুন</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+  <form method="post" action="/admin/ai/keys">
+    <input type="hidden" name="provider" value="{{ pid }}">
+    <div class="grid">
+      <div><label>API key</label><input name="api_key" type="password" required autocomplete="off"></div>
+      <div><label>নাম (ঐচ্ছিক)</label><input name="label" placeholder="যেমন key-1"></div>
+      <div><label>এই key-এর মডেল (ঐচ্ছিক)</label><input name="model" placeholder="{{ p.suggested }}"></div>
+    </div>
+    <button>+ key যোগ করুন</button>
+  </form>
+</div>
+{% endfor %}
+
+<script>
+const suggested = {{ suggested|safe }};
+const sel = document.getElementById('provider'), model = document.getElementById('model'), hint = document.getElementById('model-hint');
+function showHint(){ hint.textContent = suggested[sel.value] ? 'এই প্রোভাইডারের সাজেস্টেড মডেল: ' + suggested[sel.value] : 'এই প্রোভাইডারের key-এর "মডেল তালিকা" দেখে একটা মডেলের নাম দিন।'; }
+sel.addEventListener('change', () => {
+  // replace the model only if it still looks like an unedited suggestion
+  if (!model.value || Object.values(suggested).includes(model.value)) model.value = suggested[sel.value] || '';
+  showHint();
+});
+showHint();
+</script>
+{% endblock %}

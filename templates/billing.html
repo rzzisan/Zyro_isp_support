@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}বিলিং{% endblock %}
+{% block content %}
+<h1>বিলিং সফটওয়্যার (ISP Digital)</h1>
+<div class="card">
+  <h2>লগইন তথ্য</h2>
+  <p class="muted">বটের জন্য আলাদা স্টাফ ইউজার ব্যবহার করুন। পাসওয়ার্ড এনক্রিপ্ট করে রাখা হয় এবং কখনো দেখানো হয় না।</p>
+  <form method="post">
+    <label>প্যানেল URL</label><input name="base_url" value="{{ base_url }}" required>
+    <label>ইউজারনেম</label><input name="username" value="{{ username }}" required autocomplete="off">
+    <label>পাসওয়ার্ড {% if password_mask %}<span class="muted">(বর্তমান: {{ password_mask }} · বদলাতে না চাইলে খালি রাখুন)</span>{% endif %}</label>
+    <input name="password" type="password" autocomplete="new-password" {% if not password_mask %}required{% endif %}>
+    <button>সেভ করুন</button>
+  </form>
+</div>
+<div class="card">
+  <h2>সংযোগ পরীক্ষা</h2>
+  <form method="post" action="/admin/billing/test">
+    <label>ঐচ্ছিক: একটা মোবাইল নম্বর বা কাস্টমার আইডি দিয়ে খুঁজে দেখুন</label>
+    <input name="query" placeholder="যেমন 01917651068">
+    <button>পরীক্ষা করুন</button>
+  </form>
+</div>
+{% endblock %}

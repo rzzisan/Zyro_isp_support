@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Zyro Support{% endblock %} · Zyro Support</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#1d2330;--muted:#677085;--line:#e3e6ec;--accent:#0b7a5a;--accent-soft:#e3f4ee;--err:#b42318;--err-soft:#fdecea;--warn:#a15c07;--warn-soft:#fef3e2}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--card:#1b1f27;--text:#e7e9ee;--muted:#9aa3b5;--line:#2b313c;--accent:#3fbf91;--accent-soft:#173329;--err:#f0857a;--err-soft:#3a1d1b;--warn:#f0b35a;--warn-soft:#3a2c17}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 "Hind Siliguri",system-ui,sans-serif}
+a{color:var(--accent)}
+header{background:var(--card);border-bottom:1px solid var(--line)}
+.bar{max-width:1080px;margin:0 auto;padding:10px 16px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:600;font-size:17px;margin-right:auto}
+nav a{text-decoration:none;color:var(--muted);padding:4px 2px}
+nav a.on{color:var(--text);font-weight:600;border-bottom:2px solid var(--accent)}
+main{max-width:1080px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;margin:4px 0 16px}
+h2{font-size:17px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.stat b{display:block;font-size:24px}
+.stat span{color:var(--muted);font-size:13px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+textarea{min-height:90px}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer;margin-top:12px}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);margin-top:0;padding:4px 10px;font-size:13px}
+button.danger{color:var(--err)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.flash{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:var(--accent-soft)}
+.flash.err{background:var(--err-soft);color:var(--err)}
+.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.badge.err{background:var(--err-soft);color:var(--err)}
+.muted{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse}
+td,th{text-align:left;vertical-align:top;padding:8px 6px;border-top:1px solid var(--line);font-size:14px}
+th{color:var(--muted);font-weight:500;border-top:0}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);padding:10px;border-radius:8px;font-size:13px;margin:6px 0}
+.keys li{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line)}
+.keys{list-style:none;padding:0;margin:8px 0}
+.narrow{max-width:420px;margin:40px auto}
+.tablewrap{overflow-x:auto}
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <span class="brand">Zyro Support</span>
+  {% if user %}
+  <nav>
+    <a href="/admin" class="{{ 'on' if request.url.path == '/admin' }}">ড্যাশবোর্ড</a>
+    <a href="/admin/billing" class="{{ 'on' if request.url.path.startswith('/admin/billing') }}">বিলিং</a>
+    <a href="/admin/ai" class="{{ 'on' if request.url.path.startswith('/admin/ai') }}">AI এজেন্ট</a>
+    <a href="/admin/try" class="{{ 'on' if request.url.path.startswith('/admin/try') }}">টেস্ট</a>
+  </nav>
+  <form method="post" action="/admin/logout" style="margin:0"><button class="ghost">লগআউট ({{ user }})</button></form>
+  {% endif %}
+</div></header>
+<main>
+{% for f in flash %}<div class="flash {{ f.kind }}">{{ f.text }}</div>{% endfor %}
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>
