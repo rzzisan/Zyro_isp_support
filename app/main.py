@@ -173,12 +173,24 @@ def handle_message(message: dict, contact_name: str | None) -> None:
     context = draft = error = provider = model = None
     try:
         from app.agent import draft_reply
-        from app.ispdigital import diagnose, find_customer_by_whatsapp
+        from app.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp
 
-        customer = find_customer_by_whatsapp(billing(), wa)
-        context = diagnose(billing(), customer) if customer else None
         with store.connect() as conn:
             history = recent_history(conn, wa)
+            link = conn.execute("SELECT value FROM settings WHERE key = ?", (f"link:{wa}",)).fetchone()
+        customer = find_customer_by_whatsapp(billing(), wa)
+        if not customer:
+            # look for an ID / mobile / username the customer typed (newest message first)
+            for h in reversed(history):
+                if h["role"] == "user":
+                    customer = find_customer_by_text(billing(), h["content"])
+                    if customer:
+                        break
+        if not customer and link:
+            customer = find_customer_by_text(billing(), link["value"])
+        if customer:
+            store.set_setting(f"link:{wa}", customer.get("CustomerId") or "")
+        context = diagnose(billing(), customer) if customer else None
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": (message.get("text") or {}).get("body", "")})
         draft, provider, model = draft_reply(history, context)

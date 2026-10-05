@@ -149,6 +149,29 @@ def find_customer_by_whatsapp(api: ISPDigital, wa_number: str) -> dict | None:
     return rows[0] if len(rows) == 1 else None
 
 
+def find_customer_by_text(api: ISPDigital, text: str) -> dict | None:
+    """The customer typed an identifier: mobile (01XXXXXXXXX / +880...), customer ID (e.g. 0071) or PPPoE username."""
+    text = text or ""
+    # mobile numbers
+    for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", text)):
+        mobile = normalize_bd_mobile(m)
+        rows = [r for r in api.search_customers(mobile) if normalize_bd_mobile(r.get("MobileNumber", "")) == mobile]
+        if len(rows) == 1:
+            return rows[0]
+    # customer IDs (short numbers, keep leading zeros)
+    for cid in re.findall(r"(?<!\d)\d{2,6}(?!\d)", text):
+        rows = [r for r in api.search_customers(cid, limit=10)
+                if (r.get("CustomerId") or "").lstrip("0") == cid.lstrip("0")]
+        if len(rows) == 1:
+            return rows[0]
+    # PPPoE usernames like pp.rajib.computer / bp.apon
+    for uname in re.findall(r"\b[a-zA-Z][\w-]*\.[\w.-]+\b", text):
+        rows = [r for r in api.search_customers(uname, limit=10) if (r.get("UserName") or "").lower() == uname.lower()]
+        if len(rows) == 1:
+            return rows[0]
+    return None
+
+
 def diagnose(api: ISPDigital, customer: dict) -> dict:
     """Collect everything the bot needs, in the order: bill -> ONU -> PPPoE."""
     hid = customer["CustomerHeaderId"]
