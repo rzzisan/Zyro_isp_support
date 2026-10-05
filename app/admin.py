@@ -15,6 +15,7 @@ from app.agent import PROVIDERS, active_config, generate, list_models
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory=str(store.BASE_DIR / "templates"))
+templates.env.filters["fromjson"] = json.loads
 
 SETUP_TOKEN = os.environ.get("ADMIN_SETUP_TOKEN", "")
 _failed_logins: dict[str, list[float]] = defaultdict(list)

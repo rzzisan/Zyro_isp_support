@@ -5,6 +5,7 @@ import html
 import json
 import logging
 import os
+import re
 import threading
 
 from fastapi import FastAPI, HTTPException, Request
@@ -170,7 +171,7 @@ def handle_message(message: dict, contact_name: str | None) -> None:
     mode = store.get_setting("bot_mode", "shadow")
     if mode == "off" or message.get("type") != "text":
         return
-    context = draft = error = provider = model = None
+    context = draft = error = provider = model = ticket_note = None
     try:
         from app.agent import draft_reply
         from app.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp
@@ -194,6 +195,12 @@ def handle_message(message: dict, contact_name: str | None) -> None:
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": (message.get("text") or {}).get("body", "")})
         draft, provider, model = draft_reply(history, context)
+        if draft:
+            # [[TICKET: ...]] marker = the AI wants the technician team to follow up
+            m = re.search(r"\[\[TICKET:\s*(.*?)\]\]", draft, re.S)
+            if m:
+                ticket_note = m.group(1).strip()[:300]
+                draft = (draft[:m.start()] + draft[m.end():]).strip()
         if draft and should_send(mode, wa):
             from app import whatsapp
             res = whatsapp.send_text(wa, draft)
@@ -207,8 +214,8 @@ def handle_message(message: dict, contact_name: str | None) -> None:
         error = str(e)[:500]
     with store.connect() as conn:
         conn.execute(
-            """INSERT INTO drafts (wa_message_id, created_at, from_number, context, draft, mode, provider, model, error)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO drafts (wa_message_id, created_at, from_number, context, draft, mode, provider, model, error, ticket_note)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (message.get("id"), store.now(), wa, json.dumps(context, ensure_ascii=False) if context else None,
-             draft, mode, provider, model, error),
+             draft, mode, provider, model, error, ticket_note),
         )

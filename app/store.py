@@ -78,7 +78,7 @@ def connect() -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     # columns added after the first deploy
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(drafts)")}
-    for col in ("provider", "model", "error"):
+    for col in ("provider", "model", "error", "ticket_note"):
         if col not in cols:
             conn.execute(f"ALTER TABLE drafts ADD COLUMN {col} TEXT")
     return conn

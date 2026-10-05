@@ -181,6 +181,7 @@ def diagnose(api: ISPDigital, customer: dict) -> dict:
         "customer": {
             "id": customer.get("CustomerId"),
             "name": customer.get("CustomerName"),
+            "registered_mobile": customer.get("MobileNumber"),
             "username": customer.get("UserName"),
             "package": customer.get("Package"),
             "zone": customer.get("ZoneName"),

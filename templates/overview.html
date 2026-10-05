@@ -25,7 +25,8 @@
       <td class="muted">{{ d.created_at[:16].replace('T', ' ') }}</td>
       <td>{{ d.contact_name or '' }}<br><span class="muted">{{ d.from_number }}</span></td>
       <td>{{ d.customer_text or '' }}</td>
-      <td>{% if d.error %}<span class="badge err">ব্যর্থ</span> <span class="muted">{{ d.error }}</span>{% else %}<pre>{{ d.draft or '' }}</pre><span class="muted">{{ d.provider }} / {{ d.model }}</span>{% if d.mode == 'sent' %} <span class="badge">পাঠানো হয়েছে</span>{% endif %}{% endif %}</td>
+      <td>{% if d.error %}<span class="badge err">ব্যর্থ</span> <span class="muted">{{ d.error }}</span>{% else %}<pre>{{ d.draft or '' }}</pre><span class="muted">{{ d.provider }} / {{ d.model }}</span>{% if d.mode == 'sent' %} <span class="badge">পাঠানো হয়েছে</span>{% endif %}
+        {% if d.ticket_note %}<div class="flash err" style="margin-top:6px">টেকনিশিয়ান লাগবে: {{ d.ticket_note }}{% if d.context %} · কাস্টমার {{ (d.context|fromjson).customer.id }} {{ (d.context|fromjson).customer.name }}{% endif %}</div>{% endif %}{% endif %}</td>
     </tr>
     {% endfor %}
   </table></div>
