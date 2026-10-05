@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS ai_keys (
 """
 
 # settings keys whose values are stored encrypted
-SECRET_SETTINGS = {"billing_password"}
+SECRET_SETTINGS = {"billing_password", "wa_access_token"}
 
 
 def now() -> str:

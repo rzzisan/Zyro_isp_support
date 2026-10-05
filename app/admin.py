@@ -308,6 +308,55 @@ def ai_settings(request: Request, provider: str = Form(...), model: str = Form("
     return back("/admin/ai")
 
 
+# --- WhatsApp connection (Embedded Signup with Coexistence) ----------------------------------
+@router.get("/whatsapp", response_class=HTMLResponse)
+def whatsapp_page(request: Request):
+    if (r := require_login(request)):
+        return r
+    from app import whatsapp
+    status = None
+    pnid = store.get_setting("wa_phone_number_id")
+    if pnid and store.get_setting("wa_access_token"):
+        try:
+            status = whatsapp.phone_status(pnid)
+        except Exception as e:
+            status = {"error": str(e)[:300]}
+    return render(request, "whatsapp.html", app_id=whatsapp.APP_ID, config_id=whatsapp.CONFIG_ID,
+                  waba_id=store.get_setting("wa_waba_id"), phone_number_id=pnid,
+                  onboarded_at=store.get_setting("wa_onboarded_at"), status=status,
+                  last=store.get_setting("wa_last_onboarding"))
+
+
+@router.post("/whatsapp/complete")
+async def whatsapp_complete(request: Request):
+    if not current_user(request):
+        raise HTTPException(status_code=401)
+    check_origin(request)
+    body = await request.json()
+    if not body.get("code") or not body.get("waba_id"):
+        raise HTTPException(status_code=400, detail="code / waba_id missing")
+    from app import whatsapp
+    try:
+        result = whatsapp.complete_onboarding(body["code"], str(body["waba_id"]), body.get("phone_number_id"))
+        return {"ok": True, "result": result}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:500]}
+
+
+@router.post("/whatsapp/sync")
+def whatsapp_sync(request: Request, kind: str = Form(...)):
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    from app import whatsapp
+    try:
+        res = whatsapp.sync(store.get_setting("wa_phone_number_id") or "", kind)
+        flash(request, f"{kind} সিঙ্ক অনুরোধ পাঠানো হয়েছে: {res}")
+    except Exception as e:
+        flash(request, f"ব্যর্থ: {str(e)[:300]}", "err")
+    return back("/admin/whatsapp")
+
+
 # --- try a customer message end to end (nothing is sent) ----------------------------------
 @router.get("/try", response_class=HTMLResponse)
 def try_form(request: Request):

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp সংযোগ{% endblock %}
+{% block content %}
+<h1>WhatsApp সংযোগ</h1>
+
+<div class="card">
+  <h2>বর্তমান অবস্থা</h2>
+  {% if phone_number_id %}
+    <p>WABA: <code>{{ waba_id }}</code> · Phone number ID: <code>{{ phone_number_id }}</code> · সংযুক্ত: {{ (onboarded_at or '')[:16].replace('T', ' ') }} UTC</p>
+    {% if status and not status.error %}
+      <p>নম্বর: <b>{{ status.display_phone_number }}</b> ({{ status.verified_name }}) ·
+         Business অ্যাপেও চালু: {% if status.is_on_biz_app %}<span class="badge">হ্যাঁ (Coexistence)</span>{% else %}<span class="badge warn">না</span>{% endif %} ·
+         প্ল্যাটফর্ম: {{ status.platform_type }} · কোয়ালিটি: {{ status.quality_rating }}</p>
+    {% elif status %}<p class="flash err">{{ status.error }}</p>{% endif %}
+    <div class="row">
+      <form method="post" action="/admin/whatsapp/sync"><input type="hidden" name="kind" value="smb_app_state_sync"><button class="ghost">কন্টাক্ট সিঙ্ক</button></form>
+      <form method="post" action="/admin/whatsapp/sync"><input type="hidden" name="kind" value="history"><button class="ghost">চ্যাট হিস্টরি সিঙ্ক</button></form>
+    </div>
+    <p class="muted">সিঙ্ক শুধু সংযোগের ২৪ ঘণ্টার মধ্যে করা যায়।</p>
+  {% else %}
+    <p class="muted">এখনো কোনো নম্বর সংযুক্ত হয়নি।</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>কোম্পানির WhatsApp Business অ্যাপের নম্বর যুক্ত করুন</h2>
+  <p class="muted">বোতাম চাপলে Meta-র একটা পপআপ খুলবে। নম্বরের ধাপে <b>"Connect your existing WhatsApp Business app"</b> বাছবেন, তারপর ফোনের Business অ্যাপ থেকে অনুমতি দেবেন। নম্বর Business অ্যাপেও আগের মতোই চলবে।</p>
+  <button id="connect">WhatsApp যুক্ত করুন</button>
+  <pre id="log" style="display:none"></pre>
+</div>
+
+<script>
+const log = (t) => { const el = document.getElementById('log'); el.style.display = 'block'; el.textContent += t + '\n'; };
+let session = {};
+
+window.addEventListener('message', (event) => {
+  if (!event.origin.endsWith('facebook.com')) return;
+  try {
+    const data = JSON.parse(event.data);
+    if (data.type === 'WA_EMBEDDED_SIGNUP') {
+      log('Meta: ' + data.event + (data.data && data.data.waba_id ? ' (WABA ' + data.data.waba_id + ')' : ''));
+      if (data.data) session = Object.assign(session, data.data);
+    }
+  } catch (e) { /* non-JSON messages from the SDK */ }
+});
+
+window.fbAsyncInit = function () {
+  FB.init({ appId: '{{ app_id }}', autoLogAppEvents: true, xfbml: false, version: 'v26.0' });
+};
+
+document.getElementById('connect').addEventListener('click', () => {
+  if (typeof FB === 'undefined') { log('Facebook SDK লোড হয়নি, পেজ রিফ্রেশ করুন।'); return; }
+  FB.login(async (response) => {
+    if (!response.authResponse || !response.authResponse.code) { log('সংযোগ বাতিল বা অসম্পূর্ণ।'); return; }
+    // the session message can arrive a moment after the login callback
+    for (let i = 0; i < 20 && !session.waba_id; i++) await new Promise(r => setTimeout(r, 250));
+    if (!session.waba_id) { log('WABA ID পাওয়া যায়নি, আবার চেষ্টা করুন।'); return; }
+    log('সার্ভারে সংযোগ সম্পন্ন করছি...');
+    const r = await fetch('/admin/whatsapp/complete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: response.authResponse.code, waba_id: session.waba_id, phone_number_id: session.phone_number_id || null }),
+    });
+    const j = await r.json();
+    if (j.ok) { log('সম্পন্ন! পেজ রিফ্রেশ হচ্ছে...'); setTimeout(() => location.reload(), 1500); }
+    else log('ব্যর্থ: ' + (j.error || r.status));
+  }, {
+    config_id: '{{ config_id }}',
+    response_type: 'code',
+    override_default_response_type: true,
+    extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
+  });
+});
+</script>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+{% endblock %}
