@@ -60,4 +60,12 @@ class TenancyTest extends TestCase
 
         $this->actingAs($user)->get('/app')->assertForbidden();
     }
+
+    public function test_super_admin_without_company_is_sent_to_super_panel(): void
+    {
+        $admin = User::factory()->create();
+        $admin->forceFill(['is_super_admin' => true])->save();
+        $this->actingAs($admin)->get('/app')->assertRedirect('/super');
+        $this->actingAs($admin)->get('/app/some-company/inbox')->assertRedirect('/super');
+    }
 }

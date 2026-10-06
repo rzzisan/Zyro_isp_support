@@ -3,7 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Models\Company;
-use Filament\Http\Middleware\Authenticate;
+use App\Http\Middleware\AppPanelAuthenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -47,6 +47,6 @@ class AppPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
-            ->authMiddleware([Authenticate::class]);
+            ->authMiddleware([AppPanelAuthenticate::class]);
     }
 }
