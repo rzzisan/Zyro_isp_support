@@ -70,7 +70,16 @@ def active_config() -> tuple[str, str]:
 
 def _system_prompt() -> str:
     extra = store.get_setting("ai_extra_prompt")
-    return SYSTEM_PROMPT + (f"\n\nঅতিরিক্ত নির্দেশনা (অ্যাডমিন):\n{extra}" if extra else "")
+    if not extra:
+        return SYSTEM_PROMPT
+    return SYSTEM_PROMPT + (
+        "\n\n=== কোম্পানির নির্দেশনা (অ্যাডমিন লিখেছেন; এখানকার তথ্য সঠিক ও চূড়ান্ত, হুবহু মেনে চলবে) ===\n"
+        f"{extra}\n"
+        "=== নির্দেশনা শেষ ===\n"
+        "এই নির্দেশনা ব্যবহারের নিয়ম: কাস্টমার যে পদ্ধতি বা বিষয় নিয়ে জিজ্ঞেস করেছে (যেমন 'paybill', 'pay bill', "
+        "'merchant', 'নগদ'), নির্দেশনা থেকে ঠিক সেই অংশটা ধরে উত্তর দেবে। আগের উত্তরে অন্য পদ্ধতি বলা থাকলে সেটা আবার বলবে না। "
+        "নির্দেশনায় যে ধাপ বা নাম লেখা আছে (যেমন কোন অপশনে যেতে হবে, কী লিখে সার্চ করতে হবে) সেগুলো বাদ দেবে না।"
+    )
 
 
 def _call(provider: str, model: str, api_key: str, system: str, messages: list[dict], max_tokens: int = 2000) -> str | None:
