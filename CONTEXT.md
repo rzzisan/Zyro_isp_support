@@ -94,3 +94,11 @@
 - `panel/.env` `WA_SEND_ENABLED=false`: রিপ্লাই সেভ হয় কিন্তু কাস্টমারের কাছে যায় না (টেস্ট মোড)। লাইভে নেওয়ার সময় true করতে হবে।
 - Filament গোটচা: table/filter closure-এর প্যারামিটারের নাম `$query` হতে হবে (`$q` দিলে খালি Builder ইনজেক্ট হয়)। রুট ক্যাশ আছে: টেস্টের আগে `route:clear`।
 - টেস্ট: `tests/Feature/InboxTest.php` (৮টা), মোট ২৮টা পাস।
+
+## SaaS ধাপ ৭ (2026-10-06): Century Link নতুন ইঞ্জিনে
+- nginx `support.zyrotechbd.com`: `location = /webhook` → engine :8994; বাকি সব (পুরনো ড্যাশবোর্ড) → :8993। আগের কনফিগ: `data/nginx-support.before-engine.conf`।
+- engine `.env`: ENGINE_DRY_RUN=0, LEGACY_FORWARD_URL=http://127.0.0.1:8993/webhook (পুরনো বট প্রতিটা webhook-এর কপি পায়)। পুরনো বট `bot_mode=off`: শুধু রেকর্ড রাখে, উত্তর দেয় না।
+- panel `.env` WA_SEND_ENABLED=true: ইনবক্সের রিপ্লাই সত্যিই যায়।
+- পুরনো চ্যাট কপি: `deploy/migrate_legacy_chats.py century-link-network 1309537728917134` (আবার চালানো নিরাপদ)।
+- engine এখন `engine/llm.py`-তে নিজের prompt রাখে (app/ থেকে আর import করে না); নাম ডাকার নিয়ম যোগ হয়েছে।
+- ফেরত যাওয়া: আগের nginx কনফিগ কপি করে reload, পুরনো বটের settings-এ bot_mode=live, engine-এ ENGINE_DRY_RUN=1 আর LEGACY_FORWARD_URL মুছে restart।
