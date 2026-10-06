@@ -10,6 +10,8 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Support\HtmlString;
 use Filament\Support\Colors\Color;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -30,8 +32,12 @@ class AppPanelProvider extends PanelProvider
             ->path('app')
             ->login()
             ->brandName('Zyro Support')
+            ->brandLogo(fn () => view('filament.brand'))
+            ->brandLogoHeight('2.5rem')
+            ->font('Geist')
+            ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString('<link rel="stylesheet" href="'.asset('css/zyro-theme.css').'?v='.filemtime(public_path('css/zyro-theme.css')).'">'))
             ->tenant(Company::class, slugAttribute: 'slug')
-            ->colors(['primary' => Color::Emerald])
+            ->colors(['primary' => Color::hex('#0f7c7b')])
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\Filament\App\Resources')
             ->discoverPages(in: app_path('Filament/App/Pages'), for: 'App\Filament\App\Pages')
             ->pages([Dashboard::class])

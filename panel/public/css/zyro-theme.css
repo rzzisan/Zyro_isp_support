@@ -1,0 +1,224 @@
+/* Zyro Support panel look, matching BSOL (hybrid-stack frontend/src/app/globals.css catv-* shell). */
+:root {
+    --z-bg: #f4f0e8;
+    --z-fg: #1b1f2a;
+    --z-surface: #ffffff;
+    --z-surface-soft: #fff8ef;
+    --z-border: rgba(199, 203, 215, 0.6);
+    --z-muted: #657089;
+    --z-accent: #0f7c7b;
+    /* BSOL teal as Filament's primary palette (buttons use 600 in light, 500 in dark) */
+    --primary-50: #effaf9;
+    --primary-100: #d5f2f0;
+    --primary-200: #aee4e1;
+    --primary-300: #7dd0cc;
+    --primary-400: #3dbab3;
+    --primary-500: #19a59c;
+    --primary-600: #0f7c7b;
+    --primary-700: #0d6766;
+    --primary-800: #0f5352;
+    --primary-900: #104544;
+    --primary-950: #052828;
+}
+
+:root.dark {
+    --z-bg: #0f1523;
+    --z-fg: #e8edf8;
+    --z-surface: #1a2233;
+    --z-surface-soft: #121a29;
+    --z-border: rgba(114, 132, 170, 0.35);
+    --z-muted: #9eabc4;
+    --z-accent: #19a59c;
+}
+
+/* page background: warm paper with soft corner glows (dark: deep navy) */
+html .fi-body {
+    background: radial-gradient(circle at 8% 6%, rgba(255, 238, 208, 0.65), transparent 45%),
+        radial-gradient(circle at 92% 5%, rgba(210, 241, 225, 0.55), transparent 40%), var(--z-bg);
+    background-attachment: fixed;
+    color: var(--z-fg);
+}
+
+html.dark .fi-body {
+    background: var(--z-bg);
+}
+
+/* top bar: teal gradient, white text and icons */
+.fi-body .fi-topbar {
+    background: linear-gradient(135deg, var(--z-accent), color-mix(in srgb, var(--z-accent) 70%, #27c0ae));
+    color: #fff;
+    box-shadow: none;
+    border-bottom: 0;
+    --tw-ring-color: transparent;
+}
+
+.fi-body .fi-topbar .fi-icon-btn,
+.fi-body .fi-topbar .fi-icon-btn .fi-icon,
+.fi-body .fi-topbar .fi-logo,
+.fi-body .fi-topbar .fi-tenant-menu-trigger,
+.fi-body .fi-topbar .fi-tenant-menu-trigger * {
+    color: #fff;
+}
+
+.fi-body .fi-topbar .fi-tenant-menu-trigger:hover,
+.fi-body .fi-topbar .fi-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.17);
+}
+
+.fi-body .fi-topbar .fi-avatar {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+/* sidebar: light surface with a hairline border */
+.fi-body .fi-sidebar {
+    background: color-mix(in srgb, var(--z-surface) 90%, #ffffff 10%);
+    border-right: 1px solid var(--z-border);
+}
+
+html.dark .fi-body .fi-sidebar {
+    background: var(--z-surface);
+}
+
+.fi-body .fi-sidebar-header {
+    background: transparent;
+    box-shadow: none;
+    --tw-ring-color: transparent;
+}
+
+.fi-body .fi-sidebar-group-label {
+    color: var(--z-muted);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.fi-body .fi-sidebar-item-btn {
+    border-radius: 11px;
+    color: var(--z-muted);
+    transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.fi-body .fi-sidebar-item-btn .fi-sidebar-item-label,
+.fi-body .fi-sidebar-item-btn .fi-icon {
+    color: var(--z-muted);
+}
+
+.fi-body .fi-sidebar-item-btn:hover {
+    background: color-mix(in srgb, var(--z-accent) 12%, transparent);
+}
+
+.fi-body .fi-sidebar-item-btn:hover .fi-sidebar-item-label,
+.fi-body .fi-sidebar-item-btn:hover .fi-icon {
+    color: var(--z-fg);
+}
+
+.fi-body .fi-sidebar-item.fi-active > .fi-sidebar-item-btn {
+    background: color-mix(in srgb, var(--z-accent) 18%, transparent);
+}
+
+.fi-body .fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-sidebar-item-label {
+    color: var(--z-fg);
+    font-weight: 700;
+}
+
+.fi-body .fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-icon {
+    color: var(--z-accent);
+}
+
+/* brand mark in the sidebar / topbar */
+.z-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.z-brand-mark {
+    height: 36px;
+    width: 36px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    background: var(--z-accent);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+.fi-topbar .z-brand-mark {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.z-brand-title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.z-brand-sub {
+    margin: 0;
+    font-size: 0.7rem;
+    opacity: 0.8;
+    line-height: 1.1;
+}
+
+/* cards, tables, modals: soft rounded panels */
+.fi-body .fi-section:not(.fi-section-not-contained):not(.fi-aside),
+.fi-body .fi-ta-ctn,
+.fi-body .fi-wi-stats-overview-stat {
+    background: var(--z-surface);
+    border-radius: 18px;
+    box-shadow: 0 14px 30px rgba(17, 27, 44, 0.08);
+    --tw-ring-color: var(--z-border);
+}
+
+.fi-body .fi-modal-window {
+    border-radius: 18px;
+}
+
+.fi-btn {
+    border-radius: 10px;
+    font-weight: 700;
+}
+
+/* solid primary buttons: BSOL accent with white text (Filament would pick a lighter shade + dark text) */
+.fi-btn.fi-color-primary:not(.fi-outlined) {
+    background: var(--z-accent);
+    color: #fff;
+}
+
+.fi-btn.fi-color-primary:not(.fi-outlined):hover {
+    background: color-mix(in srgb, var(--z-accent) 85%, #000);
+    color: #fff;
+}
+
+.fi-btn.fi-color-primary:not(.fi-outlined) .fi-icon {
+    color: #fff;
+}
+
+.fi-body .fi-input-wrp {
+    border-radius: 10px;
+}
+
+.fi-body .fi-header-heading {
+    color: var(--z-fg);
+    letter-spacing: -0.01em;
+}
+
+/* login page */
+.fi-simple-layout {
+    background: radial-gradient(circle at 8% 6%, rgba(255, 238, 208, 0.65), transparent 45%),
+        radial-gradient(circle at 92% 5%, rgba(210, 241, 225, 0.55), transparent 40%), var(--z-bg);
+}
+
+html.dark .fi-simple-layout {
+    background: var(--z-bg);
+}
+
+.fi-simple-main {
+    background: var(--z-surface);
+    border-radius: 18px;
+    box-shadow: 0 14px 30px rgba(17, 27, 44, 0.12);
+}
