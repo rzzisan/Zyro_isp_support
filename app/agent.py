@@ -194,6 +194,26 @@ def _whatsapp_format(text: str | None) -> str | None:
     return text.strip()
 
 
+def transcribe(audio: bytes, mime: str) -> str | None:
+    """Voice note -> Bangla text with Groq Whisper (needs a Groq key on the AI page)."""
+    with store.connect() as conn:
+        rows = conn.execute("SELECT * FROM ai_keys WHERE provider = 'groq' ORDER BY id").fetchall()
+    ext = "ogg" if "ogg" in mime else ("mp4" if "mp4" in mime else ("mpeg" if "mpeg" in mime else "ogg"))
+    for row in rows:
+        r = httpx.post(
+            "https://api.groq.com/openai/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {store.decrypt(row['api_key_enc'])}"},
+            files={"file": (f"voice.{ext}", audio, mime.split(";")[0])},
+            data={"model": "whisper-large-v3", "language": "bn", "response_format": "json"},
+            timeout=60,
+        )
+        if r.status_code in (401, 403, 429):
+            continue
+        r.raise_for_status()
+        return (r.json().get("text") or "").strip() or None
+    raise RuntimeError("no usable Groq key for voice transcription")
+
+
 def list_models(provider: str, api_key: str) -> list[str]:
     """Live model list from the provider, so the admin picks a real model name."""
     if provider == "claude":

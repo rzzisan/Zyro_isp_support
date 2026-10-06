@@ -137,7 +137,7 @@ def reset_billing() -> None:
 
 def recent_history(conn, wa_number: str, limit: int = 12) -> list[dict]:
     rows = conn.execute(
-        """SELECT echo, body FROM messages WHERE from_number = ? AND msg_type = 'text' AND body IS NOT NULL
+        """SELECT echo, body FROM messages WHERE from_number = ? AND msg_type IN ('text', 'audio') AND body IS NOT NULL
            ORDER BY received_at DESC LIMIT ?""",
         (wa_number, limit),
     ).fetchall()
@@ -300,14 +300,63 @@ def identify(wa: str, text: str) -> tuple[dict | None, str | None, str | None, s
     return None, "আসসালামু আলাইকুম। " + ASK_ID_TEXT, None, None
 
 
+def send_fixed(message: dict, wa: str, phone_number_id: str | None, mode: str, text: str, note: str | None) -> None:
+    """A fixed reply (no AI), recorded like a draft."""
+    signature = store.get_setting("reply_signature", "- Zyro")
+    body = text + (f"\n\n{signature}" if signature else "")
+    error = None
+    try:
+        if should_send(mode, wa):
+            from app import whatsapp
+            res = whatsapp.send_text(wa, body, phone_number_id)
+            mode = "sent"
+            with store.connect() as conn:
+                conn.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                             (res.get("messages", [{}])[0].get("id"), store.now(), None, wa, None, "text", body, 1))
+    except Exception as e:
+        error = str(e)[:500]
+    with store.connect() as conn:
+        conn.execute(
+            """INSERT INTO drafts (wa_message_id, created_at, from_number, context, draft, mode, provider, model, error, ticket_note)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (message.get("id"), store.now(), wa, None, body, mode, "flow", "fixed", error, note))
+
+
 def handle_message(message: dict, contact_name: str | None, phone_number_id: str | None = None) -> None:
     """Identify customer, check billing/ONU/PPPoE, draft a reply (shadow mode stores it only)."""
     wa = message.get("from")
     log.info("message from %s (%s): type=%s", wa, contact_name, message.get("type"))
     mode = store.get_setting("bot_mode", "shadow")
-    if mode == "off" or message.get("type") != "text" or not bot_serves(phone_number_id) or bot_paused(wa):
+    mtype = message.get("type")
+    if mode == "off" or not bot_serves(phone_number_id) or bot_paused(wa):
+        return
+    if mtype not in ("text", "audio", "image", "video", "document"):
         return
     context = draft = error = provider = model = ticket_note = None
+    if mtype in ("image", "video", "document"):
+        caption = ((message.get(mtype) or {}).get("caption") or "").strip()
+        if not caption:
+            send_fixed(message, wa, phone_number_id, mode,
+                       "পেয়েছি ভাই, আমাদের টিম দেখে নেবে। সমস্যাটা একটু লিখে জানালে দ্রুত সাহায্য করতে পারব।",
+                       f"কাস্টমার {mtype} পাঠিয়েছে, টিম দেখবে")
+            return
+        message = {**message, "type": "text", "text": {"body": caption}}
+    if mtype == "audio":
+        try:
+            from app import whatsapp
+            from app.agent import transcribe
+            audio, mime = whatsapp.download_media((message.get("audio") or {}).get("id", ""))
+            spoken = transcribe(audio, mime)
+        except Exception:
+            log.exception("voice transcription failed")
+            spoken = None
+        if not spoken or len(spoken) < 2:
+            send_fixed(message, wa, phone_number_id, mode,
+                       "ভাই, ভয়েসটা ঠিক বুঝতে পারিনি। একটু লিখে জানাবেন?", None)
+            return
+        with store.connect() as conn:
+            conn.execute("UPDATE messages SET body = ? WHERE wa_message_id = ?", (f"[ভয়েস] {spoken}", message.get("id")))
+        message = {**message, "type": "text", "text": {"body": spoken}}
     try:
         from app.agent import draft_reply
         from app.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp

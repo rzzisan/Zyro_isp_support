@@ -75,6 +75,14 @@ def send_text(to: str, body: str, phone_number_id: str | None = None) -> dict:
     return _check(r)
 
 
+def download_media(media_id: str) -> tuple[bytes, str]:
+    """Media sent by a customer (voice note, image). Returns (bytes, mime type)."""
+    meta = _check(httpx.get(f"{GRAPH}/{media_id}", headers={"Authorization": f"Bearer {token()}"}, timeout=30))
+    r = httpx.get(meta["url"], headers={"Authorization": f"Bearer {token()}"}, timeout=60, follow_redirects=True)
+    r.raise_for_status()
+    return r.content, meta.get("mime_type") or r.headers.get("content-type", "application/octet-stream")
+
+
 def send_template(to: str, name: str, language: str) -> dict:
     r = httpx.post(f"{GRAPH}/{store.get_setting('wa_phone_number_id')}/messages",
                    json={"messaging_product": "whatsapp", "to": to, "type": "template",
