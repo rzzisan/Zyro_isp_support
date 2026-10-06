@@ -88,6 +88,24 @@ class WhatsApp
         return $message;
     }
 
+    /** Ask Meta about the number with its token; stores the display number and verified name it returns. */
+    public static function checkAccount(WaAccount $account): array
+    {
+        try {
+            $info = Http::withToken($account->access_token)->timeout(20)
+                ->get(static::graph($account->phone_number_id), ['fields' => 'display_phone_number,verified_name,quality_rating'])
+                ->throw()->json();
+        } catch (RequestException $e) {
+            throw new RuntimeException(mb_substr($e->response->json('error.message') ?? $e->getMessage(), 0, 300));
+        }
+        $account->forceFill([
+            'display_phone_number' => $info['display_phone_number'] ?? $account->display_phone_number,
+            'verified_name' => $info['verified_name'] ?? $account->verified_name,
+        ])->save();
+
+        return $info;
+    }
+
     /** Voice / image / file of a message, downloaded once from Meta and kept on disk. Returns [path, mime]. */
     public static function media(WaMessage $message): array
     {
