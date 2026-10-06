@@ -77,4 +77,9 @@ class Company extends Model
     {
         return $this->hasMany(WaAccount::class);
     }
+
+    public function waContacts(): HasMany
+    {
+        return $this->hasMany(WaContact::class);
+    }
 }

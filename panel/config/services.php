@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'whatsapp' => [
+        // false = inbox replies are stored but not sent (test mode)
+        'send_enabled' => env('WA_SEND_ENABLED', false),
+        'graph_version' => env('WA_GRAPH_VERSION', 'v21.0'),
+    ],
+
 ];
