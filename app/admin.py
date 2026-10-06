@@ -161,6 +161,64 @@ def overview(request: Request):
                   billing_ok=bool(billing_user and billing_pass))
 
 
+# --- conversations, grouped by WhatsApp number ------------------------------------------
+@router.get("/chats", response_class=HTMLResponse)
+def chats(request: Request, q: str = ""):
+    if (r := require_login(request)):
+        return r
+    with store.connect() as conn:
+        rows = conn.execute(
+            """SELECT from_number,
+                      MAX(received_at) AS last_at,
+                      SUM(CASE WHEN echo = 0 THEN 1 ELSE 0 END) AS incoming,
+                      SUM(CASE WHEN echo = 1 THEN 1 ELSE 0 END) AS outgoing,
+                      MAX(contact_name) AS name
+               FROM messages WHERE from_number IS NOT NULL
+               GROUP BY from_number ORDER BY last_at DESC LIMIT 300"""
+        ).fetchall()
+        last = {r["from_number"]: r["body"] for r in conn.execute(
+            """SELECT m.from_number, m.body FROM messages m
+               JOIN (SELECT from_number, MAX(received_at) t FROM messages GROUP BY from_number) x
+                 ON x.from_number = m.from_number AND x.t = m.received_at""")}
+        tickets = {r["from_number"]: r["n"] for r in conn.execute(
+            "SELECT from_number, COUNT(*) n FROM drafts WHERE ticket_note IS NOT NULL GROUP BY from_number")}
+        links = {r["key"][5:]: r["value"] for r in conn.execute("SELECT key, value FROM settings WHERE key LIKE 'link:%'")}
+    items = [dict(r, last=last.get(r["from_number"]), tickets=tickets.get(r["from_number"], 0),
+                  customer_id=links.get(r["from_number"])) for r in rows]
+    if q.strip():
+        qq = q.strip().lower()
+        items = [i for i in items if qq in (i["from_number"] or "") or qq in (i["name"] or "").lower()
+                 or qq == (i["customer_id"] or "").lstrip("0") or qq == (i["customer_id"] or "")]
+    return render(request, "chats.html", items=items, q=q)
+
+
+@router.get("/chats/{number}", response_class=HTMLResponse)
+def chat_thread(request: Request, number: str):
+    if (r := require_login(request)):
+        return r
+    with store.connect() as conn:
+        msgs = conn.execute(
+            "SELECT * FROM messages WHERE from_number = ? ORDER BY received_at", (number,)).fetchall()
+        drafts = {d["wa_message_id"]: d for d in conn.execute(
+            "SELECT * FROM drafts WHERE from_number = ?", (number,))}
+        link = conn.execute("SELECT value FROM settings WHERE key = ?", (f"link:{number}",)).fetchone()
+    items = []
+    for m in msgs:
+        d = drafts.get(m["wa_message_id"])
+        items.append({
+            "at": m["received_at"], "body": m["body"], "type": m["msg_type"],
+            "who": "customer" if not m["echo"] else ("staff" if m["phone_number_id"] else "bot"),
+            "draft": d["draft"] if d and d["mode"] != "sent" else None,
+            "draft_mode": d["mode"] if d else None,
+            "error": d["error"] if d else None,
+            "ticket": d["ticket_note"] if d else None,
+            "ctx": json.loads(d["context"]) if d and d["context"] else None,
+        })
+    name = next((m["contact_name"] for m in msgs if m["contact_name"]), None)
+    return render(request, "chat_thread.html", number=number, name=name, items=items,
+                  customer_id=link["value"] if link else None)
+
+
 # --- billing -------------------------------------------------------------------------
 @router.get("/billing", response_class=HTMLResponse)
 def billing_form(request: Request):

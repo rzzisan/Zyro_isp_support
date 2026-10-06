@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ name or number }}{% endblock %}
+{% block content %}
+<p><a href="/admin/chats">← সব কথোপকথন</a></p>
+<h1>{{ name or number }} <span class="muted">{{ number }}</span>
+  {% if customer_id %}<span class="badge">কাস্টমার {{ customer_id }}</span>{% endif %}</h1>
+<style>
+.thread{display:flex;flex-direction:column;gap:10px}
+.msg{max-width:78%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-break:break-word}
+.msg.customer{align-self:flex-start;background:var(--card);border:1px solid var(--line)}
+.msg.bot,.msg.staff{align-self:flex-end;background:var(--accent-soft)}
+.meta{font-size:12px;color:var(--muted);margin-top:4px}
+.draft{align-self:flex-end;max-width:78%;padding:8px 12px;border-radius:12px;border:1px dashed var(--line);color:var(--muted);white-space:pre-wrap}
+</style>
+<div class="card thread">
+  {% for i in items %}
+    <div class="msg {{ i.who }}">{{ i.body or ('[' ~ i.type ~ ']') }}
+      <div class="meta">{% if i.who == 'customer' %}কাস্টমার{% elif i.who == 'bot' %}বট{% else %}স্টাফ (Business অ্যাপ){% endif %} · {{ i.at[:16].replace('T', ' ') }} UTC
+        {% if i.ctx %} · বিলিং: {{ i.ctx.customer.name }} ({{ i.ctx.customer.id }}){% endif %}</div>
+    </div>
+    {% if i.draft %}<div class="draft">খসড়া (পাঠানো হয়নি): {{ i.draft }}</div>{% endif %}
+    {% if i.error %}<div class="draft" style="color:var(--err)">ব্যর্থ: {{ i.error }}</div>{% endif %}
+    {% if i.ticket %}<div class="flash err" style="align-self:flex-end;max-width:78%;margin:0">টিকেট: {{ i.ticket }}</div>{% endif %}
+  {% endfor %}
+</div>
+{% endblock %}

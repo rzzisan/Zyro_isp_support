@@ -53,6 +53,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);padding:10px
   {% if user %}
   <nav>
     <a href="/admin" class="{{ 'on' if request.url.path == '/admin' }}">ড্যাশবোর্ড</a>
+    <a href="/admin/chats" class="{{ 'on' if request.url.path.startswith('/admin/chats') }}">কথোপকথন</a>
     <a href="/admin/billing" class="{{ 'on' if request.url.path.startswith('/admin/billing') }}">বিলিং</a>
     <a href="/admin/ai" class="{{ 'on' if request.url.path.startswith('/admin/ai') }}">AI এজেন্ট</a>
     <a href="/admin/whatsapp" class="{{ 'on' if request.url.path.startswith('/admin/whatsapp') }}">WhatsApp</a>
