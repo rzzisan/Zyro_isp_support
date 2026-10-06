@@ -287,6 +287,7 @@ def ai_page(request: Request):
                   extra_prompt=store.get_setting("ai_extra_prompt", ""), models=models,
                   live_allowlist=store.get_setting("live_allowlist", ""),
                   auto_ticket=store.get_setting("auto_ticket", "on"),
+                  reply_signature=store.get_setting("reply_signature", "- Zyro"),
                   suggested=json.dumps({k: v["suggested"] for k, v in PROVIDERS.items()}))
 
 
@@ -355,12 +356,13 @@ def ai_key_models(request: Request, key_id: int):
 @router.post("/ai/settings")
 def ai_settings(request: Request, provider: str = Form(...), model: str = Form(""),
                 bot_mode: str = Form("shadow"), extra_prompt: str = Form(""), live_allowlist: str = Form(""),
-                auto_ticket: str = Form("off")):
+                auto_ticket: str = Form("off"), reply_signature: str = Form("- Zyro")):
     if (r := require_login(request)):
         return r
     check_origin(request)
     store.set_setting("live_allowlist", live_allowlist.strip() or None)
     store.set_setting("auto_ticket", "on" if auto_ticket == "on" else "off")
+    store.set_setting("reply_signature", reply_signature.strip())
     if provider not in PROVIDERS or bot_mode not in ("shadow", "off", "live"):
         flash(request, "ভুল মান।", "err")
         return back("/admin/ai")

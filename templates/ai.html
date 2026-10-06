@@ -24,6 +24,8 @@
     <label>চালু মোডে শুধু এই নম্বরগুলোকে উত্তর দেবে <span class="muted">(কমা দিয়ে আলাদা; খালি রাখলে সবাইকে। বাকিদের জন্য শুধু খসড়া হবে)</span></label>
     <input name="live_allowlist" value="{{ live_allowlist or '' }}" placeholder="01782703244, 01XXXXXXXXX">
     <label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" name="auto_ticket" value="on" style="width:auto" {{ 'checked' if auto_ticket == 'on' }}> দরকার হলে বিলিং সফটওয়্যারে নিজে থেকে টিকেট খুলবে (SMS ছাড়া, একই কাস্টমারের খোলা টিকেট থাকলে নতুন না)</label>
+    <label>প্রতিটা উত্তরের শেষে স্বাক্ষর <span class="muted">(খালি রাখলে কিছু যোগ হবে না)</span></label>
+    <input name="reply_signature" value="{{ reply_signature or '' }}">
     <label>অতিরিক্ত নির্দেশনা <span class="muted">(ঐচ্ছিক, যেমন পেমেন্টের বিকাশ নম্বর, অফিসের সময়)</span></label>
     <textarea name="extra_prompt">{{ extra_prompt or '' }}</textarea>
     <button>সেভ করুন</button>

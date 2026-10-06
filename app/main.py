@@ -235,6 +235,9 @@ def handle_message(message: dict, contact_name: str | None) -> None:
             ticket_note, extra = open_ticket(customer, wa, ticket_note)
             if extra:
                 draft = draft + "\n" + extra
+        signature = store.get_setting("reply_signature", "- Zyro")
+        if draft and signature and not draft.rstrip().endswith(signature):
+            draft = draft.rstrip() + "\n\n" + signature
         if draft and should_send(mode, wa):
             from app import whatsapp
             res = whatsapp.send_text(wa, draft)
