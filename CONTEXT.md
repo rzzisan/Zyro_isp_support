@@ -102,3 +102,4 @@
 - পুরনো চ্যাট কপি: `deploy/migrate_legacy_chats.py century-link-network 1309537728917134` (আবার চালানো নিরাপদ)।
 - engine এখন `engine/llm.py`-তে নিজের prompt রাখে (app/ থেকে আর import করে না); নাম ডাকার নিয়ম যোগ হয়েছে।
 - ফেরত যাওয়া: আগের nginx কনফিগ কপি করে reload, পুরনো বটের settings-এ bot_mode=live, engine-এ ENGINE_DRY_RUN=1 আর LEGACY_FORWARD_URL মুছে restart।
+- 2026-10-06: পুরনো বট বন্ধ (Zisan-এর নির্দেশে)। `zyro-support` সার্ভিস disable, engine আর কপি পাঠায় না, support.zyrotechbd.com/ → desk.zyrotechbd.com/app রিডাইরেক্ট; শুধু /webhook ইঞ্জিনে। পুরনো ডেটা `data/messages.db`-তে রাখা আছে, আগের nginx কনফিগ `data/nginx-support.with-legacy.conf`।
