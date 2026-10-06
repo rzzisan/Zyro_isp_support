@@ -3,16 +3,17 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Str;
 
 class Company extends Model
 {
-    protected $fillable = ['name', 'slug', 'status', 'plan', 'trial_ends_at', 'contact_phone', 'contact_email'];
+    protected $fillable = ['name', 'slug', 'status', 'plan_id', 'trial_ends_at', 'subscription_ends_at', 'contact_phone', 'contact_email'];
 
     protected function casts(): array
     {
-        return ['trial_ends_at' => 'datetime'];
+        return ['trial_ends_at' => 'datetime', 'subscription_ends_at' => 'datetime'];
     }
 
     protected static function booted(): void
@@ -33,5 +34,20 @@ class Company extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)->withPivot('role')->withTimestamps();
+    }
+
+    public function plan(): BelongsTo
+    {
+        return $this->belongsTo(Plan::class);
+    }
+
+    /** Agent seats left under the current plan (null = no plan / unlimited). */
+    public function seatsLeft(): ?int
+    {
+        if (! $this->plan) {
+            return null;
+        }
+
+        return max(0, $this->plan->max_agents - $this->users()->count());
     }
 }

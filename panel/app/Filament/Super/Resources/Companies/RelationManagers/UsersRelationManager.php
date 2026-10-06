@@ -48,8 +48,8 @@ class UsersRelationManager extends RelationManager
                     ->formatStateUsing(fn ($state) => self::roles()[$state] ?? $state),
             ])
             ->headerActions([
-                CreateAction::make()->label('নতুন ইউজার'),
-                AttachAction::make()->label('বিদ্যমান ইউজার যোগ')->preloadRecordSelect()
+                CreateAction::make()->label('নতুন ইউজার')->before(fn () => $this->ensureSeat()),
+                AttachAction::make()->label('বিদ্যমান ইউজার যোগ')->preloadRecordSelect()->before(fn () => $this->ensureSeat())
                     ->schema(fn (AttachAction $action): array => [
                         $action->getRecordSelect(),
                         Select::make('role')->label('রোল')->options(self::roles())->required()->default('agent'),
@@ -59,5 +59,17 @@ class UsersRelationManager extends RelationManager
                 EditAction::make(),
                 DetachAction::make()->label('কোম্পানি থেকে সরান'),
             ]);
+    }
+
+    /** Stop when the company plan has no agent seats left. */
+    protected function ensureSeat(): void
+    {
+        $left = $this->getOwnerRecord()->seatsLeft();
+        if ($left !== null && $left <= 0) {
+            \Filament\Notifications\Notification::make()->danger()
+                ->title('প্যাকেজের ইউজার সীমা শেষ')
+                ->body('এই কোম্পানির প্যাকেজে আর ইউজার যোগ করা যাবে না। প্যাকেজ বদলান।')->send();
+            throw new \Filament\Support\Exceptions\Halt();
+        }
     }
 }
