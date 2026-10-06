@@ -72,4 +72,9 @@ class Company extends Model
     {
         return $this->hasOne(BotSetting::class);
     }
+
+    public function waAccounts(): HasMany
+    {
+        return $this->hasMany(WaAccount::class);
+    }
 }
