@@ -90,7 +90,7 @@ class CompanySettingsTest extends TestCase
             'demo.ispdigital.cloud/Account/Login' => Http::response('<input name="__RequestVerificationToken" type="hidden" value="tok123">'),
             'demo.ispdigital.cloud/Account/LoginChecker' => Http::response('', 302, ['Location' => '/EmployeeDashboard/Index']),
             'demo.ispdigital.cloud/EmployeeDashboard/Index' => Http::response('ok'),
-            'demo.ispdigital.cloud/Customer/AjaxCustomerList*' => Http::response(['iTotalRecords' => 4814, 'aaData' => []]),
+            'demo.ispdigital.cloud/Customer/AjaxCustomerList*' => Http::response(['iTotalRecords' => 1, 'iTotalDisplayRecords' => 4814, 'aaData' => []]),
         ]);
         $this->as($this->owner);
         Livewire::test(BillingSettings::class)->call('testConnection');

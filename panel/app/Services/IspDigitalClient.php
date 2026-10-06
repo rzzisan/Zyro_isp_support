@@ -61,6 +61,6 @@ class IspDigitalClient
             throw new RuntimeException('কাস্টমার তালিকা পড়া যায়নি (এই ইউজারের অনুমতি দেখুন)।');
         }
 
-        return (int) ($r->json('iTotalRecords') ?? 0);
+        return (int) ($r->json('iTotalDisplayRecords') ?? $r->json('iTotalRecords') ?? 0);
     }
 }
