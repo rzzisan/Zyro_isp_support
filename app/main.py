@@ -153,6 +153,29 @@ def recent_history(conn, wa_number: str, limit: int = 12) -> list[dict]:
     return merged
 
 
+def open_ticket(customer: dict, wa: str, note: str) -> tuple[str, str | None]:
+    """Open a support ticket in ISP Digital (no SMS). Returns (dashboard note, line to add to the reply)."""
+    from app.ispdigital import normalize_bd_mobile
+    category, _, detail = note.partition("|")
+    category, detail = category.strip(), (detail.strip() or category.strip())
+    try:
+        existing = billing().open_tickets_for(customer.get("UserName") or "")
+        if existing:
+            no = existing[0].get("ComplainNumber") or existing[0].get("ComplainId")
+            return f"{note} → আগেই খোলা টিকেট আছে ({no}), নতুন খোলা হয়নি", \
+                "আপনার এই সমস্যার জন্য আগেই একটা অভিযোগ খোলা আছে, টিম সেটা দেখছে।"
+        _, cats = billing().ticket_form()
+        cid = cats.get(category) or next((v for k, v in cats.items() if category and category.lower() in k.lower()), None) \
+            or cats.get("Others Support")
+        mobile = normalize_bd_mobile(customer.get("MobileNumber") or "") or normalize_bd_mobile(wa)
+        msg = billing().create_ticket(customer["CustomerHeaderId"], cid, 2, mobile,
+                                      f"[WhatsApp বট] {detail}\nকাস্টমার WhatsApp: {wa}", send_sms=False)
+        return f"{note} → টিকেট খোলা হয়েছে: {msg}", None
+    except Exception as e:
+        log.exception("ticket failed")
+        return f"{note} → টিকেট খোলা যায়নি: {str(e)[:200]}", None
+
+
 def should_send(mode: str, wa: str) -> bool:
     """live = reply automatically, but only to allow-listed numbers when a list is set."""
     if mode != "live":
@@ -205,6 +228,11 @@ def handle_message(message: dict, contact_name: str | None) -> None:
             if m:
                 ticket_note = m.group(1).strip()[:300]
                 draft = (draft[:m.start()] + draft[m.end():]).strip()
+        if draft and ticket_note and customer and should_send(mode, wa) \
+                and store.get_setting("auto_ticket", "on") == "on":
+            ticket_note, extra = open_ticket(customer, wa, ticket_note)
+            if extra:
+                draft = draft + "\n" + extra
         if draft and should_send(mode, wa):
             from app import whatsapp
             res = whatsapp.send_text(wa, draft)

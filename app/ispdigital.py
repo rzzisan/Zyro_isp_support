@@ -4,6 +4,7 @@ No official API: logs in with a staff user like the browser does, then
 calls the JSON endpoints the web pages use. Never returns PPPoE/portal
 passwords to callers.
 """
+import html
 import os
 import re
 import threading
@@ -131,6 +132,54 @@ class ISPDigital:
             {"draw": 1, "start": 0, "length": 10, "search[value]": username, "search[regex]": "false"},
         )
         return data.get("aaData", [])
+
+
+    # --- write: support tickets -----------------------------------------------------
+    def ticket_form(self) -> tuple[str, dict[str, str]]:
+        """Anti-forgery token of the New Ticket form + {category name: id}."""
+        with self._lock:
+            if not self._logged_in:
+                self.login()
+            h = self._client.get("/ClientSupport/DailyComplainList").text
+        i = h.find('id="frmAdminSupportTicket"')
+        m = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"', h[i:i + 5000]) if i >= 0 else None
+        if not m:
+            self._logged_in = False
+            raise LoginError("ticket form not available")
+        sel = re.search(r'<select[^>]*id="ProblemCategoryId".*?</select>', h, re.S)
+        cats = {html.unescape(name).strip(): cid for cid, name in
+                re.findall(r'<option value="(\d+)"[^>]*>([^<]+)</option>', sel.group(0))} if sel else {}
+        return m.group(1), cats
+
+    def create_ticket(self, header_id: int, category_id: str, priority_id: int, mobile: str,
+                      comment: str, send_sms: bool = False) -> str:
+        """Opens a client support ticket like the admin 'Open New Ticket' form. Returns the panel's message."""
+        token, _ = self.ticket_form()
+        data = {
+            "__RequestVerificationToken": token,
+            "TicketNumber": "0", "TicketConversationId": "0",
+            "CustomerHeaderId": str(header_id),
+            "ProblemCategoryId": str(category_id),
+            "ProblemPriorityId": str(priority_id),
+            "ComplainedMobileNumber": mobile,
+            "RemarksOrComment": comment[:1900],
+            "IsSendSMSToClient": "true" if send_sms else "false",
+        }
+        with self._lock:
+            r = self._client.post("/ClientSupport/DailyComplainList", data=data,
+                                  files={"Attachments": ("", b"", "application/octet-stream")},
+                                  headers={"X-Requested-With": "XMLHttpRequest"})
+        r.raise_for_status()
+        res = r.json()
+        if res.get("errMSG"):
+            raise RuntimeError(res["errMSG"])
+        return res.get("sucMSG") or "ok"
+
+    def open_tickets_for(self, username: str) -> list[dict]:
+        rows = self.open_tickets(username)
+        # the daily complain list holds unresolved tickets: Status 0 = pending, 1 = processing
+        return [t for t in rows if (t.get("UserName") or "").lower() == username.lower()
+                and t.get("Status") in (0, 1)]
 
 
 def normalize_bd_mobile(wa_number: str) -> str:
