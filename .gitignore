@@ -15,3 +15,4 @@ panel/vendor/
 panel/node_modules/
 panel/.env
 panel/storage/*.key
+engine/.env

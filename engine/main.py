@@ -1,0 +1,338 @@
+"""Zyro Support engine — one WhatsApp webhook for every company.
+
+The receiving business number (phone_number_id) decides the company; that company's billing
+connection, AI keys and bot settings are used. ENGINE_DRY_RUN=1: nothing is sent to WhatsApp and
+no billing tickets are opened (drafts are stored with mode 'dry_run').
+"""
+import hashlib
+import hmac
+import json
+import logging
+import os
+import re
+import threading
+from datetime import datetime, timedelta, timezone
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import PlainTextResponse
+
+from engine import db, tenant as tenants
+from engine.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
+from engine.tenant import Tenant
+
+VERIFY_TOKEN = os.environ.get("WA_VERIFY_TOKEN", "")
+APP_SECRET = os.environ.get("META_APP_SECRET", "")
+DRY_RUN = os.environ.get("ENGINE_DRY_RUN", "1") == "1"
+MEDIA_TYPES = ("audio", "image", "video", "document", "sticker")
+
+log = logging.getLogger("zyro-engine")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.get("/health")
+def health():
+    return {"ok": True, "dry_run": DRY_RUN}
+
+
+@app.get("/webhook")
+def verify(request: Request):
+    q = request.query_params
+    if q.get("hub.mode") == "subscribe" and VERIFY_TOKEN and hmac.compare_digest(q.get("hub.verify_token", ""), VERIFY_TOKEN):
+        return PlainTextResponse(q.get("hub.challenge", ""))
+    raise HTTPException(status_code=403)
+
+
+def signature_ok(raw: bytes, header: str) -> bool:
+    if not APP_SECRET or not header.startswith("sha256="):
+        return False
+    return hmac.compare_digest(header[7:], hmac.new(APP_SECRET.encode(), raw, hashlib.sha256).hexdigest())
+
+
+# --- storage helpers ---------------------------------------------------------------------
+def contact_for(t: Tenant, wa: str, name: str | None) -> dict:
+    return db.execute(
+        """INSERT INTO wa_contacts (company_id, wa_number, name, last_message_at, created_at, updated_at)
+           VALUES (%s, %s, %s, now(), now(), now())
+           ON CONFLICT (company_id, wa_number) DO UPDATE
+             SET name = COALESCE(EXCLUDED.name, wa_contacts.name), last_message_at = now(), updated_at = now()
+           RETURNING *""",
+        (t.company_id, wa, name),
+    )
+
+
+def save_message(t: Tenant, contact_id: int, wa_message_id: str | None, direction: str, sender: str,
+                 mtype: str, body: str | None, media: dict | None = None) -> dict | None:
+    return db.execute(
+        """INSERT INTO wa_messages (company_id, contact_id, wa_account_id, wa_message_id, direction, sender,
+                                    type, body, media_id, media_mime, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+           ON CONFLICT (wa_message_id) DO NOTHING RETURNING id""",
+        (t.company_id, contact_id, t.wa_account_id, wa_message_id, direction, sender, mtype, body,
+         media.get("id") if media else None, media.get("mime_type") if media else None),
+    )
+
+
+def history_for(t: Tenant, contact_id: int, limit: int = 12) -> list[dict]:
+    rows = db.all_rows(
+        """SELECT direction, body FROM wa_messages
+           WHERE company_id = %s AND contact_id = %s AND type IN ('text', 'audio') AND body IS NOT NULL
+           ORDER BY created_at DESC, id DESC LIMIT %s""",
+        (t.company_id, contact_id, limit),
+    )
+    merged: list[dict] = []
+    for r in reversed(rows):
+        role = "user" if r["direction"] == "in" else "assistant"
+        if merged and merged[-1]["role"] == role:
+            merged[-1]["content"] += "\n" + r["body"]
+        else:
+            merged.append({"role": role, "content": r["body"]})
+    while merged and merged[0]["role"] != "user":
+        merged.pop(0)
+    return merged
+
+
+def save_draft(t: Tenant, contact_id: int, message_id: int | None, mode: str, draft: str | None,
+               context=None, provider=None, model=None, error=None, ticket_note=None) -> None:
+    db.execute(
+        """INSERT INTO wa_drafts (company_id, contact_id, message_id, context, draft, mode, provider, model, error,
+                                  ticket_note, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())""",
+        (t.company_id, contact_id, message_id, json.dumps(context, ensure_ascii=False) if context else None,
+         draft, mode, provider, model, error, ticket_note),
+    )
+
+
+# --- webhook ---------------------------------------------------------------------------------
+@app.post("/webhook")
+async def receive(request: Request):
+    raw = await request.body()
+    if not signature_ok(raw, request.headers.get("x-hub-signature-256", "")):
+        raise HTTPException(status_code=403)
+    payload = json.loads(raw)
+    jobs = []
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value", {})
+            pnid = value.get("metadata", {}).get("phone_number_id")
+            t = tenants.by_phone_number_id(pnid) if pnid else None
+            db.execute("INSERT INTO wa_events (company_id, payload, received_at) VALUES (%s, %s, now())",
+                       (t.company_id if t else None, json.dumps({"field": change.get("field"), "value": value})))
+            if not t:
+                continue  # a number no company owns
+            if change.get("field") == "messages":
+                for s in value.get("statuses", []):
+                    db.execute("UPDATE wa_messages SET status = %s WHERE wa_message_id = %s AND company_id = %s",
+                               (s.get("status"), s.get("id"), t.company_id))
+            if change.get("field") not in ("messages", "smb_message_echoes"):
+                continue
+            echo = change.get("field") == "smb_message_echoes"
+            names = {c.get("wa_id"): c.get("profile", {}).get("name") for c in value.get("contacts", [])}
+            for m in value.get("messages", []) + value.get("message_echoes", []):
+                wa = m.get("to") if echo else m.get("from")
+                c = contact_for(t, wa, names.get(wa))
+                mtype = m.get("type")
+                media = m.get(mtype) if mtype in MEDIA_TYPES else None
+                body = (m.get("text") or {}).get("body") or (media or {}).get("caption") \
+                    or ((m.get("button") or {}).get("text") if mtype == "button" else None)
+                saved = save_message(t, c["id"], m.get("id"), "out" if echo else "in", "app" if echo else "customer",
+                                     mtype, body, media)
+                if not echo and saved:  # skip Meta retries
+                    jobs.append((t, c, m, saved["id"]))
+    for job in jobs:
+        threading.Thread(target=handle_message, args=job, daemon=True).start()
+    return {"ok": True}
+
+
+# --- identification flow ----------------------------------------------------------------------
+YES = ("হ্যাঁ", "হ্যা", "হা", "জি", "জ্বি", "জী", "ঠিক", "yes", "ha", "hae", "hea", "hm", "hmm", "ji", "jee", "ok",
+       "thik", "right", "correct", "y")
+NO = ("না", "নাহ", "no", "na", "nah", "not", "noi", "nai", "n")
+ASK_ID = "আপনি লাইন নেওয়ার সময় যে ফোন নম্বর দিয়েছিলেন সেই নম্বরটা দিন, অথবা কাস্টমার ID জানা থাকলে বলুন।"
+AGENT = "ঠিক আছে ভাই, শিগগিরই আমাদের একজন সাপোর্ট এজেন্ট আপনার সাথে যোগাযোগ করবেন।"
+
+
+def _yes_no(text: str) -> str | None:
+    w = re.sub(r"[^\wঀ-৿ ]", " ", (text or "").lower()).split()
+    if not w:
+        return None
+    if w[0] in NO or "না" in w[:3]:
+        return "no"
+    if w[0] in YES:
+        return "yes"
+    return None
+
+
+def identify(t: Tenant, contact: dict, text: str):
+    """Returns (customer, fixed_reply, pending_question, agent_note)."""
+    api = tenants.billing(t)
+    state = contact.get("ident_state") or {}
+    if state.get("at") and datetime.fromisoformat(state["at"]) < datetime.now(timezone.utc) - timedelta(hours=24):
+        state = {}
+    stage = state.get("stage", "new")
+
+    def save(**kw):
+        db.execute("UPDATE wa_contacts SET ident_state = %s, updated_at = now() WHERE id = %s",
+                   (json.dumps({**kw, "at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False), contact["id"]))
+
+    def ok(customer, pending=None):
+        save(stage="ok", customer_id=customer.get("CustomerId"))
+        db.execute("UPDATE wa_contacts SET customer_id = %s WHERE id = %s", (customer.get("CustomerId"), contact["id"]))
+        return customer, None, pending, None
+
+    typed = find_customer_by_text(api, text, allow_bare_id=stage in ("ask_id", "confirm"))
+    if typed:
+        return ok(typed, state.get("pending"))
+    if stage == "ok" and state.get("customer_id"):
+        c = find_customer_by_text(api, state["customer_id"])
+        if c:
+            return ok(c)
+    if stage == "confirm":
+        ans = _yes_no(text)
+        if ans == "yes":
+            c = find_customer_by_text(api, state.get("candidate", ""))
+            if c:
+                return ok(c, state.get("pending"))
+        if ans is None and not state.get("reasked"):
+            save(**{**state, "reasked": True})
+            return None, f"জি ভাই, আপনি কি *{state.get('candidate_name')}* (ID {state.get('candidate')}) লাইনের বিষয়ে বলছেন? হ্যাঁ বা না লিখুন।", None, None
+        save(stage="ask_id", tries=1, pending=state.get("pending"))
+        return None, ASK_ID, None, None
+    if stage == "ask_id":
+        tries = state.get("tries", 1)
+        if tries >= 2:
+            save(stage="agent", pending=state.get("pending"))
+            return None, AGENT, None, "কাস্টমার শনাক্ত করা যায়নি, এজেন্ট যোগাযোগ করবেন"
+        save(stage="ask_id", tries=tries + 1, pending=state.get("pending"))
+        return None, "দুঃখিত ভাই, এই তথ্য দিয়ে আপনার লাইন খুঁজে পাইনি। " + ASK_ID, None, None
+    if stage == "agent":
+        return None, None, None, None
+    own = find_customer_by_whatsapp(api, contact["wa_number"])
+    if own:
+        save(stage="confirm", candidate=own.get("CustomerId"), candidate_name=own.get("CustomerName"), pending=text)
+        return None, (f"আসসালামু আলাইকুম। আপনি কি *{own.get('CustomerName')}* (ID {own.get('CustomerId')}) "
+                      "লাইনের বিষয়ে কথা বলছেন? হ্যাঁ বা না লিখুন।"), None, None
+    save(stage="ask_id", tries=1, pending=text)
+    return None, "আসসালামু আলাইকুম। " + ASK_ID, None, None
+
+
+# --- rules ------------------------------------------------------------------------------------
+def bot_paused(contact: dict) -> bool:
+    row = db.one("SELECT bot_paused OR COALESCE(bot_paused_until > now(), false) AS paused FROM wa_contacts WHERE id = %s",
+                 (contact["id"],))
+    return bool(row and row["paused"])
+
+
+def may_send(t: Tenant, wa: str) -> bool:
+    if DRY_RUN or (t.bot.get("bot_mode") or "shadow") != "live":
+        return False
+    allow = [n.strip() for n in (t.bot.get("live_allowlist") or "").replace("\n", ",").split(",") if n.strip()]
+    if allow and normalize_bd_mobile(wa) not in {normalize_bd_mobile(n) for n in allow}:
+        return False
+    if t.max_bot_replies and tenants.bot_replies_this_month(t) >= t.max_bot_replies:
+        log.warning("company %s reached its monthly bot reply limit", t.company_id)
+        return False
+    return True
+
+
+def deliver(t: Tenant, contact: dict, message_id: int, text: str, note: str | None = None, **draft_kw) -> None:
+    sig = t.bot.get("reply_signature")
+    body = text.rstrip() + (f"\n\n{sig}" if sig and not text.rstrip().endswith(sig) else "")
+    mode = "dry_run" if DRY_RUN else (t.bot.get("bot_mode") or "shadow")
+    error = None
+    if may_send(t, contact["wa_number"]):
+        try:
+            from engine import whatsapp
+            res = whatsapp.send_text(t, contact["wa_number"], body)
+            save_message(t, contact["id"], res.get("messages", [{}])[0].get("id"), "out", "bot", "text", body)
+            mode = "sent"
+        except Exception as e:
+            error = str(e)[:500]
+    save_draft(t, contact["id"], message_id, mode, body, ticket_note=note, error=error, **draft_kw)
+
+
+def open_ticket(t: Tenant, customer: dict, wa: str, note: str) -> tuple[str, str | None]:
+    if DRY_RUN or not t.bot.get("auto_ticket", True):
+        return f"{note} → (টিকেট খোলা হয়নি: {'dry run' if DRY_RUN else 'বন্ধ'})", None
+    api = tenants.billing(t)
+    category, _, detail = note.partition("|")
+    category, detail = category.strip(), (detail.strip() or category.strip())
+    try:
+        existing = api.open_tickets_for(customer.get("UserName") or "")
+        if existing:
+            no = existing[0].get("ComplainId")
+            return f"{note} → আগেই খোলা টিকেট আছে (#{no})", f"আপনার আগের অভিযোগটা (নম্বর {no}) এখনো খোলা আছে, টিম সেটা দেখছে।"
+        _, cats = api.ticket_form()
+        cid = cats.get(category) or next((v for k, v in cats.items() if category and category.lower() in k.lower()), None) \
+            or cats.get("Others Support")
+        mobile = normalize_bd_mobile(customer.get("MobileNumber") or "") or normalize_bd_mobile(wa)
+        api.create_ticket(customer["CustomerHeaderId"], cid, 2, mobile, f"[WhatsApp বট] {detail}\nকাস্টমার WhatsApp: {wa}")
+        created = api.open_tickets_for(customer.get("UserName") or "")
+        no = created[0].get("ComplainId") if created else None
+        return f"{note} → টিকেট খোলা হয়েছে #{no or '?'}", (f"আপনার অভিযোগ নম্বর: {no}" if no else None)
+    except Exception as e:
+        log.exception("ticket failed")
+        return f"{note} → টিকেট খোলা যায়নি: {str(e)[:200]}", None
+
+
+def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
+    from engine.agent import draft_reply, transcribe
+
+    if not t.active or (t.bot.get("bot_mode") or "shadow") == "off" or bot_paused(contact):
+        return
+    mtype = m.get("type")
+    if mtype == "button":
+        m, mtype = {**m, "type": "text", "text": {"body": (m.get("button") or {}).get("text", "")}}, "text"
+    if mtype in ("image", "video", "document") and not ((m.get(mtype) or {}).get("caption")):
+        deliver(t, contact, message_id, "পেয়েছি ভাই, আমাদের টিম দেখে নেবে। সমস্যাটা একটু লিখে জানালে দ্রুত সাহায্য করতে পারব।",
+                f"কাস্টমার {mtype} পাঠিয়েছে, টিম দেখবে", provider="flow", model="fixed")
+        return
+    if mtype in ("image", "video", "document"):
+        m = {**m, "type": "text", "text": {"body": m[mtype]["caption"]}}
+    if mtype == "audio":
+        try:
+            from engine import whatsapp
+            data, mime = whatsapp.download_media(t, (m.get("audio") or {}).get("id", ""))
+            spoken = transcribe(t, data, mime)
+        except Exception:
+            log.exception("voice transcription failed")
+            spoken = None
+        if not spoken or len(spoken) < 2:
+            deliver(t, contact, message_id, "ভাই, ভয়েসটা ঠিক বুঝতে পারিনি। একটু লিখে জানাবেন?", provider="flow", model="fixed")
+            return
+        db.execute("UPDATE wa_messages SET body = %s WHERE id = %s", (f"[ভয়েস] {spoken}", message_id))
+        m = {**m, "type": "text", "text": {"body": spoken}}
+    elif mtype != "text":
+        return
+
+    text = (m.get("text") or {}).get("body", "")
+    context = None
+    try:
+        customer, fixed, pending, note = identify(t, contact, text)
+        if not customer and not fixed:
+            return
+        if fixed:
+            if note:
+                db.execute("UPDATE wa_contacts SET bot_paused = true WHERE id = %s", (contact["id"],))
+            deliver(t, contact, message_id, fixed, note, provider="flow", model="identify")
+            return
+        context = diagnose(tenants.billing(t), customer)
+        history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
+        if not history or history[-1]["role"] != "user":
+            history.append({"role": "user", "content": text})
+        draft, provider, model = draft_reply(t, history, context)
+        ticket_note = None
+        if draft:
+            mm = re.search(r"\[\[TICKET:\s*(.*?)\]\]", draft, re.S)
+            if mm:
+                ticket_note = mm.group(1).strip()[:300]
+                draft = (draft[:mm.start()] + draft[mm.end():]).strip()
+        if draft and ticket_note and may_send(t, contact["wa_number"]):
+            ticket_note, extra = open_ticket(t, customer, contact["wa_number"], ticket_note)
+            if extra:
+                draft += "\n" + extra
+        if draft:
+            deliver(t, contact, message_id, draft, ticket_note, context=context, provider=provider, model=model)
+    except Exception as e:
+        log.exception("engine failed for company %s", t.company_id)
+        save_draft(t, contact["id"], message_id, "error", None, context=context, error=str(e)[:500])

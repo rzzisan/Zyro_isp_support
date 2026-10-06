@@ -1,0 +1,15 @@
+[Unit]
+Description=Zyro Support engine (multi-company WhatsApp webhook)
+After=network.target postgresql.service
+
+[Service]
+User=claude-dev
+WorkingDirectory=/var/www/zyro_isp_support
+EnvironmentFile=/var/www/zyro_isp_support/engine/.env
+Environment=PYTHONPATH=/var/www/zyro_isp_support
+ExecStart=/var/www/zyro_isp_support/.venv/bin/uvicorn engine.main:app --host 127.0.0.1 --port 8994 --no-access-log
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
