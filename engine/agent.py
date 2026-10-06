@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from app.agent import PROVIDERS, SYSTEM_PROMPT, KeyFailed, _call, _whatsapp_format
+from engine.llm import PROVIDERS, SYSTEM_PROMPT, KeyFailed, _call, _whatsapp_format
 from engine import db
 from engine.tenant import Tenant
 

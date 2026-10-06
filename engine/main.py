@@ -23,6 +23,8 @@ from engine.tenant import Tenant
 VERIFY_TOKEN = os.environ.get("WA_VERIFY_TOKEN", "")
 APP_SECRET = os.environ.get("META_APP_SECRET", "")
 DRY_RUN = os.environ.get("ENGINE_DRY_RUN", "1") == "1"
+# the old single-company bot keeps a copy of every webhook (it runs with bot_mode=off, so it only logs)
+LEGACY_FORWARD_URL = os.environ.get("LEGACY_FORWARD_URL", "")
 MEDIA_TYPES = ("audio", "image", "video", "document", "sticker")
 
 log = logging.getLogger("zyro-engine")
@@ -104,11 +106,22 @@ def save_draft(t: Tenant, contact_id: int, message_id: int | None, mode: str, dr
 
 
 # --- webhook ---------------------------------------------------------------------------------
+def forward_to_legacy(raw: bytes, signature: str) -> None:
+    try:
+        import httpx
+        httpx.post(LEGACY_FORWARD_URL, content=raw, timeout=10,
+                   headers={"x-hub-signature-256": signature, "content-type": "application/json"})
+    except Exception as e:
+        log.warning("legacy forward failed: %s", e)
+
+
 @app.post("/webhook")
 async def receive(request: Request):
     raw = await request.body()
     if not signature_ok(raw, request.headers.get("x-hub-signature-256", "")):
         raise HTTPException(status_code=403)
+    if LEGACY_FORWARD_URL:
+        threading.Thread(target=forward_to_legacy, args=(raw, request.headers["x-hub-signature-256"]), daemon=True).start()
     payload = json.loads(raw)
     jobs = []
     for entry in payload.get("entry", []):
