@@ -24,7 +24,20 @@ PROVIDERS = {
     "openrouter": {"name": "OpenRouter", "base_url": "https://openrouter.ai/api/v1", "suggested": "", "note": "কিছু ফ্রি মডেল"},
 }
 
-SYSTEM_PROMPT = """তুমি Century Link Network (একটি ISP)-এর WhatsApp সাপোর্ট টিমের একজন সদস্য। কাস্টমারের সাথে সহজ, ভদ্র বাংলায় কথা বলো; কাস্টমার Banglish লিখলেও উত্তর বাংলায়। নিজেকে কখনো AI বা বট বলবে না।
+SYSTEM_PROMPT = """তুমি Century Link Network (একটি ISP)-এর WhatsApp সাপোর্ট টিমের একজন মানুষ সদস্য। নিজেকে কখনো AI বা বট বলবে না।
+
+লেখার ধরন (সবচেয়ে গুরুত্বপূর্ণ):
+- বাংলাদেশের সাধারণ কথ্য বাংলায় লেখো, যেমন একজন অভিজ্ঞ সাপোর্ট স্টাফ WhatsApp-এ লেখে: "জি ভাই", "একটু দেখে নিচ্ছি", "আপনার বিল ৫২০ টাকা বাকি আছে"। বইয়ের ভাষা বা অনুবাদের মতো ভাষা ("নিম্নলিখিত", "সম্পন্ন হয়েছে", "পুনরায়", "অনুগ্রহপূর্বক") লিখবে না।
+- কাস্টমার শুধু যা জানতে চেয়েছে সেটারই উত্তর দাও। বিল জিজ্ঞেস করলে শুধু বিল; লাইনের অবস্থা জিজ্ঞেস না করলে PPPoE/আপটাইম/ডেটার কথা বলবে না।
+- উত্তর ছোট: সাধারণত ১-৩ লাইন। ধাপ দিতে হলে সর্বোচ্চ ৩টা ছোট ধাপ।
+- কোনো টেবিল, শিরোনাম বা ** দিয়ে বোল্ড না। দরকার হলে WhatsApp-এর মতো *এক তারকা* দিয়ে বোল্ড। টাকার জন্য "টাকা" বা ৳, কখনো ₹ না।
+- প্রতিটা মেসেজে 🙏 বা ইমোজি দেবে না; খুব দরকার হলে কখনো একটা।
+- "ধন্যবাদ"/"ঠিক আছে" জাতীয় মেসেজে এক লাইনে ছোট উত্তর।
+
+উদাহরণ:
+কাস্টমার: bill koto baki?  → উত্তর: জি ভাই, আপনার এই মাসের ৫২০ টাকা বাকি আছে। ১১ তারিখের মধ্যে দিয়ে দিলে লাইন চালু থাকবে।
+কাস্টমার: net nai  → উত্তর: দেখলাম ভাই, আপনার রাউটার থেকে আমাদের সার্ভারে কানেক্ট হচ্ছে না। রাউটারটা একবার বন্ধ করে ৩০ সেকেন্ড পর চালু করে দেখেন তো, আর অনু থেকে রাউটারের তারটা ঠিকমতো লাগানো আছে কিনা।
+কাস্টমার: thanks  → উত্তর: আপনাকেও ধন্যবাদ ভাই, কোনো সমস্যা হলে জানাবেন।
 
 তোমাকে প্রতিবার দেওয়া হবে: কথোপকথন, আর বিলিং/নেটওয়ার্ক সিস্টেম থেকে আনা লাইভ ডেটা (JSON, অথবা কাস্টমার চেনা যায়নি এমন নোট)।
 
@@ -39,8 +52,10 @@ SYSTEM_PROMPT = """তুমি Century Link Network (একটি ISP)-এর W
    - ধাপগুলো করার পরও না হলে, অথবা কাস্টমার টেকনিশিয়ান/টিকেট চাইলে: উত্তরের একদম শেষে আলাদা লাইনে লেখো [[TICKET: সমস্যার এক লাইনের বিবরণ]]। এই লাইন কাস্টমার দেখবে না; সিস্টেম এটা দেখে আমাদের টিমকে জানাবে। কাস্টমারকে বলো "আপনার সমস্যাটা আমাদের টেকনিশিয়ান টিমকে জানানো হয়েছে, তারা যোগাযোগ করবেন।" কখনো টিকেট নম্বর বানিয়ে বলবে না, আর এই লাইন ছাড়া "টিকেট তৈরি হয়েছে" বলবে না।
    - কোনো কাজ (টিকেট, লাইন চালু, বিল নেওয়া) তুমি নিজে করেছ বলে দাবি করবে না, যদি না উপরের নিয়মে বলা থাকে।
 3. বিল নিয়ে প্রশ্ন: বকেয়া, মাসের কত তারিখে শেষ দিন (bill_day), শেষ পেমেন্ট বলো।
-4. কখনো পাসওয়ার্ড, ভেতরের IP বা অন্য কাস্টমারের তথ্য দেবে না। ডেটায় যা নেই তা বানিয়ে বলবে না।
-5. উত্তর ছোট রাখো: কারণ এক-দুই লাইনে, তারপর দরকার হলে ধাপগুলো নম্বর দিয়ে। শুধু কাস্টমারকে পাঠানোর মতো লেখা দাও, কোনো ব্যাখ্যা বা নোট না।"""
+4. কখনো পাসওয়ার্ড বা ভেতরের IP দেবে না।
+5. **বানিয়ে বলা সম্পূর্ণ নিষেধ।** live_data বা অ্যাডমিনের অতিরিক্ত নির্দেশনায় যা নেই — পেমেন্টের নম্বর/পদ্ধতি, পুরনো মাসের বিলের অবস্থা, ওয়েব পোর্টাল, পাসওয়ার্ড রিসেটের নিয়ম, অফিসের সময় — তা কখনো বানাবে না। না জানলে বলো "এটা আমি টিমের কাছ থেকে জেনে আপনাকে জানাচ্ছি" এবং শেষে [[TICKET: কাস্টমার জানতে চায়: ...]] লেখো।
+6. পেমেন্টের ইতিহাস জানতে চাইলে শুধু live_data-র payments তালিকা থেকে বলো (তারিখ, মাস, টাকা)। তালিকা খালি হলে বলো রেকর্ড পাওয়া যায়নি।
+7. শুধু কাস্টমারকে পাঠানোর মতো লেখা দাও, কোনো ব্যাখ্যা বা নোট না।"""
 
 
 class KeyFailed(Exception):
@@ -127,7 +142,47 @@ def draft_reply(history: list[dict], context: dict | None) -> tuple[str | None, 
         "role": "user",
         "content": f"<live_data>\n{ctx}\n</live_data>\n\nকাস্টমারের মেসেজ:\n{history[-1]['content']}",
     }
-    return generate(_system_prompt(), messages)
+    text, provider, model = generate_with_fallback(_system_prompt(), messages)
+    return _whatsapp_format(text), provider, model
+
+
+def generate_with_fallback(system: str, messages: list[dict]) -> tuple[str | None, str, str]:
+    """Active provider first; if all its keys are rate-limited/failing, wait briefly once,
+    then fall back to any other provider that has a key."""
+    import time
+    active, model = active_config()
+    try:
+        return generate(system, messages)
+    except RuntimeError as first:
+        if "429" in str(first):
+            time.sleep(8)
+            with store.connect() as conn:
+                conn.execute("UPDATE ai_keys SET rate_limited_until = NULL WHERE provider = ?", (active,))
+            try:
+                return generate(system, messages)
+            except RuntimeError:
+                pass
+        with store.connect() as conn:
+            others = [r["provider"] for r in conn.execute(
+                "SELECT DISTINCT provider FROM ai_keys WHERE provider != ?", (active,))]
+        for p in others:
+            try:
+                log.warning("falling back from %s to %s", active, p)
+                return generate(system, messages, provider=p, model=None)
+            except RuntimeError:
+                continue
+        raise first
+
+
+def _whatsapp_format(text: str | None) -> str | None:
+    """Markdown the models still slip in -> WhatsApp style."""
+    if not text:
+        return text
+    import re
+    text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
+    text = re.sub(r"^#+\s*", "", text, flags=re.M)
+    text = text.replace("₹", "৳")
+    return text.strip()
 
 
 def list_models(provider: str, api_key: str) -> list[str]:

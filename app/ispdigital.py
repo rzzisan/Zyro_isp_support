@@ -177,6 +177,13 @@ def diagnose(api: ISPDigital, customer: dict) -> dict:
     hid = customer["CustomerHeaderId"]
     live = api.live_status(hid)
     onu = api.onu_info(live.get("calledid"))
+    try:
+        payments = [{
+            "date": p.get("PaymentDate"), "month": p.get("BillMonth"), "paid": p.get("PaidAmount"),
+            "discount": p.get("Discount"), "method": p.get("PaymentMethodName"),
+        } for p in api.payments(hid, limit=6)]
+    except Exception:
+        payments = None
     return {
         "customer": {
             "id": customer.get("CustomerId"),
@@ -197,6 +204,7 @@ def diagnose(api: ISPDigital, customer: dict) -> dict:
             "payment_status": live.get("paymentStatus"),
             "last_paid_amount": live.get("lastPaidAmount"),
         },
+        "payments": payments,
         "pppoe": {
             "connectivity": live.get("connectivity"),
             "uptime": live.get("uptime"),
