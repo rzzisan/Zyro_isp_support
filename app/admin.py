@@ -215,8 +215,58 @@ def chat_thread(request: Request, number: str):
             "ctx": json.loads(d["context"]) if d and d["context"] else None,
         })
     name = next((m["contact_name"] for m in msgs if m["contact_name"]), None)
+    from app.main import bot_paused
+    pause = store.get_setting(f"pause:{number}")
+    last_in = next((m["received_at"] for m in reversed(msgs) if not m["echo"]), None)
+    from datetime import datetime, timedelta, timezone
+    window_open = bool(last_in) and datetime.fromisoformat(last_in) > datetime.now(timezone.utc) - timedelta(hours=24)
+    for it, m in zip(items, msgs):
+        pid = m["phone_number_id"] or ""
+        it["staff_name"] = pid.split(":", 1)[1] if pid.startswith("dashboard:") else None
     return render(request, "chat_thread.html", number=number, name=name, items=items,
-                  customer_id=link["value"] if link else None)
+                  customer_id=link["value"] if link else None, paused=bot_paused(number),
+                  pause_value=pause, window_open=window_open)
+
+
+@router.post("/chats/{number}/reply")
+def chat_reply(request: Request, number: str, text: str = Form(...), pause_hours: int = Form(3)):
+    """A staff member answers from the dashboard; the bot pauses on this number for a while."""
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    from datetime import datetime, timedelta, timezone
+    from app import whatsapp
+    with store.connect() as conn:
+        last_in = conn.execute(
+            "SELECT phone_number_id FROM messages WHERE from_number = ? AND echo = 0 ORDER BY received_at DESC LIMIT 1",
+            (number,)).fetchone()
+    try:
+        res = whatsapp.send_text(number, text.strip(), last_in["phone_number_id"] if last_in else None)
+        with store.connect() as conn:
+            conn.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                         (res.get("messages", [{}])[0].get("id"), store.now(), f"dashboard:{current_user(request)}",
+                          number, None, "text", text.strip(), 1))
+        if pause_hours > 0:
+            store.set_setting(f"pause:{number}",
+                              (datetime.now(timezone.utc) + timedelta(hours=pause_hours)).isoformat())
+        flash(request, "পাঠানো হয়েছে।" + (f" এই নম্বরে বট {pause_hours} ঘণ্টা চুপ থাকবে।" if pause_hours > 0 else ""))
+    except Exception as e:
+        msg = str(e)
+        if "131047" in msg or "24 hours" in msg or "re-engagement" in msg.lower():
+            msg = "২৪ ঘণ্টার বেশি আগে কাস্টমার মেসেজ দিয়েছে, তাই সাধারণ মেসেজ যাবে না; অনুমোদিত template লাগবে।"
+        flash(request, f"ব্যর্থ: {msg[:300]}", "err")
+    return back(f"/admin/chats/{number}")
+
+
+@router.post("/chats/{number}/pause")
+def chat_pause(request: Request, number: str, action: str = Form(...)):
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    store.set_setting(f"pause:{number}", "on" if action == "pause" else None)
+    flash(request, "এই নম্বরে বট বন্ধ করা হয়েছে, এখন শুধু মানুষ উত্তর দেবে।" if action == "pause"
+          else "এই নম্বরে বট আবার চালু।")
+    return back(f"/admin/chats/{number}")
 
 
 # --- billing -------------------------------------------------------------------------
@@ -387,14 +437,20 @@ def whatsapp_page(request: Request):
             status = whatsapp.phone_status(pnid)
         except Exception as e:
             status = {"error": str(e)[:300]}
-    templates_list = None
+    templates_list = numbers = None
     if store.get_setting("wa_waba_id") and store.get_setting("wa_access_token"):
         try:
             templates_list = whatsapp.list_templates()
         except Exception:
             templates_list = None
+        try:
+            numbers = whatsapp.waba_numbers()
+        except Exception:
+            numbers = None
+    bot_ids = [x for x in (store.get_setting("bot_phone_ids") or "").split(",") if x]
     return render(request, "whatsapp.html", app_id=whatsapp.APP_ID, config_id=whatsapp.CONFIG_ID,
                   templates_list=templates_list, has_token=bool(store.get_setting("wa_access_token")),
+                  numbers=numbers, bot_ids=bot_ids, new_number_id=store.get_setting("wa_new_number_id"),
                   waba_id=store.get_setting("wa_waba_id"), phone_number_id=pnid,
                   onboarded_at=store.get_setting("wa_onboarded_at"), status=status,
                   last=store.get_setting("wa_last_onboarding"))
@@ -463,6 +519,70 @@ def whatsapp_create_template(request: Request, name: str = Form(...), language: 
         flash(request, f"Template জমা হয়েছে: id {res.get('id')} · status {res.get('status')}")
     except Exception as e:
         flash(request, f"ব্যর্থ: {str(e)[:300]}", "err")
+    return back("/admin/whatsapp")
+
+
+@router.post("/whatsapp/number/add")
+def wa_number_add(request: Request, phone: str = Form(...), display_name: str = Form(...)):
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    from app import whatsapp
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if digits.startswith("880"):
+        digits = digits[3:]
+    digits = digits.lstrip("0")
+    try:
+        res = whatsapp.add_phone_number("880", digits, display_name.strip())
+        store.set_setting("wa_new_number_id", res.get("id"))
+        flash(request, f"নম্বর যুক্ত হয়েছে (ID {res.get('id')})। এবার কোড পাঠান।")
+    except Exception as e:
+        flash(request, f"ব্যর্থ: {str(e)[:300]}", "err")
+    return back("/admin/whatsapp")
+
+
+@router.post("/whatsapp/number/request-code")
+def wa_number_request_code(request: Request, number_id: str = Form(...), method: str = Form("SMS")):
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    from app import whatsapp
+    try:
+        whatsapp.request_code(number_id.strip(), "VOICE" if method == "VOICE" else "SMS")
+        store.set_setting("wa_new_number_id", number_id.strip())
+        flash(request, "কোড পাঠানো হয়েছে। ফোনে আসা ৬ অঙ্কের কোড নিচে দিন।")
+    except Exception as e:
+        flash(request, f"ব্যর্থ: {str(e)[:300]}", "err")
+    return back("/admin/whatsapp")
+
+
+@router.post("/whatsapp/number/verify")
+def wa_number_verify(request: Request, number_id: str = Form(...), code: str = Form(...), pin: str = Form(...)):
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    from app import whatsapp
+    if not (pin.isdigit() and len(pin) == 6):
+        flash(request, "PIN ৬ অঙ্কের সংখ্যা হতে হবে।", "err")
+        return back("/admin/whatsapp")
+    try:
+        whatsapp.verify_code(number_id.strip(), code.strip())
+        whatsapp.register(number_id.strip(), pin)
+        flash(request, "নম্বর যাচাই ও রেজিস্টার হয়েছে। PIN-টা নিরাপদে লিখে রাখুন (two-step verification)।")
+    except Exception as e:
+        flash(request, f"ব্যর্থ: {str(e)[:300]}", "err")
+    return back("/admin/whatsapp")
+
+
+@router.post("/whatsapp/bot-numbers")
+def wa_bot_numbers(request: Request, bot_phone_ids: list[str] = Form([]), default_id: str = Form("")):
+    if (r := require_login(request)):
+        return r
+    check_origin(request)
+    store.set_setting("bot_phone_ids", ",".join(bot_phone_ids) or None)
+    if default_id:
+        store.set_setting("wa_phone_number_id", default_id)
+    flash(request, "সেভ হয়েছে।")
     return back("/admin/whatsapp")
 
 

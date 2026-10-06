@@ -47,6 +47,10 @@ def phone_numbers(waba_id: str, access_token: str) -> list[dict]:
     return _check(r).get("data", [])
 
 
+def waba_numbers() -> list[dict]:
+    return phone_numbers(store.get_setting("wa_waba_id"), token())
+
+
 def phone_status(phone_number_id: str) -> dict:
     r = httpx.get(f"{GRAPH}/{phone_number_id}",
                   params={"fields": "display_phone_number,verified_name,quality_rating,platform_type,is_on_biz_app,status"},
@@ -62,9 +66,10 @@ def sync(phone_number_id: str, sync_type: str) -> dict:
     return _check(r)
 
 
-def send_text(to: str, body: str) -> dict:
-    """Free-form text (works inside the 24h customer-service window)."""
-    r = httpx.post(f"{GRAPH}/{store.get_setting('wa_phone_number_id')}/messages",
+def send_text(to: str, body: str, phone_number_id: str | None = None) -> dict:
+    """Free-form text (works inside the 24h customer-service window). Sends from the number the
+    customer wrote to when given, else the default number."""
+    r = httpx.post(f"{GRAPH}/{phone_number_id or store.get_setting('wa_phone_number_id')}/messages",
                    json={"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": body}},
                    headers={"Authorization": f"Bearer {token()}"}, timeout=30)
     return _check(r)
@@ -91,6 +96,34 @@ def list_templates() -> list[dict]:
                   params={"fields": "name,language,status,category", "limit": 50},
                   headers={"Authorization": f"Bearer {token()}"}, timeout=30)
     return _check(r).get("data", [])
+
+
+# --- adding a number that was removed from the WhatsApp Business app -------------------------
+def add_phone_number(cc: str, phone_number: str, verified_name: str) -> dict:
+    r = httpx.post(f"{GRAPH}/{store.get_setting('wa_waba_id')}/phone_numbers",
+                   data={"cc": cc, "phone_number": phone_number, "verified_name": verified_name},
+                   headers={"Authorization": f"Bearer {token()}"}, timeout=30)
+    return _check(r)
+
+
+def request_code(phone_number_id: str, method: str = "SMS") -> dict:
+    r = httpx.post(f"{GRAPH}/{phone_number_id}/request_code",
+                   data={"code_method": method, "language": "en_US"},
+                   headers={"Authorization": f"Bearer {token()}"}, timeout=30)
+    return _check(r)
+
+
+def verify_code(phone_number_id: str, code: str) -> dict:
+    r = httpx.post(f"{GRAPH}/{phone_number_id}/verify_code", data={"code": code},
+                   headers={"Authorization": f"Bearer {token()}"}, timeout=30)
+    return _check(r)
+
+
+def register(phone_number_id: str, pin: str) -> dict:
+    r = httpx.post(f"{GRAPH}/{phone_number_id}/register",
+                   json={"messaging_product": "whatsapp", "pin": pin},
+                   headers={"Authorization": f"Bearer {token()}"}, timeout=30)
+    return _check(r)
 
 
 def complete_onboarding(code: str, waba_id: str, phone_number_id: str | None) -> dict:

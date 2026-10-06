@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import threading
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
@@ -107,10 +108,10 @@ async def receive(request: Request):
                          names.get(customer), m.get("type"), body, echo),
                     )
                     if not echo and cur.rowcount:  # skip Meta retries of the same message
-                        to_handle.append((m, names.get(customer)))
+                        to_handle.append((m, names.get(customer), phone_number_id))
     # billing lookup + AI take seconds; answer Meta immediately
-    for m, name in to_handle:
-        threading.Thread(target=handle_message, args=(m, name), daemon=True).start()
+    for m, name, pnid in to_handle:
+        threading.Thread(target=handle_message, args=(m, name, pnid), daemon=True).start()
     return {"ok": True}
 
 
@@ -189,12 +190,31 @@ def should_send(mode: str, wa: str) -> bool:
     return normalize_bd_mobile(wa) in {normalize_bd_mobile(n) for n in allow}
 
 
-def handle_message(message: dict, contact_name: str | None) -> None:
+def bot_paused(wa: str) -> bool:
+    """Per-number pause set from the conversation page (or automatically when staff replies)."""
+    until = store.get_setting(f"pause:{wa}")
+    if not until:
+        return False
+    if until == "on":
+        return True
+    try:
+        return datetime.fromisoformat(until) > datetime.now(timezone.utc)
+    except ValueError:
+        return False
+
+
+def bot_serves(phone_number_id: str | None) -> bool:
+    """Only the business numbers chosen on the WhatsApp page get the bot (others are just logged)."""
+    ids = [x.strip() for x in (store.get_setting("bot_phone_ids") or "").split(",") if x.strip()]
+    return not ids or (phone_number_id or "") in ids
+
+
+def handle_message(message: dict, contact_name: str | None, phone_number_id: str | None = None) -> None:
     """Identify customer, check billing/ONU/PPPoE, draft a reply (shadow mode stores it only)."""
     wa = message.get("from")
     log.info("message from %s (%s): type=%s", wa, contact_name, message.get("type"))
     mode = store.get_setting("bot_mode", "shadow")
-    if mode == "off" or message.get("type") != "text":
+    if mode == "off" or message.get("type") != "text" or not bot_serves(phone_number_id) or bot_paused(wa):
         return
     context = draft = error = provider = model = ticket_note = None
     try:
@@ -240,7 +260,7 @@ def handle_message(message: dict, contact_name: str | None) -> None:
             draft = draft.rstrip() + "\n\n" + signature
         if draft and should_send(mode, wa):
             from app import whatsapp
-            res = whatsapp.send_text(wa, draft)
+            res = whatsapp.send_text(wa, draft, phone_number_id)
             mode = "sent"
             with store.connect() as conn:
                 # keep our reply in the history so the next turn has context

@@ -15,7 +15,7 @@
 <div class="card thread">
   {% for i in items %}
     <div class="msg {{ i.who }}">{{ i.body or ('[' ~ i.type ~ ']') }}
-      <div class="meta">{% if i.who == 'customer' %}কাস্টমার{% elif i.who == 'bot' %}বট{% else %}স্টাফ (Business অ্যাপ){% endif %} · {{ i.at[:16].replace('T', ' ') }} UTC
+      <div class="meta">{% if i.who == 'customer' %}কাস্টমার{% elif i.who == 'bot' %}বট{% elif i.staff_name %}স্টাফ ({{ i.staff_name }}, ড্যাশবোর্ড){% else %}স্টাফ (Business অ্যাপ){% endif %} · {{ i.at[:16].replace('T', ' ') }} UTC
         {% if i.ctx %} · বিলিং: {{ i.ctx.customer.name }} ({{ i.ctx.customer.id }}){% endif %}</div>
     </div>
     {% if i.draft %}<div class="draft">খসড়া (পাঠানো হয়নি): {{ i.draft }}</div>{% endif %}
@@ -23,4 +23,30 @@
     {% if i.ticket %}<div class="flash err" style="align-self:flex-end;max-width:78%;margin:0">টিকেট: {{ i.ticket }}</div>{% endif %}
   {% endfor %}
 </div>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">উত্তর দিন</h2>
+    <form method="post" action="/admin/chats/{{ number }}/pause" style="margin:0">
+      {% if paused %}
+        <span class="badge warn">বট এই নম্বরে চুপ{% if pause_value and pause_value != 'on' %} ({{ pause_value[:16].replace('T',' ') }} UTC পর্যন্ত){% endif %}</span>
+        <input type="hidden" name="action" value="resume"><button class="ghost">বট আবার চালু করুন</button>
+      {% else %}
+        <input type="hidden" name="action" value="pause"><button class="ghost danger">এই নম্বরে বট বন্ধ করুন</button>
+      {% endif %}
+    </form>
+  </div>
+  {% if not window_open %}<p class="flash err" style="margin-top:10px">কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগের, তাই সাধারণ মেসেজ যাবে না (WhatsApp-এর নিয়ম)। কাস্টমার আবার মেসেজ দিলে উত্তর দিতে পারবেন।</p>{% endif %}
+  <form method="post" action="/admin/chats/{{ number }}/reply">
+    <textarea name="text" required placeholder="কাস্টমারকে লিখুন..."></textarea>
+    <div class="row">
+      <label style="margin:12px 0 0">উত্তর দেওয়ার পর বট চুপ থাকবে</label>
+      <select name="pause_hours" style="width:auto;margin-top:12px">
+        <option value="3">৩ ঘণ্টা</option><option value="1">১ ঘণ্টা</option><option value="24">২৪ ঘণ্টা</option><option value="0">চুপ না, বট চালু থাকুক</option>
+      </select>
+      <button>পাঠান</button>
+    </div>
+  </form>
+</div>
+<script>window.scrollTo(0, document.body.scrollHeight);</script>
 {% endblock %}

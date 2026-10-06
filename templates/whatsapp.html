@@ -22,6 +22,55 @@
   {% endif %}
 </div>
 
+{% if numbers %}
+<div class="card">
+  <h2>এই অ্যাকাউন্টের নম্বরগুলো</h2>
+  <form method="post" action="/admin/whatsapp/bot-numbers">
+    <div class="tablewrap"><table>
+      <tr><th>বট চলবে</th><th>ডিফল্ট (পাঠানোর জন্য)</th><th>নম্বর</th><th>নাম</th><th>অবস্থা</th></tr>
+      {% for n in numbers %}
+      <tr>
+        <td><input type="checkbox" name="bot_phone_ids" value="{{ n.id }}" style="width:auto" {{ 'checked' if n.id in bot_ids }}></td>
+        <td><input type="radio" name="default_id" value="{{ n.id }}" style="width:auto" {{ 'checked' if n.id == phone_number_id }}></td>
+        <td>{{ n.display_phone_number }}<br><span class="muted">ID {{ n.id }}</span></td>
+        <td>{{ n.verified_name }}</td>
+        <td class="muted">{{ n.platform_type }} · {{ n.quality_rating }}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    <p class="muted">কোনোটায় টিক না দিলে বট সব নম্বরে চলবে। যে নম্বরে টিক নেই, সেখানের মেসেজ শুধু জমা থাকবে, বট কিছু করবে না।</p>
+    <button>সেভ করুন</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>নতুন নম্বর যুক্ত করুন (Business অ্যাপ থেকে ডিলিট করার পর)</h2>
+  <p class="muted">ধাপ ১: নম্বর আর WhatsApp-এ দেখানোর নাম দিন। ধাপ ২: কোড পাঠান। ধাপ ৩: ফোনে আসা কোড আর নিজের বানানো ৬ অঙ্কের PIN দিন।</p>
+  <form method="post" action="/admin/whatsapp/number/add">
+    <div class="grid">
+      <div><label>নম্বর</label><input name="phone" required placeholder="01777858289"></div>
+      <div><label>WhatsApp-এ দেখানো নাম</label><input name="display_name" required placeholder="Century Link Network"></div>
+    </div>
+    <button>১. নম্বর যুক্ত করুন</button>
+  </form>
+  <form method="post" action="/admin/whatsapp/number/request-code">
+    <div class="grid">
+      <div><label>নম্বরের ID</label><input name="number_id" required value="{{ new_number_id or '' }}"></div>
+      <div><label>কোড কীভাবে আসবে</label><select name="method"><option value="SMS">SMS</option><option value="VOICE">ফোন কল</option></select></div>
+    </div>
+    <button>২. কোড পাঠান</button>
+  </form>
+  <form method="post" action="/admin/whatsapp/number/verify">
+    <div class="grid">
+      <div><label>নম্বরের ID</label><input name="number_id" required value="{{ new_number_id or '' }}"></div>
+      <div><label>ফোনে আসা কোড</label><input name="code" required autocomplete="one-time-code"></div>
+      <div><label>নতুন ৬ অঙ্কের PIN (মনে রাখবেন)</label><input name="pin" required pattern="\d{6}" type="password" autocomplete="new-password"></div>
+    </div>
+    <button>৩. যাচাই ও চালু করুন</button>
+  </form>
+</div>
+
 <div class="card">
   <h2>মেসেজ পাঠান</h2>
   <form method="post" action="/admin/whatsapp/send">
