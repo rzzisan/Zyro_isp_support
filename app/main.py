@@ -161,16 +161,18 @@ def open_ticket(customer: dict, wa: str, note: str) -> tuple[str, str | None]:
     try:
         existing = billing().open_tickets_for(customer.get("UserName") or "")
         if existing:
-            no = existing[0].get("ComplainNumber") or existing[0].get("ComplainId")
-            return f"{note} → আগেই খোলা টিকেট আছে ({no}), নতুন খোলা হয়নি", \
-                "আপনার এই সমস্যার জন্য আগেই একটা অভিযোগ খোলা আছে, টিম সেটা দেখছে।"
+            no = existing[0].get("ComplainId")
+            return f"{note} → আগেই খোলা টিকেট আছে (#{no}), নতুন খোলা হয়নি", \
+                f"আপনার আগের অভিযোগটা (নম্বর {no}) এখনো খোলা আছে, টিম সেটা দেখছে।"
         _, cats = billing().ticket_form()
         cid = cats.get(category) or next((v for k, v in cats.items() if category and category.lower() in k.lower()), None) \
             or cats.get("Others Support")
         mobile = normalize_bd_mobile(customer.get("MobileNumber") or "") or normalize_bd_mobile(wa)
         msg = billing().create_ticket(customer["CustomerHeaderId"], cid, 2, mobile,
                                       f"[WhatsApp বট] {detail}\nকাস্টমার WhatsApp: {wa}", send_sms=False)
-        return f"{note} → টিকেট খোলা হয়েছে: {msg}", None
+        created = billing().open_tickets_for(customer.get("UserName") or "")
+        no = created[0].get("ComplainId") if created else None
+        return f"{note} → টিকেট খোলা হয়েছে #{no or '?'} ({msg})", (f"আপনার অভিযোগ নম্বর: {no}" if no else None)
     except Exception as e:
         log.exception("ticket failed")
         return f"{note} → টিকেট খোলা যায়নি: {str(e)[:200]}", None
