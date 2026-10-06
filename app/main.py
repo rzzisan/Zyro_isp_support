@@ -16,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app import store
 
 VERIFY_TOKEN = os.environ.get("WA_VERIFY_TOKEN", "")
+MEDIA_TYPES = ("audio", "image", "video", "document", "sticker")
 APP_SECRET = os.environ.get("META_APP_SECRET", "")
 
 log = logging.getLogger("zyro-support")
@@ -102,10 +103,16 @@ async def receive(request: Request):
                     body = (m.get("text") or {}).get("body")
                     # from_number column = the customer's number (echoes go business -> customer)
                     customer = m.get("to") if echo else m.get("from")
+                    media = m.get(m.get("type") or "") if m.get("type") in MEDIA_TYPES else None
+                    if media and not body:
+                        body = media.get("caption")
                     cur = conn.execute(
-                        "INSERT OR IGNORE INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        """INSERT OR IGNORE INTO messages
+                           (wa_message_id, received_at, phone_number_id, from_number, contact_name, msg_type, body, echo,
+                            media_id, media_mime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (m.get("id"), now, phone_number_id, customer,
-                         names.get(customer), m.get("type"), body, echo),
+                         names.get(customer), m.get("type"), body, echo,
+                         media.get("id") if media else None, media.get("mime_type") if media else None),
                     )
                     if not echo and cur.rowcount:  # skip Meta retries of the same message
                         to_handle.append((m, names.get(customer), phone_number_id))
@@ -311,7 +318,7 @@ def send_fixed(message: dict, wa: str, phone_number_id: str | None, mode: str, t
             res = whatsapp.send_text(wa, body, phone_number_id)
             mode = "sent"
             with store.connect() as conn:
-                conn.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                conn.execute("INSERT OR IGNORE INTO messages (wa_message_id, received_at, phone_number_id, from_number, contact_name, msg_type, body, echo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                              (res.get("messages", [{}])[0].get("id"), store.now(), None, wa, None, "text", body, 1))
     except Exception as e:
         error = str(e)[:500]
@@ -400,7 +407,7 @@ def handle_message(message: dict, contact_name: str | None, phone_number_id: str
             mode = "sent"
             with store.connect() as conn:
                 # keep our reply in the history so the next turn has context
-                conn.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                conn.execute("INSERT OR IGNORE INTO messages (wa_message_id, received_at, phone_number_id, from_number, contact_name, msg_type, body, echo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                              (res.get("messages", [{}])[0].get("id"), store.now(), None, wa, None, "text", draft, 1))
     except Exception as e:
         log.exception("draft failed for %s", message.get("id"))

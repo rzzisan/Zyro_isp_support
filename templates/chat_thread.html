@@ -14,7 +14,12 @@
 </style>
 <div class="card thread">
   {% for i in items %}
-    <div class="msg {{ i.who }}">{{ i.body or ('[' ~ i.type ~ ']') }}
+    <div class="msg {{ i.who }}">
+      {%- if i.has_media and i.type == 'audio' %}<audio controls preload="none" src="/admin/media/{{ i.id }}" style="max-width:100%"></audio>{% if i.body %}<br>{% endif %}
+      {%- elif i.has_media and i.type in ('image', 'sticker') %}<a href="/admin/media/{{ i.id }}" target="_blank"><img src="/admin/media/{{ i.id }}" loading="lazy" style="max-width:260px;max-height:260px;border-radius:8px;display:block"></a>
+      {%- elif i.has_media and i.type == 'video' %}<video controls preload="none" src="/admin/media/{{ i.id }}" style="max-width:260px;border-radius:8px"></video>
+      {%- elif i.has_media %}<a href="/admin/media/{{ i.id }}" target="_blank">📎 ফাইল খুলুন</a>
+      {%- endif %}{{ i.body or ('' if i.has_media else '[' ~ i.type ~ ']') }}
       <div class="meta">{% if i.who == 'customer' %}কাস্টমার{% elif i.who == 'bot' %}বট{% elif i.staff_name %}স্টাফ ({{ i.staff_name }}, ড্যাশবোর্ড){% else %}স্টাফ (Business অ্যাপ){% endif %} · {{ i.at[:16].replace('T', ' ') }} UTC
         {% if i.ctx %} · বিলিং: {{ i.ctx.customer.name }} ({{ i.ctx.customer.id }}){% endif %}</div>
     </div>

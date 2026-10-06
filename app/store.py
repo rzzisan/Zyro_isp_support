@@ -77,6 +77,10 @@ def connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     # columns added after the first deploy
+    mcols = {r["name"] for r in conn.execute("PRAGMA table_info(messages)")}
+    if "media_id" not in mcols:
+        conn.execute("ALTER TABLE messages ADD COLUMN media_id TEXT")
+        conn.execute("ALTER TABLE messages ADD COLUMN media_mime TEXT")
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(drafts)")}
     for col in ("provider", "model", "error", "ticket_note"):
         if col not in cols:

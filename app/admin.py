@@ -207,6 +207,7 @@ def chat_thread(request: Request, number: str):
         d = drafts.get(m["wa_message_id"])
         items.append({
             "at": m["received_at"], "body": m["body"], "type": m["msg_type"],
+            "id": m["wa_message_id"], "has_media": bool(m["media_id"]),
             "who": "customer" if not m["echo"] else ("staff" if m["phone_number_id"] else "bot"),
             "draft": d["draft"] if d and d["mode"] != "sent" else None,
             "draft_mode": d["mode"] if d else None,
@@ -228,6 +229,32 @@ def chat_thread(request: Request, number: str):
                   pause_value=pause, window_open=window_open)
 
 
+@router.get("/media/{wa_message_id}")
+def media(request: Request, wa_message_id: str):
+    """Voice notes / images customers sent, fetched from WhatsApp once and cached on disk."""
+    if not current_user(request):
+        raise HTTPException(status_code=401)
+    from fastapi.responses import FileResponse
+    from app import whatsapp
+    with store.connect() as conn:
+        row = conn.execute("SELECT media_id, media_mime FROM messages WHERE wa_message_id = ?",
+                           (wa_message_id,)).fetchone()
+    if not row or not row["media_id"]:
+        raise HTTPException(status_code=404)
+    cache = store.DATA_DIR / "media"
+    cache.mkdir(exist_ok=True)
+    path = cache / row["media_id"]
+    mime = (row["media_mime"] or "application/octet-stream").split(";")[0]
+    if not path.exists():
+        try:
+            data, mime_dl = whatsapp.download_media(row["media_id"])
+        except Exception:
+            raise HTTPException(status_code=410, detail="media expired or unavailable")
+        path.write_bytes(data)
+        mime = mime_dl.split(";")[0] or mime
+    return FileResponse(path, media_type=mime, headers={"Cache-Control": "private, max-age=86400"})
+
+
 @router.post("/chats/{number}/reply")
 def chat_reply(request: Request, number: str, text: str = Form(...), pause_hours: int = Form(3)):
     """A staff member answers from the dashboard; the bot pauses on this number for a while."""
@@ -243,7 +270,7 @@ def chat_reply(request: Request, number: str, text: str = Form(...), pause_hours
     try:
         res = whatsapp.send_text(number, text.strip(), last_in["phone_number_id"] if last_in else None)
         with store.connect() as conn:
-            conn.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            conn.execute("INSERT OR IGNORE INTO messages (wa_message_id, received_at, phone_number_id, from_number, contact_name, msg_type, body, echo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                          (res.get("messages", [{}])[0].get("id"), store.now(), f"dashboard:{current_user(request)}",
                           number, None, "text", text.strip(), 1))
         if pause_hours > 0:
