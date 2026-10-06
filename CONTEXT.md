@@ -77,3 +77,12 @@
 - নিরাপত্তা: AI key আর টিম রিসোর্সে Filament tenancy-র পাশাপাশি নিজস্ব `where company_id = tenant` (টেস্টে Filament-এর নিজের স্কোপ কাজ করেনি)।
 - টেস্ট মোট ২০টা পাস (`CompanySettingsTest`, `CompanyPlanTest`, `TenancyTest`)।
 - বাকি: Python ইঞ্জিন এই টেবিলগুলো থেকে পড়বে (Laravel encrypted মান Python-এ ডিক্রিপ্ট: AES-256-CBC + APP_KEY)।
+
+## SaaS ধাপ ৩ (2026-10-06): মাল্টি-কোম্পানি ইঞ্জিন
+- `engine/` (FastAPI), সার্ভিস `zyro-engine`, 127.0.0.1:8994, `deploy/zyro-engine.service`। সিক্রেট `engine/.env`-এ (git-এ নেই)।
+- webhook-এ phone_number_id দেখে কোম্পানি খোঁজে; কোম্পানির বিলিং লগইন, AI key, বট সেটিং, WA টোকেন PostgreSQL থেকে নেয় (Laravel encrypted ফিল্ড Python-এ decrypt হয়)।
+- কনভারসেশন: wa_events, wa_contacts, wa_messages, wa_drafts। পরিচয় যাচাই flow (`ident_state`), ভয়েস→Groq Whisper, [[TICKET]] মার্কার।
+- এখন `ENGINE_DRY_RUN=1`: কিছু পাঠায় না, টিকিট খোলে না। Meta webhook এখনও পুরনো বটে (Century Link অক্ষত)।
+- টেস্ট: `deploy/replay_events.py 12` পুরনো বটের আসল ১২টা ইভেন্ট replay করে; ১২/১২ ড্রাফট এরর ছাড়া (2026-10-06)।
+- সময়: DB session UTC; সময়ের তুলনা SQL-এ `now()` দিয়ে (Python-এ naive/aware মেশানো যাবে না)।
+- বাকি: engine এখনও `app.agent` থেকে prompt/helper import করে; পুরনো বট সরানোর আগে কপি করতে হবে।
