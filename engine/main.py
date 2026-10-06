@@ -197,7 +197,9 @@ def identify(t: Tenant, contact: dict, text: str):
     if typed:
         return ok(typed, state.get("pending"))
     if stage == "ok" and state.get("customer_id"):
-        c = find_customer_by_text(api, state["customer_id"])
+        # an already identified chat: retry once so a billing hiccup doesn't restart identification
+        c = find_customer_by_text(api, state["customer_id"], allow_bare_id=True) \
+            or find_customer_by_text(tenants.billing(t), state["customer_id"], allow_bare_id=True)
         if c:
             return ok(c)
     if stage == "confirm":
