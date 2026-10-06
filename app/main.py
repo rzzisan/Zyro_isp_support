@@ -106,6 +106,8 @@ async def receive(request: Request):
                     media = m.get(m.get("type") or "") if m.get("type") in MEDIA_TYPES else None
                     if media and not body:
                         body = media.get("caption")
+                    if m.get("type") == "button" and not body:
+                        body = (m.get("button") or {}).get("text")
                     cur = conn.execute(
                         """INSERT OR IGNORE INTO messages
                            (wa_message_id, received_at, phone_number_id, from_number, contact_name, msg_type, body, echo,
@@ -337,6 +339,9 @@ def handle_message(message: dict, contact_name: str | None, phone_number_id: str
     mtype = message.get("type")
     if mode == "off" or not bot_serves(phone_number_id) or bot_paused(wa):
         return
+    if mtype == "button":  # customer tapped a template quick-reply button
+        message = {**message, "type": "text", "text": {"body": (message.get("button") or {}).get("text", "")}}
+        mtype = "text"
     if mtype not in ("text", "audio", "image", "video", "document"):
         return
     context = draft = error = provider = model = ticket_note = None
