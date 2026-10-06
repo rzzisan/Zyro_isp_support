@@ -60,4 +60,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     {
         return $this->companies()->whereKey($company)->first()?->pivot->role;
     }
+
+    /** Owner or Admin of the given company (settings, team). Agents only work the inbox. */
+    public function managesCompany(?Company $company): bool
+    {
+        return $company !== null && in_array($this->roleIn($company), ['owner', 'admin'], true);
+    }
 }

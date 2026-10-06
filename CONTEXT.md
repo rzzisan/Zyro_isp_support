@@ -70,3 +70,10 @@
 - টেস্ট: `tests/Feature/TenancyTest.php` (৫টা: আলাদা কোম্পানি দেখা যায় না, সুপার প্যানেলে কোম্পানি ইউজার ঢুকতে পারে না ইত্যাদি)। চালানো: `DB_DATABASE=zyro_support_test APP_ENV=testing php artisan test` (আগে `config:clear`, পরে `config:cache`)।
 - সুপার-অ্যাডমিন: `php artisan make:filament-user` তারপর `php artisan zyro:make-super-admin <email>`।
 - পুরনো বট (`zyro-support`, support.zyrotechbd.com) অপরিবর্তিত।
+
+## SaaS ধাপ ২ (2026-10-06): কোম্পানির সেটআপ
+- টেবিল: `billing_connections` (প্রতি কোম্পানিতে ১টা, পাসওয়ার্ড Laravel `encrypted` cast = APP_KEY), `bot_settings` (provider/model/mode/allowlist/auto_ticket/signature/extra_prompt), `ai_keys` (encrypted, প্রতি কোম্পানির নিজের key)। `Membership` মডেল = `company_user`।
+- কোম্পানি প্যানেলের "সেটিংস" গ্রুপ (শুধু Owner/Admin; Agent 403): বিলিং সংযোগ (+ সংযোগ পরীক্ষা, PHP `IspDigitalClient`), বট সেটিংস, AI key (+ পরীক্ষা = provider-এর models লিস্ট, টোকেন খরচ নেই), টিম (প্যাকেজের সীমা মেনে সদস্য যোগ; Admin Owner বানাতে পারে না; Owner সরানো যায় না)।
+- নিরাপত্তা: AI key আর টিম রিসোর্সে Filament tenancy-র পাশাপাশি নিজস্ব `where company_id = tenant` (টেস্টে Filament-এর নিজের স্কোপ কাজ করেনি)।
+- টেস্ট মোট ২০টা পাস (`CompanySettingsTest`, `CompanyPlanTest`, `TenancyTest`)।
+- বাকি: Python ইঞ্জিন এই টেবিলগুলো থেকে পড়বে (Laravel encrypted মান Python-এ ডিক্রিপ্ট: AES-256-CBC + APP_KEY)।

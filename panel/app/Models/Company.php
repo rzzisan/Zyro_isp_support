@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Company extends Model
@@ -49,5 +51,25 @@ class Company extends Model
         }
 
         return max(0, $this->plan->max_agents - $this->users()->count());
+    }
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(Membership::class);
+    }
+
+    public function aiKeys(): HasMany
+    {
+        return $this->hasMany(AiKey::class);
+    }
+
+    public function billingConnection(): HasOne
+    {
+        return $this->hasOne(BillingConnection::class);
+    }
+
+    public function botSetting(): HasOne
+    {
+        return $this->hasOne(BotSetting::class);
     }
 }
