@@ -60,3 +60,13 @@
 - ড্যাশবোর্ড: কথোপকথন (নম্বর অনুযায়ী, থ্রেড), স্টাফের উত্তর (বট ডিফল্ট ৩ ঘণ্টা চুপ), নম্বরভিত্তিক বট বন্ধ (`pause:<wa>`), কোন business নম্বরে বট চলবে (`bot_phone_ids`), নতুন নম্বর যুক্ত → কোড → যাচাই + PIN রেজিস্টার।
 - অফিসিয়াল নম্বর 01777858289: Coexistence-এর জন্য App Review (whatsapp_business_messaging/management) এখনো জমা হয়নি (প্যাকেজ `docs/meta-app-review.md`)। বিকল্প: Business অ্যাপ থেকে ডিলিট করে ড্যাশবোর্ড দিয়ে Cloud API-তে যুক্ত। যুক্ত হলে `bot_phone_ids`-এ শুধু ওই নম্বর রাখতে হবে (Zareen নম্বর বাদ)।
 - নিরাপত্তা বাকি: অন্যের আইডি দিয়ে তথ্য জানা আটকাতে OTP যাচাই।
+
+## SaaS ধাপ ১ (2026-10-06)
+- পরিকল্পনা: `docs/saas-plan.md` (Filament বেছে নেওয়া হয়েছে, Tyro না)।
+- `panel/` = Laravel 13 + Filament 5, https://desk.zyrotechbd.com (nginx `deploy/nginx-desk.zyrotechbd.com.conf`, wildcard cert, PHP-FPM www-data; storage/bootstrap/cache গ্রুপ www-data)।
+- DB: PostgreSQL `zyro_support` (ইউজার `zyro_support`, পাসওয়ার্ড `panel/.env`-এ), টেস্ট DB `zyro_support_test`।
+- মডেল: `companies` (slug নিজে তৈরি), `company_user` (role owner/admin/agent), `users.is_super_admin`।
+- প্যানেল: `/super` (সুপার-অ্যাডমিন: কোম্পানি, ইউজার, কোম্পানির ইউজার-রোল) আর `/app/{company}` (কোম্পানি tenancy)।
+- টেস্ট: `tests/Feature/TenancyTest.php` (৫টা: আলাদা কোম্পানি দেখা যায় না, সুপার প্যানেলে কোম্পানি ইউজার ঢুকতে পারে না ইত্যাদি)। চালানো: `DB_DATABASE=zyro_support_test APP_ENV=testing php artisan test` (আগে `config:clear`, পরে `config:cache`)।
+- সুপার-অ্যাডমিন: `php artisan make:filament-user` তারপর `php artisan zyro:make-super-admin <email>`।
+- পুরনো বট (`zyro-support`, support.zyrotechbd.com) অপরিবর্তিত।
