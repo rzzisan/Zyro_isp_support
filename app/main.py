@@ -7,7 +7,7 @@ import logging
 import os
 import re
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
@@ -209,6 +209,97 @@ def bot_serves(phone_number_id: str | None) -> bool:
     return not ids or (phone_number_id or "") in ids
 
 
+YES_WORDS = ("হ্যাঁ", "হ্যা", "হা", "জি", "জ্বি", "জী", "ঠিক", "yes", "ha", "hae", "hea", "hm", "hmm", "ji", "jee", "ok",
+             "thik", "right", "correct", "y")
+NO_WORDS = ("না", "নাহ", "no", "na", "nah", "not", "noi", "nai", "n")
+
+ASK_ID_TEXT = ("আপনি লাইন নেওয়ার সময় যে ফোন নম্বর দিয়েছিলেন সেই নম্বরটা দিন, "
+               "অথবা কাস্টমার ID জানা থাকলে বলুন।")
+AGENT_TEXT = "ঠিক আছে ভাই, শিগগিরই আমাদের একজন সাপোর্ট এজেন্ট আপনার সাথে যোগাযোগ করবেন।"
+
+
+def _yes_no(text: str) -> str | None:
+    t = re.sub(r"[^\wঀ-৿ ]", " ", (text or "").lower()).split()
+    if not t:
+        return None
+    if t[0] in NO_WORDS or "না" in t[:3]:
+        return "no"
+    if t[0] in YES_WORDS:
+        return "yes"
+    return None
+
+
+def identify(wa: str, text: str) -> tuple[dict | None, str | None, str | None, str | None]:
+    """Who is this customer? Returns (customer, fixed_reply, pending_question, agent_note).
+
+    1. WhatsApp number matches a customer -> ask them to confirm that line by name.
+    2. Not matched / said no -> ask for the phone number given at connection time or the customer ID.
+    3. Still nothing after a second try -> tell them an agent will contact them (and pause the bot).
+    An ID/phone typed at any point identifies the line directly.
+    """
+    from app.ispdigital import find_customer_by_text, find_customer_by_whatsapp
+
+    key = f"state:{wa}"
+    try:
+        state = json.loads(store.get_setting(key) or "{}")
+    except ValueError:
+        state = {}
+    # a conversation that went quiet for a day starts over
+    if state.get("at") and datetime.fromisoformat(state["at"]) < datetime.now(timezone.utc) - timedelta(hours=24):
+        state = {}
+    stage = state.get("stage", "new")
+
+    def save(**kw):
+        store.set_setting(key, json.dumps({**kw, "at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False))
+
+    def confirmed(customer, pending=None):
+        save(stage="ok", customer_id=customer.get("CustomerId"))
+        store.set_setting(f"link:{wa}", customer.get("CustomerId") or "")
+        return customer, None, pending, None
+
+    # an ID / phone / username in the message always wins (customer may ask about another line)
+    typed = find_customer_by_text(billing(), text, allow_bare_id=stage in ("ask_id", "confirm"))
+    if typed:
+        return confirmed(typed, state.get("pending"))
+
+    if stage == "ok" and state.get("customer_id"):
+        customer = find_customer_by_text(billing(), state["customer_id"])
+        if customer:
+            return confirmed(customer)
+
+    if stage == "confirm":
+        answer = _yes_no(text)
+        if answer == "yes":
+            customer = find_customer_by_text(billing(), state.get("candidate", ""))
+            if customer:
+                return confirmed(customer, state.get("pending"))
+        if answer is None and not state.get("reasked"):
+            save(**{**state, "reasked": True})
+            return None, f"জি ভাই, আপনি কি *{state.get('candidate_name')}* (ID {state.get('candidate')}) লাইনের বিষয়ে বলছেন? হ্যাঁ বা না লিখুন।", None, None
+        save(stage="ask_id", tries=1, pending=state.get("pending"))
+        return None, ASK_ID_TEXT, None, None
+
+    if stage == "ask_id":
+        tries = state.get("tries", 1)
+        if tries >= 2:
+            save(stage="agent", pending=state.get("pending"))
+            return None, AGENT_TEXT, None, "কাস্টমার শনাক্ত করা যায়নি, এজেন্ট যোগাযোগ করবেন"
+        save(stage="ask_id", tries=tries + 1, pending=state.get("pending"))
+        return None, "দুঃখিত ভাই, এই তথ্য দিয়ে আপনার লাইন খুঁজে পাইনি। " + ASK_ID_TEXT, None, None
+
+    if stage == "agent":
+        return None, None, None, None  # bot is paused for this number; nothing to say
+
+    # new conversation
+    own = find_customer_by_whatsapp(billing(), wa)
+    if own:
+        save(stage="confirm", candidate=own.get("CustomerId"), candidate_name=own.get("CustomerName"), pending=text)
+        return None, (f"আসসালামু আলাইকুম। আপনি কি *{own.get('CustomerName')}* (ID {own.get('CustomerId')}) "
+                      "লাইনের বিষয়ে কথা বলছেন? হ্যাঁ বা না লিখুন।"), None, None
+    save(stage="ask_id", tries=1, pending=text)
+    return None, "আসসালামু আলাইকুম। " + ASK_ID_TEXT, None, None
+
+
 def handle_message(message: dict, contact_name: str | None, phone_number_id: str | None = None) -> None:
     """Identify customer, check billing/ONU/PPPoE, draft a reply (shadow mode stores it only)."""
     wa = message.get("from")
@@ -223,34 +314,30 @@ def handle_message(message: dict, contact_name: str | None, phone_number_id: str
 
         with store.connect() as conn:
             history = recent_history(conn, wa)
-            link = conn.execute("SELECT value FROM settings WHERE key = ?", (f"link:{wa}",)).fetchone()
-        # priority: an ID/mobile/username in the newest message (customer may ask about another line),
-        # then the sender's own WhatsApp number, then the customer we talked about last
         current_text = (message.get("text") or {}).get("body", "")
-        customer = find_customer_by_text(billing(), current_text)
-        if not customer and link and link["value"]:
-            customer = find_customer_by_text(billing(), link["value"])
-        if not customer:
-            customer = find_customer_by_whatsapp(billing(), wa)
-        if not customer:
-            for h in reversed(history):
-                if h["role"] == "user":
-                    customer = find_customer_by_text(billing(), h["content"])
-                    if customer:
-                        break
-        if customer:
-            store.set_setting(f"link:{wa}", customer.get("CustomerId") or "")
-        context = diagnose(billing(), customer) if customer else None
-        if not history or history[-1]["role"] != "user":
-            history.append({"role": "user", "content": (message.get("text") or {}).get("body", "")})
-        draft, provider, model = draft_reply(history, context)
-        if draft:
+        customer, fixed, pending, ticket_note = identify(wa, current_text)
+        if not customer and not fixed:
+            return  # waiting for a human agent on this number
+        if fixed:
+            # identification step: a fixed message, no AI
+            draft, provider, model = fixed, "flow", "identify"
+            if ticket_note:
+                store.set_setting(f"pause:{wa}", "on")  # hand over to a human agent
+        else:
+            context = diagnose(billing(), customer)
+            if pending:
+                # answer the question the customer asked before we confirmed who they are
+                history = [{"role": "user", "content": pending + "\n" + current_text}]
+            elif not history or history[-1]["role"] != "user":
+                history.append({"role": "user", "content": current_text})
+            draft, provider, model = draft_reply(history, context)
+        if draft and not fixed:
             # [[TICKET: ...]] marker = the AI wants the technician team to follow up
             m = re.search(r"\[\[TICKET:\s*(.*?)\]\]", draft, re.S)
             if m:
                 ticket_note = m.group(1).strip()[:300]
                 draft = (draft[:m.start()] + draft[m.end():]).strip()
-        if draft and ticket_note and customer and should_send(mode, wa) \
+        if draft and not fixed and ticket_note and customer and should_send(mode, wa) \
                 and store.get_setting("auto_ticket", "on") == "on":
             ticket_note, extra = open_ticket(customer, wa, ticket_note)
             if extra:

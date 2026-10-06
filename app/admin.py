@@ -264,6 +264,8 @@ def chat_pause(request: Request, number: str, action: str = Form(...)):
         return r
     check_origin(request)
     store.set_setting(f"pause:{number}", "on" if action == "pause" else None)
+    if action != "pause":
+        store.set_setting(f"state:{number}", None)  # identification starts fresh
     flash(request, "এই নম্বরে বট বন্ধ করা হয়েছে, এখন শুধু মানুষ উত্তর দেবে।" if action == "pause"
           else "এই নম্বরে বট আবার চালু।")
     return back(f"/admin/chats/{number}")

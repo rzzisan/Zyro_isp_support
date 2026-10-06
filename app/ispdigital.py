@@ -198,8 +198,13 @@ def find_customer_by_whatsapp(api: ISPDigital, wa_number: str) -> dict | None:
     return rows[0] if len(rows) == 1 else None
 
 
-def find_customer_by_text(api: ISPDigital, text: str) -> dict | None:
-    """The customer typed an identifier: mobile (01XXXXXXXXX / +880...), customer ID (e.g. 0071) or PPPoE username."""
+ID_HINT = re.compile(r"(\bid\b|আইডি|আই ডি|customer|কাস্টমার|গ্রাহক|user)", re.I)
+
+
+def find_customer_by_text(api: ISPDigital, text: str, allow_bare_id: bool = True) -> dict | None:
+    """The customer typed an identifier: mobile (01XXXXXXXXX / +880...), customer ID (e.g. 0071) or PPPoE username.
+    allow_bare_id=False: a short number counts as a customer ID only if the text says so ("id 71")
+    or is just the number, so "520 taka diyechi" isn't read as customer 520."""
     text = text or ""
     # mobile numbers
     for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", text)):
@@ -208,7 +213,8 @@ def find_customer_by_text(api: ISPDigital, text: str) -> dict | None:
         if len(rows) == 1:
             return rows[0]
     # customer IDs (short numbers, keep leading zeros)
-    for cid in re.findall(r"(?<!\d)\d{2,6}(?!\d)", text):
+    bare_ok = allow_bare_id or bool(ID_HINT.search(text)) or text.strip().isdigit()
+    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", text) if bare_ok else []):
         rows = [r for r in api.search_customers(cid, limit=10)
                 if (r.get("CustomerId") or "").lstrip("0") == cid.lstrip("0")]
         if len(rows) == 1:
