@@ -7,6 +7,7 @@ passwords to callers.
 import html
 import re
 import threading
+from urllib.parse import urlencode
 
 import httpx
 
@@ -165,7 +166,10 @@ class ISPDigital:
         with self._lock:
             if not self._logged_in:
                 self.login()
-            r = self._client.post(path, data=data, headers={"X-Requested-With": "XMLHttpRequest"})
+            # repeated keys (empIds=3&empIds=9) need a pre-encoded body; httpx data= only takes a dict
+            body = urlencode(data) if isinstance(data, list) else urlencode(data, doseq=True)
+            r = self._client.post(path, content=body, headers={
+                "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
         if r.status_code in (301, 302):
             self._logged_in = False
             raise LoginError(f"session not accepted for {path}")
@@ -194,7 +198,14 @@ class ISPDigital:
                       sms_employees: bool = False):
         """Assign / reassign technicians like the support page's Assign button (optionally SMS them)."""
         data = [("id", str(int(complain_id))), ("deptId", str(dept_id or ""))] + [("empIds", str(int(e))) for e in employee_ids]
-        res = self._post("/ClientSupport/AddSolver", data).json()
+        r = self._post("/ClientSupport/AddSolver", data)
+        if r.text.lstrip().startswith("<"):
+            self._logged_in = False
+            raise LoginError("billing session expired, try again")
+        try:
+            res = r.json()
+        except ValueError:
+            res = None
         if sms_employees and res:
             self._post("/sms/SendAsync", jquery_params({"vmSms": res}))
         return res
