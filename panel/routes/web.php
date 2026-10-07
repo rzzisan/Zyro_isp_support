@@ -37,3 +37,29 @@ Route::get('/print/{company:slug}/tickets', function (\App\Models\Company $compa
     return view('print.tickets', ['company' => $company, 'employee' => $employee, 'tickets' => $tickets,
         'now' => now('Asia/Dhaka')]);
 })->middleware('web')->name('tickets.print');
+
+// all billing customers as CSV (no passwords); owner/admin of that company only
+Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company $company) {
+    abort_unless(Auth::user()?->managesCompany($company), 403);
+    $cols = ['customer_id' => 'ID', 'name' => 'Name', 'mobile' => 'Mobile', 'username' => 'PPPoE ID', 'zone' => 'Zone',
+        'subzone' => 'Subzone', 'box' => 'Box', 'package' => 'Package', 'monthly_bill' => 'Monthly bill', 'due' => 'Due',
+        'status' => 'Status', 'disabled' => 'Line off', 'bill_day' => 'Bill day', 'last_payment_date' => 'Last payment',
+        'joined_on' => 'Joined', 'address' => 'Address', 'thana' => 'Thana', 'district' => 'District'];
+
+    return response()->streamDownload(function () use ($company, $cols) {
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF"); // Excel reads Bangla correctly with a BOM
+        fputcsv($out, array_values($cols));
+        \App\Models\BillingCustomer::where('company_id', $company->id)->whereNull('gone_at')->orderBy('customer_id')
+            ->select(array_keys($cols))->chunk(1000, function ($rows) use ($out, $cols) {
+                foreach ($rows as $r) {
+                    fputcsv($out, array_map(fn ($c) => match ($c) {
+                        'disabled' => $r->disabled ? 'yes' : 'no',
+                        'last_payment_date', 'joined_on' => $r->{$c}?->format('Y-m-d'),
+                        default => $r->{$c},
+                    }, array_keys($cols)));
+                }
+            });
+        fclose($out);
+    }, $company->slug.'-customers-'.now('Asia/Dhaka')->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+})->middleware('web')->name('customers.csv');

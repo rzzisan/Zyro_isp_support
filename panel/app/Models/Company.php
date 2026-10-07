@@ -97,4 +97,9 @@ class Company extends Model
     {
         return $this->hasMany(LineEnable::class);
     }
+
+    public function billingCustomers(): HasMany
+    {
+        return $this->hasMany(BillingCustomer::class);
+    }
 }

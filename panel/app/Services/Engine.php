@@ -61,4 +61,16 @@ class Engine
     {
         return static::call('get', "/internal/{$companyId}/tickets/{$complainId}/solvers") ?? [];
     }
+
+    /** Copy all billing customers now (normally nightly); returns total / created / gone. */
+    public static function syncCustomers(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/customers/sync") ?? [];
+    }
+
+    /** Live connection, ONU and bill state of one customer. */
+    public static function customerLive(int $companyId, int $headerId): array
+    {
+        return static::call('get', "/internal/{$companyId}/customers/{$headerId}/live") ?? [];
+    }
 }
