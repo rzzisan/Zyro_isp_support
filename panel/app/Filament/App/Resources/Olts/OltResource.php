@@ -64,8 +64,10 @@ class OltResource extends Resource
                 Select::make('router_identity')->label('এর কাস্টমার কোন MikroTik-এ')
                     ->options(fn () => MikrotikRouter::where('company_id', Filament::getTenant()->getKey())->whereNotNull('identity')
                         ->pluck('identity', 'identity')->all())
-                    ->placeholder('সব রাউটার')
-                    ->helperText('দিলে শুধু সেই রাউটারের কাস্টমারদের MAC এই OLT-এ খোঁজা হয় (OLT-এর উপর চাপ কম)'),
+                    ->multiple()->placeholder('সব রাউটার')
+                    ->formatStateUsing(fn ($state) => is_array($state) ? $state : array_values(array_filter(array_map('trim', explode(',', (string) $state)))))
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? implode(',', (array) $state) : null)
+                    ->helperText('দিলে শুধু সেই রাউটারগুলোর কাস্টমারদের MAC এই OLT-এ খোঁজা হয় (OLT-এর উপর চাপ কম)। একাধিক বাছা যায়।'),
             ]),
             Toggle::make('enabled')->label('চালু')->default(true),
         ]);
@@ -79,7 +81,7 @@ class OltResource extends Resource
                 TextColumn::make('name')->label('OLT')->description(fn (Olt $r) => $r->sys_name),
                 TextColumn::make('brand')->label('ব্র্যান্ড')->formatStateUsing(fn ($state) => Olt::BRANDS[$state] ?? $state),
                 TextColumn::make('host')->label('IP : পোর্ট')->state(fn (Olt $r) => "{$r->host}:{$r->snmp_port}"),
-                TextColumn::make('router_identity')->label('MikroTik')->placeholder('সব'),
+                TextColumn::make('router_identity')->label('MikroTik')->placeholder('সব')->formatStateUsing(fn ($state) => str_replace(',', ', ', $state)),
                 TextColumn::make('onu_online')->label('ONU অনলাইন')
                     ->state(fn (Olt $r) => $r->onu_total === null ? '—' : "{$r->onu_online} / {$r->onu_total}"),
                 TextColumn::make('last_poll_ok')->label('শেষ পড়া')

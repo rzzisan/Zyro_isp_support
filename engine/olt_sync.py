@@ -1,12 +1,13 @@
 """Read every OLT over SNMP (read-only) every 5 minutes: all ONUs with status/power/distance, and which customer
 router MAC sits behind which ONU (looked up per MAC in the OLT's MAC table, never a full-table walk).
 
-Brand drivers: only the OIDs differ. BDCOM EPON is verified on a P3608B; VSOL / ECOM to be added once read from a
-real OLT.
+Brand drivers: only the OIDs differ. BDCOM EPON is verified on a P3608B, VSOL EPON on a V1600D; ECOM to be added once
+read from a real OLT.
   set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.olt_sync [--olt ID]
 """
 import argparse
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -25,9 +26,15 @@ FDB_PORT = "1.3.6.1.2.1.17.7.1.2.2.1.2"          # dot1qTpFdbPort.<vlan>.<mac>
 BRIDGE_IFINDEX = "1.3.6.1.2.1.17.1.4.1.2"        # dot1dBasePortIfIndex
 VLAN_NAMES = "1.3.6.1.2.1.17.7.1.4.3.1.1"        # dot1qVlanStaticName
 
+VSOL_ONU = re.compile(r"^EPON(\d+)ONU(\d+)$", re.I)
+
+# Each driver: which ifDescr names are ONUs, how an ONU's row index in the brand's own tables is built ("key"), and per
+# column (OID, how to read it): "mac" = 6 raw bytes, a number = int divided by it, "dbm" = text like
+# "0.01 mW (-19.00 dBm)", "num" = text like "44.25 C", None = plain int.
 DRIVERS = {
     "bdcom": {
         "onu_name": lambda d: ":" in d and d.upper().startswith(("EPON", "GPON")),
+        "key": lambda i, name: str(i),
         "cols": {
             "status_code": ("1.3.6.1.4.1.3320.101.10.1.1.26", None),
             "onu_mac": ("1.3.6.1.4.1.3320.101.10.1.1.3", "mac"),
@@ -38,7 +45,40 @@ DRIVERS = {
             "voltage": ("1.3.6.1.4.1.3320.101.10.5.1.3", 10000),
         },
     },
+    # VSOL V1600D EPON: ONU interfaces are named "EPON07ONU39"; its own tables are indexed <pon>.<onu>. No status code or
+    # distance column found yet (online comes from ifOperStatus). Walking past these tables made its agent stop
+    # answering, so only these two tables are read, by GET.
+    "vsol": {
+        "onu_name": lambda d: bool(VSOL_ONU.match(d)),
+        "key": lambda i, name: ".".join(str(int(x)) for x in VSOL_ONU.match(name).groups()),
+        "cols": {
+            "status_code": (None, None),
+            "onu_mac": ("1.3.6.1.4.1.37950.1.1.5.12.2.1.2.1.5", "mac"),
+            "distance_m": (None, None),
+            "rx_dbm": ("1.3.6.1.4.1.37950.1.1.5.12.2.1.8.1.7", "dbm"),
+            "tx_dbm": ("1.3.6.1.4.1.37950.1.1.5.12.2.1.8.1.6", "dbm"),
+            "temp_c": ("1.3.6.1.4.1.37950.1.1.5.12.2.1.8.1.3", "num"),
+            "voltage": ("1.3.6.1.4.1.37950.1.1.5.12.2.1.8.1.4", "num"),
+        },
+    },
 }
+
+
+def conv(v, how):
+    """One SNMP value read the driver's way; None when the ONU gave nothing usable."""
+    if how == "mac":
+        return _fmt_mac(v)
+    if how in ("dbm", "num"):
+        m = re.search(r"\((-?\d+(?:\.\d+)?)\s*dBm\)" if how == "dbm" else r"-?\d+(?:\.\d+)?", text(v) or "")
+        return round(float(m.group(1) if how == "dbm" else m.group(0)), 2) if m else None
+    if not isinstance(v, int) or v in (-65535, 65535):
+        return None
+    return v if how is None else round(v / how, 2)
+
+
+def routers(o: dict) -> list[str]:
+    """MikroTik identities whose customers dial through this OLT (comma list); empty = all."""
+    return [x.strip() for x in (o.get("router_identity") or "").split(",") if x.strip()]
 
 
 def client(o: dict) -> SNMP:
@@ -90,11 +130,16 @@ def poll_onus(o: dict, s: SNMP) -> int:
     # BDCOM's own tables: plain GETs of known ONU indexes. A GETBULK on these tables makes the OLT's SNMP agent stop
     # answering for a minute or two, so they are never walked.
     keys = sorted(onus)
+    row = {i: drv["key"](i, onus[i]) for i in keys}
     for key in ("status_code", "onu_mac", "distance_m"):
-        oid, scale = drv["cols"][key]
+        oid, how = drv["cols"][key]
+        if not oid:
+            continue
         for n in range(0, len(keys), 10):
-            for o_, v in s.get(*[f"{oid}.{i}" for i in keys[n:n + 10]]).items():
-                cols[key][idx(o_)] = _fmt_mac(v) if scale == "mac" else (v if isinstance(v, int) else None)
+            part = keys[n:n + 10]
+            got = s.get(*[f"{oid}.{row[i]}" for i in part])
+            for i in part:
+                cols[key][i] = conv(got.get(f"{oid}.{row[i]}"), how)
             time.sleep(PAUSE)
     # optical values: one ONU per request (the OLT asks the ONU itself). An ONU without DDM makes the OLT wait ~10 s
     # and answer -65535; remember those and skip them for a day.
@@ -107,17 +152,15 @@ def poll_onus(o: dict, s: SNMP) -> int:
         if oper.get(i) != 1 or i in skip:
             continue
         try:
-            got = slow.get(*[f"{drv['cols'][k][0]}.{i}" for k in optical])
+            got = slow.get(*[f"{drv['cols'][k][0]}.{row[i]}" for k in optical])
         except Exception as e:
             log.warning("optical read of %s failed: %s", onus[i], e)
             no_ddm.append(i)
             continue
         for k in optical:
-            v = got.get(f"{drv['cols'][k][0]}.{i}")
-            if isinstance(v, int) and v not in (-65535, 65535):
-                cols[k][i] = round(v / drv["cols"][k][1], 2)
-            elif k == "rx_dbm" and v in (-65535, 65535):
-                no_ddm.append(i)
+            cols[k][i] = conv(got.get(f"{drv['cols'][k][0]}.{row[i]}"), drv["cols"][k][1])
+        if cols["rx_dbm"].get(i) is None:
+            no_ddm.append(i)
         time.sleep(PAUSE)
     now = datetime.now(timezone.utc)
     rows = []
@@ -166,10 +209,10 @@ def map_macs(o: dict, s: SNMP, vlan_list: list[int]) -> tuple[int, int]:
             LEFT JOIN customer_onus m ON m.company_id = s.company_id AND m.client_mac = upper(s.caller_id)
             LEFT JOIN onu_mac_misses x ON x.olt_id = %s AND x.client_mac = upper(s.caller_id)
             WHERE s.company_id = %s AND s.caller_id IS NOT NULL AND s.seen_at > now() - interval '10 minutes'
-              {"AND r.identity = %s" if o["router_identity"] else ""}
+              {"AND r.identity = ANY(%s)" if routers(o) else ""}
               AND (m.id IS NULL OR m.checked_at < now() - interval '{RECHECK_HOURS} hours')
               AND (x.olt_id IS NULL OR x.checked_at < now() - interval '{RECHECK_HOURS} hours')""",
-        tuple([o["id"], o["company_id"]] + ([o["router_identity"]] if o["router_identity"] else [])))
+        tuple([o["id"], o["company_id"]] + ([routers(o)] if routers(o) else [])))
     macs = [r["mac"] for r in cand if r["mac"] and len(r["mac"].split(":")) == 6]
     if not macs:
         return 0, 0
@@ -255,14 +298,18 @@ def onu_for_mac(company_id: int, mac: str | None, live: bool = True) -> dict | N
     if live and r["brand"] in DRIVERS:
         try:
             s = SNMP(r["host"], r["snmp_port"], db.decrypt(r["community"]), timeout=3, retries=0)
-            cols = DRIVERS[r["brand"]]["cols"]
-            i = r["if_index"]
-            v = s.get(f"{IF_OPER}.{i}", *[f"{cols[k][0]}.{i}" for k in ("rx_dbm", "tx_dbm", "distance_m")])
+            drv = DRIVERS[r["brand"]]
+            cols, i = drv["cols"], r["if_index"]
+            k = drv["key"](i, r["name"])
+            want = {c: cols[c] for c in ("rx_dbm", "tx_dbm", "distance_m") if cols[c][0]}
+            v = s.get(f"{IF_OPER}.{i}", *[f"{oid}.{k}" for oid, _h in want.values()])
             r["online"] = v.get(f"{IF_OPER}.{i}") == 1
-            rx = v.get(f"{cols['rx_dbm'][0]}.{i}")
-            r["rx_dbm"] = round(rx / 10, 1) if isinstance(rx, int) and r["online"] else None
-            dist = v.get(f"{cols['distance_m'][0]}.{i}")
-            r["distance_m"] = dist if isinstance(dist, int) and dist else r["distance_m"]
+            got = {c: conv(v.get(f"{oid}.{k}"), how) for c, (oid, how) in want.items()}
+            if "rx_dbm" in got:
+                r["rx_dbm"] = got["rx_dbm"] if r["online"] else None
+            if "tx_dbm" in got:
+                r["tx_dbm"] = got["tx_dbm"] if r["online"] else None
+            r["distance_m"] = got.get("distance_m") or r["distance_m"]
         except Exception as e:
             log.warning("live ONU read failed: %s", e)
     return {"source": "olt", "OLTName": r["olt_name"], "OLTPort": r["name"], "OnuStatus": "online" if r["online"] else "offline",
