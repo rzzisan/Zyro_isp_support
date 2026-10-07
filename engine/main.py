@@ -268,7 +268,7 @@ def deliver(t: Tenant, contact: dict, message_id: int, text: str, note: str | No
     save_draft(t, contact["id"], message_id, mode, body, ticket_note=note, error=error, **draft_kw)
 
 
-def open_ticket(t: Tenant, customer: dict, wa: str, note: str) -> tuple[str, str | None]:
+def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str | None = None) -> tuple[str, str | None]:
     if DRY_RUN or not t.bot.get("auto_ticket", True):
         return f"{note} → (টিকেট খোলা হয়নি: {'dry run' if DRY_RUN else 'বন্ধ'})", None
     api = tenants.billing(t)
@@ -283,7 +283,7 @@ def open_ticket(t: Tenant, customer: dict, wa: str, note: str) -> tuple[str, str
         cid = cats.get(category) or next((v for k, v in cats.items() if category and category.lower() in k.lower()), None) \
             or cats.get("Others Support")
         mobile = normalize_bd_mobile(customer.get("MobileNumber") or "") or normalize_bd_mobile(wa)
-        api.create_ticket(customer["CustomerHeaderId"], cid, 2, mobile, f"[WhatsApp বট] {detail}\nকাস্টমার WhatsApp: {wa}")
+        api.create_ticket(customer["CustomerHeaderId"], cid, 2, mobile, (f"[WhatsApp: {requested_by}] {detail}\nWhatsApp: {wa}" if requested_by else f"[WhatsApp বট] {detail}\nকাস্টমার WhatsApp: {wa}"))
         created = api.open_tickets_for(customer.get("UserName") or "")
         no = created[0].get("ComplainId") if created else None
         return f"{note} → টিকেট খোলা হয়েছে #{no or '?'}", (f"আপনার অভিযোগ নম্বর: {no}" if no else None)
@@ -323,6 +323,15 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
         return
 
     text = (m.get("text") or {}).get("body", "")
+    from engine.technician import handle_tech, technician_for
+    tech = technician_for(t, contact["wa_number"])
+    if tech:
+        try:
+            handle_tech(t, contact, tech, text, message_id, deliver, open_ticket)
+        except Exception as e:
+            log.exception("technician reply failed for company %s", t.company_id)
+            save_draft(t, contact["id"], message_id, "error", None, error=str(e)[:500])
+        return
     context = None
     try:
         customer, fixed, pending, note = identify(t, contact, text)

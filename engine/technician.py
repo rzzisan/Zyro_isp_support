@@ -1,0 +1,98 @@
+"""Field technicians on WhatsApp: the company lists their numbers in the panel. Their messages skip customer
+identification; they can ask about any customer (line status, PPPoE ID, ONU, bill, tickets) and ask for a ticket.
+"""
+import json
+import logging
+import re
+
+from engine import db, tenant as tenants
+from engine.ispdigital import diagnose, find_customer_by_text
+from engine.llm import _whatsapp_format
+from engine.tenant import Tenant
+
+log = logging.getLogger("zyro-engine")
+
+TECH_PROMPT = """তুমি {company}-এর অফিস সাপোর্ট ডেস্ক। এখন কথা বলছ কোম্পানির ফিল্ড টেকনিশিয়ান {tech}-এর সাথে (তিনি স্টাফ, কাস্টমার নন)।
+টেকনিশিয়ান যেকোনো কাস্টমারের তথ্য জানতে পারেন। তিনি কাস্টমার ID, মোবাইল বা PPPoE ID দিয়ে কাস্টমার বোঝান; সিস্টেম সেটা খুঁজে live_data-তে দেয়।
+
+উত্তরের ধরন:
+- বাংলাদেশের কথ্য বাংলায়, খুব সংক্ষেপে, কাজের তথ্য। সম্বোধন "জি" বা "ভাই"। কোনো ভূমিকা বা বিদায় নয়।
+- তথ্য দিতে হলে ছোট লাইনে দাও, যেমন:
+  *Rajib* (ID 0071)
+  PPPoE: pp.rajib · Connected · uptime 2d 3h
+  ONU: Online · -21.5 dBm
+  বকেয়া: 520 টাকা
+- টেকনিশিয়ান যা জানতে চেয়েছেন শুধু সেটাই দাও। "লাইন চালু হয়েছে কি না" জিজ্ঞেস করলে PPPoE connectivity, uptime, last logout আর ONU status দেখে স্পষ্ট বলো চালু কি না।
+- PPPoE ID (username), IP, MAC, ONU optical power, OLT, zone/subzone/box টেকনিশিয়ানকে দেওয়া যাবে। পাসওয়ার্ড কখনো দেবে না।
+- live_data-তে কাস্টমার না থাকলে বলো কাস্টমার পাওয়া যায়নি, ID / মোবাইল / PPPoE ID দিতে বলো। বানিয়ে কিছু বলবে না।
+- টেকনিশিয়ান কোনো কাস্টমারের জন্য টিকিট খুলতে বললে (এবং live_data-তে সেই কাস্টমার আছে) উত্তরের একদম শেষে আলাদা লাইনে লেখো
+  [[TICKET: ক্যাটাগরি | সমস্যার এক লাইনের বিবরণ]]
+  ক্যাটাগরি এই তালিকা থেকে হুবহু: Speed Slow, Line Off, Line Not Stable, অনু লাল বাতি, অনু বাতি জলে না(ONU Power OFF), অনু চার্জার নষ্ট, ফাইবার তার ছিড়া, Optical Power Low, রাউটার নষ্ট, রাউটার কনফিগার, Password change, Cable problem/Change, Others Support।
+  উত্তরে শুধু বলো "টিকিট খোলা হচ্ছে"; নম্বর সিস্টেম নিজে যোগ করবে। live_data-তে আগের খোলা টিকিট থাকলে নতুন না খুলে সেটার নম্বর জানাও।
+- live_data-তে open_tickets থাকলে জিজ্ঞেস করা হলে সেগুলো বলো (নম্বর, সমস্যা, কার দায়িত্বে)।"""
+
+
+def technician_for(t: Tenant, wa_number: str) -> dict | None:
+    return db.one("SELECT * FROM technicians WHERE company_id = %s AND wa_number = %s AND active", (t.company_id, wa_number))
+
+
+def _history(t: Tenant, contact_id: int, limit: int = 10) -> list[dict]:
+    rows = db.all_rows(
+        """SELECT direction, body FROM wa_messages WHERE company_id = %s AND contact_id = %s AND body IS NOT NULL
+           ORDER BY created_at DESC, id DESC LIMIT %s""", (t.company_id, contact_id, limit))
+    out: list[dict] = []
+    for r in reversed(rows):
+        role = "user" if r["direction"] == "in" else "assistant"
+        if out and out[-1]["role"] == role:
+            out[-1]["content"] += "\n" + r["body"]
+        else:
+            out.append({"role": role, "content": r["body"]})
+    while out and out[0]["role"] != "user":
+        out.pop(0)
+    return out
+
+
+def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int, deliver, open_ticket) -> None:
+    """deliver / open_ticket are main.py's (same sending rules, signature and dry-run handling)."""
+    from engine.agent import generate_with_fallback
+
+    api = tenants.billing(t)
+    state = contact.get("ident_state") or {}
+    customer = find_customer_by_text(api, text, allow_bare_id=True)
+    if not customer and state.get("tech_customer"):
+        # follow-up about the customer talked about last ("ওর বিল কত?")
+        customer = find_customer_by_text(api, state["tech_customer"], allow_bare_id=True)
+    context = None
+    if customer:
+        db.execute("UPDATE wa_contacts SET ident_state = %s, updated_at = now() WHERE id = %s",
+                   (json.dumps({"mode": "technician", "tech_customer": customer.get("CustomerId")}), contact["id"]))
+        context = diagnose(api, customer)
+        context["customer"]["mac"] = (api.live_status(customer["CustomerHeaderId"]) or {}).get("calledid")
+        try:
+            context["open_tickets"] = [
+                {"no": x.get("ComplainId"), "problem": x.get("Problem"), "opened": x.get("CreatedOn"),
+                 "assigned": x.get("SolvedBy")} for x in api.open_tickets_for(customer.get("UserName") or "")]
+        except Exception:
+            context["open_tickets"] = None
+    history = _history(t, contact["id"])
+    if not history or history[-1]["role"] != "user":
+        history.append({"role": "user", "content": text})
+    ctx = json.dumps(context, ensure_ascii=False) if context else "এই মেসেজে কোনো কাস্টমার চেনা যায়নি।"
+    history[-1] = {"role": "user", "content": f"<live_data>\n{ctx}\n</live_data>\n\nটেকনিশিয়ানের মেসেজ:\n{history[-1]['content']}"}
+    system = TECH_PROMPT.format(company=t.name, tech=tech["name"])
+    draft, provider, model = generate_with_fallback(t, system, history)
+    draft = _whatsapp_format(draft)
+    if not draft:
+        return
+    note = None
+    mm = re.search(r"\[\[TICKET:\s*(.*?)\]\]", draft, re.S)
+    if mm:
+        note = mm.group(1).strip()[:300]
+        draft = (draft[:mm.start()] + draft[mm.end():]).strip()
+        if customer:
+            note, extra = open_ticket(t, customer, contact["wa_number"], note, requested_by=f"টেকনিশিয়ান {tech['name']}")
+            if extra:
+                draft += "\n" + extra
+        else:
+            note = None
+    deliver(t, contact, message_id, draft, note, context=context, provider=provider, model=f"{model} · technician")

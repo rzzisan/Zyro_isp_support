@@ -149,3 +149,7 @@
 .zi-attach-name { flex: 1; min-width: 0; font-size: .82rem; font-weight: 600; display: flex; flex-direction: column; word-break: break-all; }
 .zi-attach-name small { font-weight: 400; color: var(--z-muted); }
 .zi-attach-x { border: 0; background: transparent; color: var(--z-muted); font-size: 1rem; cursor: pointer; padding: 4px 8px; }
+
+/* ---- technicians ---- */
+.zi-tech { flex-shrink: 0; font-size: .62rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, #6366f1 16%, transparent); color: #4f46e5; }
+.dark .zi-tech { color: #a5b4fc; }

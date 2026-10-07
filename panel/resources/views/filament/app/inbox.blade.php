@@ -2,6 +2,8 @@
     $chats = $this->chatList();
     $waiting = $this->waitingCount();
     $current = $contact ?? null;
+    $techs = \App\Models\Technician::where('company_id', \Filament\Facades\Filament::getTenant()->getKey())
+        ->where('active', true)->pluck('name', 'wa_number')->all();
 @endphp
 <x-filament-panels::page>
     <link rel="stylesheet" href="{{ asset('css/zyro-inbox.css') }}?v={{ filemtime(public_path('css/zyro-inbox.css')) }}">
@@ -32,6 +34,7 @@
                         <span class="zi-item-body">
                             <span class="zi-item-top">
                                 <span class="zi-name">{{ $c->name ?: $c->displayNumber() }}</span>
+                                @if (isset($techs[$c->wa_number]))<span class="zi-tech">টেকনিশিয়ান</span>@endif
                                 <span class="zi-time {{ $isWaiting ? 'hot' : '' }}">{{ $this::shortTime($c->last_message_at) }}</span>
                             </span>
                             <span class="zi-item-bottom">
@@ -66,7 +69,7 @@
                     <a href="{{ \App\Filament\App\Resources\Conversations\ConversationResource::getUrl('index') }}" wire:navigate class="zi-back">←</a>
                     <span class="zi-av" style="background: {{ $this::avatarColor($current->wa_number) }}">{{ $this::initials($current->name, $current->wa_number) }}</span>
                     <div class="zi-chat-title">
-                        <b>{{ $current->name ?: 'নাম নেই' }}</b>
+                        <b>{{ isset($techs[$current->wa_number]) ? $techs[$current->wa_number].' (টেকনিশিয়ান)' : ($current->name ?: 'নাম নেই') }}</b>
                         <span>{{ $current->displayNumber() }}@if ($current->customer_id) · ID {{ $current->customer_id }}@endif</span>
                     </div>
                     <span class="zi-pill {{ $current->isBotPaused() ? 'warn' : 'ok' }}">

@@ -87,4 +87,9 @@ class Company extends Model
     {
         return $this->hasMany(BillingTicket::class);
     }
+
+    public function technicians(): HasMany
+    {
+        return $this->hasMany(Technician::class);
+    }
 }

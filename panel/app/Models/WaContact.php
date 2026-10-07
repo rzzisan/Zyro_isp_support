@@ -73,4 +73,10 @@ class WaContact extends Model
     {
         return str_starts_with($this->wa_number, '880') ? '0'.substr($this->wa_number, 3) : $this->wa_number;
     }
+
+    /** The field technician using this number, if it is one of the company's technicians. */
+    public function technician(): ?Technician
+    {
+        return Technician::where('company_id', $this->company_id)->where('wa_number', $this->wa_number)->where('active', true)->first();
+    }
 }
