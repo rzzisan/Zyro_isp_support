@@ -103,3 +103,8 @@
 - engine এখন `engine/llm.py`-তে নিজের prompt রাখে (app/ থেকে আর import করে না); নাম ডাকার নিয়ম যোগ হয়েছে।
 - ফেরত যাওয়া: আগের nginx কনফিগ কপি করে reload, পুরনো বটের settings-এ bot_mode=live, engine-এ ENGINE_DRY_RUN=1 আর LEGACY_FORWARD_URL মুছে restart।
 - 2026-10-06: পুরনো বট বন্ধ (Zisan-এর নির্দেশে)। `zyro-support` সার্ভিস disable, engine আর কপি পাঠায় না, support.zyrotechbd.com/ → desk.zyrotechbd.com/app রিডাইরেক্ট; শুধু /webhook ইঞ্জিনে। পুরনো ডেটা `data/messages.db`-তে রাখা আছে, আগের nginx কনফিগ `data/nginx-support.with-legacy.conf`।
+
+## বিলিংয়ের টিকিট প্যানেলে (2026-10-07)
+- `engine/ticket_sync.py`: খোলা টিকিট (`/ClientSupport/AjaxDailyComplainList`, processing আলাদা করতে `customQueryString=processing`) আর সমাধান হওয়া (`/ClientSupport/AjaxMonthlyComplainList`, তারিখ `dd-mm-yyyy`, `permissionId=1`) → `billing_tickets`। systemd `zyro-ticket-sync.timer` প্রতি ৫ মিনিটে `--days 3`; প্রথমবার `--days 90` চালানো হয়েছে (১৮৮৯টা সমাধান)।
+- বিলিংয়ের সময় "MM/dd/yyyy hh:mm:ss tt" বাংলাদেশ সময়; DB-তে UTC। Priority 1 Low, 2 Medium, 3 High। খোলা লিস্টে `SolvedBy` = দায়িত্বে কে।
+- প্যানেল: `/app/{company}/tickets` (শুধু দেখা; ট্যাব, ফিল্টার, সার্চ), ড্যাশবোর্ডে TicketStats/TicketTrendChart/TicketBreakdownChart, চ্যাট পেজে কাস্টমারের টিকিট।
