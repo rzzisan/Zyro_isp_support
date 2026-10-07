@@ -126,4 +126,26 @@ class TicketActionsTest extends TestCase
             ->filterTable('date', ['field' => 'opened_at', 'period' => 'today'])
             ->assertCanSeeTableRecords([$new])->assertCanNotSeeTableRecords([$old]);
     }
+
+    public function test_new_ticket_searches_our_customers_and_shows_their_state(): void
+    {
+        $cid = $this->company->id;
+        \App\Models\BillingCustomer::create(['company_id' => $cid, 'header_id' => 1977, 'customer_id' => '0976', 'name' => 'Mitu akter',
+            'username' => 'kp.mitu', 'mobile' => '01400016191', 'zone' => 'Minto Vhai']);
+        \App\Models\BillingCustomer::create(['company_id' => Company::create(['name' => 'Other'])->id, 'header_id' => 1, 'customer_id' => '0976', 'name' => 'Not ours']);
+        $found = (fn () => static::searchCustomers('976'))->call(new \App\Filament\App\TicketActions);
+        $this->assertSame(['0976'], array_column($found, 'customer_id'));
+        $this->assertSame('Mitu akter', $found[0]['name']);
+        $this->assertCount(1, (fn () => static::searchCustomers('01400016191'))->call(new \App\Filament\App\TicketActions));
+
+        config(['services.engine.url' => 'http://engine3.test']);
+        Http::fake(["engine3.test/internal/{$cid}/customers/1977/ticket-info" => Http::response([
+            'customer' => ['customer_id' => '0976', 'name' => 'Mitu akter', 'due' => '1000.00', 'status' => 'Active', 'disabled' => true],
+            'mikrotik' => ['online' => false, 'router' => 'CLNBD'], 'last_seen' => [], 'mac' => 'E8:65:D4:53:32:E0',
+            'onu' => ['OLTName' => 'CLN_VSOL_3', 'OLTPort' => 'EPON0/8:63', 'OnuStatus' => 'offline', 'OpticalPower' => '-21.5']])]);
+        $html = (fn () => static::infoView('1977|0976|kp.mitu|01400016191'))->call(new \App\Filament\App\TicketActions)->render();
+        foreach (['Mitu akter', 'অফলাইন', 'CLN_VSOL_3', 'EPON0/8:63', '-21.5 dBm', 'লাইন বন্ধ', '1000.00 টাকা'] as $needle) {
+            $this->assertStringContainsString($needle, $html);
+        }
+    }
 }

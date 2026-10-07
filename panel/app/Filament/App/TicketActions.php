@@ -32,6 +32,40 @@ class TicketActions
         }
     }
 
+    /** Customer search from our own copy (billing_customers): ID, mobile, PPPoE ID or name. */
+    private static function searchCustomers(string $search): array
+    {
+        $search = trim($search);
+        $digits = preg_replace('/\D/', '', $search);
+
+        return \App\Models\BillingCustomer::where('company_id', static::company())->whereNull('gone_at')
+            ->where(fn ($w) => $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$search])
+                ->orWhere('username', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%")
+                ->when(strlen($digits) >= 5, fn ($x) => $x->orWhere('mobile', 'like', "%{$digits}%")))
+            ->orderByRaw("ltrim(customer_id, '0') = ltrim(?, '0') DESC", [$search])->orderBy('customer_id')->limit(15)
+            ->get(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone'])
+            ->map(fn ($c) => $c->only(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone']))->all();
+    }
+
+    /** Info box under the customer: bill (our DB), connection (our MikroTik), OLT/ONU (billing). */
+    private static function infoView(?string $customer)
+    {
+        $headerId = (int) (explode('|', (string) $customer)[0] ?? 0);
+        if (! $headerId) {
+            return null;
+        }
+        try {
+            $info = \Illuminate\Support\Facades\Cache::remember('ticket-info:'.static::company().':'.$headerId, 60,
+                fn () => Engine::ticketInfo(static::company(), $headerId));
+            $error = null;
+        } catch (RuntimeException $e) {
+            $info = null;
+            $error = $e->getMessage();
+        }
+
+        return view('filament.app.tickets.customer-info', ['info' => $info, 'error' => $error]);
+    }
+
     /** "header_id|customer_id|username|mobile" so the choice carries what the ticket needs. */
     private static function customerKey(array $c): string
     {
@@ -53,7 +87,7 @@ class TicketActions
                 $data = ['priority' => '2', 'sms_client' => false, 'sms_employees' => true];
                 if ($customerId) {
                     try {
-                        $c = collect(Engine::customers(static::company(), $customerId))->firstWhere('customer_id', $customerId);
+                        $c = collect(static::searchCustomers($customerId))->firstWhere('customer_id', $customerId);
                         if ($c) {
                             $data['customer'] = static::customerKey($c);
                             $data['mobile'] = $c['mobile'] ?? null;
@@ -67,11 +101,14 @@ class TicketActions
             ->schema([
                 Select::make('customer')->label('কাস্টমার')->required()->searchable()
                     ->helperText('কাস্টমার ID, মোবাইল বা username লিখে খুঁজুন')
-                    ->getSearchResultsUsing(fn (string $search) => collect(Engine::customers(static::company(), $search))
+                    ->getSearchResultsUsing(fn (string $search) => collect(static::searchCustomers($search))
                         ->mapWithKeys(fn ($c) => [static::customerKey($c) => static::customerLabel($c)])->all())
                     ->getOptionLabelUsing(fn ($value) => 'ID '.(explode('|', (string) $value)[1] ?? '').' · '.(explode('|', (string) $value)[2] ?? ''))
                     ->live()
                     ->afterStateUpdated(fn ($state, callable $set) => $set('mobile', explode('|', (string) $state)[3] ?? null)),
+                \Filament\Forms\Components\Placeholder::make('info')->hiddenLabel()
+                    ->visible(fn ($get) => filled($get('customer')))
+                    ->content(fn ($get) => static::infoView($get('customer'))),
                 Grid::make(2)->schema([
                     Select::make('category_id')->label('সমস্যার ধরন')->required()->searchable()
                         ->options(fn () => static::options('categories')),

@@ -91,4 +91,10 @@ class Engine
     {
         return static::call('post', "/internal/{$companyId}/ppp/sync") ?? [];
     }
+
+    /** New-ticket form: customer/bill (our DB), connection (MikroTik), OLT/ONU (billing). */
+    public static function ticketInfo(int $companyId, int $headerId): array
+    {
+        return static::call('get', "/internal/{$companyId}/customers/{$headerId}/ticket-info") ?? [];
+    }
 }

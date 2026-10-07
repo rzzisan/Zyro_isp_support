@@ -555,3 +555,43 @@ def ppp_sync_now(request: Request, company_id: int):
                           updated_at = now() WHERE id = %s""", (str(e)[:250], r["id"]))
             out.append({"router": r["identity"] or r["host"], "ok": False, "error": str(e)[:200]})
     return out
+
+
+@app.get("/internal/{company_id}/customers/{header_id}/ticket-info")
+def ticket_info(request: Request, company_id: int, header_id: int):
+    """New-ticket form: customer and bill from our copy, connection from our MikroTik, OLT/ONU from billing."""
+    t = internal_tenant(request, company_id)
+    row = db.one("""SELECT customer_id, username, name, mobile, address, zone, subzone, box, package, monthly_bill, due, paid,
+                           status, disabled, last_payment_date, server, extra
+                    FROM billing_customers WHERE company_id = %s AND header_id = %s""", (company_id, header_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="কাস্টমার পাওয়া যায়নি")
+    from engine.ppp_sync import online_now
+    try:
+        mk = online_now(company_id, row["username"] or "", row["server"])
+    except Exception:
+        mk = None
+    last = db.one("SELECT caller_id, address, uptime, seen_at FROM ppp_sessions WHERE company_id = %s AND username = %s",
+                  (company_id, row["username"]))
+    mac = (mk or {}).get("caller_id") or (last or {}).get("caller_id")
+    if not mac:
+        try:  # offline and never seen by us: billing still knows the last router MAC
+            mac = tenants.billing(t).live_status(header_id).get("calledid") or None
+        except Exception:
+            log.exception("billing live status failed")
+    onu = None
+    if mac:
+        try:
+            onu = tenants.billing(t).onu_info(mac)
+        except Exception:
+            log.exception("onu info failed")
+    extra = row.pop("extra") or {}
+    return {
+        "customer": {k: (str(v) if v is not None and not isinstance(v, (bool, int, float, str)) else v) for k, v in row.items()},
+        "payment_status": extra.get("PaymentStatus"),
+        "mikrotik": mk,
+        "last_seen": {"caller_id": (last or {}).get("caller_id"), "address": (last or {}).get("address"),
+                      "seen_at": str(last["seen_at"]) if last and last["seen_at"] else None},
+        "mac": mac,
+        "onu": onu,
+    }
