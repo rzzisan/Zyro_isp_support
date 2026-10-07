@@ -144,8 +144,13 @@ class TicketActionsTest extends TestCase
             'mikrotik' => ['online' => false, 'router' => 'CLNBD'], 'last_seen' => [], 'mac' => 'E8:65:D4:53:32:E0',
             'onu' => ['OLTName' => 'CLN_VSOL_3', 'OLTPort' => 'EPON0/8:63', 'OnuStatus' => 'offline', 'OpticalPower' => '-21.5']])]);
         $html = (fn () => static::infoView('1977|0976|kp.mitu|01400016191'))->call(new \App\Filament\App\TicketActions)->render();
-        foreach (['Mitu akter', 'অফলাইন', 'CLN_VSOL_3', 'EPON0/8:63', '-21.5 dBm', 'লাইন বন্ধ', '1000.00 টাকা'] as $needle) {
+        foreach (['Mitu akter', 'অফলাইন', 'CLN_VSOL_3', 'EPON0/8:63', '-21.5 dBm', 'লাইন বন্ধ', '1000.00 টাকা', '(বিলিং থেকে)'] as $needle) {
             $this->assertStringContainsString($needle, $html);
         }
+        // from our own OLT the box says so
+        $html = view('filament.app.tickets.customer-info', ['error' => null, 'info' => ['customer' => [], 'mikrotik' => null,
+            'onu' => ['source' => 'olt', 'OLTName' => 'CLN_1_TILARDI', 'OLTPort' => 'EPON0/5:55', 'OnuStatus' => 'online', 'OpticalPower' => -25.2, 'TxPower' => 2.0]]])->render();
+        $this->assertStringContainsString('(আমাদের OLT থেকে, এখন)', $html);
+        $this->assertStringNotContainsString('(বিলিং থেকে)', $html);
     }
 }

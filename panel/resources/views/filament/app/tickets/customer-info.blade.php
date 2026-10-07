@@ -39,7 +39,7 @@
             </div>
         </div>
         <div style="{{ $box }}">
-            <div style="font-weight:700; font-size:.8rem; margin-bottom:6px">OLT / ONU (বিলিং থেকে)</div>
+            <div style="font-weight:700; font-size:.8rem; margin-bottom:6px">OLT / ONU {{ ($onu['source'] ?? null) === 'olt' ? '(আমাদের OLT থেকে, এখন)' : '(বিলিং থেকে)' }}</div>
             @if ($onu)
                 @php($onuOnline = strtolower((string) ($onu['OnuStatus'] ?? '')) === 'online')
                 <div style="{{ $grid }}">
@@ -48,7 +48,13 @@
                     {!! $row('Optical Power', isset($onu['OpticalPower']) ? $onu['OpticalPower'].' dBm' : null) !!}
                     {!! $row('Distance', isset($onu['Distance']) && $onu['Distance'] !== '' ? $onu['Distance'].' m' : null) !!}
                     {!! $row('ONU MAC', $onu['Onumacaddress'] ?? null) !!}
-                    {!! $row('শেষ বন্ধ', trim(($onu['LastDeregisterTime'] ?? '').' '.($onu['DeregisterReason'] ?? ''))) !!}
+                    @if (($onu['source'] ?? null) === 'olt')
+                        {!! $row('Tx power', isset($onu['TxPower']) ? $onu['TxPower'].' dBm' : null) !!}
+                        {!! $row('তাপমাত্রা', isset($onu['Temperature']) ? $onu['Temperature'].'°C' : null) !!}
+                        {!! $row('শেষ অবস্থা বদল', ! empty($onu['LastChange']) ? \Illuminate\Support\Carbon::parse($onu['LastChange'], 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : null) !!}
+                    @else
+                        {!! $row('শেষ বন্ধ', trim(($onu['LastDeregisterTime'] ?? '').' '.($onu['DeregisterReason'] ?? ''))) !!}
+                    @endif
                 </div>
             @else
                 <div style="font-size:.8rem; color:var(--z-muted,#6b7280)">{{ ($info['mac'] ?? null) ? 'এই MAC কোনো OLT-এ পাওয়া যায়নি' : 'কাস্টমারের MAC জানা নেই, তাই ONU খোঁজা যায়নি' }}</div>
