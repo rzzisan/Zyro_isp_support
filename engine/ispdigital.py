@@ -210,6 +210,17 @@ class ISPDigital:
             self._post("/sms/SendAsync", jquery_params({"vmSms": res}))
         return res
 
+    def enable_customer(self, header_id: int) -> str:
+        """Turn a (bill-)disabled line back on, like Billing -> select -> Enable. Returns the panel's answer."""
+        r = self._post("/Billing/EnableSelectedClients", [("cusHeadIds", str(int(header_id)))])
+        body = r.text.strip().strip('"')
+        if body.isdigit() and int(body) >= 400:
+            raise RuntimeError(f"billing refused to enable (HTTP {body})")
+        if body.lstrip().startswith("<"):
+            self._logged_in = False
+            raise LoginError("billing session expired, try again")
+        return body
+
     def open_tickets_for(self, username: str) -> list[dict]:
         rows = self.open_tickets(username)
         # the daily complain list holds unresolved tickets: Status 0 = pending, 1 = processing
@@ -261,7 +272,7 @@ def find_customer_by_text(api: ISPDigital, text: str, allow_bare_id: bool = True
     # customer IDs (short numbers, keep leading zeros)
     bare_ok = allow_bare_id or bool(ID_HINT.search(text)) or text.strip().isdigit()
     for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", text) if bare_ok else []):
-        rows = [r for r in api.search_customers(cid, limit=10)
+        rows = [r for r in api.search_customers(cid, limit=50)
                 if (r.get("CustomerId") or "").lstrip("0") == cid.lstrip("0")]
         if len(rows) == 1:
             return rows[0]

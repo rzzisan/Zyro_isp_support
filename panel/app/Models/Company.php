@@ -92,4 +92,9 @@ class Company extends Model
     {
         return $this->hasMany(Technician::class);
     }
+
+    public function lineEnables(): HasMany
+    {
+        return $this->hasMany(LineEnable::class);
+    }
 }
