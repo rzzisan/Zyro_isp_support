@@ -406,7 +406,7 @@ def customers(request: Request, company_id: int, q: str = ""):
 async def new_ticket(request: Request, company_id: int):
     t = internal_tenant(request, company_id)
     b = await request.json()
-    api = tenants.billing(t)
+    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
 
     def run():
         msg = api.create_ticket(int(b["header_id"]), str(b["category_id"]), int(b.get("priority") or 2),
@@ -429,7 +429,8 @@ async def assign(request: Request, company_id: int, complain_id: int):
     b = await request.json()
     if not b.get("employees"):
         raise HTTPException(status_code=400, detail="অন্তত একজন কর্মী বাছাই করুন")
-    billing_call(lambda: tenants.billing(t).assign_ticket(complain_id, [int(e) for e in b["employees"]],
+    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
+    billing_call(lambda: api.assign_ticket(complain_id, [int(e) for e in b["employees"]],
                                                           b.get("dept_id"), bool(b.get("sms_employees"))))
     refresh_tickets(t)
     return {"ok": True}

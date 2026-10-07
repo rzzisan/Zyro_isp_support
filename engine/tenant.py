@@ -76,6 +76,36 @@ def billing(t: Tenant) -> ISPDigital:
         return client
 
 
+_user_clients: dict[tuple[int, int], tuple[tuple, ISPDigital]] = {}
+
+
+class NoBillingLogin(RuntimeError):
+    pass
+
+
+def billing_for_user(t: Tenant, user_id: int) -> ISPDigital:
+    """The member's own billing login (tickets they open/assign show their name in the billing software).
+    An owner without a personal login falls back to the company login they configured."""
+    if not t.billing:
+        raise RuntimeError("billing connection not set up for this company")
+    row = db.one("SELECT role, billing_username, billing_password FROM company_user WHERE company_id = %s AND user_id = %s",
+                 (t.company_id, user_id))
+    if not row:
+        raise NoBillingLogin("আপনি এই কোম্পানির সদস্য নন")
+    if not (row["billing_username"] and row["billing_password"]):
+        if row["role"] == "owner":
+            return billing(t)
+        raise NoBillingLogin("আপনার বিলিং সফটওয়্যারের লগইন দেওয়া নেই। সেটিংস → \"আমার বিলিং লগইন\" পেজে দিন।")
+    creds = (t.billing[0], row["billing_username"], db.decrypt(row["billing_password"]))
+    with _lock:
+        hit = _user_clients.get((t.company_id, user_id))
+        if hit and hit[0] == creds:
+            return hit[1]
+        client = ISPDigital(*creds)
+        _user_clients[(t.company_id, user_id)] = (creds, client)
+        return client
+
+
 def bot_replies_this_month(t: Tenant) -> int:
     row = db.one(
         """SELECT COUNT(*) AS n FROM wa_drafts

@@ -10,7 +10,19 @@ class Membership extends Model
 {
     protected $table = 'company_user';
 
-    protected $fillable = ['company_id', 'user_id', 'role'];
+    protected $fillable = ['company_id', 'user_id', 'role', 'billing_username', 'billing_password'];
+
+    protected $hidden = ['billing_password'];
+
+    protected function casts(): array
+    {
+        return ['billing_password' => 'encrypted', 'billing_checked_at' => 'datetime', 'billing_check_ok' => 'boolean'];
+    }
+
+    public function hasBillingLogin(): bool
+    {
+        return filled($this->billing_username) && filled($this->billing_password);
+    }
 
     public const ROLES = ['owner' => 'Owner', 'admin' => 'Admin', 'agent' => 'Agent'];
 

@@ -40,13 +40,15 @@ class Engine
     /** Opens a ticket in the billing software; returns ['message' => ..., 'complain_id' => ...]. */
     public static function createTicket(int $companyId, array $data): array
     {
-        return static::call('post', "/internal/{$companyId}/tickets", $data);
+        // made with the signed-in member's own billing login
+        return static::call('post', "/internal/{$companyId}/tickets", $data + ['user_id' => auth()->id()]);
     }
 
     public static function assign(int $companyId, string $complainId, array $employees, ?string $deptId, bool $smsEmployees): void
     {
         static::call('post', "/internal/{$companyId}/tickets/{$complainId}/assign",
-            ['employees' => array_values($employees), 'dept_id' => $deptId, 'sms_employees' => $smsEmployees]);
+            ['employees' => array_values($employees), 'dept_id' => $deptId, 'sms_employees' => $smsEmployees,
+                'user_id' => auth()->id()]);
     }
 
     /** Runs the ticket sync for this company right away; returns counts. */

@@ -62,6 +62,11 @@ class MembershipResource extends Resource
             TextInput::make('password')->label('পাসওয়ার্ড')->password()->revealable()->minLength(10)->visibleOn('create')
                 ->helperText('নতুন ইউজার হলে লাগবে'),
             Select::make('role')->label('রোল')->options(fn () => self::roleOptions())->required()->default('agent'),
+            TextInput::make('billing_username')->label('বিলিং সফটওয়্যারের ইউজারনেম (ঐচ্ছিক)')->visibleOn('edit')
+                ->helperText('এই সদস্য প্যানেল থেকে টিকিট খুললে বা assign করলে এই লগইনে হবে। সদস্য নিজেও "আমার বিলিং লগইন" পেজে দিতে পারেন।'),
+            TextInput::make('billing_password')->label('বিলিং পাসওয়ার্ড')->password()->revealable()->visibleOn('edit')
+                ->dehydrated(fn ($state) => filled($state))
+                ->helperText('বদলাতে না চাইলে খালি রাখুন'),
         ]);
     }
 
@@ -73,6 +78,9 @@ class MembershipResource extends Resource
                 TextColumn::make('user.email')->label('ইমেইল')->searchable(),
                 TextColumn::make('role')->label('রোল')->badge()
                     ->formatStateUsing(fn ($state) => Membership::ROLES[$state] ?? $state),
+                TextColumn::make('billing')->label('বিলিং লগইন')->badge()
+                    ->state(fn (Membership $r) => $r->hasBillingLogin() ? ($r->billing_check_ok === false ? 'ভুল' : $r->billing_username) : 'দেওয়া নেই')
+                    ->color(fn (Membership $r) => $r->hasBillingLogin() ? ($r->billing_check_ok === false ? 'danger' : 'success') : 'gray'),
                 TextColumn::make('created_at')->label('যোগ হয়েছে')->date(),
             ])
             ->headerActions([
