@@ -601,3 +601,22 @@ def ticket_info(request: Request, company_id: int, header_id: int):
         "mac": mac,
         "onu": onu,
     }
+
+
+@app.post("/internal/{company_id}/olt/{olt_id}/test")
+def olt_test(request: Request, company_id: int, olt_id: int):
+    """OLT form "test": read its name/model over SNMP (read-only)."""
+    internal_tenant(request, company_id)
+    from engine import olt_sync
+    o = db.one("SELECT * FROM olts WHERE id = %s AND company_id = %s", (olt_id, company_id))
+    if not o:
+        raise HTTPException(status_code=404)
+    try:
+        info = olt_sync.check(o)
+    except Exception as e:
+        db.execute("UPDATE olts SET last_poll_ok = false, last_poll_message = %s, updated_at = now() WHERE id = %s",
+                   (str(e)[:250], olt_id))
+        raise HTTPException(status_code=400, detail=f"OLT-এ SNMP সংযোগ হয়নি: {str(e)[:200]}")
+    db.execute("UPDATE olts SET sys_name = %s, sys_descr = %s, updated_at = now() WHERE id = %s",
+               (info["sys_name"], info["sys_descr"], olt_id))
+    return {**info, "supported": o["brand"] in olt_sync.DRIVERS}

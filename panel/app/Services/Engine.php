@@ -97,4 +97,10 @@ class Engine
     {
         return static::call('get', "/internal/{$companyId}/customers/{$headerId}/ticket-info") ?? [];
     }
+
+    /** Read an OLT's name/model over SNMP (read-only). */
+    public static function testOlt(int $companyId, int $oltId): array
+    {
+        return static::call('post', "/internal/{$companyId}/olt/{$oltId}/test") ?? [];
+    }
 }

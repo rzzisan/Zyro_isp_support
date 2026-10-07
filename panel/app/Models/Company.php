@@ -107,4 +107,14 @@ class Company extends Model
     {
         return $this->hasMany(MikrotikRouter::class);
     }
+
+    public function olts(): HasMany
+    {
+        return $this->hasMany(Olt::class);
+    }
+
+    public function onus(): HasMany
+    {
+        return $this->hasMany(Onu::class);
+    }
 }

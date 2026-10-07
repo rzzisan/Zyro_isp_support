@@ -68,7 +68,9 @@ def idx(oid: str) -> int:
 def check(o: dict) -> dict:
     s = client(o)
     v = s.get(*SYS.values())
-    return {"sys_name": text(v[SYS["name"]]), "sys_descr": text(v[SYS["descr"]]).replace("\r", " ").replace("\n", " ")[:250]}
+    descr = v[SYS["descr"]]
+    descr = descr.decode(errors="replace") if isinstance(descr, bytes) else str(descr)
+    return {"sys_name": text(v[SYS["name"]]), "sys_descr": " ".join(descr.split())[:250]}
 
 
 def _fmt_mac(v) -> str | None:
