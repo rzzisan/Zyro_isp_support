@@ -16,7 +16,7 @@
 
 সিদ্ধান্ত: দুই তালিকা দিয়েই প্রায় সব স্থির তথ্য পাওয়া যায়, খুব কম খরচে। Search পেজের বাড়তি তথ্য (device MAC, lat/long, fiber code ইত্যাদি) কারো দরকার হলে তখনই একবার এনে রেখে দেব, সবার জন্য একসাথে না।
 
-**কখনো রাখব না:** PPPoE/Server password, portal login password (`Password`, `LoginPassword`, `vPassword`)। তালিকা দুটোতে এগুলো আসে, সেভ করার আগেই বাদ দেব।
+**PPPoE password (Zisan-এর সিদ্ধান্ত, 2026-10-07): রাখা হবে, এনক্রিপ্ট করে।** তালিকা থেকে আসা `Password` (PPPoE/Server password) `pppoe_password` কলামে APP_KEY দিয়ে এনক্রিপ্ট হয়ে থাকবে (প্যানেলের অন্য পাসওয়ার্ডের মতো)। প্যানেলে শুধু owner/admin "দেখান" চাপলে দেখবেন, আর কে কখন দেখল সেটা লগে থাকবে। বট কখনো কাস্টমার বা টেকনিশিয়ানকে পাসওয়ার্ড বলবে না। portal login password (`LoginPassword`) রাখা হবে না।
 
 ## কোন তথ্য কোথা থেকে
 
@@ -37,6 +37,7 @@ company_id            FK companies           -- সব কোম্পানি�
 header_id             bigint                 -- CustomerHeaderId (বিলিংয়ের ভেতরের id)
 customer_id           varchar                -- "0976" (শুরুর শূন্যসহ)
 username              varchar                -- PPPoE ID, যেমন kp.mitu
+pppoe_password        text null              -- এনক্রিপ্টেড (APP_KEY), শুধু owner/admin দেখবেন
 name                  varchar
 mobile                varchar                -- 01XXXXXXXXX
 mobile_normalized     varchar                -- 8801XXXXXXXXX, WhatsApp নম্বর মেলাতে
@@ -58,7 +59,7 @@ last_payment_date     date null
 assigned_employee     varchar null
 joined_on, registered_on  date null
 device, device_mac, latitude, longitude, fiber_code  varchar null  -- Search পেজ থেকে, দরকারে
-extra                 jsonb                  -- বাকি সব ফিল্ড (পাসওয়ার্ড বাদে), যাতে নতুন কলাম না লাগে
+extra                 jsonb                  -- বাকি সব ফিল্ড (কোনো পাসওয়ার্ড নয়), যাতে নতুন কলাম না লাগে
 details_fetched_at    timestamp null         -- Search পেজ থেকে বাড়তি তথ্য কবে আনা হয়েছে
 synced_at             timestamp              -- শেষ কোন sync-এ দেখা গেছে
 gone_at               timestamp null         -- বিলিং তালিকা থেকে উধাও হলে (মুছব না)
