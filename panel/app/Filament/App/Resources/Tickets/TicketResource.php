@@ -64,6 +64,25 @@ class TicketResource extends Resource
             ->whereNotNull($column)->distinct()->orderBy($column)->pluck($column, $column)->all();
     }
 
+    /** Employee names found in "Arif (10-07-26), Rifat" style assigned_to / solved_by values. */
+    public static function employees(): array
+    {
+        $names = [];
+        foreach (['assigned_to', 'solved_by'] as $col) {
+            foreach (static::options($col) as $v) {
+                foreach (explode(',', $v) as $part) {
+                    $n = trim(preg_replace('/\s*\(.*?\)\s*/u', '', $part));
+                    if ($n !== '') {
+                        $names[$n] = $n;
+                    }
+                }
+            }
+        }
+        ksort($names);
+
+        return $names;
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -121,7 +140,10 @@ class TicketResource extends Resource
                     }),
                 SelectFilter::make('zone')->label('Zone')->options(fn () => static::options('zone'))->searchable(),
                 SelectFilter::make('category')->label('সমস্যা')->options(fn () => static::options('category'))->searchable(),
-                SelectFilter::make('solved_by')->label('সমাধান করেছেন')->options(fn () => static::options('solved_by'))->searchable(),
+                SelectFilter::make('employee')->label('কর্মী (assign / সমাধান)')->options(fn () => static::employees())->searchable()
+                    ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($q, $name) => $q->where(
+                        fn ($w) => $w->whereRaw("assigned_to ~* ?", ['(^|, )'.preg_quote($name).'( \\(|,|$)'])
+                            ->orWhereRaw("solved_by ~* ?", ['(^|, )'.preg_quote($name).'( \\(|,|$)'])))),
                 SelectFilter::make('priority')->label('Priority')->options(BillingTicket::PRIORITIES),
             ])
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)

@@ -81,6 +81,20 @@ class TicketActionsTest extends TestCase
             ->assertNotified('Assign করা যায়নি');
     }
 
+    public function test_employee_filter_and_sync_button(): void
+    {
+        $arif = BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => 'a', 'state' => 'pending', 'assigned_to' => 'Arif (10-07-26)']);
+        $both = BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => 'b', 'state' => 'pending', 'assigned_to' => 'Maruf (10-07-26), Rifat (10-07-26)']);
+        $solved = BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => 'c', 'state' => 'solved', 'solved_by' => 'Rifat, Rubel']);
+        $this->assertSame(['Arif' => 'Arif', 'Maruf' => 'Maruf', 'Rifat' => 'Rifat', 'Rubel' => 'Rubel'], TicketResource::employees());
+        Livewire::test(ListTickets::class)->set('activeTab', 'all')
+            ->filterTable('employee', 'Rifat')
+            ->assertCanSeeTableRecords([$both, $solved])->assertCanNotSeeTableRecords([$arif]);
+
+        Http::fake(["engine.test/internal/{$this->company->id}/tickets/sync" => Http::response(['open' => 20, 'processing' => 16, 'solved' => 55, 'closed' => 0])]);
+        Livewire::test(ListTickets::class)->callAction('sync')->assertNotified('বিলিং থেকে আপডেট হয়েছে');
+    }
+
     public function test_date_presets(): void
     {
         [$from, $until] = TicketResource::period(['period' => 'yesterday']);

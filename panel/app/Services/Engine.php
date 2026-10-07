@@ -49,6 +49,12 @@ class Engine
             ['employees' => array_values($employees), 'dept_id' => $deptId, 'sms_employees' => $smsEmployees]);
     }
 
+    /** Runs the ticket sync for this company right away; returns counts. */
+    public static function syncTickets(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/tickets/sync") ?? [];
+    }
+
     public static function solvers(int $companyId, string $complainId): array
     {
         return static::call('get', "/internal/{$companyId}/tickets/{$complainId}/solvers") ?? [];

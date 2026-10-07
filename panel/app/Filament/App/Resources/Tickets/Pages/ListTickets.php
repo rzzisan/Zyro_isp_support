@@ -27,7 +27,7 @@ class ListTickets extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [\App\Filament\App\TicketActions::newTicket()];
+        return [\App\Filament\App\TicketActions::sync(), \App\Filament\App\TicketActions::newTicket()];
     }
 
     public function getTabs(): array

@@ -113,6 +113,23 @@ class TicketActions
             });
     }
 
+    /** Pull the latest tickets from the billing software now (instead of waiting for the 5-minute sync). */
+    public static function sync(): Action
+    {
+        return Action::make('sync')->label('এখনই Sync')->icon(Heroicon::OutlinedArrowPath)->color('gray')
+            ->action(function () {
+                try {
+                    $r = Engine::syncTickets(static::company());
+                } catch (RuntimeException $e) {
+                    Notification::make()->danger()->title('Sync হয়নি')->body($e->getMessage())->send();
+
+                    return;
+                }
+                Notification::make()->success()->title('বিলিং থেকে আপডেট হয়েছে')
+                    ->body("খোলা {$r['open']}টা, গত ৩ দিনে সমাধান {$r['solved']}টা")->send();
+            });
+    }
+
     public static function assign(): Action
     {
         return Action::make('assign')->label('Assign')->icon(Heroicon::OutlinedUserPlus)->color('gray')

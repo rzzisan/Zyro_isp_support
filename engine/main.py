@@ -439,3 +439,10 @@ async def assign(request: Request, company_id: int, complain_id: int):
 def solvers(request: Request, company_id: int, complain_id: int):
     t = internal_tenant(request, company_id)
     return billing_call(lambda: tenants.billing(t).ticket_solvers(complain_id))
+
+
+@app.post("/internal/{company_id}/tickets/sync")
+def sync_now(request: Request, company_id: int):
+    t = internal_tenant(request, company_id)
+    from engine.ticket_sync import sync_company
+    return billing_call(lambda: sync_company(t, 3))
