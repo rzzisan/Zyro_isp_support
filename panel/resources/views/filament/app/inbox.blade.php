@@ -80,9 +80,15 @@
                 </header>
 
                 <div class="zi-msgs" id="zi-msgs" wire:poll.5s
-                     x-data="{ stick: true }"
-                     x-init="$el.scrollTop = $el.scrollHeight; new MutationObserver(() => { if (stick) $el.scrollTop = $el.scrollHeight }).observe($el, { childList: true, subtree: true })"
-                     @scroll="stick = ($el.scrollHeight - $el.scrollTop - $el.clientHeight) < 80">
+                     x-data="{ stick: true, ready: false, bottom() { $el.scrollTop = $el.scrollHeight } }"
+                     x-init="
+                        bottom(); $nextTick(() => bottom()); [50, 200, 600, 1200].forEach(ms => setTimeout(() => { if (stick) bottom() }, ms));
+                        setTimeout(() => ready = true, 1300);
+                        new MutationObserver(() => { if (stick) bottom() }).observe($el, { childList: true, subtree: true });
+                        new ResizeObserver(() => { if (stick) bottom() }).observe($el);
+                        $el.querySelectorAll('img, video').forEach(m => m.addEventListener('load', () => { if (stick) bottom() }));
+                     "
+                     @scroll="if (ready) stick = ($el.scrollHeight - $el.scrollTop - $el.clientHeight) < 80">
                     @php($lastDay = null)
                     @forelse ($items as $item)
                         @php($m = $item['m'])
