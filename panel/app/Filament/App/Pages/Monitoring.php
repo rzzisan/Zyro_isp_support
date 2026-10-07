@@ -60,6 +60,28 @@ class Monitoring extends Page implements HasTable
         return 'MikroTik থেকে প্রতি ২ মিনিটে আপডেট হয়'.($last ? ' · শেষ আপডেট '.Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('g:i:s A') : '');
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('sync')->label('এখনই Sync')->icon(Heroicon::OutlinedArrowPath)
+                ->action(function () {
+                    try {
+                        $rows = Engine::syncOnline(Filament::getTenant()->getKey());
+                    } catch (RuntimeException $e) {
+                        Notification::make()->danger()->title('Sync হয়নি')->body($e->getMessage())->send();
+
+                        return;
+                    }
+                    $failed = collect($rows)->where('ok', false);
+                    Notification::make()->{$failed->isEmpty() ? 'success' : 'warning'}()
+                        ->title($failed->isEmpty() ? 'MikroTik থেকে আপডেট হয়েছে' : 'কিছু রাউটারে সংযোগ হয়নি')
+                        ->body(collect($rows)->map(fn ($r) => $r['ok'] ? "{$r['router']}: {$r['online']} অনলাইন" : "{$r['router']}: সংযোগ হয়নি")->join(' · '))
+                        ->send();
+                    $this->resetTable();
+                }),
+        ];
+    }
+
     public function setServer(string $server): void
     {
         $this->server = $server;

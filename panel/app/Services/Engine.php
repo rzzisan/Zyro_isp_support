@@ -85,4 +85,10 @@ class Engine
     {
         return static::call('get', "/internal/{$companyId}/monitor/{$headerId}/{$what}") ?? [];
     }
+
+    /** Read every router's online PPPoE list now; returns [{router, online, ok, error?}]. */
+    public static function syncOnline(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/ppp/sync") ?? [];
+    }
 }

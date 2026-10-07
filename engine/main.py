@@ -539,3 +539,19 @@ def monitor(request: Request, company_id: int, header_id: int, what: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"রাউটার থেকে উত্তর আসেনি: {str(e)[:200]}")
     raise HTTPException(status_code=404)
+
+
+@app.post("/internal/{company_id}/ppp/sync")
+def ppp_sync_now(request: Request, company_id: int):
+    """Monitoring page "Sync": read every router's online PPPoE list now."""
+    internal_tenant(request, company_id)
+    from engine.ppp_sync import sync_router
+    out = []
+    for r in db.all_rows("SELECT * FROM mikrotik_routers WHERE company_id = %s AND enabled ORDER BY id", (company_id,)):
+        try:
+            out.append({"router": r["identity"] or r["host"], "online": sync_router(r), "ok": True})
+        except Exception as e:
+            db.execute("""UPDATE mikrotik_routers SET last_checked_at = now(), last_check_ok = false, last_check_message = %s,
+                          updated_at = now() WHERE id = %s""", (str(e)[:250], r["id"]))
+            out.append({"router": r["identity"] or r["host"], "ok": False, "error": str(e)[:200]})
+    return out

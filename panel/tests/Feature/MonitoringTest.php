@@ -47,6 +47,8 @@ class MonitoringTest extends TestCase
 
         Http::fake(['engine.test/*' => Http::response(['online' => true, 'router' => 'CLNBD', 'uptime' => '2h1m', 'address' => '10.1.1.1', 'caller_id' => 'AA'])]);
         Livewire::test(Monitoring::class)->callAction(TestAction::make('recheck')->table($on))->assertNotified('অনলাইন · 2h1m · CLNBD');
+        Http::fake(["engine.test/internal/{$company->id}/ppp/sync" => Http::response([['router' => 'CLNBD', 'online' => 2523, 'ok' => true]])]);
+        Livewire::test(Monitoring::class)->callAction('sync')->assertNotified('MikroTik থেকে আপডেট হয়েছে');
         Http::assertSent(fn ($req) => str_ends_with($req->url(), "/internal/{$company->id}/monitor/1/recheck"));
     }
 
