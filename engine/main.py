@@ -504,3 +504,35 @@ def mikrotik_test(request: Request, company_id: int, router_id: int):
                   last_checked_at = now(), last_check_ok = true, last_check_message = %s, updated_at = now() WHERE id = %s""",
                (info["identity"], info["version"], info["ppp_active"], match, f"{info.get('board') or ''} · {info['ppp_active']} PPPoE অনলাইন", router_id))
     return {**info, "billing_server": match}
+
+
+@app.get("/internal/{company_id}/monitor/{header_id}/{what}")
+def monitor(request: Request, company_id: int, header_id: int, what: str):
+    """Client monitoring actions for the panel (read-only router commands): recheck | traffic | ping."""
+    internal_tenant(request, company_id)
+    from engine import ppp_sync
+    row = db.one("SELECT username, server FROM billing_customers WHERE company_id = %s AND header_id = %s", (company_id, header_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="কাস্টমার পাওয়া যায়নি")
+    try:
+        if what == "recheck":
+            res = ppp_sync.online_now(company_id, row["username"], row["server"])
+            if res and res.get("online"):
+                db.execute("""INSERT INTO ppp_sessions (company_id, router_id, username, address, caller_id, uptime, seen_at)
+                              SELECT %s, id, %s, %s, %s, %s, now() FROM mikrotik_routers WHERE company_id = %s AND identity = %s LIMIT 1
+                              ON CONFLICT (company_id, username) DO UPDATE SET address = EXCLUDED.address, caller_id = EXCLUDED.caller_id,
+                                uptime = EXCLUDED.uptime, seen_at = now()""",
+                           (company_id, row["username"], res.get("address"), res.get("caller_id"), res.get("uptime"), company_id, res.get("router")))
+            return res or {"online": None}
+        if what == "traffic":
+            return ppp_sync.traffic(company_id, row["username"], row["server"]) or {}
+        if what == "ping":
+            ip = db.one("SELECT address FROM ppp_sessions WHERE company_id = %s AND username = %s", (company_id, row["username"]))
+            if not ip or not ip["address"]:
+                raise HTTPException(status_code=400, detail="কাস্টমার এখন অনলাইন নেই, পিং করার IP নেই")
+            return ppp_sync.ping(company_id, ip["address"], row["server"]) or {}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"রাউটার থেকে উত্তর আসেনি: {str(e)[:200]}")
+    raise HTTPException(status_code=404)

@@ -79,4 +79,10 @@ class Engine
     {
         return static::call('post', "/internal/{$companyId}/mikrotik/{$routerId}/test") ?? [];
     }
+
+    /** Client monitoring action on the customer's MikroTik: recheck | traffic | ping (read-only). */
+    public static function monitor(int $companyId, int $headerId, string $what): array
+    {
+        return static::call('get', "/internal/{$companyId}/monitor/{$headerId}/{$what}") ?? [];
+    }
 }
