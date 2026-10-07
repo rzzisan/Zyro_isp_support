@@ -107,8 +107,11 @@ class ViewConversation extends Page
             Action::make('resume')->label('বট চালু করুন')->icon(Heroicon::OutlinedPlay)->color('success')
                 ->visible(fn () => $this->contact()->isBotPaused())
                 ->action(function () {
-                    // identification starts fresh, like the old dashboard
-                    $this->contact()->forceFill(['bot_paused' => false, 'bot_paused_until' => null, 'ident_state' => null])->save();
+                    // a customer already identified stays identified; an unfinished identification starts fresh
+                    $state = $this->contact()->ident_state;
+                    $keep = ($state['stage'] ?? null) === 'ok' || ($state['mode'] ?? null) === 'technician';
+                    $this->contact()->forceFill(['bot_paused' => false, 'bot_paused_until' => null,
+                        'ident_state' => $keep ? $state : null])->save();
                     Notification::make()->success()->title('এই নম্বরে বট আবার চালু')->send();
                 }),
         ];

@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Request
@@ -162,15 +163,26 @@ async def receive(request: Request):
 
 
 # --- identification flow ----------------------------------------------------------------------
-YES = ("হ্যাঁ", "হ্যা", "হা", "জি", "জ্বি", "জী", "ঠিক", "yes", "ha", "hae", "hea", "hm", "hmm", "ji", "jee", "ok",
-       "thik", "right", "correct", "y")
+YES = ("হ্যাঁ", "হ্যা", "হা", "হুম", "জি", "জ্বি", "জী", "ঠিক", "yes", "ha", "hae", "hea", "hya", "hu", "hum", "hm", "ji",
+       "je", "ok", "oke", "okay", "thik", "right", "correct", "y")
 NO = ("না", "নাহ", "no", "na", "nah", "not", "noi", "nai", "n")
+# a whole message made of these (or only emoji) just closes the talk
+ACKS = {"ok", "oke", "okay", "thanks", "thank", "you", "thx", "tnx", "ধন্যবাদ", "ঠিক", "আছে", "ওকে", "আচ্ছা", "acha",
+        "thik", "ase", "ache", "hm", "হুম", "ji", "জি", "জ্বি", "in", "sha", "allah", "ইনশাআল্লাহ", "alhamdulillah",
+        "আলহামদুলিল্লাহ", "vai", "bhai", "ভাই", "ভাইয়া", "vaiya"}
 ASK_ID = "আপনি লাইন নেওয়ার সময় যে ফোন নম্বর দিয়েছিলেন সেই নম্বরটা দিন, অথবা কাস্টমার ID জানা থাকলে বলুন।"
-AGENT = "ঠিক আছে ভাই, শিগগিরই আমাদের একজন সাপোর্ট এজেন্ট আপনার সাথে যোগাযোগ করবেন।"
+AGENT = "ঠিক আছে, শিগগিরই আমাদের একজন সাপোর্ট এজেন্ট আপনার সাথে যোগাযোগ করবেন।"
+OK_DAYS = 7  # an identified chat stays identified this long; unfinished identification restarts after a day
+
+
+def _words(text: str) -> list[str]:
+    """Lowercase words; repeated latin letters squeezed ("Haaa" -> "ha", "okkk" -> "ok")."""
+    w = re.sub(r"[^\wঀ-৿ ]", " ", (text or "").lower()).split()
+    return [re.sub(r"([a-z])\1+", r"\1", x) for x in w]
 
 
 def _yes_no(text: str) -> str | None:
-    w = re.sub(r"[^\wঀ-৿ ]", " ", (text or "").lower()).split()
+    w = _words(text)
     if not w:
         return None
     if w[0] in NO or "না" in w[:3]:
@@ -180,22 +192,52 @@ def _yes_no(text: str) -> str | None:
     return None
 
 
+def _is_ack(text: str) -> bool:
+    w = _words(text)
+    acks = set(_words(" ".join(ACKS)))
+    return len(w) <= 5 and all(x in acks for x in w)
+
+
+def _mobile_matches(customer: dict, wa: str) -> bool:
+    m = normalize_bd_mobile(customer.get("MobileNumber") or "")
+    return bool(m) and m == normalize_bd_mobile(wa)
+
+
+def _names_match(customer: dict, text: str) -> bool:
+    """Someone writing from another number proves the line is theirs by writing the account name."""
+    common = set(_words("mohammad mohammed muhammad mohammod abdul abdur hossain hosen islam uddin ahmed begum khatun "
+                        "akter akhter miah mia sheikh shaikh মোহাম্মদ মোঃ"))
+    said = {x for x in _words(text) if len(x) >= 3}
+    name = [x for x in _words(customer.get("CustomerName") or "") if len(x) >= 3 and x not in common]
+    return bool(name) and any(x in said for x in name)
+
+
 def identify(t: Tenant, contact: dict, text: str):
-    """Returns (customer, fixed_reply, pending_question, agent_note)."""
+    """Returns (customer, fixed_reply, pending_question, agent_note, verified).
+
+    verified = the chat is from the line's registered number (or the sender wrote the account name);
+    only then the bot may talk about the bill, payments or the name.
+    """
     api = tenants.billing(t)
     state = contact.get("ident_state") or {}
-    if state.get("at") and datetime.fromisoformat(state["at"]) < datetime.now(timezone.utc) - timedelta(hours=24):
-        state = {}
+    if state.get("at"):
+        keep = timedelta(days=OK_DAYS) if state.get("stage") == "ok" else timedelta(hours=24)
+        if datetime.fromisoformat(state["at"]) < datetime.now(timezone.utc) - keep:
+            state = {}
     stage = state.get("stage", "new")
 
     def save(**kw):
         db.execute("UPDATE wa_contacts SET ident_state = %s, updated_at = now() WHERE id = %s",
                    (json.dumps({**kw, "at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False), contact["id"]))
 
-    def ok(customer, pending=None):
-        save(stage="ok", customer_id=customer.get("CustomerId"))
+    def ok(customer, pending=None, verified=None):
+        same = state.get("stage") == "ok" and state.get("customer_id") == customer.get("CustomerId")
+        if verified is None:
+            verified = _mobile_matches(customer, contact["wa_number"]) or (same and state.get("verified", True)) \
+                or _names_match(customer, text)
+        save(stage="ok", customer_id=customer.get("CustomerId"), verified=bool(verified))
         db.execute("UPDATE wa_contacts SET customer_id = %s WHERE id = %s", (customer.get("CustomerId"), contact["id"]))
-        return customer, None, pending, None
+        return customer, None, pending, None, bool(verified)
 
     typed = customers.by_text(t, api, text, allow_bare_id=stage in ("ask_id", "confirm"))
     if typed:
@@ -207,32 +249,95 @@ def identify(t: Tenant, contact: dict, text: str):
         if c:
             return ok(c)
     if stage == "confirm":
-        ans = _yes_no(text)
-        if ans == "yes":
+        # the number is the line's registered number; anything but a clear "no" (a "Haaa", or the problem
+        # itself) means yes, so the customer is not asked the same question again
+        if _yes_no(text) != "no":
             c = customers.by_text(t, api, state.get("candidate", ""))
             if c:
-                return ok(c, state.get("pending"))
-        if ans is None and not state.get("reasked"):
-            save(**{**state, "reasked": True})
-            return None, f"জি ভাই, আপনি কি *{state.get('candidate_name')}* (ID {state.get('candidate')}) লাইনের বিষয়ে বলছেন? হ্যাঁ বা না লিখুন।", None, None
+                pending = "\n".join(x for x in (state.get("pending"), None if _yes_no(text) else text) if x) or None
+                return ok(c, pending, verified=True)
         save(stage="ask_id", tries=1, pending=state.get("pending"))
-        return None, ASK_ID, None, None
+        return None, ASK_ID, None, None, False
     if stage == "ask_id":
         tries = state.get("tries", 1)
-        if tries >= 2:
+        if tries >= 3:
             save(stage="agent", pending=state.get("pending"))
-            return None, AGENT, None, "কাস্টমার শনাক্ত করা যায়নি, এজেন্ট যোগাযোগ করবেন"
+            return None, AGENT, None, "কাস্টমার শনাক্ত করা যায়নি, এজেন্ট যোগাযোগ করবেন", False
         save(stage="ask_id", tries=tries + 1, pending=state.get("pending"))
-        return None, "দুঃখিত ভাই, এই তথ্য দিয়ে আপনার লাইন খুঁজে পাইনি। " + ASK_ID, None, None
+        if re.search(r"\d{2,}", text):
+            return None, "দুঃখিত, এই নম্বর/ID দিয়ে কোনো লাইন খুঁজে পাইনি। " + ASK_ID, None, None, False
+        return None, "জি, আপনার লাইনটা খুঁজে বের করতে কাস্টমার ID বা লাইনের মোবাইল নম্বরটা লিখে দিন।", None, None, False
     if stage == "agent":
-        return None, None, None, None
+        return None, None, None, None, False
     own = customers.by_whatsapp(t, api, contact["wa_number"])
     if own:
         save(stage="confirm", candidate=own.get("CustomerId"), candidate_name=own.get("CustomerName"), pending=text)
         return None, (f"আসসালামু আলাইকুম। আপনি কি *{own.get('CustomerName')}* (ID {own.get('CustomerId')}) "
-                      "লাইনের বিষয়ে কথা বলছেন? হ্যাঁ বা না লিখুন।"), None, None
+                      "লাইনের বিষয়ে কথা বলছেন?"), None, None, False
     save(stage="ask_id", tries=1, pending=text)
-    return None, "আসসালামু আলাইকুম। " + ASK_ID, None, None
+    return None, "আসসালামু আলাইকুম। " + ASK_ID, None, None, False
+
+
+def customer_view(context: dict, verified: bool) -> dict:
+    """What the customer-facing bot may see: never mobile numbers, IPs or MACs; nothing about the bill,
+    payments or the name unless the chat is verified."""
+    ctx = json.loads(json.dumps(context, ensure_ascii=False, default=str))
+    c = ctx.get("customer") or {}
+    c.pop("registered_mobile", None)
+    (ctx.get("pppoe") or {}).pop("ip", None)
+    for k in ("address", "caller_id"):
+        (ctx.get("mikrotik") or {}).pop(k, None)
+    if not verified:
+        ctx.pop("bill", None)
+        ctx.pop("payments", None)
+        for k in ("name", "username", "package", "zone", "bill_day"):
+            c.pop(k, None)
+    ctx["verified"] = verified
+    ctx["today"] = (datetime.now(timezone.utc) + timedelta(hours=6)).strftime("%Y-%m-%d")  # Asia/Dhaka
+    return ctx
+
+
+# --- one reply per burst of messages ------------------------------------------------------------
+BURST_WAIT = 4  # seconds to wait for the rest of a burst ("হায়" / "নেট নাই" / "চালান যায় না")
+_contact_locks: dict[int, threading.Lock] = {}
+
+
+def newer_inbound(t: Tenant, contact_id: int, message_id: int) -> bool:
+    return bool(db.one(
+        """SELECT 1 FROM wa_messages WHERE company_id = %s AND contact_id = %s AND direction = 'in' AND id > %s
+             AND (type IN ('text', 'audio', 'button') OR body IS NOT NULL) LIMIT 1""",
+        (t.company_id, contact_id, message_id)))
+
+
+def unanswered_text(t: Tenant, contact_id: int) -> str:
+    """The customer's messages since our last message (at most 10 minutes back), as one text."""
+    rows = db.all_rows(
+        """SELECT body FROM wa_messages WHERE company_id = %s AND contact_id = %s AND direction = 'in' AND body IS NOT NULL
+             AND created_at > now() - interval '10 minutes'
+             AND id > COALESCE((SELECT max(id) FROM wa_messages WHERE company_id = %s AND contact_id = %s
+                                AND direction = 'out'), 0)
+           ORDER BY id DESC LIMIT 5""",
+        (t.company_id, contact_id, t.company_id, contact_id))
+    return "\n".join(re.sub(r"^\[ভয়েস\]\s*", "", r["body"]) for r in reversed(rows) if r["body"].strip())
+
+
+def ack_already_answered(t: Tenant, contact_id: int) -> bool:
+    """A second "ok" in a row: our last message already answered an "ok", so the talk is over."""
+    rows = db.all_rows(
+        """SELECT direction, sender, body FROM wa_messages WHERE company_id = %s AND contact_id = %s
+           ORDER BY id DESC LIMIT 6""", (t.company_id, contact_id))
+    last_out = next((i for i, r in enumerate(rows) if r["direction"] == "out"), None)
+    if last_out is None or rows[last_out]["sender"] != "bot":
+        return False
+    before = next((r for r in rows[last_out + 1:] if r["direction"] == "in"), None)
+    return bool(before and before["body"] is not None and _is_ack(before["body"]))
+
+
+def said_recently(t: Tenant, contact_id: int, text: str, hours: int = 12) -> bool:
+    return bool(db.one(
+        """SELECT 1 FROM wa_messages WHERE company_id = %s AND contact_id = %s AND direction = 'out'
+             AND created_at > now() - make_interval(hours => %s) AND body LIKE %s LIMIT 1""",
+        (t.company_id, contact_id, hours, f"%{text}%")))
 
 
 # --- rules ------------------------------------------------------------------------------------
@@ -303,7 +408,7 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
     if mtype == "button":
         m, mtype = {**m, "type": "text", "text": {"body": (m.get("button") or {}).get("text", "")}}, "text"
     if mtype in ("image", "video", "document") and not ((m.get(mtype) or {}).get("caption")):
-        deliver(t, contact, message_id, "পেয়েছি ভাই, আমাদের টিম দেখে নেবে। সমস্যাটা একটু লিখে জানালে দ্রুত সাহায্য করতে পারব।",
+        deliver(t, contact, message_id, "জি, পেয়েছি। আমাদের টিম দেখে নেবে। সমস্যাটা একটু লিখে জানালে দ্রুত সাহায্য করতে পারব।",
                 f"কাস্টমার {mtype} পাঠিয়েছে, টিম দেখবে", provider="flow", model="fixed")
         return
     if mtype in ("image", "video", "document"):
@@ -317,7 +422,7 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
             log.exception("voice transcription failed")
             spoken = None
         if not spoken or len(spoken) < 2:
-            deliver(t, contact, message_id, "ভাই, ভয়েসটা ঠিক বুঝতে পারিনি। একটু লিখে জানাবেন?", provider="flow", model="fixed")
+            deliver(t, contact, message_id, "জি, ভয়েসটা ঠিক বুঝতে পারিনি। একটু লিখে জানাবেন?", provider="flow", model="fixed")
             return
         db.execute("UPDATE wa_messages SET body = %s WHERE id = %s", (f"[ভয়েস] {spoken}", message_id))
         m = {**m, "type": "text", "text": {"body": spoken}}
@@ -325,6 +430,20 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
         return
 
     text = (m.get("text") or {}).get("body", "")
+    # several messages in a row get one answer: wait a moment, and leave it to the newest one
+    time.sleep(BURST_WAIT)
+    if newer_inbound(t, contact["id"], message_id):
+        return
+    with _contact_locks.setdefault(contact["id"], threading.Lock()):
+        contact = db.one("SELECT * FROM wa_contacts WHERE id = %s", (contact["id"],)) or contact
+        if bot_paused(contact):  # staff took over while we waited
+            return
+        text = unanswered_text(t, contact["id"]) or text
+        _answer(t, contact, text, message_id)
+
+
+def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
+    from engine.agent import draft_reply
     from engine.technician import handle_tech, technician_for
     tech = technician_for(t, contact["wa_number"])
     if tech:
@@ -336,7 +455,7 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
         return
     context = None
     try:
-        customer, fixed, pending, note = identify(t, contact, text)
+        customer, fixed, pending, note, verified = identify(t, contact, text)
         if not customer and not fixed:
             return
         if fixed:
@@ -344,7 +463,10 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
                 db.execute("UPDATE wa_contacts SET bot_paused = true WHERE id = %s", (contact["id"],))
             deliver(t, contact, message_id, fixed, note, provider="flow", model="identify")
             return
-        context = customers.add_online(t, diagnose(tenants.billing(t), customers.fresh(tenants.billing(t), customer)), customer)
+        if not pending and _is_ack(text) and ack_already_answered(t, contact["id"]):
+            return  # "ওকে" after our "ঠিক আছে, জানাবেন": nothing more to say
+        api = tenants.billing(t)
+        context = customer_view(customers.add_online(t, diagnose(api, customers.fresh(api, customer)), customer), verified)
         history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": text})
@@ -357,7 +479,8 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
                 draft = (draft[:mm.start()] + draft[mm.end():]).strip()
         if draft and ticket_note and may_send(t, contact["wa_number"]):
             ticket_note, extra = open_ticket(t, customer, contact["wa_number"], ticket_note)
-            if extra:
+            no = re.search(r"\d{4,}", extra or "")
+            if extra and not (no and said_recently(t, contact["id"], no.group(0))):  # the ticket number once, not every reply
                 draft += "\n" + extra
         if draft:
             deliver(t, contact, message_id, draft, ticket_note, context=context, provider=provider, model=model)
