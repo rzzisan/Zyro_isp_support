@@ -82,4 +82,9 @@ class Company extends Model
     {
         return $this->hasMany(WaContact::class);
     }
+
+    public function billingTickets(): HasMany
+    {
+        return $this->hasMany(BillingTicket::class);
+    }
 }

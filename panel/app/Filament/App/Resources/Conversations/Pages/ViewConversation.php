@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\Conversations\Pages;
 
 use App\Filament\App\Resources\Conversations\ConversationResource;
+use App\Models\BillingTicket;
 use App\Models\WaContact;
 use App\Models\WaDraft;
 use App\Services\WhatsApp;
@@ -135,6 +136,10 @@ class ViewConversation extends Page
             'windowOpen' => $c->windowOpen(),
             'sending' => WhatsApp::sendingEnabled(),
             'company' => Filament::getTenant(),
+            'tickets' => $c->customer_id
+                ? BillingTicket::where('company_id', $c->company_id)->where('customer_id', $c->customer_id)
+                    ->orderByRaw("state IN ('pending', 'processing') DESC")->latest('opened_at')->limit(5)->get()
+                : collect(),
         ];
     }
 }

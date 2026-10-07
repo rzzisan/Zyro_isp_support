@@ -22,6 +22,14 @@
             background-color: #fff; color: #111827; }
         .zc-warn { padding: .6rem .8rem; border-radius: .5rem; background: #fef3c7; color: #92400e; font-size: .85rem; }
         .zc-link { color: #059669; text-decoration: underline; cursor: pointer; font-size: .72rem; }
+        .zc-tickets { display: flex; flex-direction: column; gap: .35rem; font-size: .85rem; padding: .75rem 1rem;
+            border-radius: .75rem; border: 1px solid #e5e7eb; }
+        .zc-ticket { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+        .zc-tstate { font-size: .72rem; font-weight: 700; padding: .1rem .5rem; border-radius: 999px; background: #e5e7eb; color: #374151; }
+        .zc-tstate.pending { background: #fee2e2; color: #991b1b; }
+        .zc-tstate.processing { background: #fef3c7; color: #92400e; }
+        .zc-tstate.solved { background: #d1fae5; color: #065f46; }
+        .dark .zc-tickets { border-color: #3f3f46; }
         .dark .zc-wrap { background: #18181b; }
         .dark .zc-b { background: #27272a; color: #f4f4f5; }
         .dark .zc-row.out .zc-b { background: #064e3b; }
@@ -49,6 +57,22 @@
             </b>
         </span>
     </div>
+
+    @if ($tickets->isNotEmpty())
+        <div class="zc-tickets">
+            <b>এই কাস্টমারের টিকিট (বিলিং)</b>
+            @foreach ($tickets as $t)
+                <div class="zc-ticket">
+                    <span class="zc-tstate {{ $t->state }}">{{ \App\Models\BillingTicket::STATES[$t->state] ?? $t->state }}</span>
+                    <span>#{{ $t->complain_id }} · {{ $t->category }}</span>
+                    <span class="zc-meta" style="margin:0">
+                        {{ $t->opened_at?->timezone('Asia/Dhaka')->format('d M, g:i A') }}
+                        @if ($t->solved_by) · সমাধান: {{ $t->solved_by }} @elseif ($t->assigned_to) · দায়িত্বে: {{ $t->assigned_to }} @endif
+                    </span>
+                </div>
+            @endforeach
+        </div>
+    @endif
 
     <div class="zc-wrap" wire:poll.5s id="zc-wrap"
          x-data x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)">

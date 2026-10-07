@@ -1,0 +1,139 @@
+<?php
+
+namespace App\Filament\App\Resources\Tickets;
+
+use App\Filament\App\Resources\Tickets\Pages\ListTickets;
+use App\Models\BillingTicket;
+use BackedEnum;
+use Filament\Actions\ViewAction;
+use Filament\Facades\Filament;
+use Filament\Forms\Components\DatePicker;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+
+/** Billing software support tickets, synced every 5 minutes. Read-only. */
+class TicketResource extends Resource
+{
+    protected static ?string $model = BillingTicket::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
+
+    protected static ?string $navigationLabel = 'টিকিট';
+
+    protected static ?string $modelLabel = 'টিকিট';
+
+    protected static ?string $pluralModelLabel = 'টিকিট';
+
+    protected static ?string $slug = 'tickets';
+
+    protected static ?int $navigationSort = -5;
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $n = BillingTicket::where('company_id', Filament::getTenant()?->getKey() ?? 0)
+            ->whereIn('state', ['pending', 'processing'])->count();
+
+        return $n ? (string) $n : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
+    /** Distinct values of a column for this company, for filter dropdowns. */
+    private static function options(string $column): array
+    {
+        return BillingTicket::where('company_id', Filament::getTenant()?->getKey() ?? 0)
+            ->whereNotNull($column)->distinct()->orderBy($column)->pluck($column, $column)->all();
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->poll('60s')
+            ->defaultSort('opened_at', 'desc')
+            ->columns([
+                TextColumn::make('complain_id')->label('টিকিট')->prefix('#')->searchable()->sortable(),
+                TextColumn::make('customer_name')->label('কাস্টমার')
+                    ->description(fn (BillingTicket $r) => trim('ID '.$r->customer_id.' · '.$r->mobile, ' ·'))
+                    ->searchable(['customer_name', 'customer_id', 'mobile', 'username']),
+                TextColumn::make('zone')->label('Zone')->description(fn (BillingTicket $r) => $r->subzone)->toggleable(),
+                TextColumn::make('category')->label('সমস্যা')->wrap(),
+                TextColumn::make('priority')->label('Priority')->badge()
+                    ->formatStateUsing(fn (?string $state) => BillingTicket::PRIORITIES[$state] ?? $state)
+                    ->color(fn (?string $state) => ['high' => 'danger', 'medium' => 'warning', 'low' => 'gray'][$state] ?? 'gray')
+                    ->toggleable(),
+                TextColumn::make('state')->label('অবস্থা')->badge()
+                    ->formatStateUsing(fn (string $state) => BillingTicket::STATES[$state] ?? $state)
+                    ->color(fn (string $state) => ['pending' => 'danger', 'processing' => 'warning', 'solved' => 'success'][$state] ?? 'gray'),
+                TextColumn::make('person')->label('টেকনিশিয়ান')
+                    ->state(fn (BillingTicket $r) => $r->solved_by ?? $r->assigned_to)->placeholder('কেউ না')->wrap(),
+                TextColumn::make('opened_at')->label('খোলা হয়েছে')->dateTime('d M, g:i A', 'Asia/Dhaka')->sortable()
+                    ->description(fn (BillingTicket $r) => $r->created_by ? 'খুলেছেন '.$r->created_by : null),
+                TextColumn::make('duration')->label('সময় লেগেছে')
+                    ->state(fn (BillingTicket $r) => $r->duration())
+                    ->description(fn (BillingTicket $r) => $r->isOpen() ? 'এখনো খোলা' : null),
+            ])
+            ->filters([
+                Filter::make('opened')->label('তারিখ')
+                    ->schema([
+                        DatePicker::make('from')->label('থেকে'),
+                        DatePicker::make('until')->label('পর্যন্ত'),
+                    ])
+                    ->query(fn (Builder $query, array $data) => $query
+                        ->when($data['from'] ?? null, fn ($q, $d) => $q->where('opened_at', '>=', \Illuminate\Support\Carbon::parse($d, 'Asia/Dhaka')->startOfDay()->utc()))
+                        ->when($data['until'] ?? null, fn ($q, $d) => $q->where('opened_at', '<', \Illuminate\Support\Carbon::parse($d, 'Asia/Dhaka')->addDay()->startOfDay()->utc()))),
+                SelectFilter::make('zone')->label('Zone')->options(fn () => static::options('zone'))->searchable(),
+                SelectFilter::make('category')->label('সমস্যা')->options(fn () => static::options('category'))->searchable(),
+                SelectFilter::make('solved_by')->label('সমাধান করেছেন')->options(fn () => static::options('solved_by'))->searchable(),
+                SelectFilter::make('priority')->label('Priority')->options(BillingTicket::PRIORITIES),
+            ])
+            ->recordActions([ViewAction::make()->label('বিস্তারিত')]);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema->columns(2)->components([
+            TextEntry::make('complain_id')->label('টিকিট নম্বর')->prefix('#'),
+            TextEntry::make('state')->label('অবস্থা')->formatStateUsing(fn ($state) => BillingTicket::STATES[$state] ?? $state),
+            TextEntry::make('customer_name')->label('কাস্টমার'),
+            TextEntry::make('customer_id')->label('কাস্টমার ID'),
+            TextEntry::make('username')->label('Username')->placeholder('—'),
+            TextEntry::make('mobile')->label('মোবাইল')->placeholder('—'),
+            TextEntry::make('zone')->label('Zone / Subzone / Box')
+                ->state(fn (BillingTicket $r) => collect([$r->zone, $r->subzone, $r->box])->filter()->join(' / ')),
+            TextEntry::make('category')->label('সমস্যা'),
+            TextEntry::make('priority')->label('Priority')->formatStateUsing(fn ($state) => BillingTicket::PRIORITIES[$state] ?? $state),
+            TextEntry::make('created_by')->label('খুলেছেন')->placeholder('—'),
+            TextEntry::make('assigned_to')->label('দায়িত্বে')->placeholder('—'),
+            TextEntry::make('solved_by')->label('সমাধান করেছেন')->placeholder('—'),
+            TextEntry::make('opened_at')->label('খোলা হয়েছে')->dateTime('d M Y, g:i A', 'Asia/Dhaka'),
+            TextEntry::make('solved_at')->label('সমাধান হয়েছে')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->placeholder('—'),
+            TextEntry::make('note')->label('মন্তব্য')->placeholder('—')->columnSpanFull(),
+        ]);
+    }
+
+    /** Explicit company scope in addition to Filament tenancy. */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->where('company_id', Filament::getTenant()?->getKey() ?? 0);
+    }
+
+    public static function getPages(): array
+    {
+        return ['index' => ListTickets::route('/')];
+    }
+}
