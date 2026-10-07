@@ -104,7 +104,9 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
         if marker in draft:
             draft = draft.replace(marker, "").strip()
             if customer:
-                draft += "\n" + switch_line(t, tech, customer, text, action)
+                # the system line states the real outcome; drop the model's "...করা হচ্ছে" placeholder
+                draft = "\n".join(l for l in draft.splitlines() if not re.search(r"লাইন\s*(চালু|বন্ধ)\s*করা\s*হচ্ছে", l)).strip()
+                draft = (draft + "\n" if draft else "") + switch_line(t, tech, customer, text, action)
     deliver(t, contact, message_id, draft, note, context=context, provider=provider, model=f"{model} · technician")
 
 
