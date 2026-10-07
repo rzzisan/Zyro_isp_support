@@ -29,12 +29,12 @@ class NetworkStats extends StatsOverviewWidget
     {
         $company = Filament::getTenant()->getKey();
         $fresh = now()->subMinutes(PppSession::FRESH_MINUTES);
-        $total = BillingCustomer::where('company_id', $company)->whereNull('gone_at')->where('status', 'Active')->count();
-        // only PPPoE users that exist in the billing software count
-        $billed = fn ($q) => $q->whereIn('username', BillingCustomer::where('company_id', $company)->whereNull('gone_at')->select('username'));
+        $total = BillingCustomer::where('company_id', $company)->whereNull('gone_at')->where('disabled', false)->count();
+        // only PPPoE users of the billing software whose line is on count (same as the monitoring page and billing's own)
+        $billed = fn ($q) => $q->whereIn('username', BillingCustomer::where('company_id', $company)->whereNull('gone_at')->where('disabled', false)->select('username'));
         $online = PppSession::where('company_id', $company)->where('seen_at', '>', $fresh)->where($billed)->count();
         $stats = [Stat::make('এখন অনলাইন', number_format($online))
-            ->description("Active কাস্টমার {$total} জন")->icon(Heroicon::OutlinedSignal)->color('success')
+            ->description("লাইন চালু কাস্টমার {$total} জন")->icon(Heroicon::OutlinedSignal)->color('success')
             ->url(CustomerResource::getUrl('index'))];
         foreach (MikrotikRouter::where('company_id', $company)->orderBy('id')->get() as $r) {
             $n = PppSession::where('router_id', $r->id)->where('seen_at', '>', $fresh)->where($billed)->count();

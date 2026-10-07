@@ -1,8 +1,8 @@
 [Unit]
-Description=Copy billing customers every night at 3 AM Bangladesh time
+Description=Copy billing customers every 15 minutes (line on/off changes during the day)
 
 [Timer]
-OnCalendar=*-*-* 21:00:00 UTC
+OnCalendar=*:07/15
 Persistent=true
 Unit=zyro-customer-sync.service
 

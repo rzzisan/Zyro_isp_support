@@ -30,18 +30,26 @@ class MonitoringTest extends TestCase
         $on = $mk('0001', 'CLNBD');
         $off = $mk('0002', 'CLNBD');
         $other = $mk('0003', 'CLN_4');
+        // line off (billing disabled it) is not counted even when its PPPoE session is still up; Free/Personal are
+        $cut = BillingCustomer::create(['company_id' => $company->id, 'header_id' => 4, 'customer_id' => '0004', 'username' => 'u0004',
+            'server' => 'CLNBD', 'status' => 'Active', 'disabled' => true]);
+        $free = BillingCustomer::create(['company_id' => $company->id, 'header_id' => 5, 'customer_id' => '0005', 'username' => 'u0005',
+            'server' => 'CLN_4', 'status' => 'Free']);
         $r = MikrotikRouter::create(['company_id' => $company->id, 'host' => 'h', 'api_port' => 8728, 'username' => 'u', 'password' => 'p', 'identity' => 'CLNBD', 'billing_server' => 'CLNBD']);
         DB::table('ppp_sessions')->insert([
             ['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0001', 'address' => '10.1.1.1', 'uptime' => '2h', 'seen_at' => now()],
             ['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0002', 'address' => '10.1.1.2', 'uptime' => '1h', 'seen_at' => now()->subHour()],
+            ['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0004', 'address' => '10.144.1.4', 'uptime' => '3h', 'seen_at' => now()],
+            ['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0005', 'address' => '10.1.1.5', 'uptime' => '4h', 'seen_at' => now()],
         ]);
         $this->actingAs($agent)->get("/app/{$company->slug}/monitoring")->assertOk()->assertSee('সব সার্ভার');
         Filament::setCurrentPanel('app');
         Filament::setTenant($company);
         $page = Livewire::test(Monitoring::class);
-        $this->assertSame(['total' => 3, 'online' => 1], $page->instance()->counts()['']);
+        $this->assertSame(['total' => 4, 'online' => 2], $page->instance()->counts()['']);
         $this->assertSame(['total' => 2, 'online' => 1], $page->instance()->counts()['CLNBD']);
-        $page->assertCanSeeTableRecords([$on, $off, $other])->assertSee('10.1.1.1')->assertDontSee('10.1.1.2')
+        $this->assertSame(['total' => 2, 'online' => 1], $page->instance()->counts()['CLN_4']);
+        $page->assertCanSeeTableRecords([$on, $off, $other, $free])->assertCanNotSeeTableRecords([$cut])->assertSee('10.1.1.1')->assertDontSee('10.1.1.2')
             ->call('setServer', 'CLNBD')->assertCanSeeTableRecords([$on, $off])->assertCanNotSeeTableRecords([$other])
             ->filterTable('online', true)->assertCanSeeTableRecords([$on])->assertCanNotSeeTableRecords([$off]);
 

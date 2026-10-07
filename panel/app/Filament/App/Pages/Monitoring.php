@@ -27,7 +27,8 @@ use RuntimeException;
 
 /**
  * Online client monitoring (like the billing software's ClientMonitoring page), from our MikroTik copy:
- * every active customer with online/offline, IP, MAC, uptime and when last seen; re-check, traffic and ping per client.
+ * every customer whose line is on (not disabled, any status: Active/Free/Personal — same set the billing page counts)
+ * with online/offline, IP, MAC, uptime and when last seen; re-check, traffic and ping per client.
  */
 class Monitoring extends Page implements HasTable
 {
@@ -94,7 +95,7 @@ class Monitoring extends Page implements HasTable
         $fresh = now()->subMinutes(PppSession::FRESH_MINUTES);
 
         return BillingCustomer::query()->where('billing_customers.company_id', Filament::getTenant()->getKey())
-            ->whereNull('gone_at')->where('billing_customers.status', 'Active')
+            ->whereNull('gone_at')->where('billing_customers.disabled', false)
             ->when($this->server !== '', fn ($q) => $q->where('server', $this->server))
             ->leftJoin('ppp_sessions as s', fn ($j) => $j->on('s.company_id', '=', 'billing_customers.company_id')
                 ->on('s.username', '=', 'billing_customers.username'))
@@ -107,7 +108,7 @@ class Monitoring extends Page implements HasTable
     {
         $fresh = now()->subMinutes(PppSession::FRESH_MINUTES);
         $rows = BillingCustomer::query()->where('billing_customers.company_id', Filament::getTenant()->getKey())
-            ->whereNull('gone_at')->where('billing_customers.status', 'Active')
+            ->whereNull('gone_at')->where('billing_customers.disabled', false)
             ->leftJoin('ppp_sessions as s', fn ($j) => $j->on('s.company_id', '=', 'billing_customers.company_id')
                 ->on('s.username', '=', 'billing_customers.username'))
             ->selectRaw('server, count(*) AS total, count(*) FILTER (WHERE s.seen_at > ?) AS online', [$fresh])
