@@ -98,7 +98,8 @@ class TicketActionsTest extends TestCase
     public function test_print_only_processing_tickets_of_employee(): void
     {
         $mk = fn ($id, $state, $who) => BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => $id,
-            'state' => $state, 'assigned_to' => $who, 'customer_name' => "Cust $id", 'zone' => 'Binodpur']);
+            'state' => $state, 'assigned_to' => $who, 'customer_name' => "Cust $id", 'zone' => 'Binodpur',
+            'mobile' => '01711000000', 'raw' => ['ComplainNumber' => '0199900'.$id]]);
         $mk('p1', 'processing', 'Rifat (10-07-26)');
         $mk('p2', 'processing', 'Maruf (10-07-26), Rifat (10-07-26)');
         $mk('p3', 'processing', 'Arif (10-07-26)');
@@ -109,7 +110,7 @@ class TicketActionsTest extends TestCase
 
         Livewire::test(ListTickets::class)->callAction('print', ['employee' => 'Rifat'])->assertHasNoFormErrors();
         $this->get("/print/{$this->company->slug}/tickets?employee=Rifat")->assertOk()
-            ->assertSee('#p1')->assertSee('#p2')->assertDontSee('#p3')->assertDontSee('#q1')->assertDontSee('#s1')->assertDontSee('#x1')
+            ->assertSee('#p1')->assertSee('#p2')->assertSee('01711000000')->assertSee('0199900p1')->assertDontSee('#p3')->assertDontSee('#q1')->assertDontSee('#s1')->assertDontSee('#x1')
             ->assertSee('মোট টিকিট: <b>2</b>', false);
         $this->get("/print/{$other->slug}/tickets?employee=Rifat")->assertForbidden();
     }

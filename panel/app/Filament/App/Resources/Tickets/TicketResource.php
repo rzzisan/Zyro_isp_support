@@ -91,7 +91,7 @@ class TicketResource extends Resource
             ->columns([
                 TextColumn::make('complain_id')->label('টিকিট')->prefix('#')->searchable()->sortable(),
                 TextColumn::make('customer_name')->label('কাস্টমার')
-                    ->description(fn (BillingTicket $r) => trim('ID '.$r->customer_id.' · '.$r->mobile, ' ·'))
+                    ->description(fn (BillingTicket $r) => trim('ID '.$r->customer_id.' · '.$r->mobile.(($c = $r->complainNumber()) && $c !== $r->mobile ? ' · অভিযোগ: '.$c : ''), ' ·'))
                     ->searchable(['customer_name', 'customer_id', 'mobile', 'username']),
                 TextColumn::make('zone')->label('Zone')->description(fn (BillingTicket $r) => $r->subzone)->toggleable(),
                 TextColumn::make('category')->label('সমস্যা')->wrap(),
@@ -177,7 +177,8 @@ class TicketResource extends Resource
             TextEntry::make('customer_name')->label('কাস্টমার'),
             TextEntry::make('customer_id')->label('কাস্টমার ID'),
             TextEntry::make('username')->label('Username')->placeholder('—'),
-            TextEntry::make('mobile')->label('মোবাইল')->placeholder('—'),
+            TextEntry::make('mobile')->label('মোবাইল (বিলিং)')->placeholder('—'),
+            TextEntry::make('complain_number')->label('অভিযোগের নম্বর')->state(fn (BillingTicket $r) => $r->complainNumber())->placeholder('—'),
             TextEntry::make('zone')->label('Zone / Subzone / Box')
                 ->state(fn (BillingTicket $r) => collect([$r->zone, $r->subzone, $r->box])->filter()->join(' / ')),
             TextEntry::make('category')->label('সমস্যা'),

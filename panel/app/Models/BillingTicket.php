@@ -33,6 +33,14 @@ class BillingTicket extends Model
             ->when(! $assignedOnly, fn ($x) => $x->orWhereRaw('solved_by ~* ?', [$re])));
     }
 
+    /** The "ComplainNo." box of the billing ticket: the number the complaint came from (may differ from mobile). */
+    public function complainNumber(): ?string
+    {
+        $n = trim((string) ($this->raw['ComplainNumber'] ?? ''));
+
+        return $n !== '' ? $n : null;
+    }
+
     public function isOpen(): bool
     {
         return in_array($this->state, ['pending', 'processing'], true);

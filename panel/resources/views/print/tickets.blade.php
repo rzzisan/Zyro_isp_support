@@ -52,7 +52,8 @@
             <th class="num">#</th>
             <th>টিকিট</th>
             <th>কাস্টমার</th>
-            <th>মোবাইল</th>
+            <th>মোবাইল (বিলিং)</th>
+            <th>অভিযোগের নম্বর</th>
             <th>ঠিকানা (Zone / Subzone / Box)</th>
             <th>সমস্যা</th>
             <th>খোলা হয়েছে</th>
@@ -67,6 +68,7 @@
                 <td>#{{ $t->complain_id }}<br><span class="{{ $t->priority === 'high' ? 'high' : 'muted' }}">{{ \App\Models\BillingTicket::PRIORITIES[$t->priority] ?? '' }}</span></td>
                 <td>{{ $t->customer_name }}<br><span class="muted">ID {{ $t->customer_id }}{{ $t->username ? ' · '.$t->username : '' }}</span></td>
                 <td>{{ $t->mobile }}</td>
+                <td>{{ $t->complainNumber() }}</td>
                 <td>{{ collect([$t->zone, $t->subzone, $t->box])->filter()->join(' / ') }}</td>
                 <td>{{ $t->category }}</td>
                 <td>{{ $t->opened_at?->timezone('Asia/Dhaka')->format('d M, g:i A') }}<br><span class="muted">{{ $t->created_by }}</span></td>
