@@ -72,6 +72,7 @@ class Monitoring extends Page implements HasTable
 
                         return;
                     }
+                    $rows = array_is_list($rows) ? $rows : [];
                     $failed = collect($rows)->where('ok', false);
                     Notification::make()->{$failed->isEmpty() ? 'success' : 'warning'}()
                         ->title($failed->isEmpty() ? 'MikroTik থেকে আপডেট হয়েছে' : 'কিছু রাউটারে সংযোগ হয়নি')
