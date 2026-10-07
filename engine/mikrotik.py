@@ -109,7 +109,9 @@ def check(host: str, port: int, username: str, password: str) -> dict:
         identity = (r.talk("/system/identity/print") or [{}])[0].get("name")
         res = (r.talk("/system/resource/print") or [{}])[0]
         active = r.talk("/ppp/active/print", {".proplist": "name"})
-    return {"identity": identity, "version": res.get("version"), "board": res.get("board-name"), "ppp_active": len(active)}
+    names = [a.get("name") for a in active if a.get("name")]
+    return {"identity": identity, "version": res.get("version"), "board": res.get("board-name"), "ppp_active": len(names),
+            "names": names}
 
 
 def active_session(host: str, port: int, username: str, password: str, pppoe_user: str) -> dict | None:

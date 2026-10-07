@@ -497,6 +497,9 @@ def mikrotik_test(request: Request, company_id: int, router_id: int):
         db.execute("""UPDATE mikrotik_routers SET last_checked_at = now(), last_check_ok = false, last_check_message = %s,
                       updated_at = now() WHERE id = %s""", (msg, router_id))
         raise HTTPException(status_code=400, detail=f"MikroTik-এ সংযোগ হয়নি: {msg}")
+    # only PPPoE users that exist in the billing software count
+    info["ppp_active"] = db.one("""SELECT count(*) AS n FROM billing_customers WHERE company_id = %s AND gone_at IS NULL
+                                   AND username = ANY(%s)""", (company_id, info.pop("names")))["n"]
     servers = [x["server"] for x in db.all_rows(
         "SELECT DISTINCT server FROM billing_customers WHERE company_id = %s AND server IS NOT NULL", (company_id,))]
     match = r["billing_server"] or next((s for s in servers if _norm(s) == _norm(info["identity"])), None)

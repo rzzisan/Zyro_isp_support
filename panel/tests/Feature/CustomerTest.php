@@ -118,5 +118,10 @@ class CustomerTest extends TestCase
             ->filterTable('online', true)->assertCanSeeTableRecords([$a])->assertCanNotSeeTableRecords([$b])
             ->filterTable('online', false)->assertCanSeeTableRecords([$b])->assertCanNotSeeTableRecords([$a]);
         Livewire::test(\App\Filament\App\Widgets\NetworkStats::class)->assertOk();
+        // a PPPoE user that is not in billing is never counted
+        DB::table('ppp_sessions')->insert(['company_id' => $this->company->id, 'router_id' => $router->id, 'username' => 'not.in.billing', 'seen_at' => now()]);
+        $w = new \App\Filament\App\Widgets\NetworkStats;
+        $stats = (fn () => $this->getStats())->call($w);
+        $this->assertSame('1', (string) $stats[0]->getValue());
     }
 }
