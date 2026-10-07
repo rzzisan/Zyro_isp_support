@@ -80,7 +80,7 @@ def save_message(t: Tenant, contact_id: int, wa_message_id: str | None, directio
 
 def history_for(t: Tenant, contact_id: int, limit: int = 12) -> list[dict]:
     rows = db.all_rows(
-        """SELECT direction, body FROM wa_messages
+        """SELECT direction, sender, body FROM wa_messages
            WHERE company_id = %s AND contact_id = %s AND type IN ('text', 'audio') AND body IS NOT NULL
            ORDER BY created_at DESC, id DESC LIMIT %s""",
         (t.company_id, contact_id, limit),
@@ -88,10 +88,12 @@ def history_for(t: Tenant, contact_id: int, limit: int = 12) -> list[dict]:
     merged: list[dict] = []
     for r in reversed(rows):
         role = "user" if r["direction"] == "in" else "assistant"
+        # a person from the office wrote this one (panel or the Business app), not the bot
+        body = f"[স্টাফ] {r['body']}" if r["direction"] == "out" and r["sender"] in ("staff", "app") else r["body"]
         if merged and merged[-1]["role"] == role:
-            merged[-1]["content"] += "\n" + r["body"]
+            merged[-1]["content"] += "\n" + body
         else:
-            merged.append({"role": role, "content": r["body"]})
+            merged.append({"role": role, "content": body})
     while merged and merged[0]["role"] != "user":
         merged.pop(0)
     return merged
@@ -373,6 +375,7 @@ def deliver(t: Tenant, contact: dict, message_id: int, text: str, note: str | No
         except Exception as e:
             error = str(e)[:500]
     save_draft(t, contact["id"], message_id, mode, body, ticket_note=note, error=error, **draft_kw)
+    return "failed" if error else mode
 
 
 def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str | None = None) -> tuple[str, str | None]:

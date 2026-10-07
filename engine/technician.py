@@ -35,7 +35,12 @@ TECH_PROMPT = """তুমি {company}-এর অফিস সাপোর্�
 - টেকনিশিয়ান কোনো কাস্টমারের লাইন চালু / enable / অন করে দিতে বললে (এবং live_data-তে সেই কাস্টমার আছে) উত্তরের একদম শেষে আলাদা লাইনে লেখো [[ENABLE]]।
   লাইন বন্ধ / disable / অফ করে দিতে বললে একইভাবে লেখো [[DISABLE]]।
   উত্তরে শুধু বলো "লাইন চালু করা হচ্ছে" বা "লাইন বন্ধ করা হচ্ছে"; অনুমতি যাচাই আর ফল সিস্টেম নিজে যোগ করবে।
-  টেকনিশিয়ান স্পষ্ট করে না বললে কখনো [[ENABLE]] বা [[DISABLE]] লিখবে না।"""
+  টেকনিশিয়ান স্পষ্ট করে না বললে কখনো [[ENABLE]] বা [[DISABLE]] লিখবে না।
+- টেকনিশিয়ান কোনো কাস্টমারকে কিছু জানাতে বললে (যেমন "তাকে রিপ্লাই দাও", "কাস্টমারকে জানাও লাইন ঠিক হয়েছে", "বলো বিলের তারিখ বদলানো হয়েছে")
+  এবং live_data-তে সেই কাস্টমার আছে, উত্তরের একদম শেষে আলাদা লাইনে লেখো [[NOTIFY: কাস্টমারকে পাঠানোর মেসেজ]]।
+  এই মেসেজ সরাসরি কাস্টমারের WhatsApp-এ যাবে: সাধারণ কথ্য বাংলায়, ভদ্রভাবে, ১-২ লাইনে, শুরুতে "জি,"। live_data.customer_chat-এ কাস্টমার আগে
+  কী জানতে চেয়েছিলেন দেখে সেটার সাথে মিলিয়ে লেখো। টেকনিশিয়ান যা বলেছেন তার বাইরে কোনো তথ্য (নতুন তারিখ, টাকা, সময়) বানাবে না;
+  দরকারি তথ্য না থাকলে [[NOTIFY]] না দিয়ে টেকনিশিয়ানকে সেটা জিজ্ঞেস করো। উত্তরে শুধু লেখো "কাস্টমারকে জানানো হচ্ছে"; ফল সিস্টেম যোগ করবে।"""
 
 
 def technician_for(t: Tenant, wa_number: str) -> dict | None:
@@ -81,6 +86,12 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
                  "assigned": x.get("SolvedBy")} for x in api.open_tickets_for(customer.get("UserName") or "")]
         except Exception:
             context["open_tickets"] = None
+        chat = customer_contact(t, customer)
+        context["customer_chat"] = None if not chat else [
+            {"from": "customer" if r["direction"] == "in" else r["sender"], "text": r["body"][:300]}
+            for r in reversed(db.all_rows(
+                """SELECT direction, sender, body FROM wa_messages WHERE company_id = %s AND contact_id = %s
+                     AND body IS NOT NULL ORDER BY id DESC LIMIT 6""", (t.company_id, chat["id"])))]
     history = _history(t, contact["id"])
     if not history or history[-1]["role"] != "user":
         history.append({"role": "user", "content": text})
@@ -109,7 +120,43 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
                 # the system line states the real outcome; drop the model's "...করা হচ্ছে" placeholder
                 draft = "\n".join(l for l in draft.splitlines() if not re.search(r"লাইন\s*(চালু|বন্ধ)\s*করা\s*হচ্ছে", l)).strip()
                 draft = (draft + "\n" if draft else "") + switch_line(t, tech, customer, text, action)
+    mm = re.search(r"\[\[NOTIFY:\s*(.*?)\]\]", draft, re.S)
+    if mm:
+        body = mm.group(1).strip()
+        draft = (draft[:mm.start()] + draft[mm.end():]).strip()
+        draft = "\n".join(l for l in draft.splitlines() if not re.search(r"জানানো\s*হচ্ছে", l)).strip()
+        if customer and body:
+            draft = (draft + "\n" if draft else "") + notify_customer(t, tech, customer, body, deliver)
     deliver(t, contact, message_id, draft, note, context=context, provider=provider, model=f"{model} · technician")
+
+
+def customer_contact(t: Tenant, customer: dict) -> dict | None:
+    """The customer's own WhatsApp chat: the one identified as this customer, else their registered mobile's."""
+    row = db.one("""SELECT * FROM wa_contacts WHERE company_id = %s AND customer_id = %s
+                    AND wa_number NOT IN (SELECT wa_number FROM technicians WHERE company_id = %s)
+                    ORDER BY last_message_at DESC NULLS LAST LIMIT 1""",
+                 (t.company_id, customer.get("CustomerId"), t.company_id))
+    if row:
+        return row
+    from engine.ispdigital import normalize_bd_mobile
+    mobile = normalize_bd_mobile(customer.get("MobileNumber") or "")
+    return db.one("SELECT * FROM wa_contacts WHERE company_id = %s AND wa_number = %s", (t.company_id, "88" + mobile)) \
+        if len(mobile) == 11 else None
+
+
+def notify_customer(t: Tenant, tech: dict, customer: dict, body: str, deliver) -> str:
+    """Send a technician's/office's message into the customer's WhatsApp chat (only inside WhatsApp's 24-hour window)."""
+    chat = customer_contact(t, customer)
+    if not chat:
+        return "এই কাস্টমারের সাথে WhatsApp-এ আগে কোনো কথা হয়নি, তাই মেসেজ পাঠানো গেল না। ফোন করে জানান।"
+    recent = db.one("""SELECT 1 FROM wa_messages WHERE company_id = %s AND contact_id = %s AND direction = 'in'
+                       AND created_at > now() - interval '23 hours 50 minutes' LIMIT 1""", (t.company_id, chat["id"]))
+    if not recent:
+        return "কাস্টমার গত ২৪ ঘণ্টায় মেসেজ দেননি, WhatsApp-এর নিয়মে এখন নিজে থেকে মেসেজ পাঠানো যায় না। ফোন করে জানান।"
+    mode = deliver(t, chat, None, body, f"টেকনিশিয়ান {tech['name']}-এর নির্দেশে", provider="flow", model="technician notify")
+    if mode == "sent":
+        return f"✅ কাস্টমারকে পাঠানো হয়েছে: {body}"
+    return f"কাস্টমারকে পাঠানো যায়নি ({mode}). অফিসে জানান।"
 
 
 def switch_line(t: Tenant, tech: dict, customer: dict, request: str, action: str) -> str:
