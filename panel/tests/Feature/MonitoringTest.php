@@ -49,4 +49,28 @@ class MonitoringTest extends TestCase
         Livewire::test(Monitoring::class)->callAction(TestAction::make('recheck')->table($on))->assertNotified('অনলাইন · 2h1m · CLNBD');
         Http::assertSent(fn ($req) => str_ends_with($req->url(), "/internal/{$company->id}/monitor/1/recheck"));
     }
+
+    public function test_zone_subzone_box_filters_apply_and_cascade(): void
+    {
+        $company = Company::create(['name' => 'Century Link Network']);
+        $agent = User::factory()->create();
+        $company->users()->attach($agent, ['role' => 'agent']);
+        $mk = fn ($id, $z, $sz, $b) => BillingCustomer::create(['company_id' => $company->id, 'header_id' => (int) $id, 'customer_id' => $id,
+            'username' => "u{$id}", 'server' => 'CLNBD', 'status' => 'Active', 'zone' => $z, 'subzone' => $sz, 'box' => $b]);
+        $a = $mk('1', 'Zisan', 'এনায়েতনগর', 'Box-1');
+        $b = $mk('2', 'Zisan', 'ধোপা পাড়া', 'Box-2');
+        $c = $mk('3', 'Binodpur', 'বড় বাড়ি', 'Box-3');
+        MikrotikRouter::create(['company_id' => $company->id, 'host' => 'h', 'api_port' => 8728, 'username' => 'u', 'password' => 'p']);
+        $this->actingAs($agent);
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($company);
+        $page = Livewire::test(Monitoring::class)
+            ->filterTable('zone', 'Zisan')->assertCanSeeTableRecords([$a, $b])->assertCanNotSeeTableRecords([$c]);
+        $page->filterTable('subzone', 'ধোপা পাড়া')->assertCanSeeTableRecords([$b])->assertCanNotSeeTableRecords([$a, $c]);
+        Livewire::test(Monitoring::class)->filterTable('box', 'Box-3')->assertCanSeeTableRecords([$c])->assertCanNotSeeTableRecords([$a, $b]);
+        // subzone choices follow the zone
+        $m = Livewire::test(Monitoring::class)->set('tableFilters.zone.value', 'Binodpur');
+        $opts = (fn () => $this->scopedOptions('subzone', ['zone']))->call($m->instance());
+        $this->assertSame(['বড় বাড়ি' => 'বড় বাড়ি'], $opts);
+    }
 }

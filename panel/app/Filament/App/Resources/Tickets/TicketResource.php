@@ -145,6 +145,7 @@ class TicketResource extends Resource
                 SelectFilter::make('priority')->label('Priority')->options(BillingTicket::PRIORITIES),
             ])
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
+            ->deferFilters(false)
             ->filtersFormColumns(4)
             ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')]);
     }

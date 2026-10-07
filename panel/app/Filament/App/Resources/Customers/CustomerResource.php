@@ -110,6 +110,7 @@ class CustomerResource extends Resource
                     ->queries(true: fn (Builder $query) => $query->whereNull('gone_at'), false: fn (Builder $query) => $query->whereNotNull('gone_at')),
             ])
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
+            ->deferFilters(false)
             ->filtersFormColumns(4)
             ->recordActions([ViewAction::make()->label('দেখুন')]);
     }

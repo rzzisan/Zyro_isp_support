@@ -105,6 +105,20 @@ class Monitoring extends Page implements HasTable
             ->whereNotNull($column)->distinct()->orderBy($column)->pluck($column, $column)->all();
     }
 
+    /** Options of $column limited by the zone/subzone already chosen in the filters. */
+    private function scopedOptions(string $column, array $parents): array
+    {
+        $q = BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')->whereNotNull($column)
+            ->when($this->server !== '', fn ($x) => $x->where('server', $this->server));
+        foreach ($parents as $p) {
+            if ($v = $this->tableFilters[$p]['value'] ?? null) {
+                $q->where($p, $v);
+            }
+        }
+
+        return $q->distinct()->orderBy($column)->pluck($column, $column)->all();
+    }
+
     private static function speed(int $bps): string
     {
         return $bps >= 1_000_000 ? round($bps / 1_000_000, 2).' Mbps' : round($bps / 1000).' Kbps';
@@ -146,15 +160,16 @@ class Monitoring extends Page implements HasTable
                     ->queries(true: fn (Builder $q) => $q->where('s.seen_at', '>', $fresh()),
                         false: fn (Builder $q) => $q->where(fn ($w) => $w->whereNull('s.seen_at')->orWhere('s.seen_at', '<=', $fresh()))),
                 SelectFilter::make('zone')->label('Zone')->options(fn () => static::options('zone'))->searchable()
-                    ->query(fn (Builder $q, array $data) => $q->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.zone', $v))),
-                SelectFilter::make('subzone')->label('Subzone')->options(fn () => static::options('subzone'))->searchable()
-                    ->query(fn (Builder $q, array $data) => $q->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.subzone', $v))),
-                SelectFilter::make('box')->label('Box')->options(fn () => static::options('box'))->searchable()
-                    ->query(fn (Builder $q, array $data) => $q->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.box', $v))),
+                    ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.zone', $v))),
+                SelectFilter::make('subzone')->label('Subzone')->options(fn () => $this->scopedOptions('subzone', ['zone']))->searchable()
+                    ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.subzone', $v))),
+                SelectFilter::make('box')->label('Box')->options(fn () => $this->scopedOptions('box', ['zone', 'subzone']))->searchable()
+                    ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.box', $v))),
                 SelectFilter::make('connection_type')->label('Connection Type')->options(fn () => static::options('connection_type'))
-                    ->query(fn (Builder $q, array $data) => $q->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.connection_type', $v))),
+                    ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.connection_type', $v))),
             ])
             ->filtersLayout(FiltersLayout::AboveContent)
+            ->deferFilters(false) // apply as soon as a value is picked (no "Apply filters" click)
             ->filtersFormColumns(5)
             ->recordActions([
                 Action::make('recheck')->label('রি-চেক')->icon(Heroicon::OutlinedArrowPath)->color('gray')
