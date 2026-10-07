@@ -176,33 +176,60 @@ def map_macs(o: dict, s: SNMP, vlan_list: list[int]) -> tuple[int, int]:
     bridge = {idx(oid): v for oid, v in walk(s, BRIDGE_IFINDEX)}
     onu_ids = {r["if_index"]: r["id"] for r in db.all_rows("SELECT id, if_index FROM onus WHERE olt_id = %s", (o["id"],))}
     hits: dict[str, tuple[int, int]] = {}
-    for vlan in vlan_list:
-        todo = [m for m in macs if m not in hits]
-        for i in range(0, len(todo), 20):
-            chunk = todo[i:i + 20]
-            res = s.get(*[_fdb_oid(m, vlan) for m in chunk])
-            for m in chunk:
-                port = res.get(_fdb_oid(m, vlan))
-                ifindex = bridge.get(port, port) if isinstance(port, int) and port > 0 else None
-                if ifindex in onu_ids:
-                    hits[m] = (onu_ids[ifindex], vlan)
-            time.sleep(PAUSE)
-    with db.conn() as c:
-        with c.transaction():
-            for m, (onu_id, vlan) in hits.items():
-                c.execute("""INSERT INTO customer_onus (company_id, client_mac, olt_id, onu_id, vlan, checked_at)
-                             VALUES (%s, %s, %s, %s, %s, now())
-                             ON CONFLICT (company_id, client_mac) DO UPDATE SET olt_id = EXCLUDED.olt_id, onu_id = EXCLUDED.onu_id,
-                               vlan = EXCLUDED.vlan, checked_at = now()""", (o["company_id"], m, o["id"], onu_id, vlan))
-            for m in set(macs) - set(hits):
-                c.execute("""INSERT INTO onu_mac_misses (olt_id, client_mac, checked_at) VALUES (%s, %s, now())
-                             ON CONFLICT (olt_id, client_mac) DO UPDATE SET checked_at = now()""", (o["id"], m))
-                c.execute("DELETE FROM customer_onus WHERE company_id = %s AND client_mac = %s AND olt_id = %s",
-                          (o["company_id"], m, o["id"]))
+    # VLANs that already gave us customers first; batches of 100 MACs, each finished and saved before the next,
+    # and at most ~4 minutes per run (the rest continues next run), so a big router never blocks the sync.
+    known = [r["vlan"] for r in db.all_rows("SELECT vlan, count(*) n FROM customer_onus WHERE olt_id = %s AND vlan IS NOT NULL "
+                                            "GROUP BY vlan ORDER BY n DESC", (o["id"],))]
+    order = known + [v for v in vlan_list if v not in known]
+    started, asked = time.time(), 0
+    for b0 in range(0, len(macs), 100):
+        if time.time() - started > 240:
+            break
+        batch = macs[b0:b0 + 100]
+        asked += len(batch)
+        for vlan in order:
+            todo = [m for m in batch if m not in hits]
+            if not todo:
+                break
+            for i in range(0, len(todo), 20):
+                chunk = todo[i:i + 20]
+                res = s.get(*[_fdb_oid(m, vlan) for m in chunk])
+                for m in chunk:
+                    port = res.get(_fdb_oid(m, vlan))
+                    ifindex = bridge.get(port, port) if isinstance(port, int) and port > 0 else None
+                    if ifindex in onu_ids:
+                        hits[m] = (onu_ids[ifindex], vlan)
+                time.sleep(PAUSE)
+        with db.conn() as c:
+            with c.transaction():
+                for m in batch:
+                    if m in hits:
+                        onu_id, vlan = hits[m]
+                        c.execute("""INSERT INTO customer_onus (company_id, client_mac, olt_id, onu_id, vlan, checked_at)
+                                     VALUES (%s, %s, %s, %s, %s, now())
+                                     ON CONFLICT (company_id, client_mac) DO UPDATE SET olt_id = EXCLUDED.olt_id,
+                                       onu_id = EXCLUDED.onu_id, vlan = EXCLUDED.vlan, checked_at = now()""",
+                                  (o["company_id"], m, o["id"], onu_id, vlan))
+                    else:
+                        c.execute("""INSERT INTO onu_mac_misses (olt_id, client_mac, checked_at) VALUES (%s, %s, now())
+                                     ON CONFLICT (olt_id, client_mac) DO UPDATE SET checked_at = now()""", (o["id"], m))
+                        c.execute("DELETE FROM customer_onus WHERE company_id = %s AND client_mac = %s AND olt_id = %s",
+                                  (o["company_id"], m, o["id"]))
+    macs = macs[:asked]
     return len(macs), len(hits)
 
 
 def sync_olt(o: dict) -> dict:
+    import fcntl
+    with open(f"/tmp/zyro-olt-{o['id']}.lock", "w") as fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return {"skipped": "another sync of this OLT is running"}
+        return _sync_olt(o)
+
+
+def _sync_olt(o: dict) -> dict:
     if o["brand"] not in DRIVERS:
         raise RuntimeError(f"{o['brand']} OLT এখনো সমর্থিত নয়")
     s = client(o)
