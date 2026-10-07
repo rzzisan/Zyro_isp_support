@@ -13,6 +13,9 @@
         .zm-bar { height: 5px; border-radius: 999px; background: color-mix(in srgb, #dc2626 25%, transparent); margin-top: 8px; overflow: hidden; }
         .zm-bar i { display: block; height: 100%; background: #10b981; }
     </style>
+    @if ($this->refreshing)
+        <div wire:poll.5s="checkRefresh" style="display:none"></div>
+    @endif
     <div class="zm-tabs" wire:poll.60s>
         @foreach ($counts as $server => $c)
             <button type="button" wire:click="setServer('{{ $server }}')" class="zm-tab {{ $this->server === (string) $server ? 'on' : '' }}">

@@ -68,6 +68,16 @@ class Engine
         return static::call('post', "/internal/{$companyId}/customers/sync") ?? [];
     }
 
+    /** Background customer sync if the last one is older than $maxAge seconds; returns started / running. */
+    public static function refreshCustomers(int $companyId, int $maxAge = 600): array
+    {
+        try {
+            return static::http()->timeout(5)->post("/internal/{$companyId}/customers/refresh?max_age={$maxAge}")->throw()->json() ?? [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     /** Live connection, ONU and bill state of one customer. */
     public static function customerLive(int $companyId, int $headerId): array
     {

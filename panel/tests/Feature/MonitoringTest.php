@@ -42,6 +42,7 @@ class MonitoringTest extends TestCase
             ['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0004', 'address' => '10.144.1.4', 'uptime' => '3h', 'seen_at' => now()],
             ['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0005', 'address' => '10.1.1.5', 'uptime' => '4h', 'seen_at' => now()],
         ]);
+        Http::fake(['engine.test/internal/*/customers/refresh*' => Http::response(['started' => true, 'running' => true])]);
         $this->actingAs($agent)->get("/app/{$company->slug}/monitoring")->assertOk()->assertSee('সব সার্ভার');
         Filament::setCurrentPanel('app');
         Filament::setTenant($company);
@@ -52,6 +53,9 @@ class MonitoringTest extends TestCase
         $page->assertCanSeeTableRecords([$on, $off, $other, $free])->assertCanNotSeeTableRecords([$cut])->assertSee('10.1.1.1')->assertDontSee('10.1.1.2')
             ->call('setServer', 'CLNBD')->assertCanSeeTableRecords([$on, $off])->assertCanNotSeeTableRecords([$other])
             ->filterTable('online', true)->assertCanSeeTableRecords([$on])->assertCanNotSeeTableRecords([$off]);
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), "/internal/{$company->id}/customers/refresh"));
+        $page->assertSet('refreshing', true)->call('checkRefresh')->assertSet('refreshing', false);
 
         Http::fake(['engine.test/*' => Http::response(['online' => true, 'router' => 'CLNBD', 'uptime' => '2h1m', 'address' => '10.1.1.1', 'caller_id' => 'AA'])]);
         Livewire::test(Monitoring::class)->callAction(TestAction::make('recheck')->table($on))->assertNotified('অনলাইন · 2h1m · CLNBD');

@@ -49,6 +49,24 @@ class Monitoring extends Page implements HasTable
     #[Url(as: 'server')]
     public string $server = '';
 
+    /** true while the background customer sync started by opening this page is running */
+    public bool $refreshing = false;
+
+    public function mount(): void
+    {
+        // line on/off changes during the day: refresh the customer list when someone opens this page (at most every 10 min)
+        $this->refreshing = (bool) (Engine::refreshCustomers(Filament::getTenant()->getKey())['running'] ?? false);
+    }
+
+    public function checkRefresh(): void
+    {
+        if (! \Illuminate\Support\Facades\DB::table('billing_customer_syncs')->where('company_id', Filament::getTenant()->getKey())
+            ->whereNull('finished_at')->where('started_at', '>', now()->subMinutes(5))->exists()) {
+            $this->refreshing = false;
+            $this->resetTable();
+        }
+    }
+
     public static function canAccess(): bool
     {
         return \App\Support\Menu::can('monitoring') && (MikrotikRouter::where('company_id', Filament::getTenant()?->getKey() ?? 0)->exists());
@@ -58,7 +76,7 @@ class Monitoring extends Page implements HasTable
     {
         $last = PppSession::where('company_id', Filament::getTenant()->getKey())->max('seen_at');
 
-        return 'MikroTik থেকে প্রতি ২ মিনিটে আপডেট হয়'.($last ? ' · শেষ আপডেট '.Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('g:i:s A') : '');
+        return 'MikroTik থেকে প্রতি ২ মিনিটে আপডেট হয়'.($this->refreshing ? ' · বিলিং থেকে কাস্টমার তালিকা আপডেট হচ্ছে…' : '').($last ? ' · শেষ আপডেট '.Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('g:i:s A') : '');
     }
 
     protected function getHeaderActions(): array

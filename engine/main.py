@@ -467,6 +467,40 @@ def customers_sync_now(request: Request, company_id: int):
     return billing_call(lambda: sync_company(t))
 
 
+_customer_refresh = threading.Lock()
+
+
+@app.post("/internal/{company_id}/customers/refresh")
+def customers_refresh(request: Request, company_id: int, max_age: int = 600):
+    """Monitoring page opened: start a background customer sync unless one ran (or is running) in the last max_age seconds."""
+    t = internal_tenant(request, company_id)
+    if not _customer_refresh.acquire(blocking=False):
+        return {"started": False, "running": True}
+    try:
+        recent = db.one("""SELECT 1 FROM billing_customer_syncs WHERE company_id = %s AND (
+                             (finished_at IS NULL AND started_at > now() - interval '5 minutes')
+                             OR (error IS NULL AND finished_at > now() - make_interval(secs => %s))) LIMIT 1""",
+                        (company_id, max_age))
+    except Exception:
+        _customer_refresh.release()
+        raise
+    if recent:
+        _customer_refresh.release()
+        return {"started": False, "running": False}
+
+    def run():
+        from engine.customer_sync import sync_company
+        try:
+            log.info("customer refresh company %s: %s", company_id, sync_company(t))
+        except Exception:
+            log.exception("customer refresh failed for company %s", company_id)
+        finally:
+            _customer_refresh.release()
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"started": True, "running": True}
+
+
 @app.get("/internal/{company_id}/customers/{header_id}/live")
 def customer_live(request: Request, company_id: int, header_id: int):
     """Live state for the panel's customer page: connection, ONU, this month's bill, last payments."""
