@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\Conversations\Pages;
 
+use App\Filament\App\Resources\Conversations\Concerns\InboxList;
 use App\Filament\App\Resources\Conversations\ConversationResource;
 use App\Models\BillingTicket;
 use App\Models\WaContact;
@@ -20,11 +21,12 @@ use RuntimeException;
 /** One conversation: messages, the bot's drafts, staff reply box, assign and bot pause. */
 class ViewConversation extends Page
 {
+    use InboxList;
     use InteractsWithRecord;
 
     protected static string $resource = ConversationResource::class;
 
-    protected string $view = 'filament.app.conversation';
+    protected string $view = 'filament.app.inbox';
 
     public string $reply = '';
 
@@ -46,6 +48,17 @@ class ViewConversation extends Page
         $c = $this->contact();
 
         return ($c->name ?: 'নাম নেই').' · '.$c->displayNumber();
+    }
+
+    /** The chat header shows who it is; the page keeps only its action buttons. */
+    public function getHeading(): string|Htmlable
+    {
+        return 'ইনবক্স';
+    }
+
+    public function getBreadcrumbs(): array
+    {
+        return [];
     }
 
     protected function getHeaderActions(): array
@@ -135,6 +148,7 @@ class ViewConversation extends Page
             'contact' => $c,
             'items' => $items,
             'windowOpen' => $c->windowOpen(),
+            'messageCount' => $c->messages()->count(),
             'sending' => WhatsApp::sendingEnabled(),
             'company' => Filament::getTenant(),
             'tickets' => $c->customer_id

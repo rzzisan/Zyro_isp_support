@@ -69,8 +69,9 @@ class InboxTest extends TestCase
         [, , $other] = $this->companyWithChat('Other ISP', '8801711999999');
         $this->as($this->owner);
         Livewire::test(ListConversations::class)
-            ->assertCanSeeTableRecords([$this->contact])
-            ->assertCanNotSeeTableRecords([$other]);
+            ->assertSee('Customer of Century Link Network')->assertDontSee('Customer of Other ISP')
+            ->call('setBox', 'waiting')->assertSee('Customer of Century Link Network')
+            ->set('search', 'nobody-here')->assertDontSee('Customer of Century Link Network');
     }
 
     public function test_agent_opens_inbox_and_chat_but_not_another_companys_chat(): void
