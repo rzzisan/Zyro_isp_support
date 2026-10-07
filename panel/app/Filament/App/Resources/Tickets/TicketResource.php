@@ -141,9 +141,7 @@ class TicketResource extends Resource
                 SelectFilter::make('zone')->label('Zone')->options(fn () => static::options('zone'))->searchable(),
                 SelectFilter::make('category')->label('সমস্যা')->options(fn () => static::options('category'))->searchable(),
                 SelectFilter::make('employee')->label('কর্মী (assign / সমাধান)')->options(fn () => static::employees())->searchable()
-                    ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($q, $name) => $q->where(
-                        fn ($w) => $w->whereRaw("assigned_to ~* ?", ['(^|, )'.preg_quote($name).'( \\(|,|$)'])
-                            ->orWhereRaw("solved_by ~* ?", ['(^|, )'.preg_quote($name).'( \\(|,|$)'])))),
+                    ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($q, $name) => $q->forEmployee($name))),
                 SelectFilter::make('priority')->label('Priority')->options(BillingTicket::PRIORITIES),
             ])
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)

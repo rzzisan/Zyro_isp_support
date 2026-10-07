@@ -24,6 +24,15 @@ class BillingTicket extends Model
         return $this->belongsTo(Company::class);
     }
 
+    /** Tickets assigned to or solved by $name (values look like "Maruf (10-07-26), Rifat"). */
+    public function scopeForEmployee($query, string $name, bool $assignedOnly = false)
+    {
+        $re = '(^|, )'.preg_quote($name).'( \(|,|$)';
+
+        return $query->where(fn ($w) => $w->whereRaw('assigned_to ~* ?', [$re])
+            ->when(! $assignedOnly, fn ($x) => $x->orWhereRaw('solved_by ~* ?', [$re])));
+    }
+
     public function isOpen(): bool
     {
         return in_array($this->state, ['pending', 'processing'], true);

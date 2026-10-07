@@ -23,3 +23,17 @@ Route::get('/media/{message}', function (\App\Models\WaMessage $message) {
 
     return response()->file($path, ['Content-Type' => $mime, 'Cache-Control' => 'private, max-age=86400']);
 })->middleware('web')->name('media.show');
+
+// printable list of one employee's in-progress billing tickets; members of that company only
+Route::get('/print/{company:slug}/tickets', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
+    $user = Auth::user();
+    abort_unless($user && $user->canAccessTenant($company), 403);
+    $employee = trim((string) $request->query('employee'));
+    abort_if($employee === '', 404);
+    $tickets = \App\Models\BillingTicket::where('company_id', $company->id)->where('state', 'processing')
+        ->forEmployee($employee, assignedOnly: true)
+        ->orderBy('zone')->orderBy('subzone')->orderBy('opened_at')->get();
+
+    return view('print.tickets', ['company' => $company, 'employee' => $employee, 'tickets' => $tickets,
+        'now' => now('Asia/Dhaka')]);
+})->middleware('web')->name('tickets.print');

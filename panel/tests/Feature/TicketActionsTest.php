@@ -95,6 +95,25 @@ class TicketActionsTest extends TestCase
         Livewire::test(ListTickets::class)->callAction('sync')->assertNotified('বিলিং থেকে আপডেট হয়েছে');
     }
 
+    public function test_print_only_processing_tickets_of_employee(): void
+    {
+        $mk = fn ($id, $state, $who) => BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => $id,
+            'state' => $state, 'assigned_to' => $who, 'customer_name' => "Cust $id", 'zone' => 'Binodpur']);
+        $mk('p1', 'processing', 'Rifat (10-07-26)');
+        $mk('p2', 'processing', 'Maruf (10-07-26), Rifat (10-07-26)');
+        $mk('p3', 'processing', 'Arif (10-07-26)');
+        $mk('q1', 'pending', 'Rifat (10-07-26)');
+        BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => 's1', 'state' => 'solved', 'solved_by' => 'Rifat']);
+        $other = Company::create(['name' => 'Other ISP']);
+        BillingTicket::create(['company_id' => $other->id, 'complain_id' => 'x1', 'state' => 'processing', 'assigned_to' => 'Rifat']);
+
+        Livewire::test(ListTickets::class)->callAction('print', ['employee' => 'Rifat'])->assertHasNoFormErrors();
+        $this->get("/print/{$this->company->slug}/tickets?employee=Rifat")->assertOk()
+            ->assertSee('#p1')->assertSee('#p2')->assertDontSee('#p3')->assertDontSee('#q1')->assertDontSee('#s1')->assertDontSee('#x1')
+            ->assertSee('মোট টিকিট: <b>2</b>', false);
+        $this->get("/print/{$other->slug}/tickets?employee=Rifat")->assertForbidden();
+    }
+
     public function test_date_presets(): void
     {
         [$from, $until] = TicketResource::period(['period' => 'yesterday']);

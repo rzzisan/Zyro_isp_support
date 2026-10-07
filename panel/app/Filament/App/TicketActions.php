@@ -130,6 +130,37 @@ class TicketActions
             });
     }
 
+    /** Printable list of one employee's in-progress tickets (opens in a new tab). */
+    public static function print(): Action
+    {
+        return Action::make('print')->label('প্রিন্ট')->icon(Heroicon::OutlinedPrinter)->color('gray')
+            ->modalHeading('কাজ চলছে এমন টিকিট প্রিন্ট')
+            ->modalSubmitActionLabel('প্রিন্ট পেজ খুলুন')
+            ->schema([
+                Select::make('employee')->label('কর্মী')->required()->searchable()
+                    ->options(function () {
+                        $names = [];
+                        foreach (BillingTicket::where('company_id', static::company())->where('state', 'processing')
+                            ->whereNotNull('assigned_to')->pluck('assigned_to') as $v) {
+                            foreach (explode(',', $v) as $part) {
+                                $n = trim(preg_replace('/\s*\(.*?\)\s*/u', '', $part));
+                                if ($n !== '') {
+                                    $names[$n] = ($names[$n] ?? 0) + 1;
+                                }
+                            }
+                        }
+                        ksort($names);
+
+                        return collect($names)->mapWithKeys(fn ($c, $n) => [$n => "{$n} ({$c}টা)"])->all();
+                    })
+                    ->helperText('শুধু যাদের নামে এখন কাজ চলছে এমন টিকিট আছে'),
+            ])
+            ->action(function (array $data, $livewire) {
+                $url = route('tickets.print', ['company' => Filament::getTenant()->slug, 'employee' => $data['employee']]);
+                $livewire->js('window.open('.json_encode($url).', "_blank")');
+            });
+    }
+
     public static function assign(): Action
     {
         return Action::make('assign')->label('Assign')->icon(Heroicon::OutlinedUserPlus)->color('gray')
