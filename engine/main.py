@@ -581,10 +581,16 @@ def ticket_info(request: Request, company_id: int, header_id: int):
             log.exception("billing live status failed")
     onu = None
     if mac:
+        from engine.olt_sync import onu_for_mac
         try:
-            onu = tenants.billing(t).onu_info(mac)
+            onu = onu_for_mac(company_id, mac)  # our own OLT, read now
         except Exception:
-            log.exception("onu info failed")
+            log.exception("own OLT read failed")
+        if not onu:
+            try:
+                onu = tenants.billing(t).onu_info(mac)
+            except Exception:
+                log.exception("onu info failed")
     extra = row.pop("extra") or {}
     return {
         "customer": {k: (str(v) if v is not None and not isinstance(v, (bool, int, float, str)) else v) for k, v in row.items()},

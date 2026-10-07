@@ -1,0 +1,10 @@
+[Unit]
+Description=Read ONUs from the OLTs every 10 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=10min
+Unit=zyro-olt-sync.service
+
+[Install]
+WantedBy=timers.target

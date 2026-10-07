@@ -109,6 +109,18 @@ def add_online(t: Tenant, context: dict, row: dict) -> dict:
     try:
         from engine.ppp_sync import online_now
         context["mikrotik"] = online_now(t.company_id, row.get("UserName") or "", row.get("Server"))
+        mac = (context["mikrotik"] or {}).get("caller_id")
+        if not mac:  # offline now: the router MAC from its last session
+            last = db.one("SELECT caller_id FROM ppp_sessions WHERE company_id = %s AND username = %s",
+                          (t.company_id, row.get("UserName") or ""))
+            mac = last and last["caller_id"]
+        if mac:
+            from engine.olt_sync import onu_for_mac
+            own = onu_for_mac(t.company_id, mac)
+            if own:  # our OLT's answer (right now) replaces the billing software's copy
+                context["onu"] = {"olt": own["OLTName"], "port": own["OLTPort"], "status": own["OnuStatus"],
+                                  "optical_power_dbm": own["OpticalPower"], "distance_m": own["Distance"],
+                                  "last_change": own["LastChange"], "source": "own OLT"}
     except Exception:
         log.exception("mikrotik check failed")
     return context
