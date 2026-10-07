@@ -16,6 +16,7 @@ use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
+use Livewire\WithFileUploads;
 use RuntimeException;
 
 /** One conversation: messages, the bot's drafts, staff reply box, assign and bot pause. */
@@ -23,6 +24,7 @@ class ViewConversation extends Page
 {
     use InboxList;
     use InteractsWithRecord;
+    use WithFileUploads;
 
     protected static string $resource = ConversationResource::class;
 
@@ -31,6 +33,14 @@ class ViewConversation extends Page
     public string $reply = '';
 
     public int $pauseHours = 2;
+
+    /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
+    public $attachment = null;
+
+    public function removeAttachment(): void
+    {
+        $this->attachment = null;
+    }
 
     public function mount(int|string $record): void
     {
@@ -107,17 +117,27 @@ class ViewConversation extends Page
     public function send(): void
     {
         $this->validate([
-            'reply' => ['required', 'string', 'max:4000'],
+            'reply' => [$this->attachment ? 'nullable' : 'required', 'string', 'max:4000'],
             'pauseHours' => ['integer', 'min:0', 'max:72'],
-        ], ['reply.required' => 'মেসেজ লিখুন']);
+            'attachment' => ['nullable', 'file', 'max:12288',
+                'mimetypes:'.implode(',', array_keys(WhatsApp::MEDIA_TYPES))],
+        ], [
+            'reply.required' => 'মেসেজ লিখুন',
+            'attachment.max' => 'ফাইল ১২ MB-এর বেশি হতে পারবে না',
+            'attachment.mimetypes' => 'শুধু ছবি (JPG/PNG/WEBP), PDF, MP4 বা MP3 পাঠানো যায়',
+        ]);
         try {
-            $m = WhatsApp::sendText($this->contact(), $this->reply, auth()->user(), $this->pauseHours);
+            $m = $this->attachment
+                ? WhatsApp::sendMedia($this->contact(), $this->attachment->getRealPath(), $this->attachment->getMimeType(),
+                    $this->attachment->getClientOriginalName(), $this->reply, auth()->user(), $this->pauseHours)
+                : WhatsApp::sendText($this->contact(), $this->reply, auth()->user(), $this->pauseHours);
         } catch (RuntimeException $e) {
             Notification::make()->danger()->title($e->getMessage())->send();
 
             return;
         }
         $this->reply = '';
+        $this->attachment = null;
         $this->contact()->refresh();
         Notification::make()->success()
             ->title($m->status === 'test' ? 'টেস্ট মোড: সেভ হয়েছে, কাস্টমারের কাছে যায়নি' : 'পাঠানো হয়েছে')

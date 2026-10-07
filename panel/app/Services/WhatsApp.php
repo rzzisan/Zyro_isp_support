@@ -88,6 +88,62 @@ class WhatsApp
         return $message;
     }
 
+    public const MEDIA_TYPES = [
+        'image/jpeg' => 'image', 'image/png' => 'image', 'image/webp' => 'image',
+        'application/pdf' => 'document', 'video/mp4' => 'video', 'audio/mpeg' => 'audio', 'audio/ogg' => 'audio',
+    ];
+
+    /**
+     * Send an image / PDF / video / audio file (with an optional caption) as a staff reply: uploaded to Meta with
+     * the company's token, then sent. The file is also kept on disk so the inbox shows it without downloading.
+     */
+    public static function sendMedia(WaContact $contact, string $path, string $mime, string $fileName, ?string $caption,
+        User $user, int $pauseHours = 0): WaMessage
+    {
+        $type = static::MEDIA_TYPES[$mime] ?? throw new RuntimeException('এই ধরনের ফাইল পাঠানো যায় না (ছবি, PDF, MP4, MP3 চলবে)।');
+        if (! $contact->windowOpen()) {
+            throw new RuntimeException('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই এখন কিছু পাঠানো যাবে না; অনুমোদিত template লাগবে।');
+        }
+        $caption = trim((string) $caption) ?: null;
+        $account = static::accountFor($contact);
+        $waId = null;
+        $mediaId = null;
+        $status = 'test';
+        if (static::sendingEnabled()) {
+            try {
+                $mediaId = Http::withToken($account->access_token)->timeout(120)
+                    ->attach('file', file_get_contents($path), $fileName, ['Content-Type' => $mime])
+                    ->post(static::graph($account->phone_number_id.'/media'), ['messaging_product' => 'whatsapp', 'type' => $mime])
+                    ->throw()->json('id');
+                $media = ['id' => $mediaId] + ($caption && $type !== 'audio' ? ['caption' => $caption] : [])
+                    + ($type === 'document' ? ['filename' => $fileName] : []);
+                $res = Http::withToken($account->access_token)->timeout(30)
+                    ->post(static::graph($account->phone_number_id.'/messages'), [
+                        'messaging_product' => 'whatsapp', 'to' => $contact->wa_number, 'type' => $type, $type => $media,
+                    ])->throw()->json();
+            } catch (RequestException $e) {
+                $msg = $e->response->json('error.message') ?? $e->getMessage();
+                throw new RuntimeException('পাঠানো যায়নি: '.mb_substr($msg, 0, 300));
+            }
+            $waId = $res['messages'][0]['id'] ?? null;
+            $status = 'sent';
+        }
+        $message = WaMessage::create([
+            'company_id' => $contact->company_id, 'contact_id' => $contact->id, 'wa_account_id' => $account->id,
+            'wa_message_id' => $waId, 'direction' => 'out', 'sender' => 'staff', 'user_id' => $user->id,
+            'type' => $type, 'body' => $caption ?? ($type === 'document' ? $fileName : null),
+            'media_id' => $mediaId ?? 'local', 'media_mime' => $mime, 'status' => $status,
+        ]);
+        Storage::disk('local')->put("media/{$contact->company_id}/{$message->id}", file_get_contents($path));
+        $contact->forceFill([
+            'last_message_at' => now(),
+            'bot_paused_until' => $pauseHours > 0 ? now()->addHours($pauseHours) : $contact->bot_paused_until,
+            'assigned_user_id' => $contact->assigned_user_id ?? $user->id,
+        ])->save();
+
+        return $message;
+    }
+
     /** Ask Meta about the number with its token; stores the display number and verified name it returns. */
     public static function checkAccount(WaAccount $account): array
     {

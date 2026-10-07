@@ -176,4 +176,35 @@ class InboxTest extends TestCase
         Http::assertSentCount(2); // second view served from disk
         Http::assertSent(fn ($r) => $r->hasHeader('Authorization', "Bearer token-{$this->company->id}"));
     }
+
+    public function test_send_image_with_caption(): void
+    {
+        Storage::fake('local');
+        config(['services.whatsapp.send_enabled' => true]);
+        Http::fake([
+            'graph.facebook.com/*/media' => Http::response(['id' => 'MEDIA9']),
+            'graph.facebook.com/*/messages' => Http::response(['messages' => [['id' => 'wamid.IMG1']]]),
+        ]);
+        $this->as($this->owner);
+        Livewire::test(ViewConversation::class, ['record' => $this->contact->id])
+            ->set('attachment', \Illuminate\Http\UploadedFile::fake()->image('router.jpg', 40, 40))
+            ->set('reply', 'এই রাউটারের লাইট দেখুন')->set('pauseHours', 0)
+            ->call('send')->assertHasNoErrors()->assertSet('attachment', null)->assertSet('reply', '');
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/media') && $r->hasHeader('Authorization', "Bearer token-{$this->company->id}"));
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/messages') && $r['type'] === 'image'
+            && $r['image']['id'] === 'MEDIA9' && $r['image']['caption'] === 'এই রাউটারের লাইট দেখুন');
+        $m = WaMessage::where('sender', 'staff')->sole();
+        $this->assertSame(['image', 'MEDIA9', 'wamid.IMG1'], [$m->type, $m->media_id, $m->wa_message_id]);
+        Storage::disk('local')->assertExists("media/{$this->company->id}/{$m->id}");
+        $this->get("/media/{$m->id}")->assertOk();
+    }
+
+    public function test_send_rejects_unsupported_file(): void
+    {
+        $this->as($this->owner);
+        Livewire::test(ViewConversation::class, ['record' => $this->contact->id])
+            ->set('attachment', \Illuminate\Http\UploadedFile::fake()->create('x.exe', 10, 'application/x-msdownload'))
+            ->call('send')->assertHasErrors(['attachment']);
+        $this->assertSame(0, WaMessage::where('sender', 'staff')->count());
+    }
 }

@@ -156,7 +156,26 @@
                     @if (! $windowOpen)
                         <div class="zi-warn">কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে। WhatsApp-এর নিয়মে এখন সাধারণ মেসেজ যাবে না, অনুমোদিত template লাগবে।</div>
                     @endif
+                    @if ($attachment)
+                        <div class="zi-attach">
+                            @if (str_starts_with((string) $attachment->getMimeType(), 'image/'))
+                                <img src="{{ $attachment->temporaryUrl() }}" alt="">
+                            @else
+                                <span class="zi-attach-icon">📄</span>
+                            @endif
+                            <span class="zi-attach-name">{{ $attachment->getClientOriginalName() }}
+                                <small>{{ number_format($attachment->getSize() / 1024, 0) }} KB · উপরের লেখাটা ক্যাপশন হিসেবে যাবে</small></span>
+                            <button type="button" wire:click="removeAttachment" class="zi-attach-x" title="বাদ দিন">✕</button>
+                        </div>
+                    @endif
+                    <div wire:loading wire:target="attachment" class="zi-muted">ফাইল আপলোড হচ্ছে…</div>
+                    @error('attachment')<div class="zi-err">{{ $message }}</div>@enderror
                     <div class="zi-compose-row">
+                        <label class="zi-clip" title="ছবি বা ফাইল পাঠান">
+                            <x-filament::icon icon="heroicon-o-paper-clip" class="zi-send-icon" />
+                            <input type="file" class="zi-file-input" wire:model="attachment"
+                                   accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,audio/mpeg,audio/ogg" @disabled(! $windowOpen)>
+                        </label>
                         <textarea x-ref="t" rows="1" wire:model="reply" placeholder="উত্তর লিখুন… (Enter = পাঠান, Shift+Enter = নতুন লাইন)"
                                   @input="grow()" x-effect="$wire.reply; $nextTick(() => grow())"
                                   @keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); $wire.send() }"
