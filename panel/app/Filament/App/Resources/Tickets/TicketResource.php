@@ -3,6 +3,10 @@
 namespace App\Filament\App\Resources\Tickets;
 
 use App\Filament\App\Resources\Tickets\Pages\ListTickets;
+use App\Filament\App\TicketActions;
+use Filament\Forms\Components\Select;
+use Filament\Tables\Enums\FiltersLayout;
+use Illuminate\Support\Carbon;
 use App\Models\BillingTicket;
 use BackedEnum;
 use Filament\Actions\ViewAction;
@@ -88,20 +92,61 @@ class TicketResource extends Resource
                     ->description(fn (BillingTicket $r) => $r->isOpen() ? 'এখনো খোলা' : null),
             ])
             ->filters([
-                Filter::make('opened')->label('তারিখ')
+                Filter::make('date')
                     ->schema([
-                        DatePicker::make('from')->label('থেকে'),
-                        DatePicker::make('until')->label('পর্যন্ত'),
+                        Select::make('field')->label('কোন তারিখ')->default('opened_at')->selectablePlaceholder(false)
+                            ->options(['opened_at' => 'খোলার তারিখ', 'solved_at' => 'সমাধানের তারিখ']),
+                        Select::make('period')->label('সময়')->placeholder('সব সময়')->live()
+                            ->options(['today' => 'আজ', 'yesterday' => 'গতকাল', '7d' => 'শেষ ৭ দিন', '30d' => 'শেষ ৩০ দিন',
+                                'this_month' => 'এই মাস', 'last_month' => 'গত মাস', 'custom' => 'নির্দিষ্ট তারিখ']),
+                        DatePicker::make('from')->label('থেকে')->visible(fn ($get) => $get('period') === 'custom'),
+                        DatePicker::make('until')->label('পর্যন্ত')->visible(fn ($get) => $get('period') === 'custom'),
                     ])
-                    ->query(fn (Builder $query, array $data) => $query
-                        ->when($data['from'] ?? null, fn ($q, $d) => $q->where('opened_at', '>=', \Illuminate\Support\Carbon::parse($d, 'Asia/Dhaka')->startOfDay()->utc()))
-                        ->when($data['until'] ?? null, fn ($q, $d) => $q->where('opened_at', '<', \Illuminate\Support\Carbon::parse($d, 'Asia/Dhaka')->addDay()->startOfDay()->utc()))),
+                    ->columns(4)->columnSpan(2)
+                    ->query(function (Builder $query, array $data) {
+                        [$from, $until] = static::period($data);
+                        $field = ($data['field'] ?? null) === 'solved_at' ? 'solved_at' : 'opened_at';
+
+                        return $query->when($from, fn ($q) => $q->where($field, '>=', $from->utc()))
+                            ->when($until, fn ($q) => $q->where($field, '<', $until->utc()));
+                    })
+                    ->indicateUsing(function (array $data) {
+                        [$from, $until] = static::period($data);
+                        if (! $from && ! $until) {
+                            return null;
+                        }
+                        $label = ($data['field'] ?? null) === 'solved_at' ? 'সমাধান' : 'খোলা';
+
+                        return $label.': '.($from?->format('d M') ?? '…').' – '.($until?->subDay()->format('d M') ?? 'আজ');
+                    }),
                 SelectFilter::make('zone')->label('Zone')->options(fn () => static::options('zone'))->searchable(),
                 SelectFilter::make('category')->label('সমস্যা')->options(fn () => static::options('category'))->searchable(),
                 SelectFilter::make('solved_by')->label('সমাধান করেছেন')->options(fn () => static::options('solved_by'))->searchable(),
                 SelectFilter::make('priority')->label('Priority')->options(BillingTicket::PRIORITIES),
             ])
-            ->recordActions([ViewAction::make()->label('বিস্তারিত')]);
+            ->filtersLayout(FiltersLayout::AboveContentCollapsible)
+            ->filtersFormColumns(4)
+            ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')]);
+    }
+
+    /** [from, until) in Bangladesh time for the date filter, or [null, null]. */
+    public static function period(array $data): array
+    {
+        $today = Carbon::now('Asia/Dhaka')->startOfDay();
+
+        return match ($data['period'] ?? null) {
+            'today' => [$today, null],
+            'yesterday' => [$today->copy()->subDay(), $today],
+            '7d' => [$today->copy()->subDays(6), null],
+            '30d' => [$today->copy()->subDays(29), null],
+            'this_month' => [$today->copy()->startOfMonth(), null],
+            'last_month' => [$today->copy()->subMonthNoOverflow()->startOfMonth(), $today->copy()->startOfMonth()],
+            'custom' => [
+                ($data['from'] ?? null) ? Carbon::parse($data['from'], 'Asia/Dhaka')->startOfDay() : null,
+                ($data['until'] ?? null) ? Carbon::parse($data['until'], 'Asia/Dhaka')->addDay()->startOfDay() : null,
+            ],
+            default => [null, null],
+        };
     }
 
     public static function infolist(Schema $schema): Schema

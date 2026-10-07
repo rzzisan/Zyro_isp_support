@@ -41,4 +41,10 @@ return [
         'graph_version' => env('WA_GRAPH_VERSION', 'v21.0'),
     ],
 
+    'engine' => [
+        // the Python engine's internal API (billing actions); 127.0.0.1 only
+        'url' => env('ENGINE_URL', 'http://127.0.0.1:8994'),
+        'key' => env('ENGINE_INTERNAL_KEY'),
+    ],
+
 ];

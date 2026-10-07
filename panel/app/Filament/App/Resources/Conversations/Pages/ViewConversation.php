@@ -53,6 +53,7 @@ class ViewConversation extends Page
         $company = Filament::getTenant();
 
         return [
+            \App\Filament\App\TicketActions::newTicket($this->contact()->customer_id)->label('টিকিট খুলুন')->color('gray'),
             Action::make('take')->label('আমি নিলাম')->icon(Heroicon::OutlinedHandRaised)
                 ->visible(fn () => $this->contact()->assigned_user_id !== auth()->id())
                 ->action(function () {

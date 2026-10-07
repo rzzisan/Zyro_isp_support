@@ -25,6 +25,11 @@ class ListTickets extends ListRecords
             : 'এখনো বিলিং থেকে কোনো টিকিট আসেনি';
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [\App\Filament\App\TicketActions::newTicket()];
+    }
+
     public function getTabs(): array
     {
         $count = fn (array $states) => BillingTicket::where('company_id', Filament::getTenant()->getKey())

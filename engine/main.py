@@ -25,6 +25,8 @@ APP_SECRET = os.environ.get("META_APP_SECRET", "")
 DRY_RUN = os.environ.get("ENGINE_DRY_RUN", "1") == "1"
 # the old single-company bot keeps a copy of every webhook (it runs with bot_mode=off, so it only logs)
 LEGACY_FORWARD_URL = os.environ.get("LEGACY_FORWARD_URL", "")
+# the panel calls /internal/* (127.0.0.1 only; nginx exposes just /webhook) with this shared key
+INTERNAL_KEY = os.environ.get("INTERNAL_API_KEY", "")
 MEDIA_TYPES = ("audio", "image", "video", "document", "sticker")
 
 log = logging.getLogger("zyro-engine")
@@ -351,3 +353,89 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
     except Exception as e:
         log.exception("engine failed for company %s", t.company_id)
         save_draft(t, contact["id"], message_id, "error", None, context=context, error=str(e)[:500])
+
+
+# --- internal API for the panel (billing actions) -------------------------------------------
+def internal_tenant(request: Request, company_id: int) -> Tenant:
+    key = request.headers.get("x-internal-key", "")
+    if not INTERNAL_KEY or not hmac.compare_digest(key, INTERNAL_KEY):
+        raise HTTPException(status_code=403)
+    row = db.one("SELECT phone_number_id FROM wa_accounts WHERE company_id = %s ORDER BY id LIMIT 1", (company_id,))
+    t = tenants.by_phone_number_id(row["phone_number_id"]) if row else None
+    if not t or not t.billing:
+        raise HTTPException(status_code=400, detail="এই কোম্পানির বিলিং সংযোগ নেই")
+    return t
+
+
+def refresh_tickets(t: Tenant) -> None:
+    from engine.ticket_sync import sync_company
+    try:
+        sync_company(t, 1)
+    except Exception:
+        log.exception("ticket refresh failed")
+
+
+def billing_call(fn):
+    try:
+        return fn()
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("billing action failed")
+        raise HTTPException(status_code=400, detail=str(e)[:300])
+
+
+@app.get("/internal/{company_id}/ticket-options")
+def ticket_options(request: Request, company_id: int):
+    t = internal_tenant(request, company_id)
+    return billing_call(lambda: tenants.billing(t).support_options())
+
+
+@app.get("/internal/{company_id}/customers")
+def customers(request: Request, company_id: int, q: str = ""):
+    t = internal_tenant(request, company_id)
+    if len(q.strip()) < 2:
+        return []
+    rows = billing_call(lambda: tenants.billing(t).search_customers(q.strip(), 10))
+    return [{"header_id": r.get("CustomerHeaderId"), "customer_id": r.get("CustomerId"), "name": r.get("CustomerName"),
+             "mobile": r.get("MobileNumber"), "username": r.get("UserName"),
+             "zone": r.get("ZoneName") or r.get("Zone")} for r in rows]
+
+
+@app.post("/internal/{company_id}/tickets")
+async def new_ticket(request: Request, company_id: int):
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    api = tenants.billing(t)
+
+    def run():
+        msg = api.create_ticket(int(b["header_id"]), str(b["category_id"]), int(b.get("priority") or 2),
+                                normalize_bd_mobile(b.get("mobile") or "") or (b.get("mobile") or ""),
+                                b.get("comment") or "", send_sms=bool(b.get("sms_client")))
+        created = api.open_tickets_for(b.get("username") or "") if b.get("username") else []
+        complain_id = created[0].get("ComplainId") if created else None
+        if complain_id and b.get("employees"):
+            api.assign_ticket(int(complain_id), [int(e) for e in b["employees"]], b.get("dept_id"), bool(b.get("sms_employees")))
+        return {"message": msg, "complain_id": complain_id}
+
+    res = billing_call(run)
+    refresh_tickets(t)
+    return res
+
+
+@app.post("/internal/{company_id}/tickets/{complain_id}/assign")
+async def assign(request: Request, company_id: int, complain_id: int):
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    if not b.get("employees"):
+        raise HTTPException(status_code=400, detail="অন্তত একজন কর্মী বাছাই করুন")
+    billing_call(lambda: tenants.billing(t).assign_ticket(complain_id, [int(e) for e in b["employees"]],
+                                                          b.get("dept_id"), bool(b.get("sms_employees"))))
+    refresh_tickets(t)
+    return {"ok": True}
+
+
+@app.get("/internal/{company_id}/tickets/{complain_id}/solvers")
+def solvers(request: Request, company_id: int, complain_id: int):
+    t = internal_tenant(request, company_id)
+    return billing_call(lambda: tenants.billing(t).ticket_solvers(complain_id))

@@ -161,11 +161,60 @@ class ISPDigital:
             raise RuntimeError(res["errMSG"])
         return res.get("sucMSG") or "ok"
 
+    def _post(self, path: str, data) -> httpx.Response:
+        with self._lock:
+            if not self._logged_in:
+                self.login()
+            r = self._client.post(path, data=data, headers={"X-Requested-With": "XMLHttpRequest"})
+        if r.status_code in (301, 302):
+            self._logged_in = False
+            raise LoginError(f"session not accepted for {path}")
+        r.raise_for_status()
+        return r
+
+    def support_options(self) -> dict:
+        """Ticket categories, priorities, departments and employees offered by the support page."""
+        with self._lock:
+            if not self._logged_in:
+                self.login()
+            h = self._client.get("/ClientSupport/DailyComplainList").text
+
+        def opts(select_id: str) -> dict[str, str]:
+            m = re.search(r'<select[^>]*id="%s".*?</select>' % select_id, h, re.S)
+            return {cid: html.unescape(name).strip() for cid, name in
+                    re.findall(r'<option value="(\d+)"[^>]*>([^<]+)</option>', m.group(0))} if m else {}
+
+        return {"categories": opts("ProblemCategoryId"), "priorities": opts("ProblemPriorityId"),
+                "departments": opts("EmpDepartmentId"), "employees": opts("AssignEmpHeadId")}
+
+    def ticket_solvers(self, complain_id: int) -> dict:
+        return self._get(f"/ClientSupport/GetEmployeeDeptAndEmpByComplainId/{int(complain_id)}")
+
+    def assign_ticket(self, complain_id: int, employee_ids: list[int], dept_id: int | None = None,
+                      sms_employees: bool = False):
+        """Assign / reassign technicians like the support page's Assign button (optionally SMS them)."""
+        data = [("id", str(int(complain_id))), ("deptId", str(dept_id or ""))] + [("empIds", str(int(e))) for e in employee_ids]
+        res = self._post("/ClientSupport/AddSolver", data).json()
+        if sms_employees and res:
+            self._post("/sms/SendAsync", jquery_params({"vmSms": res}))
+        return res
+
     def open_tickets_for(self, username: str) -> list[dict]:
         rows = self.open_tickets(username)
         # the daily complain list holds unresolved tickets: Status 0 = pending, 1 = processing
         return [t for t in rows if (t.get("UserName") or "").lower() == username.lower()
                 and t.get("Status") in (0, 1)]
+
+
+def jquery_params(obj, prefix: str = "") -> list[tuple[str, str]]:
+    """Form encoding the way jQuery's $.post serialises nested objects (a[b][0][c]=v)."""
+    out: list[tuple[str, str]] = []
+    items = obj.items() if isinstance(obj, dict) else enumerate(obj) if isinstance(obj, list) else None
+    if items is None:
+        return [(prefix, "" if obj is None else str(obj).lower() if isinstance(obj, bool) else str(obj))]
+    for k, v in items:
+        out += jquery_params(v, f"{prefix}[{k}]" if prefix else str(k))
+    return out
 
 
 def normalize_bd_mobile(wa_number: str) -> str:
