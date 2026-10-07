@@ -33,6 +33,11 @@ class LineEnableResource extends Resource
 
     protected static ?int $navigationSort = -4;
 
+    public static function canAccess(): bool
+    {
+        return \App\Support\Menu::can('line_enables');
+    }
+
     public static function canCreate(): bool
     {
         return false;

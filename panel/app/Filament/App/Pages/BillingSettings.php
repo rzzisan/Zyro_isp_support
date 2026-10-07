@@ -29,6 +29,11 @@ class BillingSettings extends CompanySettingsPage
 
     protected static ?int $navigationSort = 10;
 
+    public static function canAccess(): bool
+    {
+        return parent::canAccess() && \App\Support\Menu::can('billing');
+    }
+
     protected function record(Company $company): Model
     {
         return $company->billingConnection()->firstOrNew([], ['provider' => 'ispdigital', 'base_url' => 'https://']);

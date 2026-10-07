@@ -38,7 +38,7 @@ class TechnicianResource extends Resource
 
     public static function canAccess(): bool
     {
-        return (bool) auth()->user()?->managesCompany(Filament::getTenant());
+        return \App\Support\Menu::can('technicians') && ((bool) auth()->user()?->managesCompany(Filament::getTenant()));
     }
 
     public static function form(Schema $schema): Schema

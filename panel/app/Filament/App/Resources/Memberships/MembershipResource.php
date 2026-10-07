@@ -39,7 +39,7 @@ class MembershipResource extends Resource
 
     public static function canAccess(): bool
     {
-        return (bool) auth()->user()?->managesCompany(Filament::getTenant());
+        return \App\Support\Menu::can('team') && ((bool) auth()->user()?->managesCompany(Filament::getTenant()));
     }
 
     /** Admins may add agents/admins; only an owner may create another owner. */
@@ -67,6 +67,11 @@ class MembershipResource extends Resource
             TextInput::make('billing_password')->label('বিলিং পাসওয়ার্ড')->password()->revealable()->visibleOn('edit')
                 ->dehydrated(fn ($state) => filled($state))
                 ->helperText('বদলাতে না চাইলে খালি রাখুন'),
+            \Filament\Forms\Components\CheckboxList::make('permissions')->label('কোন কোন মেনু দেখবেন')->visibleOn('edit')
+                ->options(\App\Support\Menu::options())
+                ->columns(3)->bulkToggleable()
+                ->formatStateUsing(fn ($state, ?Membership $record) => $state ?? \App\Support\Menu::defaults($record?->role ?? 'agent'))
+                ->helperText('ড্যাশবোর্ড আর "আমার বিলিং লগইন" সবাই দেখেন। সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin হলে কাজ করে, Agent-এর জন্য টিক দিলেও খুলবে না।'),
         ]);
     }
 
@@ -78,6 +83,11 @@ class MembershipResource extends Resource
                 TextColumn::make('user.email')->label('ইমেইল')->searchable(),
                 TextColumn::make('role')->label('রোল')->badge()
                     ->formatStateUsing(fn ($state) => Membership::ROLES[$state] ?? $state),
+                TextColumn::make('menus')->label('মেনু')
+                    ->state(fn (Membership $r) => $r->role === 'owner' ? 'সব'
+                        : count($r->permissions ?? \App\Support\Menu::defaults($r->role)).'/'.count(\App\Support\Menu::ITEMS).($r->permissions === null ? ' (ডিফল্ট)' : ''))
+                    ->tooltip(fn (Membership $r) => collect($r->role === 'owner' ? array_keys(\App\Support\Menu::ITEMS) : ($r->permissions ?? \App\Support\Menu::defaults($r->role)))
+                        ->map(fn ($k) => \App\Support\Menu::ITEMS[$k][0] ?? $k)->join(', ')),
                 TextColumn::make('billing')->label('বিলিং লগইন')->badge()
                     ->state(fn (Membership $r) => $r->hasBillingLogin() ? ($r->billing_check_ok === false ? 'ভুল' : $r->billing_username) : 'দেওয়া নেই')
                     ->color(fn (Membership $r) => $r->hasBillingLogin() ? ($r->billing_check_ok === false ? 'danger' : 'success') : 'gray'),

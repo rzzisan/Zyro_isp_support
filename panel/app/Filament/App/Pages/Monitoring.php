@@ -50,7 +50,7 @@ class Monitoring extends Page implements HasTable
 
     public static function canAccess(): bool
     {
-        return MikrotikRouter::where('company_id', Filament::getTenant()?->getKey() ?? 0)->exists();
+        return \App\Support\Menu::can('monitoring') && (MikrotikRouter::where('company_id', Filament::getTenant()?->getKey() ?? 0)->exists());
     }
 
     public function getSubheading(): ?string

@@ -44,7 +44,7 @@ class WaAccountResource extends Resource
 
     public static function canAccess(): bool
     {
-        return (bool) auth()->user()?->managesCompany(Filament::getTenant());
+        return \App\Support\Menu::can('whatsapp') && ((bool) auth()->user()?->managesCompany(Filament::getTenant()));
     }
 
     public static function form(Schema $schema): Schema

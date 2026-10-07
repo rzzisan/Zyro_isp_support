@@ -37,6 +37,11 @@ class CustomerResource extends Resource
 
     protected static ?int $navigationSort = -8;
 
+    public static function canAccess(): bool
+    {
+        return \App\Support\Menu::can('customers');
+    }
+
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function canCreate(): bool

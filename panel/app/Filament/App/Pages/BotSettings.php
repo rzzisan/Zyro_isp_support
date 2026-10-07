@@ -27,6 +27,11 @@ class BotSettings extends CompanySettingsPage
 
     protected static ?int $navigationSort = 20;
 
+    public static function canAccess(): bool
+    {
+        return parent::canAccess() && \App\Support\Menu::can('bot');
+    }
+
     protected function record(Company $company): Model
     {
         return $company->botSetting()->firstOrNew([], [

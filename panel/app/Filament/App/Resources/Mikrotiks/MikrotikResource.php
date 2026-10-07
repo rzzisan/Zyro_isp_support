@@ -46,7 +46,7 @@ class MikrotikResource extends Resource
 
     public static function canAccess(): bool
     {
-        return (bool) auth()->user()?->managesCompany(Filament::getTenant());
+        return \App\Support\Menu::can('mikrotik') && ((bool) auth()->user()?->managesCompany(Filament::getTenant()));
     }
 
     /** Server names customers have in the billing software, with how many customers each. */

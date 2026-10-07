@@ -33,6 +33,11 @@ class ConversationResource extends Resource
 
     protected static ?int $navigationSort = -10;
 
+    public static function canAccess(): bool
+    {
+        return \App\Support\Menu::can('inbox');
+    }
+
     public static function canCreate(): bool
     {
         return false;

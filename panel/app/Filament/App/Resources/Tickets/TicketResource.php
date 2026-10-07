@@ -39,6 +39,11 @@ class TicketResource extends Resource
 
     protected static ?int $navigationSort = -5;
 
+    public static function canAccess(): bool
+    {
+        return \App\Support\Menu::can('tickets');
+    }
+
     public static function canCreate(): bool
     {
         return false;

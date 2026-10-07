@@ -40,7 +40,7 @@ class AiKeyResource extends Resource
 
     public static function canAccess(): bool
     {
-        return (bool) auth()->user()?->managesCompany(Filament::getTenant());
+        return \App\Support\Menu::can('ai_keys') && ((bool) auth()->user()?->managesCompany(Filament::getTenant()));
     }
 
     public static function form(Schema $schema): Schema
