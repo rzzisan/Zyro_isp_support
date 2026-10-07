@@ -23,11 +23,11 @@ class LineEnableResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBolt;
 
-    protected static ?string $navigationLabel = 'লাইন চালুর রেকর্ড';
+    protected static ?string $navigationLabel = 'লাইন চালু/বন্ধের রেকর্ড';
 
     protected static ?string $modelLabel = 'লাইন চালু';
 
-    protected static ?string $pluralModelLabel = 'লাইন চালুর রেকর্ড';
+    protected static ?string $pluralModelLabel = 'লাইন চালু/বন্ধের রেকর্ড';
 
     protected static ?string $slug = 'line-enables';
 
@@ -53,16 +53,20 @@ class LineEnableResource extends Resource
                 TextColumn::make('customer_name')->label('কাস্টমার')
                     ->description(fn (LineEnable $r) => trim('ID '.$r->customer_id.($r->username ? ' · '.$r->username : '')))
                     ->searchable(['customer_name', 'customer_id', 'username']),
+                TextColumn::make('action')->label('অনুরোধ')->badge()
+                    ->formatStateUsing(fn (string $state) => LineEnable::ACTIONS[$state] ?? $state)
+                    ->color(fn (string $state) => $state === 'disable' ? 'danger' : 'success'),
                 TextColumn::make('due')->label('তখন বকেয়া')->placeholder('—')->suffix(' টাকা'),
                 TextColumn::make('result')->label('ফল')->badge()
                     ->formatStateUsing(fn (string $state) => LineEnable::RESULTS[$state] ?? $state)
-                    ->color(fn (string $state) => ['enabled' => 'success', 'already_active' => 'gray', 'failed' => 'danger', 'dry_run' => 'warning'][$state] ?? 'gray'),
+                    ->color(fn (string $state) => ['enabled' => 'success', 'disabled' => 'success', 'failed' => 'danger', 'not_allowed' => 'danger', 'dry_run' => 'warning'][$state] ?? 'gray'),
                 TextColumn::make('request')->label('টেকনিশিয়ানের মেসেজ')->limit(60)->wrap()->toggleable(),
             ])
             ->filters([
                 SelectFilter::make('technician_name')->label('টেকনিশিয়ান')
                     ->options(fn () => LineEnable::where('company_id', $company())->distinct()->orderBy('technician_name')
                         ->pluck('technician_name', 'technician_name')->all()),
+                SelectFilter::make('action')->label('অনুরোধ')->options(LineEnable::ACTIONS),
                 SelectFilter::make('result')->label('ফল')->options(LineEnable::RESULTS),
                 Filter::make('date')->schema([DatePicker::make('from')->label('থেকে'), DatePicker::make('until')->label('পর্যন্ত')])
                     ->query(fn (Builder $query, array $data) => $query

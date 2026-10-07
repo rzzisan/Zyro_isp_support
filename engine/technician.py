@@ -32,8 +32,9 @@ TECH_PROMPT = """তুমি {company}-এর অফিস সাপোর্�
   উত্তরে শুধু বলো "টিকিট খোলা হচ্ছে"; নম্বর সিস্টেম নিজে যোগ করবে। live_data-তে আগের খোলা টিকিট থাকলে নতুন না খুলে সেটার নম্বর জানাও।
 - live_data-তে open_tickets থাকলে জিজ্ঞেস করা হলে সেগুলো বলো (নম্বর, সমস্যা, কার দায়িত্বে)।
 - টেকনিশিয়ান কোনো কাস্টমারের লাইন চালু / enable / অন করে দিতে বললে (এবং live_data-তে সেই কাস্টমার আছে) উত্তরের একদম শেষে আলাদা লাইনে লেখো [[ENABLE]]।
-  customer.disabled false হলে লাইন বিলিংয়ে আগে থেকেই চালু; তখনও [[ENABLE]] লেখো, সিস্টেম যাচাই করে জানাবে। উত্তরে শুধু বলো "লাইন চালু করা হচ্ছে"; ফল সিস্টেম নিজে যোগ করবে।
-  টেকনিশিয়ান লাইন চালু করতে না বললে কখনো [[ENABLE]] লিখবে না।"""
+  লাইন বন্ধ / disable / অফ করে দিতে বললে একইভাবে লেখো [[DISABLE]]।
+  উত্তরে শুধু বলো "লাইন চালু করা হচ্ছে" বা "লাইন বন্ধ করা হচ্ছে"; অনুমতি যাচাই আর ফল সিস্টেম নিজে যোগ করবে।
+  টেকনিশিয়ান স্পষ্ট করে না বললে কখনো [[ENABLE]] বা [[DISABLE]] লিখবে না।"""
 
 
 def technician_for(t: Tenant, wa_number: str) -> dict | None:
@@ -99,41 +100,47 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
                 draft += "\n" + extra
         else:
             note = None
-    if "[[ENABLE]]" in draft:
-        draft = draft.replace("[[ENABLE]]", "").strip()
-        if customer:
-            draft += "\n" + enable_line(t, tech, customer, text)
+    for marker, action in (("[[ENABLE]]", "enable"), ("[[DISABLE]]", "disable")):
+        if marker in draft:
+            draft = draft.replace(marker, "").strip()
+            if customer:
+                draft += "\n" + switch_line(t, tech, customer, text, action)
     deliver(t, contact, message_id, draft, note, context=context, provider=provider, model=f"{model} · technician")
 
 
-def enable_line(t: Tenant, tech: dict, customer: dict, request: str) -> str:
-    """Turn the customer's line on in the billing software and log who asked (line_enables)."""
+def switch_line(t: Tenant, tech: dict, customer: dict, request: str, action: str) -> str:
+    """Turn the customer's line on/off in the billing software, only for technicians the owner allowed.
+    Every request (allowed or not) is logged in line_enables."""
+    on = action == "enable"
+    word = "চালু" if on else "বন্ধ"
     api = tenants.billing(t)
     fresh = find_customer_by_text(api, customer.get("CustomerId") or "", allow_bare_id=True) or customer
     due = fresh.get("BalanceDue")
-    result, error = "enabled", None
-    if not fresh.get("Disabled"):
-        result, reply = "already_active", "লাইনটা বিলিংয়ে আগে থেকেই চালু আছে, তাই নতুন করে চালু করতে হয়নি।"
+    result, error = ("enabled" if on else "disabled"), None
+    if not tech.get("can_switch_lines"):
+        result, reply = "not_allowed", f"দুঃখিত, আপনার লাইন {word} করার অনুমতি নেই। অফিসে জানান।"
+    elif bool(fresh.get("Disabled")) != on:
+        result, reply = ("already_active" if on else "already_disabled"), f"লাইনটা বিলিংয়ে আগে থেকেই {word} আছে।"
     elif os.environ.get("ENGINE_DRY_RUN", "1") == "1":
-        result, reply = "dry_run", "(টেস্ট মোড: লাইন আসলে চালু করা হয়নি)"
+        result, reply = "dry_run", f"(টেস্ট মোড: লাইন আসলে {word} করা হয়নি)"
     else:
         try:
-            api.enable_customer(int(fresh["CustomerHeaderId"]))
+            (api.enable_customer if on else api.disable_customer)(int(fresh["CustomerHeaderId"]))
             after = find_customer_by_text(api, fresh.get("CustomerId") or "", allow_bare_id=True)
-            if after and after.get("Disabled"):
-                result, error = "failed", "billing still shows the line disabled"
-                reply = "লাইন চালু করার চেষ্টা করেছি, কিন্তু বিলিংয়ে এখনো বন্ধ দেখাচ্ছে। অফিসে জানান।"
+            if after and bool(after.get("Disabled")) == on:
+                result, error = "failed", f"billing still shows the line {'disabled' if on else 'enabled'}"
+                reply = f"লাইন {word} করার চেষ্টা করেছি, কিন্তু বিলিংয়ে বদলায়নি। অফিসে জানান।"
             else:
-                reply = f"✅ লাইন চালু করা হয়েছে।{f' বকেয়া: {due} টাকা' if due not in (None, '', 0, '0') else ''}"
+                reply = f"✅ লাইন {word} করা হয়েছে।" + (f" বকেয়া: {due} টাকা" if on and due not in (None, '', 0, '0') else "")
         except Exception as e:
-            log.exception("enable failed")
+            log.exception("line %s failed", action)
             result, error = "failed", str(e)[:500]
-            reply = "লাইন চালু করা যায়নি, বিলিং সফটওয়্যারে সমস্যা হয়েছে। অফিসে জানান।"
+            reply = f"লাইন {word} করা যায়নি, বিলিং সফটওয়্যারে সমস্যা হয়েছে। অফিসে জানান।"
     db.execute(
         """INSERT INTO line_enables (company_id, technician_id, technician_name, technician_number, customer_id,
-               customer_header_id, customer_name, username, due, request, result, error, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())""",
+               customer_header_id, customer_name, username, due, request, action, result, error, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())""",
         (t.company_id, tech.get("id"), tech["name"], tech.get("wa_number"), fresh.get("CustomerId"),
          fresh.get("CustomerHeaderId"), fresh.get("CustomerName"), fresh.get("UserName"),
-         None if due is None else str(due), request[:2000], result, error))
+         None if due is None else str(due), request[:2000], action, result, error))
     return reply

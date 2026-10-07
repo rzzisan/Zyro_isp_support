@@ -60,6 +60,8 @@ class TechnicianResource extends Resource
                 })
                 ->validationMessages(['regex' => 'বাংলাদেশি মোবাইল নম্বর দিন (01XXXXXXXXX)', 'unique' => 'এই নম্বর আগেই যোগ করা আছে']),
             TextInput::make('note')->label('নোট (ঐচ্ছিক)')->placeholder('যেমন এলাকা: Binodpur'),
+            Toggle::make('can_switch_lines')->label('এর কথায় বট লাইন চালু/বন্ধ করতে পারবে')->default(false)
+                ->helperText('বন্ধ থাকলে লাইন চালু বা বন্ধ করতে বললে বট না বলবে, তবে অনুরোধটা রেকর্ডে থাকবে'),
             Toggle::make('active')->label('চালু')->default(true),
         ]);
     }
@@ -72,6 +74,7 @@ class TechnicianResource extends Resource
                 TextColumn::make('name')->label('নাম')->searchable(),
                 TextColumn::make('wa_number')->label('WhatsApp')->formatStateUsing(fn ($state, Technician $r) => $r->displayNumber())->searchable(),
                 TextColumn::make('note')->label('নোট')->placeholder('—'),
+                IconColumn::make('can_switch_lines')->label('লাইন চালু/বন্ধ')->boolean(),
                 IconColumn::make('active')->label('চালু')->boolean(),
             ])
             ->headerActions([CreateAction::make()->label('টেকনিশিয়ান যোগ করুন')

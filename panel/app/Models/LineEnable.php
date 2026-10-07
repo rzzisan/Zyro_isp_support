@@ -10,7 +10,10 @@ class LineEnable extends Model
 {
     public const UPDATED_AT = null;
 
-    public const RESULTS = ['enabled' => 'চালু করা হয়েছে', 'already_active' => 'আগেই চালু ছিল', 'failed' => 'ব্যর্থ', 'dry_run' => 'টেস্ট মোড'];
+    public const RESULTS = ['enabled' => 'চালু করা হয়েছে', 'disabled' => 'বন্ধ করা হয়েছে', 'already_active' => 'আগেই চালু ছিল',
+        'already_disabled' => 'আগেই বন্ধ ছিল', 'not_allowed' => 'অনুমতি নেই', 'failed' => 'ব্যর্থ', 'dry_run' => 'টেস্ট মোড'];
+
+    public const ACTIONS = ['enable' => 'চালু', 'disable' => 'বন্ধ'];
 
     protected $guarded = [];
 

@@ -49,6 +49,11 @@ class TechnicianTest extends TestCase
             ->assertHasNoFormErrors();
         $t = Technician::sole();
         $this->assertSame(['8801711000111', $this->company->id], [$t->wa_number, $t->company_id]);
+        $this->assertFalse($t->can_switch_lines); // off unless the owner allows it
+        Livewire::test(ManageTechnicians::class)
+            ->callAction(TestAction::make('edit')->table($t), ['name' => 'Nazmul', 'wa_number' => '01711000111', 'can_switch_lines' => true, 'active' => true])
+            ->assertHasNoFormErrors();
+        $this->assertTrue($t->fresh()->can_switch_lines);
         Livewire::test(ManageTechnicians::class)
             ->callAction(TestAction::make('create')->table(), ['name' => 'Copy', 'wa_number' => '+8801711000111'])
             ->assertHasFormErrors(['wa_number']);

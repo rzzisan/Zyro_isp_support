@@ -221,6 +221,17 @@ class ISPDigital:
             raise LoginError("billing session expired, try again")
         return body
 
+    def disable_customer(self, header_id: int) -> str:
+        """Turn a line off, like Billing -> select -> Disable."""
+        r = self._post("/Billing/DisableSelectedClients", [("cusHeadIds", str(int(header_id)))])
+        body = r.text.strip().strip('"')
+        if body.isdigit() and int(body) >= 400:
+            raise RuntimeError(f"billing refused to disable (HTTP {body})")
+        if body.lstrip().startswith("<"):
+            self._logged_in = False
+            raise LoginError("billing session expired, try again")
+        return body
+
     def open_tickets_for(self, username: str) -> list[dict]:
         rows = self.open_tickets(username)
         # the daily complain list holds unresolved tickets: Status 0 = pending, 1 = processing

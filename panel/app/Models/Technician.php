@@ -7,11 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Technician extends Model
 {
-    protected $fillable = ['company_id', 'name', 'wa_number', 'active', 'note'];
+    protected $fillable = ['company_id', 'name', 'wa_number', 'active', 'can_switch_lines', 'note'];
 
     protected function casts(): array
     {
-        return ['active' => 'boolean'];
+        return ['active' => 'boolean', 'can_switch_lines' => 'boolean'];
     }
 
     public function company(): BelongsTo
