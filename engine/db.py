@@ -47,6 +47,19 @@ def _key() -> bytes:
     return base64.b64decode(k[7:]) if k.startswith("base64:") else k.encode()
 
 
+def encrypt(plain: str) -> str:
+    """Laravel's Crypt::encryptString / 'encrypted' cast format, so the panel can read it."""
+    key = _key()
+    iv = os.urandom(16)
+    pad = padding.PKCS7(128).padder()
+    data = pad.update(plain.encode()) + pad.finalize()
+    enc = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
+    value = base64.b64encode(enc.update(data) + enc.finalize()).decode()
+    iv_b64 = base64.b64encode(iv).decode()
+    mac = hmac.new(key, (iv_b64 + value).encode(), hashlib.sha256).hexdigest()
+    return base64.b64encode(json.dumps({"iv": iv_b64, "value": value, "mac": mac, "tag": ""}, separators=(",", ":")).encode()).decode()
+
+
 def decrypt(payload: str | None) -> str | None:
     """Inverse of Laravel's Crypt::encryptString (AES-256-CBC + HMAC-SHA256)."""
     if not payload:

@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
-from engine import db, tenant as tenants
+from engine import customers, db, tenant as tenants
 from engine.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
 from engine.tenant import Tenant
 
@@ -197,19 +197,19 @@ def identify(t: Tenant, contact: dict, text: str):
         db.execute("UPDATE wa_contacts SET customer_id = %s WHERE id = %s", (customer.get("CustomerId"), contact["id"]))
         return customer, None, pending, None
 
-    typed = find_customer_by_text(api, text, allow_bare_id=stage in ("ask_id", "confirm"))
+    typed = customers.by_text(t, api, text, allow_bare_id=stage in ("ask_id", "confirm"))
     if typed:
         return ok(typed, state.get("pending"))
     if stage == "ok" and state.get("customer_id"):
         # an already identified chat: retry once so a billing hiccup doesn't restart identification
-        c = find_customer_by_text(api, state["customer_id"], allow_bare_id=True) \
+        c = customers.by_text(t, api, state["customer_id"], allow_bare_id=True) \
             or find_customer_by_text(tenants.billing(t), state["customer_id"], allow_bare_id=True)
         if c:
             return ok(c)
     if stage == "confirm":
         ans = _yes_no(text)
         if ans == "yes":
-            c = find_customer_by_text(api, state.get("candidate", ""))
+            c = customers.by_text(t, api, state.get("candidate", ""))
             if c:
                 return ok(c, state.get("pending"))
         if ans is None and not state.get("reasked"):
@@ -226,7 +226,7 @@ def identify(t: Tenant, contact: dict, text: str):
         return None, "দুঃখিত ভাই, এই তথ্য দিয়ে আপনার লাইন খুঁজে পাইনি। " + ASK_ID, None, None
     if stage == "agent":
         return None, None, None, None
-    own = find_customer_by_whatsapp(api, contact["wa_number"])
+    own = customers.by_whatsapp(t, api, contact["wa_number"])
     if own:
         save(stage="confirm", candidate=own.get("CustomerId"), candidate_name=own.get("CustomerName"), pending=text)
         return None, (f"আসসালামু আলাইকুম। আপনি কি *{own.get('CustomerName')}* (ID {own.get('CustomerId')}) "
@@ -344,7 +344,7 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
                 db.execute("UPDATE wa_contacts SET bot_paused = true WHERE id = %s", (contact["id"],))
             deliver(t, contact, message_id, fixed, note, provider="flow", model="identify")
             return
-        context = diagnose(tenants.billing(t), customer)
+        context = diagnose(tenants.billing(t), customers.fresh(tenants.billing(t), customer))
         history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": text})
@@ -403,11 +403,11 @@ def ticket_options(request: Request, company_id: int):
 
 
 @app.get("/internal/{company_id}/customers")
-def customers(request: Request, company_id: int, q: str = ""):
+def customer_search(request: Request, company_id: int, q: str = ""):
     t = internal_tenant(request, company_id)
     if len(q.strip()) < 2:
         return []
-    rows = billing_call(lambda: tenants.billing(t).search_customers(q.strip(), 10))
+    rows = customers.search(t, q, 10) or billing_call(lambda: tenants.billing(t).search_customers(q.strip(), 10))
     return [{"header_id": r.get("CustomerHeaderId"), "customer_id": r.get("CustomerId"), "name": r.get("CustomerName"),
              "mobile": r.get("MobileNumber"), "username": r.get("UserName"),
              "zone": r.get("ZoneName") or r.get("Zone")} for r in rows]
@@ -458,3 +458,21 @@ def sync_now(request: Request, company_id: int):
     t = internal_tenant(request, company_id)
     from engine.ticket_sync import sync_company
     return billing_call(lambda: sync_company(t, 3))
+
+
+@app.post("/internal/{company_id}/customers/sync")
+def customers_sync_now(request: Request, company_id: int):
+    t = internal_tenant(request, company_id)
+    from engine.customer_sync import sync_company
+    return billing_call(lambda: sync_company(t))
+
+
+@app.get("/internal/{company_id}/customers/{header_id}/live")
+def customer_live(request: Request, company_id: int, header_id: int):
+    """Live state for the panel's customer page: connection, ONU, this month's bill, last payments."""
+    t = internal_tenant(request, company_id)
+    row = db.one("SELECT extra FROM billing_customers WHERE company_id = %s AND header_id = %s", (company_id, header_id))
+    if not row or not row["extra"]:
+        raise HTTPException(status_code=404, detail="কাস্টমার পাওয়া যায়নি")
+    api = tenants.billing(t)
+    return billing_call(lambda: diagnose(api, customers.fresh(api, row["extra"])))

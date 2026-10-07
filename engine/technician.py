@@ -6,7 +6,7 @@ import logging
 import os
 import re
 
-from engine import db, tenant as tenants
+from engine import customers, db, tenant as tenants
 from engine.ispdigital import diagnose, find_customer_by_text
 from engine.llm import _whatsapp_format
 from engine.tenant import Tenant
@@ -63,14 +63,15 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
 
     api = tenants.billing(t)
     state = contact.get("ident_state") or {}
-    customer = find_customer_by_text(api, text, allow_bare_id=True)
+    customer = customers.by_text(t, api, text, allow_bare_id=True)
     if not customer and state.get("tech_customer"):
         # follow-up about the customer talked about last ("ওর বিল কত?")
-        customer = find_customer_by_text(api, state["tech_customer"], allow_bare_id=True)
+        customer = customers.by_text(t, api, state["tech_customer"], allow_bare_id=True)
     context = None
     if customer:
         db.execute("UPDATE wa_contacts SET ident_state = %s, updated_at = now() WHERE id = %s",
                    (json.dumps({"mode": "technician", "tech_customer": customer.get("CustomerId")}), contact["id"]))
+        customer = customers.fresh(api, customer)
         context = diagnose(api, customer)
         context["customer"]["mac"] = (api.live_status(customer["CustomerHeaderId"]) or {}).get("calledid")
         try:
@@ -138,6 +139,9 @@ def switch_line(t: Tenant, tech: dict, customer: dict, request: str, action: str
             log.exception("line %s failed", action)
             result, error = "failed", str(e)[:500]
             reply = f"লাইন {word} করা যায়নি, বিলিং সফটওয়্যারে সমস্যা হয়েছে। অফিসে জানান।"
+    if result in ("enabled", "disabled"):
+        db.execute("UPDATE billing_customers SET disabled = %s, updated_at = now() WHERE company_id = %s AND header_id = %s",
+                   (not on, t.company_id, int(fresh["CustomerHeaderId"])))
     db.execute(
         """INSERT INTO line_enables (company_id, technician_id, technician_name, technician_number, customer_id,
                customer_header_id, customer_name, username, due, request, action, result, error, created_at)
