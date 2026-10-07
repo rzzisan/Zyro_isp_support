@@ -7,8 +7,12 @@
         $b = $live['bill'] ?? [];
         $cu = $live['customer'] ?? [];
         $online = strtolower((string) ($p['connectivity'] ?? '')) === 'connected' || str_contains(strtolower((string) ($p['connectivity'] ?? '')), 'online');
+        $mk = $live['mikrotik'] ?? null;
+        if ($mk) { $online = (bool) ($mk['online'] ?? false); }
         $rows = [
-            'PPPoE' => ($p['connectivity'] ?? '—'),
+            'MikroTik (এখন)' => $mk ? (($mk['online'] ?? false) ? 'অনলাইন · '.($mk['uptime'] ?? '').' · '.($mk['router'] ?? '') : 'অফলাইন · '.($mk['router'] ?? '')) : 'রাউটার থেকে উত্তর আসেনি',
+            'IP / MAC (রাউটার)' => $mk && ($mk['online'] ?? false) ? (($mk['address'] ?? '—').' · '.($mk['caller_id'] ?? '—')) : '—',
+            'PPPoE (বিলিং)' => ($p['connectivity'] ?? '—'),
             'Uptime' => $p['uptime'] ?? '—',
             'শেষ logout' => $p['last_logout'] ?? '—',
             'IP' => $p['ip'] ?? '—',
@@ -24,7 +28,7 @@
     <div style="display:grid; grid-template-columns: auto 1fr; gap:6px 16px; font-size:.9rem">
         @foreach ($rows as $k => $v)
             <div style="color:#6b7280">{{ $k }}</div>
-            <div style="font-weight:600; {{ $k === 'PPPoE' ? ($online ? 'color:#059669' : 'color:#dc2626') : '' }}">{{ $v }}</div>
+            <div style="font-weight:600; {{ $k === 'MikroTik (এখন)' ? ($online ? 'color:#059669' : 'color:#dc2626') : '' }}">{{ $v }}</div>
         @endforeach
     </div>
     @if (! empty($live['payments']))

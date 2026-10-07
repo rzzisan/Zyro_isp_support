@@ -24,6 +24,7 @@ TECH_PROMPT = """তুমি {company}-এর অফিস সাপোর্�
   ONU: Online · -21.5 dBm
   বকেয়া: 520 টাকা
 - টেকনিশিয়ান যা জানতে চেয়েছেন শুধু সেটাই দাও। "লাইন চালু হয়েছে কি না" জিজ্ঞেস করলে PPPoE connectivity, uptime, last logout আর ONU status দেখে স্পষ্ট বলো চালু কি না।
+- live_data-তে "mikrotik" থাকলে সেটা রাউটার থেকে এই মুহূর্তের অবস্থা (online, uptime, IP, MAC, কোন রাউটার); অনলাইন কিনা বলতে এটাই আগে দেখবে।
 - PPPoE ID (username), IP, MAC, ONU optical power, OLT, zone/subzone/box টেকনিশিয়ানকে দেওয়া যাবে। পাসওয়ার্ড কখনো দেবে না।
 - live_data-তে কাস্টমার না থাকলে বলো কাস্টমার পাওয়া যায়নি, ID / মোবাইল / PPPoE ID দিতে বলো। বানিয়ে কিছু বলবে না।
 - টেকনিশিয়ান কোনো কাস্টমারের জন্য টিকিট খুলতে বললে (এবং live_data-তে সেই কাস্টমার আছে) উত্তরের একদম শেষে আলাদা লাইনে লেখো
@@ -72,7 +73,7 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
         db.execute("UPDATE wa_contacts SET ident_state = %s, updated_at = now() WHERE id = %s",
                    (json.dumps({"mode": "technician", "tech_customer": customer.get("CustomerId")}), contact["id"]))
         customer = customers.fresh(api, customer)
-        context = diagnose(api, customer)
+        context = customers.add_online(t, diagnose(api, customer), customer)
         context["customer"]["mac"] = (api.live_status(customer["CustomerHeaderId"]) or {}).get("calledid")
         try:
             context["open_tickets"] = [

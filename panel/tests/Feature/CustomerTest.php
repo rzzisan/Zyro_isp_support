@@ -99,4 +99,24 @@ class CustomerTest extends TestCase
         $this->assertStringContainsString('Disconnected', $html);
         $this->assertStringContainsString('বন্ধ', $html);
     }
+
+    public function test_online_comes_from_fresh_mikrotik_sessions(): void
+    {
+        $a = $this->customer($this->company, '0976');
+        $b = $this->customer($this->company, '1922');
+        $other = Company::create(['name' => 'Other']);
+        $router = \App\Models\MikrotikRouter::create(['company_id' => $this->company->id, 'host' => '10.0.0.1', 'api_port' => 8728,
+            'username' => 'ro', 'password' => 'x', 'identity' => 'CLNBD']);
+        $otherRouter = \App\Models\MikrotikRouter::create(['company_id' => $other->id, 'host' => '10.0.0.2', 'api_port' => 8728, 'username' => 'ro', 'password' => 'x']);
+        DB::table('ppp_sessions')->insert([
+            ['company_id' => $this->company->id, 'router_id' => $router->id, 'username' => 'kp.c0976', 'uptime' => '1h2m', 'seen_at' => now()],
+            ['company_id' => $this->company->id, 'router_id' => $router->id, 'username' => 'kp.c1922', 'uptime' => '9h', 'seen_at' => now()->subMinutes(30)], // stale
+            ['company_id' => $other->id, 'router_id' => $otherRouter->id, 'username' => 'kp.c1922', 'uptime' => '1m', 'seen_at' => now()], // other company
+        ]);
+        $this->as($this->agent);
+        Livewire::test(ListCustomers::class)->assertSee('1h2m')
+            ->filterTable('online', true)->assertCanSeeTableRecords([$a])->assertCanNotSeeTableRecords([$b])
+            ->filterTable('online', false)->assertCanSeeTableRecords([$b])->assertCanNotSeeTableRecords([$a]);
+        Livewire::test(\App\Filament\App\Widgets\NetworkStats::class)->assertOk();
+    }
 }

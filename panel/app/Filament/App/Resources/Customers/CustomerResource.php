@@ -55,10 +55,22 @@ class CustomerResource extends Resource
             ->whereNotNull($column)->distinct()->orderBy($column)->pluck($column, $column)->all();
     }
 
+    /** Subquery: a PPPoE session for this customer seen in the last few minutes. */
+    public static function freshSession(): \Closure
+    {
+        return fn ($q) => $q->from('ppp_sessions')->whereColumn('ppp_sessions.company_id', 'billing_customers.company_id')
+            ->whereColumn('ppp_sessions.username', 'billing_customers.username')
+            ->where('ppp_sessions.seen_at', '>', now()->subMinutes(\App\Models\PppSession::FRESH_MINUTES));
+    }
+
     public static function table(Table $table): Table
     {
         return $table
             ->defaultSort('customer_id')
+            ->modifyQueryUsing(fn (Builder $query) => $query->select('billing_customers.*')->addSelect(['online_uptime' =>
+                \App\Models\PppSession::query()->select('uptime')->whereColumn('ppp_sessions.company_id', 'billing_customers.company_id')
+                    ->whereColumn('ppp_sessions.username', 'billing_customers.username')
+                    ->where('seen_at', '>', now()->subMinutes(\App\Models\PppSession::FRESH_MINUTES))->limit(1)]))
             ->striped()
             ->columns([
                 TextColumn::make('customer_id')->label('ID')->sortable()->searchable(query: fn (Builder $query, string $search) => $query
@@ -72,6 +84,10 @@ class CustomerResource extends Resource
                 TextColumn::make('monthly_bill')->label('মাসিক বিল')->numeric(0)->sortable(),
                 TextColumn::make('due')->label('বকেয়া')->numeric(0)->sortable()->placeholder('—')
                     ->color(fn ($state) => $state > 0 ? 'danger' : null),
+                TextColumn::make('online')->label('এখন')->badge()
+                    ->state(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'অনলাইন' : 'অফলাইন')
+                    ->description(fn (BillingCustomer $r) => $r->online_uptime)
+                    ->color(fn (string $state) => $state === 'অনলাইন' ? 'success' : 'gray'),
                 TextColumn::make('status')->label('অবস্থা')->badge()
                     ->state(fn (BillingCustomer $r) => $r->gone_at ? 'বিলিংয়ে নেই' : ($r->disabled ? 'বন্ধ' : ($r->status ?: '—')))
                     ->color(fn (string $state) => match ($state) { 'Active' => 'success', 'বন্ধ' => 'danger', default => 'gray' }),
@@ -83,6 +99,9 @@ class CustomerResource extends Resource
                 SelectFilter::make('subzone')->label('Subzone')->options(fn () => static::options('subzone'))->searchable(),
                 SelectFilter::make('package')->label('প্যাকেজ')->options(fn () => static::options('package'))->searchable(),
                 SelectFilter::make('status')->label('অবস্থা')->options(fn () => static::options('status')),
+                TernaryFilter::make('online')->label('এখন')->trueLabel('অনলাইন')->falseLabel('অফলাইন')
+                    ->queries(true: fn (Builder $query) => $query->whereExists(static::freshSession()),
+                        false: fn (Builder $query) => $query->whereNotExists(static::freshSession())),
                 TernaryFilter::make('disabled')->label('লাইন')->trueLabel('বন্ধ')->falseLabel('চালু'),
                 TernaryFilter::make('has_due')->label('বকেয়া')->trueLabel('বকেয়া আছে')->falseLabel('বকেয়া নেই')
                     ->queries(true: fn (Builder $query) => $query->where('due', '>', 0),

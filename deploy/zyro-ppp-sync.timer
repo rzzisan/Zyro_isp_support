@@ -1,0 +1,10 @@
+[Unit]
+Description=Copy online PPPoE sessions every 2 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=zyro-ppp-sync.service
+
+[Install]
+WantedBy=timers.target

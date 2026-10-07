@@ -35,4 +35,11 @@ class BillingCustomer extends Model
                 ->latest('last_message_at')->first()
             : WaContact::where('company_id', $this->company_id)->where('customer_id', $this->customer_id)->first();
     }
+
+    /** Its PPPoE session seen on a MikroTik in the last few minutes (online now), or null. */
+    public function onlineSession(): ?PppSession
+    {
+        return $this->username ? PppSession::where('company_id', $this->company_id)->where('username', $this->username)
+            ->where('seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))->first() : null;
+    }
 }

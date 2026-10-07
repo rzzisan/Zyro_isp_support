@@ -344,7 +344,7 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
                 db.execute("UPDATE wa_contacts SET bot_paused = true WHERE id = %s", (contact["id"],))
             deliver(t, contact, message_id, fixed, note, provider="flow", model="identify")
             return
-        context = diagnose(tenants.billing(t), customers.fresh(tenants.billing(t), customer))
+        context = customers.add_online(t, diagnose(tenants.billing(t), customers.fresh(tenants.billing(t), customer)), customer)
         history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": text})
@@ -475,7 +475,7 @@ def customer_live(request: Request, company_id: int, header_id: int):
     if not row or not row["extra"]:
         raise HTTPException(status_code=404, detail="কাস্টমার পাওয়া যায়নি")
     api = tenants.billing(t)
-    return billing_call(lambda: diagnose(api, customers.fresh(api, row["extra"])))
+    return billing_call(lambda: customers.add_online(t, diagnose(api, customers.fresh(api, row["extra"])), row["extra"]))
 
 
 def _norm(name: str | None) -> str:

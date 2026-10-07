@@ -102,3 +102,13 @@ def search(t: Tenant, q: str, limit: int = 10) -> list[dict]:
            ORDER BY (ltrim(customer_id, '0') = ltrim(%s, '0')) DESC, customer_id LIMIT %s""",
         (t.company_id, q, f"%{q.lower()}%", f"%{q}%", digits, f"%{digits.lstrip('0')}%", q, limit))
     return [r["extra"] for r in rows if r["extra"]]
+
+
+def add_online(t: Tenant, context: dict, row: dict) -> dict:
+    """Put the MikroTik's answer (online right now, uptime, IP, MAC) into the bot's live data."""
+    try:
+        from engine.ppp_sync import online_now
+        context["mikrotik"] = online_now(t.company_id, row.get("UserName") or "", row.get("Server"))
+    except Exception:
+        log.exception("mikrotik check failed")
+    return context
