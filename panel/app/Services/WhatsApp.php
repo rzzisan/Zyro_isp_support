@@ -51,6 +51,7 @@ class WhatsApp
         if (! $contact->windowOpen()) {
             throw new RuntimeException('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই সাধারণ মেসেজ যাবে না; অনুমোদিত template লাগবে।');
         }
+        $body = static::signed($body, $user);
         $account = static::accountFor($contact);
         $waId = null;
         $status = 'test';
@@ -88,6 +89,15 @@ class WhatsApp
         return $message;
     }
 
+    /** The agent's name under the reply, so the customer knows who answered ("- Rezaul"). */
+    public static function signed(string $text, User $user): string
+    {
+        $text = trim($text);
+        $sig = '- '.trim($user->name);
+
+        return $text === '' ? $sig : (str_ends_with($text, $sig) ? $text : $text."\n\n".$sig);
+    }
+
     public const MEDIA_TYPES = [
         'image/jpeg' => 'image', 'image/png' => 'image', 'image/webp' => 'image',
         'application/pdf' => 'document', 'video/mp4' => 'video', 'audio/mpeg' => 'audio', 'audio/ogg' => 'audio',
@@ -104,7 +114,7 @@ class WhatsApp
         if (! $contact->windowOpen()) {
             throw new RuntimeException('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই এখন কিছু পাঠানো যাবে না; অনুমোদিত template লাগবে।');
         }
-        $caption = trim((string) $caption) ?: null;
+        $caption = $type === 'audio' ? null : static::signed((string) $caption, $user);
         $account = static::accountFor($contact);
         $waId = null;
         $mediaId = null;

@@ -99,6 +99,7 @@ class InboxTest extends TestCase
         $m = WaMessage::where('sender', 'staff')->sole();
         $this->assertSame('test', $m->status);
         $this->assertSame($agent->id, $m->user_id);
+        $this->assertSame("ভাই, রাউটার রিস্টার্ট দিন\n\n- ".$agent->name, $m->body);
         $this->contact->refresh();
         $this->assertTrue($this->contact->isBotPaused());
         $this->assertSame($agent->id, $this->contact->assigned_user_id);
@@ -113,7 +114,7 @@ class InboxTest extends TestCase
             ->set('reply', 'ঠিক আছে')->set('pauseHours', 0)->call('send')->assertHasNoErrors();
         Http::assertSent(fn ($r) => str_contains($r->url(), "/PN{$this->company->id}/messages")
             && $r->hasHeader('Authorization', "Bearer token-{$this->company->id}")
-            && $r['to'] === '8801711000001' && $r['text']['body'] === 'ঠিক আছে');
+            && $r['to'] === '8801711000001' && $r['text']['body'] === "ঠিক আছে\n\n- ".$this->owner->name);
         $this->assertSame('wamid.OUT1', WaMessage::where('sender', 'staff')->value('wa_message_id'));
         $this->assertFalse($this->contact->fresh()->isBotPaused());
     }
@@ -192,7 +193,7 @@ class InboxTest extends TestCase
             ->call('send')->assertHasNoErrors()->assertSet('attachment', null)->assertSet('reply', '');
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/media') && $r->hasHeader('Authorization', "Bearer token-{$this->company->id}"));
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/messages') && $r['type'] === 'image'
-            && $r['image']['id'] === 'MEDIA9' && $r['image']['caption'] === 'এই রাউটারের লাইট দেখুন');
+            && $r['image']['id'] === 'MEDIA9' && $r['image']['caption'] === "এই রাউটারের লাইট দেখুন\n\n- ".$this->owner->name);
         $m = WaMessage::where('sender', 'staff')->sole();
         $this->assertSame(['image', 'MEDIA9', 'wamid.IMG1'], [$m->type, $m->media_id, $m->wa_message_id]);
         Storage::disk('local')->assertExists("media/{$this->company->id}/{$m->id}");
