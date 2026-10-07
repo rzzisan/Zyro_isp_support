@@ -23,6 +23,7 @@ IF_DESCR = "1.3.6.1.2.1.2.2.1.2"
 IF_OPER = "1.3.6.1.2.1.2.2.1.8"
 IF_LAST_CHANGE = "1.3.6.1.2.1.2.2.1.9"
 FDB_PORT = "1.3.6.1.2.1.17.7.1.2.2.1.2"          # dot1qTpFdbPort.<vlan>.<mac>
+FDB_PORT_D1D = "1.3.6.1.2.1.17.4.3.1.2"          # dot1dTpFdbPort.<mac> (all VLANs in one table)
 BRIDGE_IFINDEX = "1.3.6.1.2.1.17.1.4.1.2"        # dot1dBasePortIfIndex
 VLAN_NAMES = "1.3.6.1.2.1.17.7.1.4.3.1.1"        # dot1qVlanStaticName
 
@@ -50,6 +51,7 @@ DRIVERS = {
     # answering, so only these two tables are read, by GET.
     "vsol": {
         "onu_name": lambda d: bool(VSOL_ONU.match(d)),
+        "fdb": "dot1d",
         "key": lambda i, name: ".".join(str(int(x)) for x in VSOL_ONU.match(name).groups()),
         "cols": {
             "status_code": (None, None),
@@ -116,6 +118,10 @@ def check(o: dict) -> dict:
 def _fmt_mac(v) -> str | None:
     if isinstance(v, bytes) and len(v) == 6:
         return ":".join(f"{b:02X}" for b in v)
+    m = re.fullmatch(rb"0x([0-9a-fA-F]{12})", v) if isinstance(v, bytes) else None   # VSOL: text like b"0xa25d0831d980"
+    if m:
+        h = m.group(1).decode().upper()
+        return ":".join(h[n:n + 2] for n in range(0, 12, 2))
     return None
 
 
@@ -198,8 +204,11 @@ def vlans(o: dict, s: SNMP) -> list[int]:
     return found
 
 
-def _fdb_oid(mac: str, vlan: int) -> str:
-    return f"{FDB_PORT}.{vlan}." + ".".join(str(int(x, 16)) for x in mac.split(":"))
+def _fdb_oid(mac: str, vlan: int | None) -> str:
+    octets = ".".join(str(int(x, 16)) for x in mac.split(":"))
+    if vlan is None:   # VSOL: dot1dTpFdbPort, MAC index carries its length ("6."), no VLAN, port = ifIndex
+        return f"{FDB_PORT_D1D}.6.{octets}"
+    return f"{FDB_PORT}.{vlan}.{octets}"
 
 
 def map_macs(o: dict, s: SNMP, vlan_list: list[int]) -> tuple[int, int]:
@@ -224,6 +233,8 @@ def map_macs(o: dict, s: SNMP, vlan_list: list[int]) -> tuple[int, int]:
     known = [r["vlan"] for r in db.all_rows("SELECT vlan, count(*) n FROM customer_onus WHERE olt_id = %s AND vlan IS NOT NULL "
                                             "GROUP BY vlan ORDER BY n DESC", (o["id"],))]
     order = known + [v for v in vlan_list if v not in known]
+    if DRIVERS[o["brand"]].get("fdb") == "dot1d":
+        order = [None]
     started, asked = time.time(), 0
     for b0 in range(0, len(macs), 100):
         if time.time() - started > 240:
