@@ -102,4 +102,9 @@ class Company extends Model
     {
         return $this->hasMany(BillingCustomer::class);
     }
+
+    public function mikrotikRouters(): HasMany
+    {
+        return $this->hasMany(MikrotikRouter::class);
+    }
 }

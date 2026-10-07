@@ -476,3 +476,31 @@ def customer_live(request: Request, company_id: int, header_id: int):
         raise HTTPException(status_code=404, detail="কাস্টমার পাওয়া যায়নি")
     api = tenants.billing(t)
     return billing_call(lambda: diagnose(api, customers.fresh(api, row["extra"])))
+
+
+def _norm(name: str | None) -> str:
+    return "".join(ch for ch in (name or "").lower() if ch.isalnum())
+
+
+@app.post("/internal/{company_id}/mikrotik/{router_id}/test")
+def mikrotik_test(request: Request, company_id: int, router_id: int):
+    """Connect to the router, read its identity, and match it to the billing software's server name."""
+    internal_tenant(request, company_id)
+    from engine import mikrotik
+    r = db.one("SELECT * FROM mikrotik_routers WHERE id = %s AND company_id = %s", (router_id, company_id))
+    if not r:
+        raise HTTPException(status_code=404)
+    try:
+        info = mikrotik.check(r["host"], r["api_port"], r["username"], db.decrypt(r["password"]))
+    except Exception as e:
+        msg = str(e)[:250] or e.__class__.__name__
+        db.execute("""UPDATE mikrotik_routers SET last_checked_at = now(), last_check_ok = false, last_check_message = %s,
+                      updated_at = now() WHERE id = %s""", (msg, router_id))
+        raise HTTPException(status_code=400, detail=f"MikroTik-এ সংযোগ হয়নি: {msg}")
+    servers = [x["server"] for x in db.all_rows(
+        "SELECT DISTINCT server FROM billing_customers WHERE company_id = %s AND server IS NOT NULL", (company_id,))]
+    match = r["billing_server"] or next((s for s in servers if _norm(s) == _norm(info["identity"])), None)
+    db.execute("""UPDATE mikrotik_routers SET identity = %s, version = %s, ppp_active = %s, billing_server = %s,
+                  last_checked_at = now(), last_check_ok = true, last_check_message = %s, updated_at = now() WHERE id = %s""",
+               (info["identity"], info["version"], info["ppp_active"], match, f"{info.get('board') or ''} · {info['ppp_active']} PPPoE অনলাইন", router_id))
+    return {**info, "billing_server": match}

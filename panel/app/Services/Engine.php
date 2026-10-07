@@ -73,4 +73,10 @@ class Engine
     {
         return static::call('get', "/internal/{$companyId}/customers/{$headerId}/live") ?? [];
     }
+
+    /** Connect to a MikroTik, read its identity and match it to the billing server name. */
+    public static function testMikrotik(int $companyId, int $routerId): array
+    {
+        return static::call('post', "/internal/{$companyId}/mikrotik/{$routerId}/test") ?? [];
+    }
 }
