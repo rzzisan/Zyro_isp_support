@@ -150,7 +150,9 @@ async def receive(request: Request):
                 media = m.get(mtype) if mtype in MEDIA_TYPES else None
                 body = (m.get("text") or {}).get("body") or (media or {}).get("caption") \
                     or ((m.get("button") or {}).get("text") if mtype == "button" else None)
-                saved = save_message(t, c["id"], m.get("id"), "out" if echo else "in", "app" if echo else "customer",
+                from engine.technician import technician_for
+                sender = "app" if echo else ("technician" if technician_for(t, wa) else "customer")  # technicians are staff
+                saved = save_message(t, c["id"], m.get("id"), "out" if echo else "in", sender,
                                      mtype, body, media)
                 if not echo and saved:  # skip Meta retries
                     jobs.append((t, c, m, saved["id"]))

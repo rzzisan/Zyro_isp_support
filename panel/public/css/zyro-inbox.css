@@ -153,3 +153,6 @@
 /* ---- technicians ---- */
 .zi-tech { flex-shrink: 0; font-size: .62rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, #6366f1 16%, transparent); color: #4f46e5; }
 .dark .zi-tech { color: #a5b4fc; }
+.zi-row.in.technician .zi-b { background: #ede9fe; }
+.dark .zi-row.in.technician .zi-b { background: #312e81; }
+.zi-row.in.technician .zi-who { color: #6d28d9; }

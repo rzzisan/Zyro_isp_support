@@ -33,8 +33,8 @@
                         <span class="zi-av" style="background: {{ $this::avatarColor($c->wa_number) }}">{{ $this::initials($c->name, $c->wa_number) }}</span>
                         <span class="zi-item-body">
                             <span class="zi-item-top">
-                                <span class="zi-name">{{ $c->name ?: $c->displayNumber() }}</span>
-                                @if (isset($techs[$c->wa_number]))<span class="zi-tech">টেকনিশিয়ান</span>@endif
+                                <span class="zi-name">{{ $techs[$c->wa_number] ?? ($c->name ?: $c->displayNumber()) }}</span>
+                                @if (isset($techs[$c->wa_number]))<span class="zi-tech">স্টাফ</span>@endif
                                 <span class="zi-time {{ $isWaiting ? 'hot' : '' }}">{{ $this::shortTime($c->last_message_at) }}</span>
                             </span>
                             <span class="zi-item-bottom">
@@ -69,7 +69,7 @@
                     <a href="{{ \App\Filament\App\Resources\Conversations\ConversationResource::getUrl('index') }}" wire:navigate class="zi-back">←</a>
                     <span class="zi-av" style="background: {{ $this::avatarColor($current->wa_number) }}">{{ $this::initials($current->name, $current->wa_number) }}</span>
                     <div class="zi-chat-title">
-                        <b>{{ isset($techs[$current->wa_number]) ? $techs[$current->wa_number].' (টেকনিশিয়ান)' : ($current->name ?: 'নাম নেই') }}</b>
+                        <b>{{ isset($techs[$current->wa_number]) ? $techs[$current->wa_number].' · স্টাফ (টেকনিশিয়ান)' : ($current->name ?: 'নাম নেই') }}</b>
                         <span>{{ $current->displayNumber() }}@if ($current->customer_id) · ID {{ $current->customer_id }}@endif</span>
                     </div>
                     <span class="zi-pill {{ $current->isBotPaused() ? 'warn' : 'ok' }}">
@@ -95,7 +95,9 @@
                         @if ($item['kind'] === 'message')
                             <div class="zi-row {{ $m->direction }} {{ $m->sender }}" wire:key="m{{ $m->id }}">
                                 <div class="zi-b">
-                                    @if ($m->direction === 'out' && $m->sender !== 'bot')
+                                    @if ($m->sender === 'technician')
+                                        <div class="zi-who">টেকনিশিয়ান · {{ $techs[$current->wa_number] ?? 'স্টাফ' }}</div>
+                                    @elseif ($m->direction === 'out' && $m->sender !== 'bot')
                                         <div class="zi-who">{{ $m->sender === 'staff' ? ($m->user?->name ?? 'স্টাফ') : ($m->sender === 'campaign' ? 'ক্যাম্পেইন' : 'WhatsApp অ্যাপ') }}</div>
                                     @elseif ($m->sender === 'bot')
                                         <div class="zi-who">বট</div>

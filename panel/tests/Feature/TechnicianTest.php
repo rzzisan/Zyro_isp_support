@@ -72,6 +72,22 @@ class TechnicianTest extends TestCase
         $c = WaContact::create(['company_id' => $this->company->id, 'wa_number' => '8801711000111', 'name' => 'Naz', 'last_message_at' => now()]);
         WaMessage::create(['company_id' => $this->company->id, 'contact_id' => $c->id, 'direction' => 'in', 'sender' => 'customer', 'body' => '5629 line?']);
         $this->as($agent);
-        Livewire::test(ListConversations::class)->assertSee('টেকনিশিয়ান');
+        Livewire::test(ListConversations::class)->assertSee('Nazmul')->assertSee('zi-tech', false);
+    }
+
+    public function test_technicians_count_as_staff_not_customers(): void
+    {
+        Technician::create(['company_id' => $this->company->id, 'name' => 'Nazmul', 'wa_number' => '8801711000111']);
+        $tech = WaContact::create(['company_id' => $this->company->id, 'wa_number' => '8801711000111', 'last_message_at' => now()]);
+        WaMessage::create(['company_id' => $this->company->id, 'contact_id' => $tech->id, 'direction' => 'in', 'sender' => 'technician', 'body' => '5629?']);
+        $cust = WaContact::create(['company_id' => $this->company->id, 'wa_number' => '8801711000999', 'last_message_at' => now()]);
+        WaMessage::create(['company_id' => $this->company->id, 'contact_id' => $cust->id, 'direction' => 'in', 'sender' => 'customer', 'body' => 'net nai']);
+        $in = new \App\Services\Insights($this->company->id);
+        $this->assertSame(1, $in->waiting());
+        $this->assertSame(1, $in->newContacts(\App\Services\Insights::todayStartUtc()->subDay()));
+        $this->assertSame(1, $in->messageCounts(\App\Services\Insights::todayStartUtc()->subDay())['customer']);
+        $this->as($this->owner);
+        Livewire::test(ListConversations::class)->call('setBox', 'staff')->assertSee('Nazmul')->assertDontSee('net nai')
+            ->call('setBox', 'waiting')->assertSee('net nai')->assertDontSee('5629?');
     }
 }
