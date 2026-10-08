@@ -5,8 +5,10 @@ for the last --days days. Run every few minutes by zyro-ticket-sync.timer; --day
   set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.ticket_sync [--days 3] [--company ID]
 """
 import argparse
+import html
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -72,6 +74,37 @@ def upsert(company_id: int, r: dict, state: str) -> None:
     )
 
 
+def html_text(s: str | None) -> str:
+    """'<p>line one</p><p>two&nbsp;</p>' -> 'line one\ntwo'."""
+    s = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</li>", "\n", s or "")
+    s = html.unescape(re.sub(r"<[^>]+>", "", s)).replace("\xa0", " ")
+    return "\n".join(x.strip() for x in s.splitlines() if x.strip())
+
+
+def fetch_description(api, complain_id: str) -> str:
+    """The description typed when the ticket was opened = its first staff-to-staff conversation entry."""
+    rows = api._get("/ComplainDiscussion/GetConversationInfoByTicketId",
+                    {"id": complain_id, "forWhom": "EmployeeToEmployee"}) or []
+    rows = sorted((r for r in rows if not r.get("ParentConversationId")), key=lambda r: int(r.get("ConversationId") or 0))
+    return html_text(rows[0].get("Comments")) if rows else ""
+
+
+def fill_descriptions(api, company_id: int) -> int:
+    """Fetch the description once for open tickets that don't have it yet ('' when the ticket has none)."""
+    n = 0
+    for r in db.all_rows("""SELECT complain_id FROM billing_tickets WHERE company_id = %s
+                            AND state IN ('pending', 'processing') AND description IS NULL""", (company_id,)):
+        try:
+            d = fetch_description(api, r["complain_id"])
+        except Exception:
+            log.warning("description fetch failed for ticket %s", r["complain_id"], exc_info=True)
+            continue
+        db.execute("UPDATE billing_tickets SET description = %s WHERE company_id = %s AND complain_id = %s",
+                   (d, company_id, r["complain_id"]))
+        n += 1
+    return n
+
+
 def sync_company(t, days: int) -> dict:
     api = tenants.billing(t)
     open_rows = fetch_all(api, "/ClientSupport/AjaxDailyComplainList", {})
@@ -79,6 +112,7 @@ def sync_company(t, days: int) -> dict:
                                                                 {"customQueryString": "processing"})}
     for r in open_rows:
         upsert(t.company_id, r, "processing" if str(r.get("ComplainId")) in processing else "pending")
+    described = fill_descriptions(api, t.company_id)
 
     today = datetime.now(DHAKA).date()
     solved = fetch_all(api, "/ClientSupport/AjaxMonthlyComplainList", {
@@ -94,7 +128,7 @@ def sync_company(t, days: int) -> dict:
                       WHERE company_id = %s AND state IN ('pending', 'processing') AND NOT (complain_id = ANY(%s))
                       RETURNING 1)
            SELECT count(*) AS n FROM u""", (t.company_id, open_ids))
-    return {"open": len(open_rows), "processing": len(processing), "solved": len(solved), "closed": gone["n"]}
+    return {"open": len(open_rows), "processing": len(processing), "solved": len(solved), "closed": gone["n"], "described": described}
 
 
 def companies(only: int | None) -> list:

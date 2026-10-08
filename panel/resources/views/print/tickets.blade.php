@@ -20,6 +20,7 @@
         tr { page-break-inside: avoid; }
         .num { width: 28px; text-align: center; }
         .done { width: 110px; }
+        .desc { white-space: pre-line; max-width: 260px; }
         .muted { color: #555; }
         .high { font-weight: 700; color: #b91c1c; }
         footer { margin-top: 28px; display: flex; justify-content: space-between; font-size: 12px; }
@@ -72,7 +73,7 @@
                 <td>{{ collect([$t->zone, $t->subzone, $t->box])->filter()->join(' / ') }}</td>
                 <td>{{ $t->category }}</td>
                 <td>{{ $t->opened_at?->timezone('Asia/Dhaka')->format('d M, g:i A') }}<br><span class="muted">{{ $t->created_by }}</span></td>
-                <td>{{ $t->note }}</td>
+                <td class="desc">{{ collect([$t->description, $t->note])->filter()->join("\n") }}</td>
                 <td class="done"></td>
             </tr>
         @endforeach

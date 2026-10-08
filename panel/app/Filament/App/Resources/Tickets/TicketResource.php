@@ -194,6 +194,7 @@ class TicketResource extends Resource
             TextEntry::make('solved_by')->label('সমাধান করেছেন')->placeholder('—'),
             TextEntry::make('opened_at')->label('খোলা হয়েছে')->dateTime('d M Y, g:i A', 'Asia/Dhaka'),
             TextEntry::make('solved_at')->label('সমাধান হয়েছে')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->placeholder('—'),
+            TextEntry::make('description')->label('সমস্যার বিবরণ')->placeholder('—')->columnSpanFull(),
             TextEntry::make('note')->label('মন্তব্য')->placeholder('—')->columnSpanFull(),
         ]);
     }
