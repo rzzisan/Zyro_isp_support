@@ -72,12 +72,24 @@ SYSTEM_PROMPT = """তুমি Century Link Network (একটি ISP)-এর W
 class KeyFailed(Exception):
     """This key can't be used right now (bad key, rate limited, provider down) - try the next one."""
 
+    def __init__(self, msg: str, limits: dict | None = None):
+        super().__init__(msg)
+        self.limits = limits or {}
 
-def _call(provider: str, model: str, api_key: str, system: str, messages: list[dict], max_tokens: int = 2000) -> str | None:
+
+def _limits(headers) -> dict:
+    """Rate-limit headers the provider sent (Groq/OpenAI/xAI: x-ratelimit-*, Anthropic: anthropic-ratelimit-*)."""
+    return {k.lower(): v for k, v in headers.items()
+            if k.lower().startswith(("x-ratelimit-", "anthropic-ratelimit-")) or k.lower() == "retry-after"}
+
+
+def _call(provider: str, model: str, api_key: str, system: str, messages: list[dict],
+          max_tokens: int = 2000) -> tuple[str | None, dict, dict]:
+    """Reply text, token usage {input, output, cached} and the rate-limit headers of the response."""
     if provider == "claude":
         client = anthropic.Anthropic(api_key=api_key, max_retries=1)
         try:
-            response = client.beta.messages.create(
+            raw = client.beta.messages.with_raw_response.create(
                 model=model,
                 max_tokens=max_tokens,
                 system=system,
@@ -88,10 +100,15 @@ def _call(provider: str, model: str, api_key: str, system: str, messages: list[d
             )
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.RateLimitError,
                 anthropic.InternalServerError, anthropic.APIConnectionError) as e:
-            raise KeyFailed(str(e)) from e
+            resp = getattr(e, "response", None)
+            raise KeyFailed(str(e), _limits(resp.headers) if resp is not None else None) from e
+        response = raw.parse()
+        u = response.usage
+        usage = {"input": (u.input_tokens or 0) + (u.cache_read_input_tokens or 0) + (u.cache_creation_input_tokens or 0),
+                 "output": u.output_tokens or 0, "cached": u.cache_read_input_tokens or 0}
         if response.stop_reason == "refusal":
-            return None
-        return "".join(b.text for b in response.content if b.type == "text").strip() or None
+            return None, usage, _limits(raw.headers)
+        return "".join(b.text for b in response.content if b.type == "text").strip() or None, usage, _limits(raw.headers)
 
     base_url = PROVIDERS[provider]["base_url"]
     try:
@@ -104,9 +121,13 @@ def _call(provider: str, model: str, api_key: str, system: str, messages: list[d
     except httpx.TransportError as e:  # timeout / connection: move on to the next key or provider
         raise KeyFailed(f"{type(e).__name__}: {e}") from e
     if r.status_code in (401, 403, 429) or r.status_code >= 500:  # 5xx e.g. Gemini "model overloaded"
-        raise KeyFailed(f"HTTP {r.status_code}: {r.text[:200]}")
+        raise KeyFailed(f"HTTP {r.status_code}: {r.text[:300]}", _limits(r.headers))
     r.raise_for_status()
-    return (r.json()["choices"][0]["message"].get("content") or "").strip() or None
+    body = r.json()
+    u = body.get("usage") or {}
+    usage = {"input": u.get("prompt_tokens") or 0, "output": u.get("completion_tokens") or 0,
+             "cached": (u.get("prompt_tokens_details") or {}).get("cached_tokens") or 0}
+    return (body["choices"][0]["message"].get("content") or "").strip() or None, usage, _limits(r.headers)
 
 
 def _whatsapp_format(text: str | None) -> str | None:

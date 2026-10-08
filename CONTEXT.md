@@ -157,3 +157,8 @@
 - Bot Settings now has a collapsed read-only section "বট এখন যা নির্দেশনা পায়", fed by the engine's `GET /internal/{company}/bot-prompts`.
 - Deploy: migrate, then config:cache (claude-dev, chgrp www-data, 640), then route:cache/filament:optimize/view:cache as www-data, reload fpm, restart zyro-engine. Verified: /health 200, bot-prompts returns customer+technician, both pages 302 to login, no new log errors.
 - Pending: add package/offer FAQs (550 tk 20 Mbps + Bongo); bot pause hours after a staff reply (bug 4); Gemini key quota (bug 8).
+
+## 2026-10-08: AI খরচ page (token usage per key/model)
+- Engine records every AI call in `ai_usage` (company, key, provider, model, purpose customer/technician/voice, contact, input/output/cached tokens, ok/error). `llm._call` now returns (text, usage, rate-limit headers); `agent.record_usage` writes the row and merges the provider's rate-limit headers into `ai_keys.quota` (+ `quota_at`). Groq's 429 text "tokens per day (TPD): Limit X, Used Y" is saved as `quota["limit:tpd"]` with time. Voice (Whisper) rows keep audio seconds in input_tokens. Keys are never stored or logged.
+- Panel page "AI খরচ" (`/app/{company}/ai-usage`, সেটিংস, same access as AI key): today/7/30-day cost + tokens, per key (with provider's last-known limits), per model (editable USD price per 1M tokens, `ai_model_prices`, defaults in `AiModelPrice::DEFAULTS`), per purpose, last 14 days. Cost is an estimate; free-tier keys really cost 0.
+- Migration 2026_10_08_000005. Counting starts at deploy; nothing before is reconstructed.

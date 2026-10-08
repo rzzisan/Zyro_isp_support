@@ -120,7 +120,7 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
     ctx = json.dumps(context, ensure_ascii=False) if context else "এই মেসেজে কোনো কাস্টমার চেনা যায়নি।"
     history[-1] = {"role": "user", "content": f"<live_data>\n{ctx}\n</live_data>\n\nটেকনিশিয়ানের মেসেজ:\n{history[-1]['content']}"}
     system = tech_prompt(t, tech["name"])
-    draft, provider, model = generate_with_fallback(t, system, history)
+    draft, provider, model = generate_with_fallback(t, system, history, "technician", contact["id"])
     draft = _whatsapp_format(draft)
     if not draft:
         return

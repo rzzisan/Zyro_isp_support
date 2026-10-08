@@ -430,7 +430,7 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
         try:
             from engine import whatsapp
             data, mime = whatsapp.download_media(t, (m.get("audio") or {}).get("id", ""))
-            spoken = transcribe(t, data, mime)
+            spoken = transcribe(t, data, mime, contact["id"])
         except Exception:
             log.exception("voice transcription failed")
             spoken = None
@@ -483,7 +483,7 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
         history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": text})
-        draft, provider, model = draft_reply(t, history, context)
+        draft, provider, model = draft_reply(t, history, context, contact["id"])
         ticket_note = None
         if draft:
             mm = re.search(r"\[\[TICKET:\s*(.*?)\]\]", draft, re.S)
