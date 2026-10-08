@@ -17,7 +17,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
-use RuntimeException;
+use Throwable;
 
 class BotSettings extends CompanySettingsPage
 {
@@ -100,7 +100,7 @@ class BotSettings extends CompanySettingsPage
         try {
             $data['customer_prompt'] = ($data['customer_prompt'] ?? null) ?: ($this->prompts()['customer_default'] ?? null);
             $data['technician_prompt'] = ($data['technician_prompt'] ?? null) ?: ($this->prompts()['technician_default'] ?? null);
-        } catch (RuntimeException) {
+        } catch (Throwable) {
             // engine unreachable: the boxes stay empty, which means "built-in rules"
         }
 
@@ -111,7 +111,7 @@ class BotSettings extends CompanySettingsPage
     {
         try {
             $text = $this->prompts()[$which] ?? '';
-        } catch (RuntimeException $e) {
+        } catch (Throwable $e) {
             $text = 'নির্দেশনা আনা যায়নি: '.$e->getMessage();
         }
 
@@ -125,7 +125,7 @@ class BotSettings extends CompanySettingsPage
         // unchanged built-in text is stored as null, so later improvements to the built-in rules still reach this company
         try {
             $defaults = $this->prompts();
-        } catch (RuntimeException) {
+        } catch (Throwable) {
             $defaults = [];
         }
         foreach (['customer_prompt' => 'customer_default', 'technician_prompt' => 'technician_default'] as $field => $default) {
