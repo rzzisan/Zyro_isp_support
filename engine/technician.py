@@ -54,6 +54,12 @@ SEND_INTENT = re.compile(r"জানা(ও|ন|বে|য়ে|িয়ে)|�
 CLAIMS_SENT = re.compile(r"(পাঠানো হয়েছে|পাঠালাম|দেওয়া হয়েছে|দিলাম|নিচে|লিংক|link)", re.I)
 
 
+def tech_prompt(t: Tenant, name: str) -> str:
+    from engine.agent import knowledge
+    block = knowledge(t)
+    return TECH_PROMPT.format(company=t.name, tech=name, knowledge="\n\n" + block if block else "")
+
+
 def technician_for(t: Tenant, wa_number: str) -> dict | None:
     return db.one("SELECT * FROM technicians WHERE company_id = %s AND wa_number = %s AND active", (t.company_id, wa_number))
 
@@ -113,9 +119,7 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
         history.append({"role": "user", "content": text})
     ctx = json.dumps(context, ensure_ascii=False) if context else "এই মেসেজে কোনো কাস্টমার চেনা যায়নি।"
     history[-1] = {"role": "user", "content": f"<live_data>\n{ctx}\n</live_data>\n\nটেকনিশিয়ানের মেসেজ:\n{history[-1]['content']}"}
-    extra = t.bot.get("extra_prompt")
-    system = TECH_PROMPT.format(company=t.name, tech=tech["name"], knowledge=(
-        f"\n\n=== কোম্পানির নির্দেশনা ===\n{extra}\n=== নির্দেশনা শেষ ===" if extra else ""))
+    system = tech_prompt(t, tech["name"])
     draft, provider, model = generate_with_fallback(t, system, history)
     draft = _whatsapp_format(draft)
     if not draft:

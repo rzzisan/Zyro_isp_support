@@ -4,8 +4,10 @@ namespace App\Filament\App\Pages;
 
 use App\Models\AiKey;
 use App\Models\Company;
+use App\Services\Engine;
 use BackedEnum;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -14,6 +16,8 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
+use RuntimeException;
 
 class BotSettings extends CompanySettingsPage
 {
@@ -63,7 +67,30 @@ class BotSettings extends CompanySettingsPage
                     ->helperText('পেমেন্টের নিয়ম (বিকাশ/নগদ নম্বর), অফিসের সময়, বিশেষ নোটিশ — বট এগুলো হুবহু মানবে')
                     ->rows(8),
             ]),
+            Section::make('বট এখন যা নির্দেশনা পায়')->collapsed()
+                ->description('শুধু দেখার জন্য: বটের ভেতরের নিয়ম + উপরের অতিরিক্ত নির্দেশনা + "বটের FAQ"। অতিরিক্ত নির্দেশনা বদলালে সেভ করে পেজ রিলোড দিলে এখানে দেখা যাবে।')
+                ->schema([
+                    Placeholder::make('customer_prompt')->label('কাস্টমারের সাথে কথা বলার সময়')
+                        ->content(fn () => $this->promptBox('customer')),
+                    Placeholder::make('technician_prompt')->label('টেকনিশিয়ানের সাথে কথা বলার সময়')
+                        ->content(fn () => $this->promptBox('technician')),
+                ]),
         ]);
+    }
+
+    private ?array $prompts = null;
+
+    private function promptBox(string $which): HtmlString
+    {
+        try {
+            $this->prompts ??= Engine::botPrompts(Filament::getTenant()->getKey());
+            $text = $this->prompts[$which] ?? '';
+        } catch (RuntimeException $e) {
+            $text = 'নির্দেশনা আনা যায়নি: '.$e->getMessage();
+        }
+
+        return new HtmlString('<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;max-height:28rem;overflow:auto;'
+            .'padding:12px;border-radius:8px;background:rgba(127,127,127,.08)">'.e($text).'</pre>');
     }
 
     protected function beforeSaving(array $data, Model $record): array

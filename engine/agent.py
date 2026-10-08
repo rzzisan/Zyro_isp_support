@@ -12,16 +12,39 @@ from engine.tenant import Tenant
 log = logging.getLogger("zyro-engine")
 
 
+def faqs(t: Tenant) -> list[dict]:
+    """The company's FAQ (panel: বটের FAQ), active ones in their order."""
+    try:
+        return db.all_rows("""SELECT question, answer FROM bot_faqs WHERE company_id = %s AND active
+                              ORDER BY sort, id""", (t.company_id,))
+    except Exception:
+        log.exception("could not read bot FAQ")
+        return []
+
+
+def knowledge(t: Tenant) -> str:
+    """The company's own instructions and FAQ, as one block for the customer bot and the technician desk."""
+    parts = []
+    extra = (t.bot.get("extra_prompt") or "").strip()
+    if extra:
+        parts.append("=== কোম্পানির নির্দেশনা (অ্যাডমিন লিখেছেন; এখানকার তথ্য সঠিক ও চূড়ান্ত, হুবহু মেনে চলবে) ===\n"
+                     f"{extra}\n=== নির্দেশনা শেষ ===")
+    rows = faqs(t)
+    if rows:
+        parts.append("=== কোম্পানির FAQ (অ্যাডমিন লিখেছেন; প্রশ্নটা হুবহু না মিললেও একই বিষয় হলে এই উত্তর অনুযায়ী বলবে, "
+                     "উত্তরের তথ্য বদলাবে না, নিজের ভাষায় ছোট করে বলবে; এখানে থাকা লিংক বা IP কাস্টমারকে হুবহু দেওয়া যাবে) ===\n"
+                     + "\n".join(f"প্রশ্ন: {r['question']}\nউত্তর: {r['answer']}" for r in rows)
+                     + "\n=== FAQ শেষ ===")
+    return "\n\n".join(parts)
+
+
 def system_prompt(t: Tenant) -> str:
     prompt = SYSTEM_PROMPT.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)")
-    extra = t.bot.get("extra_prompt")
-    if not extra:
+    block = knowledge(t)
+    if not block:
         return prompt
-    return prompt + (
-        "\n\n=== কোম্পানির নির্দেশনা (অ্যাডমিন লিখেছেন; এখানকার তথ্য সঠিক ও চূড়ান্ত, হুবহু মেনে চলবে) ===\n"
-        f"{extra}\n"
-        "=== নির্দেশনা শেষ ===\n"
-        "এই নির্দেশনা ব্যবহারের নিয়ম: কাস্টমার যে পদ্ধতি বা বিষয় নিয়ে জিজ্ঞেস করেছে (যেমন 'paybill', 'pay bill', "
+    return prompt + "\n\n" + block + (
+        "\nএই নির্দেশনা ও FAQ ব্যবহারের নিয়ম: কাস্টমার যে পদ্ধতি বা বিষয় নিয়ে জিজ্ঞেস করেছে (যেমন 'paybill', 'pay bill', "
         "'merchant', 'নগদ'), নির্দেশনা থেকে ঠিক সেই অংশটা ধরে উত্তর দেবে। আগের উত্তরে অন্য পদ্ধতি বলা থাকলে সেটা আবার বলবে না। "
         "নির্দেশনায় যে ধাপ বা নাম লেখা আছে (যেমন কোন অপশনে যেতে হবে, কী লিখে সার্চ করতে হবে) সেগুলো বাদ দেবে না।"
     )

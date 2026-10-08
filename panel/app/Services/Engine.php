@@ -113,4 +113,10 @@ class Engine
     {
         return static::call('post', "/internal/{$companyId}/olt/{$oltId}/test") ?? [];
     }
+
+    /** The full instructions the bots get now: ['customer' => ..., 'technician' => ...]. */
+    public static function botPrompts(int $companyId): array
+    {
+        return static::call('get', "/internal/{$companyId}/bot-prompts") ?? [];
+    }
 }

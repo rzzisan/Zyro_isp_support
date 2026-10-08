@@ -4,6 +4,7 @@ The receiving business number (phone_number_id) decides the company; that compan
 connection, AI keys and bot settings are used. ENGINE_DRY_RUN=1: nothing is sent to WhatsApp and
 no billing tickets are opened (drafts are stored with mode 'dry_run').
 """
+import dataclasses
 import hashlib
 import hmac
 import json
@@ -540,6 +541,23 @@ def billing_call(fn):
 def ticket_options(request: Request, company_id: int):
     t = internal_tenant(request, company_id)
     return billing_call(lambda: tenants.billing(t).support_options())
+
+
+@app.get("/internal/{company_id}/bot-prompts")
+def bot_prompts(request: Request, company_id: int):
+    """Bot settings page: the full instructions the bots get now (built-in rules + company instructions + FAQ)."""
+    key = request.headers.get("x-internal-key", "")
+    if not INTERNAL_KEY or not hmac.compare_digest(key, INTERNAL_KEY):
+        raise HTTPException(status_code=403)
+    row = db.one("SELECT phone_number_id FROM wa_accounts WHERE company_id = %s ORDER BY id LIMIT 1", (company_id,))
+    t = tenants.by_phone_number_id(row["phone_number_id"]) if row else None
+    if not t:
+        raise HTTPException(status_code=404, detail="এই কোম্পানির WhatsApp নম্বর যুক্ত নেই")
+    from engine.agent import system_prompt
+    from engine.technician import tech_prompt
+    bot = db.one("SELECT * FROM bot_settings WHERE company_id = %s", (company_id,)) or {}
+    t = dataclasses.replace(t, bot=dict(bot))  # the saved settings, not the cached copy
+    return {"customer": system_prompt(t), "technician": tech_prompt(t, "(টেকনিশিয়ানের নাম)")}
 
 
 @app.get("/internal/{company_id}/customers")
