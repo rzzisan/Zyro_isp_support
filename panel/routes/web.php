@@ -63,3 +63,42 @@ Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company
         fclose($out);
     }, $company->slug.'-customers-'.now('Asia/Dhaka')->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
 })->middleware('web')->name('customers.csv');
+
+// new incoming WhatsApp messages for the browser notifier (public/js/zyro-notify.js); inbox users of that company only.
+// Without ?after it only returns the newest id, so opening the panel never replays old messages.
+Route::get('/notify/{company:slug}/poll', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'inbox'), 403);
+    $base = \App\Models\WaMessage::where('company_id', $company->id)->where('direction', 'in');
+    $after = $request->query('after');
+    if (! is_numeric($after)) {
+        return response()->json(['last' => (int) $base->max('id'), 'items' => []]);
+    }
+    $rows = (clone $base)->where('id', '>', (int) $after)->with('contact')->orderBy('id')->limit(20)->get();
+    $staff = \App\Models\Technician::where('company_id', $company->id)->where('active', true)->pluck('wa_number')->all();
+    $botLive = \App\Models\BotSetting::where('company_id', $company->id)->value('bot_mode') === 'live';
+    $items = $rows->map(function (\App\Models\WaMessage $m) use ($company, $staff, $botLive) {
+        $c = $m->contact;
+        $body = trim((string) $m->body);
+        if ($body === '') {
+            $body = match ($m->type) {
+                'image' => '📷 ছবি', 'audio' => '🎤 ভয়েস', 'video' => '🎬 ভিডিও', 'document' => '📄 ফাইল',
+                'sticker' => 'স্টিকার', 'location' => '📍 লোকেশন', default => 'নতুন মেসেজ',
+            };
+        }
+
+        return [
+            'id' => $m->id,
+            'contact' => $c->id,
+            'name' => $c->name ?: $c->displayNumber(),
+            'number' => $c->displayNumber(),
+            'body' => \Illuminate\Support\Str::limit($body, 140),
+            'staff' => in_array($c->wa_number, $staff, true),
+            'human' => ! $botLive || $c->isBotPaused(),   // the bot will not answer this one
+            'url' => \App\Filament\App\Resources\Conversations\ConversationResource::getUrl('view', ['record' => $c], panel: 'app', tenant: $company),
+        ];
+    })->values();
+
+    return response()->json(['last' => (int) ($rows->max('id') ?? $after), 'items' => $items])
+        ->header('Cache-Control', 'no-store');
+})->middleware('web')->name('notify.poll');
