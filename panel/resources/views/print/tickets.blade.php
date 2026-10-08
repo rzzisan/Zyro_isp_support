@@ -9,7 +9,7 @@
     <style>
         @page { size: A4 landscape; margin: 10mm; }
         * { box-sizing: border-box; }
-        body { font-family: 'Noto Sans Bengali', Arial, sans-serif; color: #111; margin: 0; padding: 16px; font-size: 12px; background: #fff; }
+        body { font-family: 'Noto Sans Bengali', Arial, sans-serif; color: #111; margin: 0; padding: 16px; font-size: 12px; font-weight: 700; background: #fff; }
         header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0f7c7b; padding-bottom: 8px; margin-bottom: 10px; }
         h1 { margin: 0; font-size: 18px; color: #0f7c7b; }
         .sub { margin: 2px 0 0; font-size: 13px; }
