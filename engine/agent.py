@@ -23,14 +23,64 @@ def faqs(t: Tenant) -> list[dict]:
         return []
 
 
-def knowledge(t: Tenant) -> str:
-    """The company's own instructions and FAQ, as one block for the customer bot and the technician desk."""
+FAQ_ALL_CHARS = 1500  # a small FAQ goes out whole; a bigger one only the entries that match the question
+FAQ_TOP = 4
+_SUFFIXES = ("গুলো", "গুলা", "টার", "টা", "টি", "কে", "য়ের", "ের", "এর", "র", "ে", "য়", "s")
+_STOP = {"কি", "কী", "কত", "আমি", "আমার", "আপনার", "আছে", "আর", "এই", "ওই", "কেন", "কিভাবে", "কীভাবে", "করে", "করব",
+         "দিন", "দেন", "ভাই", "জি", "the", "is", "a", "to", "and", "of", "ki", "koto", "ami", "amar", "ache", "vai", "bhai"}
+
+
+# Banglish/English words customers type, to the Bangla an admin usually writes (both are kept)
+_SAME = {"office": "অফিস", "ofis": "অফিস", "kothay": "কোথায়", "kothai": "কোথায়", "address": "ঠিকানা", "thikana": "ঠিকানা",
+         "package": "প্যাকেজ", "pakage": "প্যাকেজ", "packege": "প্যাকেজ", "offer": "অফার", "bill": "বিল", "link": "লিংক",
+         "channel": "চ্যানেল", "router": "রাউটার", "price": "দাম", "dam": "দাম", "time": "সময়", "somoy": "সময়",
+         "speed": "স্পিড", "mbps": "এমবিপিএস", "connection": "সংযোগ", "line": "লাইন", "new": "নতুন", "notun": "নতুন",
+         "taka": "টাকা", "tk": "টাকা", "bkash": "বিকাশ", "bikash": "বিকাশ", "nagad": "নগদ", "movie": "মুভি", "game": "গেম"}
+_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+
+def _terms(text: str) -> set[str]:
+    out = set()
+    for w in re.findall(r"[\wঀ-৿]+", (text or "").lower().translate(_DIGITS)):
+        if w in _SAME:
+            out.add(_SAME[w])
+        for s in _SUFFIXES:
+            if len(w) > len(s) + 1 and w.endswith(s):
+                w = w[:-len(s)]
+                break
+        if len(w) >= 2 and w not in _STOP:
+            out.add(w)
+    return out
+
+
+def _score(query: set[str], faq: dict) -> int:
+    q = _terms(faq["question"])
+    words = q | _terms(faq["answer"])
+    hit = lambda w: any(w == x or (len(w) >= 3 and len(x) >= 3 and (x.startswith(w) or w.startswith(x))) for x in words)
+    # a word of the FAQ's question counts double
+    return sum(2 if any(w == x or (len(w) >= 3 and (x.startswith(w) or w.startswith(x))) for x in q) else 1
+               for w in query if hit(w))
+
+
+def relevant_faqs(rows: list[dict], query: str | None) -> list[dict]:
+    """All of a small FAQ; of a big one, the few entries that share words with the customer's message."""
+    if query is None or sum(len(r["question"]) + len(r["answer"]) for r in rows) <= FAQ_ALL_CHARS:
+        return rows
+    terms = _terms(query)
+    scored = sorted(((_score(terms, r), i) for i, r in enumerate(rows)), key=lambda x: (-x[0], x[1]))
+    return [rows[i] for s, i in scored[:FAQ_TOP] if s > 0]
+
+
+def knowledge(t: Tenant, query: str | None = None) -> str:
+    """The company's own instructions and FAQ, as one block for the customer bot and the technician desk.
+    query = the message being answered: a big FAQ is cut to the entries that match it (fewer tokens per call);
+    None = everything (the panel's "what the bot is told" view)."""
     parts = []
     extra = (t.bot.get("extra_prompt") or "").strip()
     if extra:
         parts.append("=== কোম্পানির নির্দেশনা (অ্যাডমিন লিখেছেন; এখানকার তথ্য সঠিক ও চূড়ান্ত, হুবহু মেনে চলবে) ===\n"
                      f"{extra}\n=== নির্দেশনা শেষ ===")
-    rows = faqs(t)
+    rows = relevant_faqs(faqs(t), query)
     if rows:
         parts.append("=== কোম্পানির FAQ (অ্যাডমিন লিখেছেন; প্রশ্নটা হুবহু না মিললেও একই বিষয় হলে এই উত্তর অনুযায়ী বলবে, "
                      "উত্তরের তথ্য বদলাবে না, নিজের ভাষায় ছোট করে বলবে; এখানে থাকা লিংক বা IP কাস্টমারকে হুবহু দেওয়া যাবে) ===\n"
@@ -39,11 +89,11 @@ def knowledge(t: Tenant) -> str:
     return "\n\n".join(parts)
 
 
-def system_prompt(t: Tenant) -> str:
+def system_prompt(t: Tenant, query: str | None = None) -> str:
     # the company may have edited the built-in rules (Bot settings); empty = the built-in text
     base = (t.bot.get("customer_prompt") or "").strip() or SYSTEM_PROMPT
     prompt = base.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)")
-    block = knowledge(t)
+    block = knowledge(t, query)
     if not block:
         return prompt
     return prompt + "\n\n" + block + (
@@ -139,7 +189,9 @@ def draft_reply(t: Tenant, history: list[dict], context: dict | None,
     messages = list(history)
     messages[-1] = {"role": "user",
                     "content": f"<live_data>\n{ctx}\n</live_data>\n\nকাস্টমারের মেসেজ:\n{history[-1]['content']}"}
-    text, provider, model = generate_with_fallback(t, system_prompt(t), messages, "customer", contact_id)
+    # the FAQ entries that match what the customer is asking now (and just before)
+    asked = "\n".join(m["content"] for m in history[-3:] if m["role"] == "user")
+    text, provider, model = generate_with_fallback(t, system_prompt(t, asked), messages, "customer", contact_id)
     return _whatsapp_format(text), provider, model
 
 

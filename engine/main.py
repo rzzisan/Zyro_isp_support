@@ -87,7 +87,7 @@ def save_message(t: Tenant, contact_id: int, wa_message_id: str | None, directio
     )
 
 
-def history_for(t: Tenant, contact_id: int, limit: int = 12) -> list[dict]:
+def history_for(t: Tenant, contact_id: int, limit: int = 6) -> list[dict]:
     rows = db.all_rows(
         """SELECT direction, sender, body FROM wa_messages
            WHERE company_id = %s AND contact_id = %s AND type IN ('text', 'audio') AND body IS NOT NULL
@@ -290,7 +290,12 @@ def identify(t: Tenant, contact: dict, text: str):
     return None, "আসসালামু আলাইকুম। " + ASK_ID, None, None, False
 
 
-def customer_view(context: dict, verified: bool) -> dict:
+# the customer talks about a payment: then the bot gets the last 6 payments, otherwise only the latest one
+PAYMENT_WORDS = re.compile(r"পেমেন্ট|পরিশোধ|জমা|দিয়েছি|দিছি|দিলাম|দিসি|দিয়েছিলাম|বিকাশ|নগদ|রকেট|টাকা|মাস|রিসিট|"
+                           r"pay|paid|bkash|bikash|nagad|rocket|diyechi|disi|dilam|joma|taka|month|history|receipt", re.I)
+
+
+def customer_view(context: dict, verified: bool, text: str = "") -> dict:
     """What the customer-facing bot may see: never mobile numbers, IPs or MACs; nothing about the bill,
     payments or the name unless the chat is verified."""
     ctx = json.loads(json.dumps(context, ensure_ascii=False, default=str))
@@ -304,6 +309,8 @@ def customer_view(context: dict, verified: bool) -> dict:
         ctx.pop("payments", None)
         for k in ("name", "username", "package", "zone", "bill_day"):
             c.pop(k, None)
+    if ctx.get("payments") and not PAYMENT_WORDS.search(text or ""):
+        ctx["payments"] = ctx["payments"][:1]
     ctx["verified"] = verified
     ctx["today"] = (datetime.now(timezone.utc) + timedelta(hours=6)).strftime("%Y-%m-%d")  # Asia/Dhaka
     return ctx
@@ -479,7 +486,8 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
         if not pending and _is_ack(text) and ack_already_answered(t, contact["id"]):
             return  # "ওকে" after our "ঠিক আছে, জানাবেন": nothing more to say
         api = tenants.billing(t)
-        context = customer_view(customers.add_online(t, diagnose(api, customers.fresh(api, customer)), customer), verified)
+        context = customer_view(customers.add_online(t, diagnose(api, customers.fresh(api, customer)), customer), verified,
+                                "\n".join(x for x in (pending, text) if x))
         history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": text})

@@ -54,9 +54,9 @@ SEND_INTENT = re.compile(r"জানা(ও|ন|বে|য়ে|িয়ে)|�
 CLAIMS_SENT = re.compile(r"(পাঠানো হয়েছে|পাঠালাম|দেওয়া হয়েছে|দিলাম|নিচে|লিংক|link)", re.I)
 
 
-def tech_prompt(t: Tenant, name: str) -> str:
+def tech_prompt(t: Tenant, name: str, query: str | None = None) -> str:
     from engine.agent import knowledge
-    block = knowledge(t)
+    block = knowledge(t, query)
     # the company may have edited the built-in rules (Bot settings); plain replace, so braces they type are harmless
     base = (t.bot.get("technician_prompt") or "").strip() or TECH_PROMPT
     if "{knowledge}" not in base:
@@ -69,7 +69,7 @@ def technician_for(t: Tenant, wa_number: str) -> dict | None:
     return db.one("SELECT * FROM technicians WHERE company_id = %s AND wa_number = %s AND active", (t.company_id, wa_number))
 
 
-def _history(t: Tenant, contact_id: int, limit: int = 10) -> list[dict]:
+def _history(t: Tenant, contact_id: int, limit: int = 6) -> list[dict]:
     rows = db.all_rows(
         """SELECT direction, body FROM wa_messages WHERE company_id = %s AND contact_id = %s AND body IS NOT NULL
            ORDER BY created_at DESC, id DESC LIMIT %s""", (t.company_id, contact_id, limit))
@@ -124,7 +124,7 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
         history.append({"role": "user", "content": text})
     ctx = json.dumps(context, ensure_ascii=False) if context else "এই মেসেজে কোনো কাস্টমার চেনা যায়নি।"
     history[-1] = {"role": "user", "content": f"<live_data>\n{ctx}\n</live_data>\n\nটেকনিশিয়ানের মেসেজ:\n{history[-1]['content']}"}
-    system = tech_prompt(t, tech["name"])
+    system = tech_prompt(t, tech["name"], text)
     draft, provider, model = generate_with_fallback(t, system, history, "technician", contact["id"])
     draft = _whatsapp_format(draft)
     if not draft:
