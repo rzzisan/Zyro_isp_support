@@ -67,12 +67,20 @@ class BotSettings extends CompanySettingsPage
                     ->helperText('পেমেন্টের নিয়ম (বিকাশ/নগদ নম্বর), অফিসের সময়, বিশেষ নোটিশ — বট এগুলো হুবহু মানবে')
                     ->rows(8),
             ]),
-            Section::make('বট এখন যা নির্দেশনা পায়')->collapsed()
-                ->description('শুধু দেখার জন্য: বটের ভেতরের নিয়ম + উপরের অতিরিক্ত নির্দেশনা + "বটের FAQ"। অতিরিক্ত নির্দেশনা বদলালে সেভ করে পেজ রিলোড দিলে এখানে দেখা যাবে।')
+            Section::make('বটের মূল নির্দেশনা (এডিট করা যায়)')->collapsed()
+                ->description('বট কীভাবে কথা বলবে, কী করবে না, টিকিট কখন খুলবে: এই মূল নিয়মগুলো এখানে বদলানো যায়। সাবধানে বদলান: [[TICKET: ...]], [[NOTIFY: ...]], [[ENABLE]], [[DISABLE]] নিয়মগুলো মুছলে বট টিকিট খোলা, কাস্টমারকে জানানো বা লাইন চালু/বন্ধ করা বন্ধ করে দেবে। পুরো লেখা মুছে সেভ করলে ডিফল্ট নির্দেশনায় ফিরে যাবে। অতিরিক্ত নির্দেশনা আর FAQ নিজে থেকেই শেষে যোগ হয়।')
                 ->schema([
-                    Placeholder::make('customer_prompt')->label('কাস্টমারের সাথে কথা বলার সময়')
+                    Textarea::make('customer_prompt')->label('কাস্টমার বট')->rows(18)
+                        ->helperText('খালি = ডিফল্ট নির্দেশনা'),
+                    Textarea::make('technician_prompt')->label('টেকনিশিয়ান বট')->rows(18)
+                        ->helperText('{company} = কোম্পানির নাম, {tech} = টেকনিশিয়ানের নাম, {knowledge} = অতিরিক্ত নির্দেশনা + FAQ যেখানে বসবে। খালি = ডিফল্ট।'),
+                ]),
+            Section::make('বট এখন যা নির্দেশনা পায়')->collapsed()
+                ->description('শুধু দেখার জন্য: মূল নির্দেশনা + অতিরিক্ত নির্দেশনা + "বটের FAQ" মিলে বট এখন হুবহু যা পায়। কিছু বদলালে সেভ করে পেজ রিলোড দিন।')
+                ->schema([
+                    Placeholder::make('customer_prompt_view')->label('কাস্টমারের সাথে কথা বলার সময়')
                         ->content(fn () => $this->promptBox('customer')),
-                    Placeholder::make('technician_prompt')->label('টেকনিশিয়ানের সাথে কথা বলার সময়')
+                    Placeholder::make('technician_prompt_view')->label('টেকনিশিয়ানের সাথে কথা বলার সময়')
                         ->content(fn () => $this->promptBox('technician')),
                 ]),
         ]);
@@ -80,11 +88,29 @@ class BotSettings extends CompanySettingsPage
 
     private ?array $prompts = null;
 
+    private function prompts(): array
+    {
+        return $this->prompts ??= Engine::botPrompts(Filament::getTenant()->getKey());
+    }
+
+    /** The edit boxes show the built-in rules until the company saves its own version. */
+    protected function fillData(Model $record): array
+    {
+        $data = parent::fillData($record);
+        try {
+            $data['customer_prompt'] = ($data['customer_prompt'] ?? null) ?: ($this->prompts()['customer_default'] ?? null);
+            $data['technician_prompt'] = ($data['technician_prompt'] ?? null) ?: ($this->prompts()['technician_default'] ?? null);
+        } catch (RuntimeException) {
+            // engine unreachable: the boxes stay empty, which means "built-in rules"
+        }
+
+        return $data;
+    }
+
     private function promptBox(string $which): HtmlString
     {
         try {
-            $this->prompts ??= Engine::botPrompts(Filament::getTenant()->getKey());
-            $text = $this->prompts[$which] ?? '';
+            $text = $this->prompts()[$which] ?? '';
         } catch (RuntimeException $e) {
             $text = 'নির্দেশনা আনা যায়নি: '.$e->getMessage();
         }
@@ -96,6 +122,17 @@ class BotSettings extends CompanySettingsPage
     protected function beforeSaving(array $data, Model $record): array
     {
         $data['company_id'] = Filament::getTenant()->id;
+        // unchanged built-in text is stored as null, so later improvements to the built-in rules still reach this company
+        try {
+            $defaults = $this->prompts();
+        } catch (RuntimeException) {
+            $defaults = [];
+        }
+        foreach (['customer_prompt' => 'customer_default', 'technician_prompt' => 'technician_default'] as $field => $default) {
+            $text = trim((string) ($data[$field] ?? ''));
+            $data[$field] = ($text === '' || $text === trim((string) ($defaults[$default] ?? ''))) ? null : $text;
+        }
+        $this->prompts = null; // the read-only view shows the saved version
 
         return $data;
     }

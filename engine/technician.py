@@ -57,7 +57,12 @@ CLAIMS_SENT = re.compile(r"(পাঠানো হয়েছে|পাঠা�
 def tech_prompt(t: Tenant, name: str) -> str:
     from engine.agent import knowledge
     block = knowledge(t)
-    return TECH_PROMPT.format(company=t.name, tech=name, knowledge="\n\n" + block if block else "")
+    # the company may have edited the built-in rules (Bot settings); plain replace, so braces they type are harmless
+    base = (t.bot.get("technician_prompt") or "").strip() or TECH_PROMPT
+    if "{knowledge}" not in base:
+        base += "{knowledge}"
+    return (base.replace("{company}", t.name).replace("{tech}", name)
+            .replace("{knowledge}", "\n\n" + block if block else ""))
 
 
 def technician_for(t: Tenant, wa_number: str) -> dict | None:

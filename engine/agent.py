@@ -40,7 +40,9 @@ def knowledge(t: Tenant) -> str:
 
 
 def system_prompt(t: Tenant) -> str:
-    prompt = SYSTEM_PROMPT.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)")
+    # the company may have edited the built-in rules (Bot settings); empty = the built-in text
+    base = (t.bot.get("customer_prompt") or "").strip() or SYSTEM_PROMPT
+    prompt = base.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)")
     block = knowledge(t)
     if not block:
         return prompt

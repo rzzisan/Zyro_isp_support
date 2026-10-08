@@ -557,7 +557,11 @@ def bot_prompts(request: Request, company_id: int):
     from engine.technician import tech_prompt
     bot = db.one("SELECT * FROM bot_settings WHERE company_id = %s", (company_id,)) or {}
     t = dataclasses.replace(t, bot=dict(bot))  # the saved settings, not the cached copy
-    return {"customer": system_prompt(t), "technician": tech_prompt(t, "(টেকনিশিয়ানের নাম)")}
+    from engine.llm import SYSTEM_PROMPT
+    from engine.technician import TECH_PROMPT
+    return {"customer": system_prompt(t), "technician": tech_prompt(t, "(টেকনিশিয়ানের নাম)"),
+            # the built-in rules, for the edit boxes and "back to default"
+            "customer_default": SYSTEM_PROMPT, "technician_default": TECH_PROMPT}
 
 
 @app.get("/internal/{company_id}/customers")
