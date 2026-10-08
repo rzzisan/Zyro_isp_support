@@ -90,14 +90,16 @@ def fetch_description(api, complain_id: str) -> str:
 
 
 def fill_descriptions(api, company_id: int) -> int:
-    """Fetch the description once for open tickets that don't have it yet ('' when the ticket has none)."""
+    """Refresh the description of every open ticket ('' when it has none); staff edit it in the billing software."""
     n = 0
-    for r in db.all_rows("""SELECT complain_id FROM billing_tickets WHERE company_id = %s
-                            AND state IN ('pending', 'processing') AND description IS NULL""", (company_id,)):
+    for r in db.all_rows("""SELECT complain_id, description FROM billing_tickets WHERE company_id = %s
+                            AND state IN ('pending', 'processing')""", (company_id,)):
         try:
             d = fetch_description(api, r["complain_id"])
         except Exception:
             log.warning("description fetch failed for ticket %s", r["complain_id"], exc_info=True)
+            continue
+        if d == r["description"]:
             continue
         db.execute("UPDATE billing_tickets SET description = %s WHERE company_id = %s AND complain_id = %s",
                    (d, company_id, r["complain_id"]))
