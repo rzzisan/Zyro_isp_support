@@ -49,6 +49,40 @@
         if (!document.hidden) { unseen = 0; document.title = baseTitle; }
     });
 
+    // ---- Web Push: the engine pushes each new message to this browser, shown by /zyro-sw.js even with no tab open
+    const canPush = !!(cfg.vapid && 'serviceWorker' in navigator && 'PushManager' in window && window.isSecureContext);
+    let pushOn = false;
+    function keyBytes(b64) {
+        const s = atob((b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+        return Uint8Array.from(s, c => c.charCodeAt(0));
+    }
+    function post(url, body) {
+        return fetch(url, {method: 'POST', credentials: 'same-origin', body: JSON.stringify(body),
+            headers: {'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': cfg.csrf}});
+    }
+    async function subscribePush() {
+        if (!canPush || Notification.permission !== 'granted') return;
+        try {
+            const reg = await navigator.serviceWorker.register(cfg.sw, {scope: '/'});
+            await navigator.serviceWorker.ready;
+            let sub = await reg.pushManager.getSubscription();
+            if (sub && store.get('zyroNotify:vapid') !== cfg.vapid) { await sub.unsubscribe(); sub = null; }
+            sub = sub || await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: keyBytes(cfg.vapid)});
+            store.set('zyroNotify:vapid', cfg.vapid);
+            const r = await post(cfg.push, sub.toJSON());   // every page load: keeps it tied to this user/company
+            pushOn = r.ok;
+        } catch (e) { pushOn = false; }
+    }
+    async function unsubscribePush() {
+        pushOn = false;
+        if (!canPush) return;
+        try {
+            const reg = await navigator.serviceWorker.getRegistration('/');
+            const sub = reg && await reg.pushManager.getSubscription();
+            if (sub) { await post(cfg.unpush, {endpoint: sub.endpoint}); await sub.unsubscribe(); }
+        } catch (e) {}
+    }
+
     // ---- bell button
     const bell = document.getElementById('zyro-notify-bell');
     function paintBell() {
@@ -74,6 +108,7 @@
                 return;
             }
             store.set(MODE_KEY, 'off');
+            unsubscribePush();
             paintBell();
             toast('মেসেজ নোটিফিকেশন বন্ধ', 'আবার চালু করতে বেল আইকনে ক্লিক করুন।', 'gray');
             return;
@@ -82,12 +117,15 @@
         if (canDesktop && Notification.permission === 'default') await Notification.requestPermission();
         paintBell();
         ding();
+        await subscribePush();
         if (canDesktop && Notification.permission === 'granted') {
             new Notification('নোটিফিকেশন চালু হয়েছে', {body: 'নতুন WhatsApp মেসেজ এলে এভাবে জানানো হবে।', icon: cfg.icon});
         }
-        toast('মেসেজ নোটিফিকেশন চালু', 'নতুন মেসেজ এলে শব্দ ও নোটিফিকেশন আসবে। এই ট্যাবটা খোলা রাখুন (ছোট করে রাখলেও চলবে)।', 'success');
+        toast('মেসেজ নোটিফিকেশন চালু', pushOn ? 'নতুন মেসেজ এলে নোটিফিকেশন আসবে, প্যানেলের ট্যাব বন্ধ থাকলেও (ব্রাউজার চালু থাকলে)।'
+            : 'নতুন মেসেজ এলে শব্দ ও নোটিফিকেশন আসবে। এই ট্যাবটা খোলা রাখুন (ছোট করে রাখলেও চলবে)।', 'success');
     });
     paintBell();
+    if (on()) subscribePush();
 
     // ---- alerts for new messages
     function alert(items) {
@@ -106,6 +144,7 @@
             const title = (i.staff ? '[স্টাফ] ' : '') + i.name + (i.human ? ' · উত্তর দিন' : '');
             const viewing = !document.hidden && new URL(i.url, location.href).pathname === here;
             if (viewing) return;   // the open chat refreshes by itself
+            if (document.hidden && pushOn) return;   // the push notification covers it
             if (!sounded) { ding(); sounded = true; }
             if (document.hidden && canDesktop && Notification.permission === 'granted') {
                 const n = new Notification(title, {body: i.body, tag: 'wa-' + i.contact, renotify: true, icon: cfg.icon});

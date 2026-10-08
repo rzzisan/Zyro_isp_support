@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
-from engine import customers, db, tenant as tenants
+from engine import customers, db, tenant as tenants, webpush
 from engine.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
 from engine.tenant import Tenant
 
@@ -33,6 +33,14 @@ MEDIA_TYPES = ("audio", "image", "video", "document", "sticker")
 log = logging.getLogger("zyro-engine")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.on_event("startup")
+def _push_keys() -> None:
+    try:
+        webpush.keys()  # the panel needs the public key before the first browser can subscribe
+    except Exception:
+        log.exception("could not load/create web push keys")
 
 
 @app.get("/health")
@@ -159,6 +167,7 @@ async def receive(request: Request):
                                      mtype, body, media)
                 if not echo and saved:  # skip Meta retries
                     jobs.append((t, c, m, saved["id"]))
+                    webpush.new_message(t.company_id, c, mtype, body, sender == "technician")
     for job in jobs:
         threading.Thread(target=handle_message, args=job, daemon=True).start()
     return {"ok": True}

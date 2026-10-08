@@ -7,3 +7,4 @@ python-multipart
 itsdangerous
 cryptography
 psycopg[binary]>=3.2
+pywebpush>=2.0

@@ -12,6 +12,11 @@
             poll: @js(route('notify.poll', $company)),
             worker: @js(asset('js/zyro-notify-worker.js').'?v='.filemtime(public_path('js/zyro-notify-worker.js'))),
             icon: @js(asset('favicon.ico')),
+            sw: @js(asset('zyro-sw.js')),
+            vapid: @js(\Illuminate\Support\Facades\DB::table('web_push_keys')->orderBy('id')->value('public_key')),
+            push: @js(route('notify.push', $company)),
+            unpush: @js(route('notify.push.delete', $company)),
+            csrf: @js(csrf_token()),
         };
     </script>
     <script src="{{ asset('js/zyro-notify.js') }}?v={{ filemtime(public_path('js/zyro-notify.js')) }}" defer></script>

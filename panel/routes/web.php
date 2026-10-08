@@ -102,3 +102,27 @@ Route::get('/notify/{company:slug}/poll', function (\App\Models\Company $company
     return response()->json(['last' => (int) ($rows->max('id') ?? $after), 'items' => $items])
         ->header('Cache-Control', 'no-store');
 })->middleware('web')->name('notify.poll');
+
+// this browser's Web Push subscription (bell in the top bar), so the engine can alert it with the panel closed
+Route::post('/notify/{company:slug}/push', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'inbox'), 403);
+    $data = $request->validate(['endpoint' => 'required|url|starts_with:https://|max:2000',
+        'keys.p256dh' => 'required|string|max:255', 'keys.auth' => 'required|string|max:255']);
+    \Illuminate\Support\Facades\DB::table('push_subscriptions')->upsert([[
+        'company_id' => $company->id, 'user_id' => $user->id, 'endpoint' => $data['endpoint'],
+        'p256dh' => $data['keys']['p256dh'], 'auth' => $data['keys']['auth'],
+        'user_agent' => \Illuminate\Support\Str::limit((string) $request->userAgent(), 250, ''),
+        'created_at' => now(), 'updated_at' => now(),
+    ]], ['company_id', 'endpoint'], ['user_id', 'p256dh', 'auth', 'user_agent', 'updated_at']);
+
+    return response()->json(['ok' => true]);
+})->middleware('web')->name('notify.push');
+
+Route::post('/notify/{company:slug}/push/delete', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
+    abort_unless(Auth::check(), 403);
+    \Illuminate\Support\Facades\DB::table('push_subscriptions')->where('company_id', $company->id)
+        ->where('user_id', Auth::id())->where('endpoint', (string) $request->input('endpoint'))->delete();
+
+    return response()->json(['ok' => true]);
+})->middleware('web')->name('notify.push.delete');
