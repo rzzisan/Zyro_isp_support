@@ -151,3 +151,9 @@
 - ফিক্স: `ispdigital.number_text/without_urls` — মোবাইল/ID খোঁজার আগে লিংক, IP, MAC, ডট/কোলন দেওয়া সংখ্যা বাদ (বিলিং ও লোকাল দুই লুকআপে)। টেকনিশিয়ানের মেসেজে খালি সংখ্যা ID ধরা হয় শুধু ছোট মেসেজে (≤৬ শব্দ) বা "id/কাস্টমার" লেখা থাকলে। `tech_customer` ৩০ মিনিট পর ভুলে যায় (`ident_state.at`)। [[NOTIFY]] যায় শুধু টেকনিশিয়ান গত ১৫ মিনিটের মেসেজে স্পষ্ট বললে (জানাও/বলো/পাঠাও/send/reply...); টেকনিশিয়ানের পেস্ট করা লিংক NOTIFY-তে নিজে যোগ হয়; "পাঠানো হয়েছে/লিংক" দাবি কিন্তু লিংক/সংখ্যা নেই এমন NOTIFY আটকে যায়। ফলাফলে কাস্টমারের নাম+ID দেখায়। টেকনিশিয়ান prompt-এ কোম্পানির নির্দেশনা (extra_prompt) যোগ।
 - কাস্টমার বট: BURST_WAIT 7s, আর উত্তর পাঠানোর ঠিক আগে নতুন মেসেজ এলে এই উত্তর বাদ (draft mode `superseded`), যাতে এক প্রশ্নে দুই উত্তর না যায়। prompt-এ 5a/5b: অফিস/স্টাফ কোথায়/প্যাকেজ-অফার নির্দেশনায় না থাকলে বানাবে না ("এমন প্যাকেজ নেই" বলবে না); বিষয়ের বাইরের প্রশ্নে (গেম, অ্যাপ) ভদ্র না, টিকিট নয়।
 - বাকি (অ্যাডমিনের কাজ): বট সেটিংসের নির্দেশনায় 550 টাকা 20Mbps + Bongo অফার ও FTP লিংক যোগ; Gemini key quota শেষ, Groq 429 — key ঠিক করা/নতুন provider।
+
+## 2026-10-08 17:13 UTC: Bot FAQ deployed (58e146a)
+- New table `bot_faqs` (migration 2026_10_08_000004), panel page "বটের FAQ" (সেটিংস group). Active rows go into both the customer and the technician prompts via engine/agent.py `knowledge()`.
+- Bot Settings now has a collapsed read-only section "বট এখন যা নির্দেশনা পায়", fed by the engine's `GET /internal/{company}/bot-prompts`.
+- Deploy: migrate, then config:cache (claude-dev, chgrp www-data, 640), then route:cache/filament:optimize/view:cache as www-data, reload fpm, restart zyro-engine. Verified: /health 200, bot-prompts returns customer+technician, both pages 302 to login, no new log errors.
+- Pending: add package/offer FAQs (550 tk 20 Mbps + Bongo); bot pause hours after a staff reply (bug 4); Gemini key quota (bug 8).
