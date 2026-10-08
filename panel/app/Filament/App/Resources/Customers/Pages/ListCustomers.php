@@ -22,11 +22,12 @@ class ListCustomers extends ListRecords
     public function getSubheading(): ?string
     {
         $company = Filament::getTenant()->getKey();
-        $n = BillingCustomer::where('company_id', $company)->whereNull('gone_at')->count();
+        $n = BillingCustomer::where('company_id', $company)->whereNull('gone_at')->where('is_left', false)->count();
+        $left = BillingCustomer::where('company_id', $company)->whereNull('gone_at')->where('is_left', true)->count();
         $last = DB::table('billing_customer_syncs')->where('company_id', $company)->whereNull('error')
             ->whereNotNull('finished_at')->max('finished_at');
 
-        return "{$n} জন কাস্টমার · বিলিং থেকে প্রতিদিন রাত ৩টায় আপডেট হয়"
+        return "{$n} জন কাস্টমার · Left {$left} জন · বিলিং থেকে প্রতিদিন রাত ৩টায় আপডেট হয়"
             .($last ? ' · শেষ আপডেট '.\Illuminate\Support\Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : '');
     }
 
@@ -45,7 +46,8 @@ class ListCustomers extends ListRecords
                         return;
                     }
                     Notification::make()->success()->title('কাস্টমারের তথ্য আপডেট হয়েছে')
-                        ->body("মোট {$r['total']} জন · নতুন {$r['created']} · বিলিংয়ে নেই {$r['gone']}")->send();
+                        ->body("মোট {$r['total']} জন · নতুন {$r['created']} · বিলিংয়ে নেই {$r['gone']}"
+                            .' · Left '.($r['left_total'] ?? 0).' জন (এই sync-এ Left হয়েছেন '.($r['became_left'] ?? 0).', ফিরে এসেছেন '.($r['came_back'] ?? 0).')')->send();
                 }),
             Action::make('csv')->label('CSV ডাউনলোড')->icon(Heroicon::OutlinedArrowDownTray)->color('gray')
                 ->visible(fn () => CustomerResource::managers())

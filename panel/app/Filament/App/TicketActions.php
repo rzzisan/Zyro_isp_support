@@ -32,7 +32,7 @@ class TicketActions
         }
     }
 
-    /** Customer search from our own copy (billing_customers): ID, mobile, PPPoE ID or name. */
+    /** Customer search from our own copy (billing_customers): ID, mobile, PPPoE ID or name. Left customers too, after the current ones. */
     private static function searchCustomers(string $search): array
     {
         $search = trim($search);
@@ -42,9 +42,9 @@ class TicketActions
             ->where(fn ($w) => $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$search])
                 ->orWhere('username', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%")
                 ->when(strlen($digits) >= 5, fn ($x) => $x->orWhere('mobile', 'like', "%{$digits}%")))
-            ->orderByRaw("ltrim(customer_id, '0') = ltrim(?, '0') DESC", [$search])->orderBy('customer_id')->limit(15)
-            ->get(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone'])
-            ->map(fn ($c) => $c->only(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone']))->all();
+            ->orderByRaw("ltrim(customer_id, '0') = ltrim(?, '0') DESC", [$search])->orderBy('is_left')->orderBy('customer_id')->limit(15)
+            ->get(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone', 'is_left', 'left_on'])
+            ->map(fn ($c) => $c->only(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone', 'is_left', 'left_on']))->all();
     }
 
     /** Info box under the customer: bill (our DB), connection (our MikroTik), OLT/ONU (billing). */
@@ -74,7 +74,8 @@ class TicketActions
 
     private static function customerLabel(array $c): string
     {
-        return trim('ID '.$c['customer_id'].' · '.$c['name'].' · '.($c['mobile'] ?? '').($c['zone'] ? ' · '.$c['zone'] : ''), ' ·');
+        return trim('ID '.$c['customer_id'].' · '.$c['name'].' · '.($c['mobile'] ?? '').($c['zone'] ? ' · '.$c['zone'] : ''), ' ·')
+            .(! empty($c['is_left']) ? ' · LEFT'.(! empty($c['left_on']) ? ' ('.$c['left_on']->format('d M Y').')' : '') : '');
     }
 
     /** @param  string|null  $customerId  prefill (e.g. from a chat) */

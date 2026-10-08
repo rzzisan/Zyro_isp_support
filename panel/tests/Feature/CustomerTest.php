@@ -66,6 +66,24 @@ class CustomerTest extends TestCase
         $this->get("/export/{$this->company->slug}/customers.csv")->assertForbidden();
     }
 
+    public function test_left_customers_have_their_own_list_and_stay_out_of_counts(): void
+    {
+        $a = $this->customer($this->company, '0976');
+        $l = $this->customer($this->company, '5618', ['status' => 'Left', 'disabled' => true, 'is_left' => true, 'left_on' => '2026-10-04']);
+        $g = $this->customer($this->company, '0100', ['gone_at' => now()]);
+        $this->as($this->agent);
+        Livewire::test(ListCustomers::class)
+            ->assertCanSeeTableRecords([$a])->assertCanNotSeeTableRecords([$l, $g])
+            ->assertSee('1 জন কাস্টমার · Left 1 জন')
+            ->filterTable('list', 'left')->assertCanSeeTableRecords([$l])->assertCanNotSeeTableRecords([$a, $g])
+            ->assertSee('04 Oct 2026')
+            ->filterTable('list', 'gone')->assertCanSeeTableRecords([$g])->assertCanNotSeeTableRecords([$a, $l])
+            ->filterTable('list', 'all')->assertCanSeeTableRecords([$a, $l, $g]);
+        DB::table('billing_customer_changes')->insert(['company_id' => $this->company->id, 'header_id' => $l->header_id,
+            'change' => 'left', 'left_on' => '2026-10-04', 'seen_at' => '2026-10-04 06:00:00']);
+        Livewire::test(ViewCustomer::class, ['record' => $l->id])->assertSee('Left হয়েছেন · 04 Oct 2026')->assertSee('04 Oct 2026 থেকে');
+    }
+
     public function test_password_is_encrypted_and_viewing_it_is_logged(): void
     {
         $a = $this->customer($this->company, '0976');

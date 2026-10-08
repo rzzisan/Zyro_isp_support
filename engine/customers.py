@@ -16,7 +16,7 @@ ID_HINT = re.compile(r"(\bid\b|আইডি|আই ডি|customer|কাস্�
 
 
 def _rows(t: Tenant, where: str, params: tuple) -> list[dict]:
-    rows = db.all_rows(f"SELECT extra FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND {where} LIMIT 3",
+    rows = db.all_rows(f"SELECT extra FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND NOT is_left AND {where} LIMIT 3",
                        (t.company_id, *params))
     return [r["extra"] for r in rows if r["extra"]]
 
@@ -96,7 +96,7 @@ def search(t: Tenant, q: str, limit: int = 10) -> list[dict]:
     q = q.strip()
     digits = re.sub(r"\D", "", q)
     rows = db.all_rows(
-        """SELECT extra FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND (
+        """SELECT extra FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND NOT is_left AND (
                ltrim(customer_id, '0') = ltrim(%s, '0') OR lower(username) LIKE %s OR name ILIKE %s
                OR (length(%s) >= 5 AND mobile_normalized LIKE %s))
            ORDER BY (ltrim(customer_id, '0') = ltrim(%s, '0')) DESC, customer_id LIMIT %s""",

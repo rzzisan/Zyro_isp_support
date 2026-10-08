@@ -27,7 +27,7 @@ def sync_router(r: dict) -> int:
                     [(r["company_id"], r["id"], x.get("name"), x.get("address"), x.get("caller-id"), x.get("uptime"))
                      for x in rows if x.get("name")])
             # count only PPPoE users that exist in the billing software
-            n = c.execute("""SELECT count(*) AS n FROM billing_customers WHERE company_id = %s AND gone_at IS NULL
+            n = c.execute("""SELECT count(*) AS n FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND NOT is_left
                              AND username = ANY(%s)""", (r["company_id"], [x.get("name") for x in rows if x.get("name")])).fetchone()["n"]
             c.execute("""UPDATE mikrotik_routers SET ppp_active = %s, last_checked_at = now(), last_check_ok = true,
                          updated_at = now() WHERE id = %s""", (n, r["id"]))

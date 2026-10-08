@@ -25,7 +25,7 @@ class MikrotikRouter extends Model
     public function customerCount(): int
     {
         return $this->billing_server
-            ? BillingCustomer::where('company_id', $this->company_id)->whereNull('gone_at')->where('server', $this->billing_server)->count()
+            ? BillingCustomer::where('company_id', $this->company_id)->whereNull('gone_at')->where('is_left', false)->where('server', $this->billing_server)->count()
             : 0;
     }
 }

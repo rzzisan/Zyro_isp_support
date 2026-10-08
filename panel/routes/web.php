@@ -50,7 +50,7 @@ Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF"); // Excel reads Bangla correctly with a BOM
         fputcsv($out, array_values($cols));
-        \App\Models\BillingCustomer::where('company_id', $company->id)->whereNull('gone_at')->orderBy('customer_id')
+        \App\Models\BillingCustomer::where('company_id', $company->id)->whereNull('gone_at')->where('is_left', false)->orderBy('customer_id')
             ->select(array_keys($cols))->chunk(1000, function ($rows) use ($out, $cols) {
                 foreach ($rows as $r) {
                     fputcsv($out, array_map(fn ($c) => match ($c) {

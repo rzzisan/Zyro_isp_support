@@ -56,7 +56,7 @@ class CustomerResource extends Resource
 
     private static function options(string $column): array
     {
-        return BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')
+        return BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')->where('is_left', false)
             ->whereNotNull($column)->distinct()->orderBy($column)->pluck($column, $column)->all();
     }
 
@@ -94,8 +94,9 @@ class CustomerResource extends Resource
                     ->description(fn (BillingCustomer $r) => $r->online_uptime)
                     ->color(fn (string $state) => $state === 'অনলাইন' ? 'success' : 'gray'),
                 TextColumn::make('status')->label('অবস্থা')->badge()
-                    ->state(fn (BillingCustomer $r) => $r->gone_at ? 'বিলিংয়ে নেই' : ($r->disabled ? 'বন্ধ' : ($r->status ?: '—')))
-                    ->color(fn (string $state) => match ($state) { 'Active' => 'success', 'বন্ধ' => 'danger', default => 'gray' }),
+                    ->state(fn (BillingCustomer $r) => $r->gone_at ? 'বিলিংয়ে নেই' : ($r->is_left ? 'Left' : ($r->disabled ? 'বন্ধ' : ($r->status ?: '—'))))
+                    ->description(fn (BillingCustomer $r) => $r->is_left && $r->left_on ? $r->left_on->format('d M Y') : null)
+                    ->color(fn (string $state) => match ($state) { 'Active' => 'success', 'বন্ধ' => 'danger', 'Left' => 'warning', default => 'gray' }),
                 TextColumn::make('bill_day')->label('বিলের তারিখ')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('joined_on')->label('যোগ দিয়েছেন')->date('d M Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -111,8 +112,14 @@ class CustomerResource extends Resource
                 TernaryFilter::make('has_due')->label('বকেয়া')->trueLabel('বকেয়া আছে')->falseLabel('বকেয়া নেই')
                     ->queries(true: fn (Builder $query) => $query->where('due', '>', 0),
                         false: fn (Builder $query) => $query->where(fn ($w) => $w->whereNull('due')->orWhere('due', '<=', 0))),
-                TernaryFilter::make('gone')->label('বিলিংয়ে আছে')->default(true)->trueLabel('আছে')->falseLabel('নেই (left)')
-                    ->queries(true: fn (Builder $query) => $query->whereNull('gone_at'), false: fn (Builder $query) => $query->whereNotNull('gone_at')),
+                SelectFilter::make('list')->label('তালিকা')->default('current')->selectablePlaceholder(false)
+                    ->options(['current' => 'বর্তমান কাস্টমার', 'left' => 'Left কাস্টমার', 'gone' => 'বিলিংয়ে নেই', 'all' => 'সব'])
+                    ->query(fn (Builder $query, array $data) => match ($data['value'] ?? 'current') {
+                        'left' => $query->whereNull('gone_at')->where('is_left', true),
+                        'gone' => $query->whereNotNull('gone_at'),
+                        'all' => $query,
+                        default => $query->whereNull('gone_at')->where('is_left', false),
+                    }),
             ])
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
             ->deferFilters(false)
@@ -152,7 +159,15 @@ class CustomerResource extends Resource
                 TextEntry::make('bill_day')->label('বিলের শেষ তারিখ')->placeholder('—')->suffix(' তারিখ'),
                 TextEntry::make('last_payment_date')->label('শেষ পেমেন্ট')->date('d M Y')->placeholder('—'),
                 TextEntry::make('status')->label('অবস্থা')
-                    ->state(fn (BillingCustomer $r) => ($r->status ?: '—').($r->disabled ? ' (লাইন বন্ধ)' : '')),
+                    ->state(fn (BillingCustomer $r) => ($r->status ?: '—').($r->is_left
+                        ? ($r->left_on ? ' · '.$r->left_on->format('d M Y').' থেকে' : '')
+                        : ($r->disabled ? ' (লাইন বন্ধ)' : ''))),
+                TextEntry::make('changes')->label('Active / Left বদল')->placeholder('—')
+                    ->state(fn (BillingCustomer $r) => \Illuminate\Support\Facades\DB::table('billing_customer_changes')
+                        ->where('company_id', $r->company_id)->where('header_id', $r->header_id)->orderByDesc('seen_at')->limit(5)->get()
+                        ->map(fn ($c) => ($c->change === 'left' ? 'Left হয়েছেন' : 'আবার Active')
+                            .' · '.\Illuminate\Support\Carbon::parse($c->seen_at, 'UTC')->timezone('Asia/Dhaka')->format('d M Y'))
+                        ->join(', ') ?: null),
                 TextEntry::make('synced_at')->label('শেষ sync')->since(),
             ]),
         ]);

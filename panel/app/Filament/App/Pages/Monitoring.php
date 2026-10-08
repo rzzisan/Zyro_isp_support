@@ -113,7 +113,7 @@ class Monitoring extends Page implements HasTable
         $fresh = now()->subMinutes(PppSession::FRESH_MINUTES);
 
         return BillingCustomer::query()->where('billing_customers.company_id', Filament::getTenant()->getKey())
-            ->whereNull('gone_at')->where('billing_customers.disabled', false)
+            ->whereNull('gone_at')->where('is_left', false)->where('billing_customers.disabled', false)
             ->when($this->server !== '', fn ($q) => $q->where('server', $this->server))
             ->leftJoin('ppp_sessions as s', fn ($j) => $j->on('s.company_id', '=', 'billing_customers.company_id')
                 ->on('s.username', '=', 'billing_customers.username'))
@@ -126,7 +126,7 @@ class Monitoring extends Page implements HasTable
     {
         $fresh = now()->subMinutes(PppSession::FRESH_MINUTES);
         $rows = BillingCustomer::query()->where('billing_customers.company_id', Filament::getTenant()->getKey())
-            ->whereNull('gone_at')->where('billing_customers.disabled', false)
+            ->whereNull('gone_at')->where('is_left', false)->where('billing_customers.disabled', false)
             ->leftJoin('ppp_sessions as s', fn ($j) => $j->on('s.company_id', '=', 'billing_customers.company_id')
                 ->on('s.username', '=', 'billing_customers.username'))
             ->selectRaw('server, count(*) AS total, count(*) FILTER (WHERE s.seen_at > ?) AS online', [$fresh])
@@ -143,14 +143,14 @@ class Monitoring extends Page implements HasTable
 
     private static function options(string $column): array
     {
-        return BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')
+        return BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')->where('is_left', false)
             ->whereNotNull($column)->distinct()->orderBy($column)->pluck($column, $column)->all();
     }
 
     /** Options of $column limited by the zone/subzone already chosen in the filters. */
     private function scopedOptions(string $column, array $parents): array
     {
-        $q = BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')->whereNotNull($column)
+        $q = BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')->where('is_left', false)->whereNotNull($column)
             ->when($this->server !== '', fn ($x) => $x->where('server', $this->server));
         foreach ($parents as $p) {
             if ($v = $this->tableFilters[$p]['value'] ?? null) {

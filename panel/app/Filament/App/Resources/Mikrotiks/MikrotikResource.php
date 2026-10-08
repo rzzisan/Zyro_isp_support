@@ -52,7 +52,7 @@ class MikrotikResource extends Resource
     /** Server names customers have in the billing software, with how many customers each. */
     public static function billingServers(): array
     {
-        return BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')
+        return BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')->where('is_left', false)
             ->whereNotNull('server')->where('server', '!=', 'Not Found')
             ->selectRaw('server, count(*) AS n')->groupBy('server')->orderByDesc('n')->pluck('n', 'server')->all();
     }
