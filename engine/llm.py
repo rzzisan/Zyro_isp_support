@@ -68,7 +68,7 @@ SYSTEM_PROMPT = """তুমি Century Link Network (একটি ISP)-এর W
 
 
 class KeyFailed(Exception):
-    """This key can't be used right now (bad key or rate limited) - try the next one."""
+    """This key can't be used right now (bad key, rate limited, provider down) - try the next one."""
 
 
 def _call(provider: str, model: str, api_key: str, system: str, messages: list[dict], max_tokens: int = 2000) -> str | None:
@@ -84,20 +84,24 @@ def _call(provider: str, model: str, api_key: str, system: str, messages: list[d
                 betas=["server-side-fallback-2026-07-01"],
                 fallbacks="default",
             )
-        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.RateLimitError) as e:
+        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.RateLimitError,
+                anthropic.InternalServerError, anthropic.APIConnectionError) as e:
             raise KeyFailed(str(e)) from e
         if response.stop_reason == "refusal":
             return None
         return "".join(b.text for b in response.content if b.type == "text").strip() or None
 
     base_url = PROVIDERS[provider]["base_url"]
-    r = httpx.post(
-        f"{base_url}/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}"},
-        json={"model": model, "messages": [{"role": "system", "content": system}] + messages, "max_tokens": max_tokens},
-        timeout=60,
-    )
-    if r.status_code in (401, 403, 429):
+    try:
+        r = httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"model": model, "messages": [{"role": "system", "content": system}] + messages, "max_tokens": max_tokens},
+            timeout=60,
+        )
+    except httpx.TransportError as e:  # timeout / connection: move on to the next key or provider
+        raise KeyFailed(f"{type(e).__name__}: {e}") from e
+    if r.status_code in (401, 403, 429) or r.status_code >= 500:  # 5xx e.g. Gemini "model overloaded"
         raise KeyFailed(f"HTTP {r.status_code}: {r.text[:200]}")
     r.raise_for_status()
     return (r.json()["choices"][0]["message"].get("content") or "").strip() or None
