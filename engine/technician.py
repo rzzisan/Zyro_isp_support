@@ -54,15 +54,21 @@ SEND_INTENT = re.compile(r"জানা(ও|ন|বে|য়ে|িয়ে)|�
 CLAIMS_SENT = re.compile(r"(পাঠানো হয়েছে|পাঠালাম|দেওয়া হয়েছে|দিলাম|নিচে|লিংক|link)", re.I)
 
 
-def tech_prompt(t: Tenant, name: str, query: str | None = None) -> str:
-    from engine.agent import knowledge
-    block = knowledge(t, query)
+def tech_parts(t: Tenant, name: str, query: str | None = None) -> list[str]:
+    """[same on every call for this technician (cached on Claude), the FAQ entries for this message]."""
+    from engine.agent import extra_block, faq_block
+    extra = extra_block(t)
     # the company may have edited the built-in rules (Bot settings); plain replace, so braces they type are harmless
     base = (t.bot.get("technician_prompt") or "").strip() or TECH_PROMPT
     if "{knowledge}" not in base:
         base += "{knowledge}"
-    return (base.replace("{company}", t.name).replace("{tech}", name)
-            .replace("{knowledge}", "\n\n" + block if block else ""))
+    stable = (base.replace("{company}", t.name).replace("{tech}", name)
+              .replace("{knowledge}", "\n\n" + extra if extra else ""))
+    return [stable, faq_block(t, query)]
+
+
+def tech_prompt(t: Tenant, name: str, query: str | None = None) -> str:
+    return "\n\n".join(x for x in tech_parts(t, name, query) if x)
 
 
 def technician_for(t: Tenant, wa_number: str) -> dict | None:
@@ -124,7 +130,7 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
         history.append({"role": "user", "content": text})
     ctx = json.dumps(context, ensure_ascii=False) if context else "এই মেসেজে কোনো কাস্টমার চেনা যায়নি।"
     history[-1] = {"role": "user", "content": f"<live_data>\n{ctx}\n</live_data>\n\nটেকনিশিয়ানের মেসেজ:\n{history[-1]['content']}"}
-    system = tech_prompt(t, tech["name"], text)
+    system = tech_parts(t, tech["name"], text)
     draft, provider, model = generate_with_fallback(t, system, history, "technician", contact["id"])
     draft = _whatsapp_format(draft)
     if not draft:

@@ -83,16 +83,22 @@ def _limits(headers) -> dict:
             if k.lower().startswith(("x-ratelimit-", "anthropic-ratelimit-")) or k.lower() == "retry-after"}
 
 
-def _call(provider: str, model: str, api_key: str, system: str, messages: list[dict],
+def _call(provider: str, model: str, api_key: str, system: str | list[str], messages: list[dict],
           max_tokens: int = 2000) -> tuple[str | None, dict, dict]:
-    """Reply text, token usage {input, output, cached} and the rate-limit headers of the response."""
+    """Reply text, token usage {input, output, cached} and the rate-limit headers of the response.
+    system as [stable, per-message]: Claude caches the stable part (prompt caching), the others get it joined."""
+    parts = [system] if isinstance(system, str) else [x for x in system if x]
     if provider == "claude":
+        # the cache breakpoint sits at the end of the part that is the same on every call; the FAQ entries and the
+        # conversation (with this customer's live data) come after it, so they never spoil the cached prefix
+        blocks = [{"type": "text", "text": x} for x in parts]
+        blocks[0]["cache_control"] = {"type": "ephemeral"}
         client = anthropic.Anthropic(api_key=api_key, max_retries=1)
         try:
             raw = client.beta.messages.with_raw_response.create(
                 model=model,
                 max_tokens=max_tokens,
-                system=system,
+                system=blocks,
                 messages=messages,
                 output_config={"effort": "low"},
                 betas=["server-side-fallback-2026-07-01"],
@@ -115,7 +121,8 @@ def _call(provider: str, model: str, api_key: str, system: str, messages: list[d
         r = httpx.post(
             f"{base_url}/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": model, "messages": [{"role": "system", "content": system}] + messages, "max_tokens": max_tokens},
+            json={"model": model, "messages": [{"role": "system", "content": "\n\n".join(parts)}] + messages,
+                  "max_tokens": max_tokens},
             timeout=60,
         )
     except httpx.TransportError as e:  # timeout / connection: move on to the next key or provider

@@ -71,36 +71,48 @@ def relevant_faqs(rows: list[dict], query: str | None) -> list[dict]:
     return [rows[i] for s, i in scored[:FAQ_TOP] if s > 0]
 
 
-def knowledge(t: Tenant, query: str | None = None) -> str:
-    """The company's own instructions and FAQ, as one block for the customer bot and the technician desk.
-    query = the message being answered: a big FAQ is cut to the entries that match it (fewer tokens per call);
-    None = everything (the panel's "what the bot is told" view)."""
-    parts = []
+def extra_block(t: Tenant) -> str:
     extra = (t.bot.get("extra_prompt") or "").strip()
-    if extra:
-        parts.append("=== কোম্পানির নির্দেশনা (অ্যাডমিন লিখেছেন; এখানকার তথ্য সঠিক ও চূড়ান্ত, হুবহু মেনে চলবে) ===\n"
-                     f"{extra}\n=== নির্দেশনা শেষ ===")
+    return ("=== কোম্পানির নির্দেশনা (অ্যাডমিন লিখেছেন; এখানকার তথ্য সঠিক ও চূড়ান্ত, হুবহু মেনে চলবে) ===\n"
+            f"{extra}\n=== নির্দেশনা শেষ ===") if extra else ""
+
+
+def faq_block(t: Tenant, query: str | None = None) -> str:
+    """query = the message being answered: a big FAQ is cut to the entries that match it (fewer tokens per call);
+    None = everything (the panel's "what the bot is told" view)."""
     rows = relevant_faqs(faqs(t), query)
-    if rows:
-        parts.append("=== কোম্পানির FAQ (অ্যাডমিন লিখেছেন; প্রশ্নটা হুবহু না মিললেও একই বিষয় হলে এই উত্তর অনুযায়ী বলবে, "
-                     "উত্তরের তথ্য বদলাবে না, নিজের ভাষায় ছোট করে বলবে; এখানে থাকা লিংক বা IP কাস্টমারকে হুবহু দেওয়া যাবে) ===\n"
-                     + "\n".join(f"প্রশ্ন: {r['question']}\nউত্তর: {r['answer']}" for r in rows)
-                     + "\n=== FAQ শেষ ===")
-    return "\n\n".join(parts)
+    if not rows:
+        return ""
+    return ("=== কোম্পানির FAQ (অ্যাডমিন লিখেছেন; প্রশ্নটা হুবহু না মিললেও একই বিষয় হলে এই উত্তর অনুযায়ী বলবে, "
+            "উত্তরের তথ্য বদলাবে না, নিজের ভাষায় ছোট করে বলবে; এখানে থাকা লিংক বা IP কাস্টমারকে হুবহু দেওয়া যাবে) ===\n"
+            + "\n".join(f"প্রশ্ন: {r['question']}\nউত্তর: {r['answer']}" for r in rows)
+            + "\n=== FAQ শেষ ===")
 
 
-def system_prompt(t: Tenant, query: str | None = None) -> str:
+def knowledge(t: Tenant, query: str | None = None) -> str:
+    """The company's own instructions and FAQ, as one block for the customer bot and the technician desk."""
+    return "\n\n".join(x for x in (extra_block(t), faq_block(t, query)) if x)
+
+
+KNOWLEDGE_RULES = (
+    "এই নির্দেশনা ও FAQ ব্যবহারের নিয়ম: কাস্টমার যে পদ্ধতি বা বিষয় নিয়ে জিজ্ঞেস করেছে (যেমন 'paybill', 'pay bill', "
+    "'merchant', 'নগদ'), নির্দেশনা থেকে ঠিক সেই অংশটা ধরে উত্তর দেবে। আগের উত্তরে অন্য পদ্ধতি বলা থাকলে সেটা আবার বলবে না। "
+    "নির্দেশনায় যে ধাপ বা নাম লেখা আছে (যেমন কোন অপশনে যেতে হবে, কী লিখে সার্চ করতে হবে) সেগুলো বাদ দেবে না।")
+
+
+def system_parts(t: Tenant, query: str | None = None) -> list[str]:
+    """[the part that is the same on every call, the part that changes per message]. Claude caches the first
+    (prompt caching: ~1/10 of the input price while it stays warm); other providers get them joined."""
     # the company may have edited the built-in rules (Bot settings); empty = the built-in text
     base = (t.bot.get("customer_prompt") or "").strip() or SYSTEM_PROMPT
     prompt = base.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)")
-    block = knowledge(t, query)
-    if not block:
-        return prompt
-    return prompt + "\n\n" + block + (
-        "\nএই নির্দেশনা ও FAQ ব্যবহারের নিয়ম: কাস্টমার যে পদ্ধতি বা বিষয় নিয়ে জিজ্ঞেস করেছে (যেমন 'paybill', 'pay bill', "
-        "'merchant', 'নগদ'), নির্দেশনা থেকে ঠিক সেই অংশটা ধরে উত্তর দেবে। আগের উত্তরে অন্য পদ্ধতি বলা থাকলে সেটা আবার বলবে না। "
-        "নির্দেশনায় যে ধাপ বা নাম লেখা আছে (যেমন কোন অপশনে যেতে হবে, কী লিখে সার্চ করতে হবে) সেগুলো বাদ দেবে না।"
-    )
+    extra, faq = extra_block(t), faq_block(t, query)
+    stable = "\n\n".join(x for x in (prompt, extra, KNOWLEDGE_RULES if extra or faq else "") if x)
+    return [stable, faq]
+
+
+def system_prompt(t: Tenant, query: str | None = None) -> str:
+    return "\n\n".join(x for x in system_parts(t, query) if x)
 
 
 def _keys(t: Tenant, provider: str, usable_only: bool = False) -> list[dict]:
@@ -136,7 +148,7 @@ def record_usage(t: Tenant, key_id: int | None, provider: str, model: str, purpo
         log.exception("could not record AI usage")
 
 
-def generate(t: Tenant, system: str, messages: list[dict], provider: str, model: str | None,
+def generate(t: Tenant, system: str | list[str], messages: list[dict], provider: str, model: str | None,
              purpose: str = "customer", contact_id: int | None = None) -> tuple[str | None, str, str]:
     """One provider, rotating the company's keys; a failing key cools down for a minute."""
     rows = _keys(t, provider, usable_only=True)
@@ -158,7 +170,7 @@ def generate(t: Tenant, system: str, messages: list[dict], provider: str, model:
     raise RuntimeError(f"all {provider} keys failed: {last}")
 
 
-def generate_with_fallback(t: Tenant, system: str, messages: list[dict], purpose: str = "customer",
+def generate_with_fallback(t: Tenant, system: str | list[str], messages: list[dict], purpose: str = "customer",
                            contact_id: int | None = None) -> tuple[str | None, str, str]:
     active = t.bot.get("ai_provider") or "groq"
     model = t.bot.get("ai_model")
@@ -191,7 +203,7 @@ def draft_reply(t: Tenant, history: list[dict], context: dict | None,
                     "content": f"<live_data>\n{ctx}\n</live_data>\n\nকাস্টমারের মেসেজ:\n{history[-1]['content']}"}
     # the FAQ entries that match what the customer is asking now (and just before)
     asked = "\n".join(m["content"] for m in history[-3:] if m["role"] == "user")
-    text, provider, model = generate_with_fallback(t, system_prompt(t, asked), messages, "customer", contact_id)
+    text, provider, model = generate_with_fallback(t, system_parts(t, asked), messages, "customer", contact_id)
     return _whatsapp_format(text), provider, model
 
 
