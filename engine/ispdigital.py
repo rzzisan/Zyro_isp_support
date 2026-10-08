@@ -267,22 +267,35 @@ def find_customer_by_whatsapp(api: ISPDigital, wa_number: str) -> dict | None:
 
 
 ID_HINT = re.compile(r"(\bid\b|আইডি|আই ডি|customer|কাস্টমার|গ্রাহক|user)", re.I)
+URL_RE = re.compile(r"(?:https?|ftp)://\S+|\bwww\.\S+", re.I)
+# IPs, MACs, times, amounts like 172.19.178.178 / 10:30 / 1.5: their digits are never a customer ID or mobile
+DOTTED_RE = re.compile(r"\d+(?:[.:]\d+)+|\b[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}\b", re.I)
+
+
+def without_urls(text: str) -> str:
+    return URL_RE.sub(" ", text or "")
+
+
+def number_text(text: str) -> str:
+    """The text with links, IPs, MACs and dotted numbers removed: what is left may hold a mobile or customer ID."""
+    return DOTTED_RE.sub(" ", without_urls(text))
 
 
 def find_customer_by_text(api: ISPDigital, text: str, allow_bare_id: bool = True) -> dict | None:
     """The customer typed an identifier: mobile (01XXXXXXXXX / +880...), customer ID (e.g. 0071) or PPPoE username.
     allow_bare_id=False: a short number counts as a customer ID only if the text says so ("id 71")
     or is just the number, so "520 taka diyechi" isn't read as customer 520."""
-    text = text or ""
+    text = without_urls(text)
+    nums = number_text(text)
     # mobile numbers
-    for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", text)):
+    for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", nums)):
         mobile = normalize_bd_mobile(m)
         rows = [r for r in api.search_customers(mobile) if normalize_bd_mobile(r.get("MobileNumber", "")) == mobile]
         if len(rows) == 1:
             return rows[0]
     # customer IDs (short numbers, keep leading zeros)
     bare_ok = allow_bare_id or bool(ID_HINT.search(text)) or text.strip().isdigit()
-    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", text) if bare_ok else []):
+    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", nums) if bare_ok else []):
         rows = [r for r in api.search_customers(cid, limit=50)
                 if (r.get("CustomerId") or "").lstrip("0") == cid.lstrip("0")]
         if len(rows) == 1:

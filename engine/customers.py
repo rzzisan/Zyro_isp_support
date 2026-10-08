@@ -8,7 +8,8 @@ import logging
 import re
 
 from engine import db
-from engine.ispdigital import ISPDigital, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
+from engine.ispdigital import (ISPDigital, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile,
+                               number_text, without_urls)
 from engine.tenant import Tenant
 
 log = logging.getLogger("zyro-engine")
@@ -32,13 +33,14 @@ def local_by_whatsapp(t: Tenant, wa_number: str) -> dict | None:
 
 def local_by_text(t: Tenant, text: str, allow_bare_id: bool = True) -> dict | None:
     """Same rules as ispdigital.find_customer_by_text, against our table."""
-    text = text or ""
-    for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", text)):
+    text = without_urls(text)
+    nums = number_text(text)
+    for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", nums)):
         hit = _one(_rows(t, "mobile_normalized = %s", ("88" + normalize_bd_mobile(m),)))
         if hit:
             return hit
     bare_ok = allow_bare_id or bool(ID_HINT.search(text)) or text.strip().isdigit()
-    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", text) if bare_ok else []):
+    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", nums) if bare_ok else []):
         hit = _one(_rows(t, "ltrim(customer_id, '0') = %s", (cid.lstrip("0") or "0",)))
         if hit:
             return hit

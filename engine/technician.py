@@ -5,9 +5,10 @@ import json
 import logging
 import os
 import re
+from datetime import datetime, timedelta, timezone
 
 from engine import customers, db, tenant as tenants
-from engine.ispdigital import diagnose, find_customer_by_text
+from engine.ispdigital import URL_RE, diagnose, find_customer_by_text
 from engine.llm import _whatsapp_format
 from engine.tenant import Tenant
 
@@ -40,7 +41,17 @@ TECH_PROMPT = """তুমি {company}-এর অফিস সাপোর্�
   এবং live_data-তে সেই কাস্টমার আছে, উত্তরের একদম শেষে আলাদা লাইনে লেখো [[NOTIFY: কাস্টমারকে পাঠানোর মেসেজ]]।
   এই মেসেজ সরাসরি কাস্টমারের WhatsApp-এ যাবে: সাধারণ কথ্য বাংলায়, ভদ্রভাবে, ১-২ লাইনে, শুরুতে "জি,"। live_data.customer_chat-এ কাস্টমার আগে
   কী জানতে চেয়েছিলেন দেখে সেটার সাথে মিলিয়ে লেখো। টেকনিশিয়ান যা বলেছেন তার বাইরে কোনো তথ্য (নতুন তারিখ, টাকা, সময়) বানাবে না;
-  দরকারি তথ্য না থাকলে [[NOTIFY]] না দিয়ে টেকনিশিয়ানকে সেটা জিজ্ঞেস করো। উত্তরে শুধু লেখো "কাস্টমারকে জানানো হচ্ছে"; ফল সিস্টেম যোগ করবে।"""
+  দরকারি তথ্য না থাকলে [[NOTIFY]] না দিয়ে টেকনিশিয়ানকে সেটা জিজ্ঞেস করো। উত্তরে শুধু লেখো "কাস্টমারকে জানানো হচ্ছে"; ফল সিস্টেম যোগ করবে।
+  লিংক, নম্বর বা তথ্য পাঠাতে বলা হলে সেটা [[NOTIFY]]-এর লেখার ভেতরেই হুবহু দেবে; "পাঠানো হয়েছে" লিখে আসল জিনিসটা বাদ দেবে না।
+  টেকনিশিয়ান স্পষ্ট করে কাস্টমারকে জানাতে/পাঠাতে না বললে (যেমন শুধু "Hi", "ok", প্রশ্ন) কখনো [[NOTIFY]] লিখবে না।
+- কোম্পানির তথ্য (প্যাকেজ, অফার, FTP/লিংক, পেমেন্ট) শুধু নিচের কোম্পানির নির্দেশনা থেকে বলবে; সেখানে না থাকলে টেকনিশিয়ানকে জিজ্ঞেস করো, বানাবে না।{knowledge}"""
+
+TECH_CUSTOMER_MINUTES = 30  # "ওর বিল কত?" follows the customer talked about last, only this long
+# the technician clearly asks for something to go to the customer
+SEND_INTENT = re.compile(r"জানা(ও|ন|বে|য়ে|িয়ে)|বলো|বলেন|বলে দা|বলে দি|পাঠা|দিয়ে দা|দিয়ে দি|রিপ্লাই|"
+                         r"\b(send|sent|reply|rply|notify|inform|tell|janao|janan|jana[iy]|bolo|bolen|patha\w*|dao|diye)\b", re.I)
+# "the links were sent" with no link, number or amount in it: an empty promise, not a message
+CLAIMS_SENT = re.compile(r"(পাঠানো হয়েছে|পাঠালাম|দেওয়া হয়েছে|দিলাম|নিচে|লিংক|link)", re.I)
 
 
 def technician_for(t: Tenant, wa_number: str) -> dict | None:
@@ -69,14 +80,19 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
 
     api = tenants.billing(t)
     state = contact.get("ident_state") or {}
-    customer = customers.by_text(t, api, text, allow_bare_id=True)
-    if not customer and state.get("tech_customer"):
+    # a short message ("1565", "Send ftp link to 1565") names a customer by bare ID; in a long one, numbers are
+    # usually something else, so an ID needs a hint word ("id 1565"). IPs and links never count (ispdigital).
+    customer = customers.by_text(t, api, text, allow_bare_id=len(text.split()) <= 6)
+    at = state.get("at")
+    recent = bool(at) and datetime.fromisoformat(at) > datetime.now(timezone.utc) - timedelta(minutes=TECH_CUSTOMER_MINUTES)
+    if not customer and state.get("tech_customer") and recent:
         # follow-up about the customer talked about last ("ওর বিল কত?")
         customer = customers.by_text(t, api, state["tech_customer"], allow_bare_id=True)
     context = None
     if customer:
         db.execute("UPDATE wa_contacts SET ident_state = %s, updated_at = now() WHERE id = %s",
-                   (json.dumps({"mode": "technician", "tech_customer": customer.get("CustomerId")}), contact["id"]))
+                   (json.dumps({"mode": "technician", "tech_customer": customer.get("CustomerId"),
+                                "at": datetime.now(timezone.utc).isoformat()}), contact["id"]))
         customer = customers.fresh(api, customer)
         context = customers.add_online(t, diagnose(api, customer), customer)
         context["customer"]["mac"] = (api.live_status(customer["CustomerHeaderId"]) or {}).get("calledid")
@@ -97,7 +113,9 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
         history.append({"role": "user", "content": text})
     ctx = json.dumps(context, ensure_ascii=False) if context else "এই মেসেজে কোনো কাস্টমার চেনা যায়নি।"
     history[-1] = {"role": "user", "content": f"<live_data>\n{ctx}\n</live_data>\n\nটেকনিশিয়ানের মেসেজ:\n{history[-1]['content']}"}
-    system = TECH_PROMPT.format(company=t.name, tech=tech["name"])
+    extra = t.bot.get("extra_prompt")
+    system = TECH_PROMPT.format(company=t.name, tech=tech["name"], knowledge=(
+        f"\n\n=== কোম্পানির নির্দেশনা ===\n{extra}\n=== নির্দেশনা শেষ ===" if extra else ""))
     draft, provider, model = generate_with_fallback(t, system, history)
     draft = _whatsapp_format(draft)
     if not draft:
@@ -126,7 +144,19 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
         draft = (draft[:mm.start()] + draft[mm.end():]).strip()
         draft = "\n".join(l for l in draft.splitlines() if not re.search(r"জানানো\s*হচ্ছে", l)).strip()
         if customer and body:
-            draft = (draft + "\n" if draft else "") + notify_customer(t, tech, customer, body, deliver)
+            # links the technician pasted go out as they are, even if the model left them out
+            body += "".join(f"\n{u}" for u in URL_RE.findall(text) if u not in body)
+            asked = db.all_rows("""SELECT body FROM wa_messages WHERE company_id = %s AND contact_id = %s AND direction = 'in'
+                                     AND body IS NOT NULL AND created_at > now() - interval '15 minutes'
+                                   ORDER BY id DESC LIMIT 4""", (t.company_id, contact["id"]))
+            # "Send ftp link to 1565" ... (bot asks for the link) ... the link: the ask may be a message or two back
+            if not SEND_INTENT.search(" ".join([text] + [r["body"] for r in asked])):
+                result = "কাস্টমারকে কিছু পাঠাইনি। পাঠাতে চাইলে স্পষ্ট লিখুন, যেমন \"1565-কে জানাও ...\""
+            elif CLAIMS_SENT.search(body) and not re.search(r"https?://|ftp://|www\.|\d{3,}", body):
+                result = "কাস্টমারকে পাঠাইনি: মেসেজে লিংক/তথ্যটা নেই। লিংক বা তথ্যটা এখানে লিখে দিন, সেটাই পাঠাব।"
+            else:
+                result = notify_customer(t, tech, customer, body, deliver)
+            draft = (draft + "\n" if draft else "") + result
     deliver(t, contact, message_id, draft, note, context=context, provider=provider, model=f"{model} · technician")
 
 
@@ -154,8 +184,9 @@ def notify_customer(t: Tenant, tech: dict, customer: dict, body: str, deliver) -
     if not recent:
         return "কাস্টমার গত ২৪ ঘণ্টায় মেসেজ দেননি, WhatsApp-এর নিয়মে এখন নিজে থেকে মেসেজ পাঠানো যায় না। ফোন করে জানান।"
     mode = deliver(t, chat, None, body, f"টেকনিশিয়ান {tech['name']}-এর নির্দেশে", provider="flow", model="technician notify")
+    who = f"*{customer.get('CustomerName')}* (ID {customer.get('CustomerId')})"
     if mode == "sent":
-        return f"✅ কাস্টমারকে পাঠানো হয়েছে: {body}"
+        return f"✅ {who}-কে পাঠানো হয়েছে: {body}"
     return f"কাস্টমারকে পাঠানো যায়নি ({mode}). অফিসে জানান।"
 
 

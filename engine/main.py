@@ -309,7 +309,7 @@ def customer_view(context: dict, verified: bool) -> dict:
 
 
 # --- one reply per burst of messages ------------------------------------------------------------
-BURST_WAIT = 4  # seconds to wait for the rest of a burst ("হায়" / "নেট নাই" / "চালান যায় না")
+BURST_WAIT = 7  # seconds to wait for the rest of a burst ("হায়" / "নেট নাই" / "চালান যায় না")
 _contact_locks: dict[int, threading.Lock] = {}
 
 
@@ -494,6 +494,11 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
             no = re.search(r"\d{4,}", extra or "")
             if extra and not (no and said_recently(t, contact["id"], no.group(0))):  # the ticket number once, not every reply
                 draft += "\n" + extra
+        if draft and newer_inbound(t, contact["id"], message_id):
+            # the customer wrote again while we were answering: that message's turn answers all of them
+            # (otherwise two replies go out for one question)
+            save_draft(t, contact["id"], message_id, "superseded", draft, context=context, provider=provider, model=model)
+            return
         if draft:
             deliver(t, contact, message_id, draft, ticket_note, context=context, provider=provider, model=model)
     except Exception as e:
