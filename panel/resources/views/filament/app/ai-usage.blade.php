@@ -31,7 +31,7 @@
                 <b>{{ $t['label'] }}</b>
                 <div class="za-cost">{{ $money($t['cost'], $t['priced']) }}</div>
                 <div class="za-sub">
-                    {{ $n($t['input'] + $t['output']) }} টোকেন (ইনপুট {{ $n($t['input']) }} · আউটপুট {{ $n($t['output']) }})<br>
+                    {{ $n($t['input'] + $t['output']) }} টোকেন (ইনপুট {{ $n($t['input']) }}@if ($t['cached']), এর মধ্যে cache থেকে {{ $n($t['cached']) }}@endif · আউটপুট {{ $n($t['output']) }})<br>
                     {{ $n($t['calls']) }} বার AI ডাকা হয়েছে
                     @if ($t['failed']) · <span class="za-bad">{{ $n($t['failed']) }} বার ব্যর্থ (লিমিট/এরর)</span> @endif
                 </div>
@@ -79,7 +79,7 @@
                 <tr>
                     <td>{{ $m['model'] }}<div class="za-q">{{ \App\Models\AiKey::PROVIDERS[$m['provider']][0] ?? $m['provider'] }}</div></td>
                     <td class="num">{{ $n($m['calls']) }}</td>
-                    <td class="num">{{ $n($m['input']) }}@if (str_contains($m['model'], 'whisper'))<div class="za-q">সেকেন্ড অডিও</div>@endif</td>
+                    <td class="num">{{ $n($m['input']) }}@if (str_contains($m['model'], 'whisper'))<div class="za-q">সেকেন্ড অডিও</div>@elseif ($m['cached'])<div class="za-q">cache থেকে {{ $n($m['cached']) }}</div>@endif</td>
                     <td class="num">{{ $n($m['output']) }}</td>
                     <td class="num">
                         {{ $m['price'] ? rtrim(rtrim(number_format($m['price'][0], 4), '0'), '.').' / '.rtrim(rtrim(number_format($m['price'][1], 4), '0'), '.') : 'সেট নেই' }}

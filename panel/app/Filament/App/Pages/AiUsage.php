@@ -88,7 +88,7 @@ class AiUsage extends Page
         $out = [];
         foreach ($rows as $r) {
             $k = implode('|', array_map(fn ($c) => $r->{$c}, $by));
-            $o = $out[$k] ?? ['calls' => 0, 'failed' => 0, 'input' => 0, 'output' => 0, 'cost' => 0.0, 'priced' => true, 'last_at' => null];
+            $o = $out[$k] ?? ['calls' => 0, 'failed' => 0, 'input' => 0, 'output' => 0, 'cached' => 0, 'cost' => 0.0, 'priced' => true, 'last_at' => null];
             foreach ($by as $c) {
                 $o[$c] = $r->{$c};
             }
@@ -96,6 +96,7 @@ class AiUsage extends Page
             $o['failed'] += $r->failed;
             $o['input'] += $r->input;
             $o['output'] += $r->output;
+            $o['cached'] += $r->cached;
             $c = $this->cost($prices, $r->provider, $r->model, (int) $r->input, (int) $r->output, (int) $r->cached);
             if ($c === null) {
                 $o['priced'] = false;
@@ -114,13 +115,14 @@ class AiUsage extends Page
     {
         $out = [];
         foreach (['today' => 'আজ', '7' => 'গত ৭ দিন', '30' => 'গত ৩০ দিন'] as $p => $label) {
-            $t = ['label' => $label, 'calls' => 0, 'failed' => 0, 'input' => 0, 'output' => 0, 'cost' => 0.0, 'priced' => true];
+            $t = ['label' => $label, 'calls' => 0, 'failed' => 0, 'input' => 0, 'output' => 0, 'cached' => 0, 'cost' => 0.0, 'priced' => true];
             foreach ($this->grouped($p, ['purpose']) as $r) {
                 $t['calls'] += $r['calls'];
                 $t['failed'] += $r['failed'];
                 if ($r['purpose'] !== 'voice') {
                     $t['input'] += $r['input'];
                     $t['output'] += $r['output'];
+                    $t['cached'] += $r['cached'];
                 }
                 $t['cost'] += $r['cost'];
                 $t['priced'] = $t['priced'] && $r['priced'];
