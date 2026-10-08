@@ -143,6 +143,19 @@ class CompanySettingsTest extends TestCase
         Livewire::test(BotSettings::class)->assertOk()->assertSet('data.customer_prompt', null);
     }
 
+    public function test_ai_cost_prices_cached_input_at_a_tenth(): void
+    {
+        DB::table('ai_usage')->insert(['company_id' => $this->company->id, 'provider' => 'claude', 'model' => 'claude-haiku-5-5',
+            'purpose' => 'customer', 'input_tokens' => 10000, 'output_tokens' => 1000, 'cached_tokens' => 9000, 'ok' => true,
+            'created_at' => now()]);
+        $this->as($this->owner);
+
+        $today = Livewire::test(\App\Filament\App\Pages\AiUsage::class)->instance()->totals()['today'];
+        // 1,000 uncached x $0.10 + 9,000 cached x $0.01 + 1,000 output x $0.50, per 1M tokens
+        $this->assertEqualsWithDelta(0.00069, $today['cost'], 1e-9);
+        $this->assertTrue($today['priced']);
+    }
+
     public function test_ai_key_is_encrypted_and_scoped_to_company(): void
     {
         $other = Company::create(['name' => 'Other ISP']);

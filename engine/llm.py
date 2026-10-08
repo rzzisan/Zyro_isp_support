@@ -83,6 +83,23 @@ def _limits(headers) -> dict:
             if k.lower().startswith(("x-ratelimit-", "anthropic-ratelimit-")) or k.lower() == "retry-after"}
 
 
+# Claude prompt caching: the instructions are the same for every chat, so Anthropic keeps them for an hour
+# and later replies read them at a tenth of the price. A cache read refreshes the hour.
+CLAUDE_CACHE_TTL = "1h"
+# the FAQ part can change per message (only the matching entries are sent), so it stays outside the cached part
+_FAQ_HEADER = "=== কোম্পানির FAQ"
+
+
+def _claude_system(system: str) -> list[dict]:
+    """The system prompt as Anthropic blocks: the stable instructions cached, the FAQ part (if any) after it."""
+    cut = system.find(_FAQ_HEADER)
+    head, tail = (system, "") if cut <= 0 else (system[:cut], system[cut:])
+    blocks = [{"type": "text", "text": head, "cache_control": {"type": "ephemeral", "ttl": CLAUDE_CACHE_TTL}}]
+    if tail.strip():
+        blocks.append({"type": "text", "text": tail})
+    return blocks
+
+
 def _call(provider: str, model: str, api_key: str, system: str, messages: list[dict],
           max_tokens: int = 2000) -> tuple[str | None, dict, dict]:
     """Reply text, token usage {input, output, cached} and the rate-limit headers of the response."""
@@ -92,7 +109,7 @@ def _call(provider: str, model: str, api_key: str, system: str, messages: list[d
             raw = client.beta.messages.with_raw_response.create(
                 model=model,
                 max_tokens=max_tokens,
-                system=system,
+                system=_claude_system(system),
                 messages=messages,
                 output_config={"effort": "low"},
                 betas=["server-side-fallback-2026-07-01"],

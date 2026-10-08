@@ -15,7 +15,13 @@ class AiModelPrice extends Model
         'groq|whisper-large-v3' => [30.83, 0], // $0.111 per audio hour
         'gemini|gemini-2.5-flash' => [0.30, 2.50],
         'gemini|gemini-2.5-flash-lite' => [0.10, 0.40],
+        'claude|claude-haiku-5-5' => [0.10, 0.50],
+        'claude|claude-sonnet-5-5' => [2.00, 10.00],
+        'claude|claude-opus-5-5' => [4.00, 20.00],
     ];
+
+    /** Input read from the provider's prompt cache costs about a tenth of the input price. */
+    public const CACHED_INPUT_FACTOR = 0.1;
 
     protected $fillable = ['company_id', 'provider', 'model', 'input_per_million', 'output_per_million'];
 

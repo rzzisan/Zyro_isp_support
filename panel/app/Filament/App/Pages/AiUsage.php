@@ -65,11 +65,13 @@ class AiUsage extends Page
         return $start->utc();
     }
 
-    private function cost(array $prices, string $provider, string $model, int $in, int $out): ?float
+    private function cost(array $prices, string $provider, string $model, int $in, int $out, int $cached = 0): ?float
     {
         $p = $prices["{$provider}|{$model}"] ?? null;
+        $cached = min($cached, $in); // input_tokens already includes the cached part
 
-        return $p === null ? null : ($in * $p[0] + $out * $p[1]) / 1_000_000;
+        return $p === null ? null
+            : (($in - $cached) * $p[0] + $cached * $p[0] * AiModelPrice::CACHED_INPUT_FACTOR + $out * $p[1]) / 1_000_000;
     }
 
     /** Usage grouped by the given columns since the start of a period, each row with its estimated cost. */
@@ -81,7 +83,7 @@ class AiUsage extends Page
             ->select([...array_unique([...$by, 'provider', 'model']),
                 DB::raw('count(*) AS calls'), DB::raw('sum(CASE WHEN ok THEN 0 ELSE 1 END) AS failed'),
                 DB::raw('sum(input_tokens) AS input'), DB::raw('sum(output_tokens) AS output'),
-                DB::raw('max(created_at) AS last_at')])
+                DB::raw('sum(cached_tokens) AS cached'), DB::raw('max(created_at) AS last_at')])
             ->get();
         $out = [];
         foreach ($rows as $r) {
@@ -94,7 +96,7 @@ class AiUsage extends Page
             $o['failed'] += $r->failed;
             $o['input'] += $r->input;
             $o['output'] += $r->output;
-            $c = $this->cost($prices, $r->provider, $r->model, (int) $r->input, (int) $r->output);
+            $c = $this->cost($prices, $r->provider, $r->model, (int) $r->input, (int) $r->output, (int) $r->cached);
             if ($c === null) {
                 $o['priced'] = false;
             } else {
@@ -166,14 +168,15 @@ class AiUsage extends Page
             ->where('purpose', '!=', 'voice')
             ->groupBy(DB::raw("date(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Dhaka')"), 'provider', 'model')
             ->select([DB::raw("date(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Dhaka') AS day"), 'provider', 'model',
-                DB::raw('count(*) AS calls'), DB::raw('sum(input_tokens) AS input'), DB::raw('sum(output_tokens) AS output')])
+                DB::raw('count(*) AS calls'), DB::raw('sum(input_tokens) AS input'), DB::raw('sum(output_tokens) AS output'),
+                DB::raw('sum(cached_tokens) AS cached')])
             ->get();
         $days = [];
         foreach ($rows as $r) {
             $d = $days[$r->day] ?? ['day' => $r->day, 'calls' => 0, 'tokens' => 0, 'cost' => 0.0];
             $d['calls'] += $r->calls;
             $d['tokens'] += $r->input + $r->output;
-            $d['cost'] += $this->cost($prices, $r->provider, $r->model, (int) $r->input, (int) $r->output) ?? 0;
+            $d['cost'] += $this->cost($prices, $r->provider, $r->model, (int) $r->input, (int) $r->output, (int) $r->cached) ?? 0;
             $days[$r->day] = $d;
         }
         krsort($days);
