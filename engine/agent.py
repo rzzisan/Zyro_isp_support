@@ -23,14 +23,49 @@ def faqs(t: Tenant) -> list[dict]:
         return []
 
 
-def knowledge(t: Tenant) -> str:
-    """The company's own instructions and FAQ, as one block for the customer bot and the technician desk."""
+FAQ_ALL_CHARS = 2500  # a small FAQ goes in whole (same text every time, so providers can cache it)
+FAQ_MAX_PICKED = 5
+# Banglish / English / Bangla spellings of the same word count as one, so "package" finds "প্যাকেজ"
+_SAME = {
+    "package": "প্যাকেজ", "pakage": "প্যাকেজ", "packege": "প্যাকেজ", "offer": "অফার", "ofar": "অফার",
+    "bill": "বিল", "taka": "টাকা", "tk": "টাকা", "dam": "দাম", "price": "দাম", "rate": "দাম",
+    "ftp": "ftp", "link": "লিংক", "lingk": "লিংক", "server": "সার্ভার", "movie": "মুভি", "tv": "টিভি", "live": "লাইভ",
+    "speed": "স্পিড", "mbps": "mbps", "payment": "পেমেন্ট", "pay": "পেমেন্ট", "bkash": "বিকাশ", "bikash": "বিকাশ",
+    "nagad": "নগদ", "office": "অফিস", "ofis": "অফিস", "time": "সময়", "somoy": "সময়", "number": "নম্বর",
+    "nombor": "নম্বর", "router": "রাউটার", "wifi": "ওয়াইফাই", "password": "পাসওয়ার্ড", "line": "লাইন",
+    "connection": "সংযোগ", "notun": "নতুন", "new": "নতুন", "bongo": "বঙ্গ", "bonggo": "বঙ্গ", "chorki": "চরকি",
+    "লিংক": "লিংক", "লিঙ্ক": "লিংক", "নাম্বার": "নম্বর", "নম্বর": "নম্বর",
+}
+_STOP = {"কি", "কী", "কত", "আর", "এর", "আছে", "ki", "koto", "ar", "er", "ache", "ase", "vai", "ভাই", "জি", "the", "is",
+         "what", "how", "আমি", "আমার", "apnar", "amar", "ami", "দিন", "den", "dao", "দাও"}
+
+
+def _words(text: str) -> set[str]:
+    out = set()
+    for w in re.findall(r"[a-z0-9]+|[\u0980-\u09ff]+", (text or "").lower()):
+        if len(w) >= 2 and w not in _STOP:
+            out.add(_SAME.get(w, w))
+    return out
+
+
+def pick_faqs(rows: list[dict], query: str | None) -> list[dict]:
+    """All of a small FAQ; of a big one only the entries that share words with the customer's message."""
+    if query is None or sum(len(r["question"]) + len(r["answer"]) for r in rows) <= FAQ_ALL_CHARS:
+        return rows
+    q = _words(query)
+    scored = [(len(q & _words(r["question"])) * 2 + len(q & _words(r["answer"])), i, r) for i, r in enumerate(rows)]
+    return [r for s, i, r in sorted(scored, key=lambda x: (-x[0], x[1])) if s > 0][:FAQ_MAX_PICKED]
+
+
+def knowledge(t: Tenant, query: str | None = None) -> str:
+    """The company's own instructions and FAQ, as one block for the customer bot and the technician desk.
+    query = the message being answered (picks the FAQs that matter once the FAQ is big); None = everything."""
     parts = []
     extra = (t.bot.get("extra_prompt") or "").strip()
     if extra:
         parts.append("=== কোম্পানির নির্দেশনা (অ্যাডমিন লিখেছেন; এখানকার তথ্য সঠিক ও চূড়ান্ত, হুবহু মেনে চলবে) ===\n"
                      f"{extra}\n=== নির্দেশনা শেষ ===")
-    rows = faqs(t)
+    rows = pick_faqs(faqs(t), query)
     if rows:
         parts.append("=== কোম্পানির FAQ (অ্যাডমিন লিখেছেন; প্রশ্নটা হুবহু না মিললেও একই বিষয় হলে এই উত্তর অনুযায়ী বলবে, "
                      "উত্তরের তথ্য বদলাবে না, নিজের ভাষায় ছোট করে বলবে; এখানে থাকা লিংক বা IP কাস্টমারকে হুবহু দেওয়া যাবে) ===\n"
@@ -39,11 +74,11 @@ def knowledge(t: Tenant) -> str:
     return "\n\n".join(parts)
 
 
-def system_prompt(t: Tenant) -> str:
+def system_prompt(t: Tenant, query: str | None = None) -> str:
     # the company may have edited the built-in rules (Bot settings); empty = the built-in text
     base = (t.bot.get("customer_prompt") or "").strip() or SYSTEM_PROMPT
     prompt = base.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)")
-    block = knowledge(t)
+    block = knowledge(t, query)
     if not block:
         return prompt
     return prompt + "\n\n" + block + (
@@ -139,7 +174,7 @@ def draft_reply(t: Tenant, history: list[dict], context: dict | None,
     messages = list(history)
     messages[-1] = {"role": "user",
                     "content": f"<live_data>\n{ctx}\n</live_data>\n\nকাস্টমারের মেসেজ:\n{history[-1]['content']}"}
-    text, provider, model = generate_with_fallback(t, system_prompt(t), messages, "customer", contact_id)
+    text, provider, model = generate_with_fallback(t, system_prompt(t, history[-1]["content"]), messages, "customer", contact_id)
     return _whatsapp_format(text), provider, model
 
 

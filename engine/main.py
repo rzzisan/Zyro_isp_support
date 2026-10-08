@@ -87,7 +87,7 @@ def save_message(t: Tenant, contact_id: int, wa_message_id: str | None, directio
     )
 
 
-def history_for(t: Tenant, contact_id: int, limit: int = 12) -> list[dict]:
+def history_for(t: Tenant, contact_id: int, limit: int = 6) -> list[dict]:
     rows = db.all_rows(
         """SELECT direction, sender, body FROM wa_messages
            WHERE company_id = %s AND contact_id = %s AND type IN ('text', 'audio') AND body IS NOT NULL
@@ -290,6 +290,20 @@ def identify(t: Tenant, contact: dict, text: str):
     return None, "আসসালামু আলাইকুম। " + ASK_ID, None, None, False
 
 
+# the message is about paying / a payment not showing: only then the bot needs the last payments
+PAYMENT_TALK = re.compile(
+    r"পেমেন্ট|পেইড|পরিশোধ|বিকাশ|নগদ|রকেট|টাকা|দিয়েছি|দিয়েছি|দিছি|দিলাম|দিসি|পাঠাইছি|পাঠিয়েছি|জমা|মাসের|কোন মাস|ইতিহাস|রিসিভ|"
+    r"\b(pay\w*|paid|bkash|bikash|nagad|rocket|taka|tk|dichi|disi|diyechi|dilam|dici|pathaisi|pathiyechi|joma|"
+    r"history|month|mash|receive\w*|recharge|bill\s*(dichi|disi|diyechi|dilam|paid))\b", re.I)
+
+
+def drop_payments_unless_asked(context: dict | None, text: str) -> dict | None:
+    """The 6-month payment list is the biggest part of live_data; send it only when the message is about paying."""
+    if context and not PAYMENT_TALK.search(text or ""):
+        context.pop("payments", None)
+    return context
+
+
 def customer_view(context: dict, verified: bool) -> dict:
     """What the customer-facing bot may see: never mobile numbers, IPs or MACs; nothing about the bill,
     payments or the name unless the chat is verified."""
@@ -480,6 +494,7 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
             return  # "ওকে" after our "ঠিক আছে, জানাবেন": nothing more to say
         api = tenants.billing(t)
         context = customer_view(customers.add_online(t, diagnose(api, customers.fresh(api, customer)), customer), verified)
+        drop_payments_unless_asked(context, text)
         history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": text})
