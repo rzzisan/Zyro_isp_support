@@ -1,8 +1,8 @@
 """Read every OLT over SNMP (read-only) every 5 minutes: all ONUs with status/power/distance, and which customer
 router MAC sits behind which ONU (looked up per MAC in the OLT's MAC table, never a full-table walk).
 
-Brand drivers: only the OIDs differ. BDCOM EPON is verified on a P3608B, VSOL EPON on a V1600D; ECOM to be added once
-read from a real OLT.
+Brand drivers: only the OIDs differ. BDCOM EPON is verified on a P3608B, VSOL EPON on a V1600D, ECOM EPON
+(EasyPath / C-Data family, NSCRTV EPON MIB) on 172.26.26.30.
   set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.olt_sync [--olt ID]
 """
 import argparse
@@ -28,6 +28,16 @@ BRIDGE_IFINDEX = "1.3.6.1.2.1.17.1.4.1.2"        # dot1dBasePortIfIndex
 VLAN_NAMES = "1.3.6.1.2.1.17.7.1.4.3.1.1"        # dot1qVlanStaticName
 
 VSOL_ONU = re.compile(r"^EPON(\d+)ONU(\d+)$", re.I)
+OPTICAL = ("rx_dbm", "tx_dbm", "temp_c", "voltage")
+
+# ECOM: no ONU interfaces in ifTable; ONUs live in the NSCRTV onuInfoTable, indexed by a device number
+# 0x01000000 | (PON ifIndex << 8) | ONU id (PON ifIndex 11 = pon 1). We use that device number as the ONU's if_index.
+ECOM_ONU = "1.3.6.1.4.1.17409.2.3.4.1.1"
+ECOM_FDB = "1.3.6.1.4.1.34592.1.3.100.12.2.1.1.3"   # .<router mac 6 octets>.<vlan> = ONU device number
+
+
+def ecom_name(dev: int) -> str:
+    return f"EPON0/{((dev >> 8) & 0xFF) - 10}:{dev & 0xFF}"
 
 # Each driver: which ifDescr names are ONUs, how an ONU's row index in the brand's own tables is built ("key"), and per
 # column (OID, how to read it): "mac" = 6 raw bytes, a number = int divided by it, "dbm" = text like
@@ -63,7 +73,31 @@ DRIVERS = {
             "voltage": ("1.3.6.1.4.1.37950.1.1.5.12.2.1.8.1.4", "num"),
         },
     },
+    # ECOM EPON (EasyPath, C-Data family): ONU list, status and distance from onuInfoTable (small GETBULKs are fine),
+    # optical values by GET per online ONU (<col>.<dev>.0.0; offline ONUs answer noSuchInstance). No BRIDGE-MIB: the
+    # customer MAC -> ONU table is C-Data's own (ECOM_FDB), about one row per online ONU, so it is walked whole.
+    # A long burst of requests makes its agent stop answering for ~90 s, hence the longer pause.
+    "ecom": {
+        "table": True,
+        "fdb": "ecom",
+        "pause": 0.1,
+        "optical_suffix": ".0.0",
+        "key": lambda i, name: str(i),
+        "cols": {
+            "status_code": (ECOM_ONU + ".8", None),       # 1 online, 2 offline
+            "onu_mac": (ECOM_ONU + ".7", "mac"),
+            "distance_m": (ECOM_ONU + ".15", None),
+            "rx_dbm": ("1.3.6.1.4.1.17409.2.3.4.2.1.4", 100),
+            "tx_dbm": ("1.3.6.1.4.1.17409.2.3.4.2.1.5", 100),
+            "temp_c": ("1.3.6.1.4.1.17409.2.3.4.2.1.8", 100),
+            "voltage": ("1.3.6.1.4.1.17409.2.3.4.2.1.7", 100000),
+        },
+    },
 }
+
+
+def col_oid(drv: dict, col: str, key: str) -> str:
+    return f"{drv['cols'][col][0]}.{key}{drv.get('optical_suffix', '') if col in OPTICAL else ''}"
 
 
 def conv(v, how):
@@ -87,7 +121,7 @@ def client(o: dict) -> SNMP:
     return SNMP(o["host"], o["snmp_port"], db.decrypt(o["community"]), timeout=5, retries=1)
 
 
-def walk(s: SNMP, root: str, rep: int = 20) -> list[tuple[str, object]]:
+def walk(s: SNMP, root: str, rep: int = 20, pause: float = PAUSE) -> list[tuple[str, object]]:
     out, cur, pre = [], root, root + "."
     while True:
         rows = s._request(0xA5, [cur], 0, rep)
@@ -100,7 +134,30 @@ def walk(s: SNMP, root: str, rep: int = 20) -> list[tuple[str, object]]:
             cur = oid
         if stop or not rows:
             return out
-        time.sleep(PAUSE)
+        time.sleep(pause)
+
+
+def walk_cols(s: SNMP, roots: list[str], rep: int, pause: float) -> dict[str, dict[int, object]]:
+    """Walk several columns of one table together: one GETBULK carries all of them, so a table costs as many
+    requests as walking one column. Returns {root: {last index: value}}."""
+    out = {r: {} for r in roots}
+    cur = {r: r for r in roots}
+    while cur:
+        live = list(cur)
+        rows = s._request(0xA5, [cur[r] for r in live], 0, rep)
+        if not rows:
+            break
+        for n, (oid, tag, val) in enumerate(rows):
+            r = live[n % len(live)]
+            if r not in cur:
+                continue
+            if tag == 0x82 or not oid.startswith(r + "."):
+                del cur[r]
+                continue
+            out[r][idx(oid)] = val
+            cur[r] = oid
+        time.sleep(pause)
+    return out
 
 
 def idx(oid: str) -> int:
@@ -127,19 +184,32 @@ def _fmt_mac(v) -> str | None:
 
 def poll_onus(o: dict, s: SNMP) -> int:
     drv = DRIVERS[o["brand"]]
-    names = {idx(oid): text(v) for oid, v in walk(s, IF_DESCR)}
-    onus = {i: n for i, n in names.items() if drv["onu_name"](n)}
-    oper = {idx(oid): v for oid, v in walk(s, IF_OPER) if idx(oid) in onus}
-    changed = {idx(oid): v for oid, v in walk(s, IF_LAST_CHANGE) if idx(oid) in onus}
-    uptime = s.get(SYS["uptime"])[SYS["uptime"]] or 0
+    pause = drv.get("pause", PAUSE)
     cols = {k: {} for k in drv["cols"]}
+    if drv.get("table"):
+        # ONUs from the brand's own table: status, MAC, distance and seconds since the last change in four small walks
+        t = walk_cols(s, [ECOM_ONU + c for c in (".8", ".7", ".15", ".18")], 5, pause)
+        st, since = t[ECOM_ONU + ".8"], t[ECOM_ONU + ".18"]
+        onus = {i: ecom_name(i) for i in st}
+        oper = {i: 1 if v == 1 else 2 for i, v in st.items()}
+        cols["status_code"] = {i: conv(v, None) for i, v in st.items()}
+        cols["onu_mac"] = {i: conv(v, "mac") for i, v in t[ECOM_ONU + ".7"].items()}
+        cols["distance_m"] = {i: conv(v, None) or None for i, v in t[ECOM_ONU + ".15"].items()}
+        uptime = 100 * max(since.values(), default=0)   # ifLastChange-style: timeticks of "now" and of the change
+        changed = {i: uptime - 100 * v for i, v in since.items() if isinstance(v, int)}
+    else:
+        names = {idx(oid): text(v) for oid, v in walk(s, IF_DESCR)}
+        onus = {i: n for i, n in names.items() if drv["onu_name"](n)}
+        oper = {idx(oid): v for oid, v in walk(s, IF_OPER) if idx(oid) in onus}
+        changed = {idx(oid): v for oid, v in walk(s, IF_LAST_CHANGE) if idx(oid) in onus}
+        uptime = s.get(SYS["uptime"])[SYS["uptime"]] or 0
     # BDCOM's own tables: plain GETs of known ONU indexes. A GETBULK on these tables makes the OLT's SNMP agent stop
     # answering for a minute or two, so they are never walked.
     keys = sorted(onus)
     row = {i: drv["key"](i, onus[i]) for i in keys}
     for key in ("status_code", "onu_mac", "distance_m"):
         oid, how = drv["cols"][key]
-        if not oid:
+        if not oid or drv.get("table"):
             continue
         for n in range(0, len(keys), 10):
             part = keys[n:n + 10]
@@ -153,21 +223,21 @@ def poll_onus(o: dict, s: SNMP) -> int:
         "SELECT if_index FROM onus WHERE olt_id = %s AND no_ddm_at > now() - interval '1 day'", (o["id"],))}
     no_ddm = []
     slow = SNMP(o["host"], o["snmp_port"], s.community.decode(), timeout=12, retries=0)
-    optical = [k for k in ("rx_dbm", "tx_dbm", "temp_c", "voltage")]
+    optical = list(OPTICAL)
     for i in keys:
         if oper.get(i) != 1 or i in skip:
             continue
         try:
-            got = slow.get(*[f"{drv['cols'][k][0]}.{row[i]}" for k in optical])
+            got = slow.get(*[col_oid(drv, k, row[i]) for k in optical])
         except Exception as e:
             log.warning("optical read of %s failed: %s", onus[i], e)
             no_ddm.append(i)
             continue
         for k in optical:
-            cols[k][i] = conv(got.get(f"{drv['cols'][k][0]}.{row[i]}"), drv["cols"][k][1])
+            cols[k][i] = conv(got.get(col_oid(drv, k, row[i])), drv["cols"][k][1])
         if cols["rx_dbm"].get(i) is None:
             no_ddm.append(i)
-        time.sleep(PAUSE)
+        time.sleep(pause)
     now = datetime.now(timezone.utc)
     rows = []
     for i, name in onus.items():
@@ -225,9 +295,18 @@ def map_macs(o: dict, s: SNMP, vlan_list: list[int]) -> tuple[int, int]:
     macs = [r["mac"] for r in cand if r["mac"] and len(r["mac"].split(":")) == 6]
     if not macs:
         return 0, 0
-    bridge = {idx(oid): v for oid, v in walk(s, BRIDGE_IFINDEX)}
     onu_ids = {r["if_index"]: r["id"] for r in db.all_rows("SELECT id, if_index FROM onus WHERE olt_id = %s", (o["id"],))}
     hits: dict[str, tuple[int, int]] = {}
+    if DRIVERS[o["brand"]].get("fdb") == "ecom":
+        # the whole customer MAC -> ONU table (~one row per online ONU) in small walks, then match locally
+        pre = len(ECOM_FDB.split("."))
+        for oid, dev in walk(s, ECOM_FDB, 10, DRIVERS[o["brand"]]["pause"]):
+            p = oid.split(".")[pre:]
+            if len(p) == 7 and dev in onu_ids:
+                hits[":".join(f"{int(x):02X}" for x in p[:6])] = (onu_ids[dev], int(p[6]))
+        _save_macs(o, macs, hits)
+        return len(macs), sum(1 for m in macs if m in hits)
+    bridge = {idx(oid): v for oid, v in walk(s, BRIDGE_IFINDEX)}
     # VLANs that already gave us customers first; batches of 100 MACs, each finished and saved before the next,
     # and at most ~4 minutes per run (the rest continues next run), so a big router never blocks the sync.
     known = [r["vlan"] for r in db.all_rows("SELECT vlan, count(*) n FROM customer_onus WHERE olt_id = %s AND vlan IS NOT NULL "
@@ -254,23 +333,28 @@ def map_macs(o: dict, s: SNMP, vlan_list: list[int]) -> tuple[int, int]:
                     if ifindex in onu_ids:
                         hits[m] = (onu_ids[ifindex], vlan)
                 time.sleep(PAUSE)
-        with db.conn() as c:
-            with c.transaction():
-                for m in batch:
-                    if m in hits:
-                        onu_id, vlan = hits[m]
-                        c.execute("""INSERT INTO customer_onus (company_id, client_mac, olt_id, onu_id, vlan, checked_at)
-                                     VALUES (%s, %s, %s, %s, %s, now())
-                                     ON CONFLICT (company_id, client_mac) DO UPDATE SET olt_id = EXCLUDED.olt_id,
-                                       onu_id = EXCLUDED.onu_id, vlan = EXCLUDED.vlan, checked_at = now()""",
-                                  (o["company_id"], m, o["id"], onu_id, vlan))
-                    else:
-                        c.execute("""INSERT INTO onu_mac_misses (olt_id, client_mac, checked_at) VALUES (%s, %s, now())
-                                     ON CONFLICT (olt_id, client_mac) DO UPDATE SET checked_at = now()""", (o["id"], m))
-                        c.execute("DELETE FROM customer_onus WHERE company_id = %s AND client_mac = %s AND olt_id = %s",
-                                  (o["company_id"], m, o["id"]))
+        _save_macs(o, batch, hits)
     macs = macs[:asked]
     return len(macs), len(hits)
+
+
+def _save_macs(o: dict, batch: list[str], hits: dict[str, tuple[int, int]]) -> None:
+    """Found MACs into customer_onus, the rest into onu_mac_misses (not asked again for RECHECK_HOURS)."""
+    with db.conn() as c:
+        with c.transaction():
+            for m in batch:
+                if m in hits:
+                    onu_id, vlan = hits[m]
+                    c.execute("""INSERT INTO customer_onus (company_id, client_mac, olt_id, onu_id, vlan, checked_at)
+                                 VALUES (%s, %s, %s, %s, %s, now())
+                                 ON CONFLICT (company_id, client_mac) DO UPDATE SET olt_id = EXCLUDED.olt_id,
+                                   onu_id = EXCLUDED.onu_id, vlan = EXCLUDED.vlan, checked_at = now()""",
+                              (o["company_id"], m, o["id"], onu_id, vlan))
+                else:
+                    c.execute("""INSERT INTO onu_mac_misses (olt_id, client_mac, checked_at) VALUES (%s, %s, now())
+                                 ON CONFLICT (olt_id, client_mac) DO UPDATE SET checked_at = now()""", (o["id"], m))
+                    c.execute("DELETE FROM customer_onus WHERE company_id = %s AND client_mac = %s AND olt_id = %s",
+                              (o["company_id"], m, o["id"]))
 
 
 def sync_olt(o: dict) -> dict:
@@ -313,9 +397,10 @@ def onu_for_mac(company_id: int, mac: str | None, live: bool = True) -> dict | N
             cols, i = drv["cols"], r["if_index"]
             k = drv["key"](i, r["name"])
             want = {c: cols[c] for c in ("rx_dbm", "tx_dbm", "distance_m") if cols[c][0]}
-            v = s.get(f"{IF_OPER}.{i}", *[f"{oid}.{k}" for oid, _h in want.values()])
-            r["online"] = v.get(f"{IF_OPER}.{i}") == 1
-            got = {c: conv(v.get(f"{oid}.{k}"), how) for c, (oid, how) in want.items()}
+            state = col_oid(drv, "status_code", k) if drv.get("table") else f"{IF_OPER}.{i}"
+            v = s.get(state, *[col_oid(drv, c, k) for c in want])
+            r["online"] = v.get(state) == 1
+            got = {c: conv(v.get(col_oid(drv, c, k)), how) for c, (_oid, how) in want.items()}
             if "rx_dbm" in got:
                 r["rx_dbm"] = got["rx_dbm"] if r["online"] else None
             if "tx_dbm" in got:
