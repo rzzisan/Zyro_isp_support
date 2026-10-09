@@ -17,6 +17,18 @@
     $k = 'color:var(--z-muted,#6b7280); white-space:nowrap';
     $chip = fn ($text, $color) => '<span style="display:inline-block; padding:1px 8px; border-radius:999px; font-size:.72rem; font-weight:700; color:'.$color.'; background:color-mix(in srgb, '.$color.' 12%, transparent)">'.e($text).'</span>';
     $val = fn ($v) => $v === null || $v === '' ? '—' : $v;
+    $bytes = function ($b) {
+        if ($b === null) {
+            return '—';
+        }
+        foreach (['GB' => 1073741824, 'MB' => 1048576, 'KB' => 1024] as $u => $n) {
+            if ($b >= $n) {
+                return round($b / $n, $b >= 10 * $n ? 1 : 2).' '.$u;
+            }
+        }
+
+        return $b.' B';
+    };
 @endphp
 
 <div style="display:flex; flex-direction:column; gap:10px">
@@ -68,6 +80,10 @@
                     @if ($online)
                         <span style="{{ $k }}">Uptime</span><span>{{ $val($mk['uptime'] ?? null) }}</span>
                         <span style="{{ $k }}">IP</span><span>{{ $val($mk['address'] ?? null) }}</span>
+                        @if (($mk['download_bytes'] ?? null) !== null || ($mk['upload_bytes'] ?? null) !== null)
+                            <span style="{{ $k }}">ডাউনলোড</span><span style="font-weight:600">{{ $bytes($mk['download_bytes'] ?? null) }}</span>
+                            <span style="{{ $k }}">আপলোড</span><span style="font-weight:600">{{ $bytes($mk['upload_bytes'] ?? null) }}</span>
+                        @endif
                     @elseif (! empty($last['seen_at']))
                         <span style="{{ $k }}">শেষ অনলাইন</span><span>{{ $dt(\Illuminate\Support\Carbon::parse($last['seen_at'], 'UTC')) }}</span>
                     @endif
