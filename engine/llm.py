@@ -83,9 +83,10 @@ def _limits(headers) -> dict:
             if k.lower().startswith(("x-ratelimit-", "anthropic-ratelimit-")) or k.lower() == "retry-after"}
 
 
-# Claude prompt caching: the instructions are the same for every chat, so Anthropic keeps them for an hour
-# and later replies read them at a tenth of the price. A cache read refreshes the hour.
-CLAUDE_CACHE_TTL = "1h"
+# Claude prompt caching: the instructions are the same for every chat, so Anthropic keeps them for 5 minutes
+# and later replies read them at a tenth of the price. A cache read refreshes the 5 minutes. The 1h cache
+# costs 2x input per write against 1.25x here, and in practice every read came within 5 minutes anyway.
+CLAUDE_CACHE_TTL = "5m"
 # the FAQ part can change per message (only the matching entries are sent), so it stays outside the cached part
 _FAQ_HEADER = "=== কোম্পানির FAQ"
 
