@@ -617,6 +617,30 @@ async def assign(request: Request, company_id: int, complain_id: int):
     return {"ok": True}
 
 
+@app.post("/internal/{company_id}/tickets/{complain_id}/solve")
+async def solve(request: Request, company_id: int, complain_id: int):
+    """Desk "Solve": only when the customer's PPPoE is online on our MikroTik right now."""
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    row = db.one("""SELECT bt.username, bt.state, bc.server FROM billing_tickets bt
+                    LEFT JOIN billing_customers bc ON bc.company_id = bt.company_id AND bc.header_id = bt.customer_header_id
+                    WHERE bt.company_id = %s AND bt.complain_id = %s""", (company_id, str(complain_id)))
+    if not row:
+        raise HTTPException(status_code=404, detail="টিকিট পাওয়া যায়নি")
+    if row["state"] not in ("pending", "processing"):
+        raise HTTPException(status_code=400, detail="টিকিটটা আগেই সমাধান হয়েছে")
+    from engine.ppp_sync import online_now
+    mk = online_now(company_id, row["username"] or "", row["server"])
+    if mk is None:
+        raise HTTPException(status_code=400, detail="MikroTik থেকে উত্তর আসেনি, তাই অনলাইন কিনা যাচাই করা গেল না")
+    if not mk.get("online"):
+        raise HTTPException(status_code=400, detail="কাস্টমার MikroTik-এ অফলাইন, লাইন চালু হলে Solve করুন")
+    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
+    billing_call(lambda: api.solve_ticket(complain_id, (b.get("remark") or "")[:500]))
+    refresh_tickets(t)
+    return {"ok": True, "uptime": mk.get("uptime")}
+
+
 @app.get("/internal/{company_id}/tickets/{complain_id}/solvers")
 def solvers(request: Request, company_id: int, complain_id: int):
     t = internal_tenant(request, company_id)

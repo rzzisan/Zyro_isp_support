@@ -57,6 +57,13 @@ class Engine
         return static::call('post', "/internal/{$companyId}/tickets/sync") ?? [];
     }
 
+    /** Mark a ticket solved in billing; the engine refuses unless the customer is online on MikroTik now. */
+    public static function solve(int $companyId, string $complainId, ?string $remark): array
+    {
+        return static::call('post', "/internal/{$companyId}/tickets/{$complainId}/solve",
+            ['remark' => (string) $remark, 'user_id' => auth()->id()]) ?? [];
+    }
+
     public static function solvers(int $companyId, string $complainId): array
     {
         return static::call('get', "/internal/{$companyId}/tickets/{$complainId}/solvers") ?? [];

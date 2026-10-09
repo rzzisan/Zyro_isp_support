@@ -210,6 +210,17 @@ class ISPDigital:
             self._post("/sms/SendAsync", jquery_params({"vmSms": res}))
         return res
 
+    def solve_ticket(self, complain_id: int, remark: str = "") -> None:
+        """Mark a ticket solved like the support page's Solve button (no customer SMS)."""
+        r = self._post("/ClientSupport/Solved/", jquery_params({"complainSolved": {
+            "ComplainId": int(complain_id), "IsSmsSendable": False, "Remark": remark or ""}}))
+        body = r.text.strip().strip('"').lower()
+        if body.startswith("<"):
+            self._logged_in = False
+            raise LoginError("billing session expired, try again")
+        if body != "true":
+            raise RuntimeError(f"billing did not solve the ticket ({r.text.strip()[:100]})")
+
     def enable_customer(self, header_id: int) -> str:
         """Turn a (bill-)disabled line back on, like Billing -> select -> Enable. Returns the panel's answer."""
         r = self._post("/Billing/EnableSelectedClients", [("cusHeadIds", str(int(header_id)))])

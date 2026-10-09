@@ -257,4 +257,42 @@ class TicketActions
                 Notification::make()->success()->title("টিকিট #{$record->complain_id} assign হয়েছে")->send();
             });
     }
+
+    /** "Solve" in the ticket details: only while the customer is online on MikroTik (the engine checks again). */
+    public static function solve(): Action
+    {
+        $online = function (BillingTicket $record): ?bool {
+            [$info] = static::liveInfo((int) $record->customer_header_id);
+            $mk = $info['mikrotik'] ?? null;
+
+            return $mk === null ? null : (bool) ($mk['online'] ?? false);
+        };
+
+        return Action::make('solve')->label('Solve')->icon(Heroicon::OutlinedCheckCircle)->color('success')->button()
+            ->visible(fn (BillingTicket $record) => $record->isOpen())
+            ->disabled(fn (BillingTicket $record) => $online($record) === false)
+            ->tooltip(fn (BillingTicket $record) => match ($online($record)) {
+                false => 'কাস্টমার MikroTik-এ অফলাইন, তাই Solve করা যাবে না',
+                null => 'MikroTik থেকে উত্তর আসেনি; Solve চাপলে আবার যাচাই হবে',
+                default => null,
+            })
+            ->modalHeading(fn (BillingTicket $record) => "টিকিট #{$record->complain_id} সমাধান")
+            ->modalDescription('কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে বিলিংয়ে Solved করা হবে। কাস্টমারকে SMS যাবে না।')
+            ->modalSubmitActionLabel('Solve করুন')
+            ->schema([
+                Textarea::make('remark')->label('মন্তব্য (ঐচ্ছিক)')->rows(2)->maxLength(500),
+            ])
+            ->action(function (array $data, BillingTicket $record, Action $action) {
+                try {
+                    Engine::solve(static::company(), $record->complain_id, $data['remark'] ?? null);
+                } catch (RuntimeException $e) {
+                    \Illuminate\Support\Facades\Cache::forget('ticket-info:'.static::company().':'.(int) $record->customer_header_id);
+                    Notification::make()->danger()->title('Solve হয়নি')->body($e->getMessage())->send();
+                    $action->halt();
+
+                    return;
+                }
+                Notification::make()->success()->title("টিকিট #{$record->complain_id} সমাধান হয়েছে")->send();
+            });
+    }
 }
