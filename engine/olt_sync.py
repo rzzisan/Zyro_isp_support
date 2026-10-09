@@ -339,6 +339,15 @@ def main() -> None:
     a = p.parse_args()
     rows = db.all_rows("SELECT * FROM olts WHERE enabled" + (" AND id = %s" if a.olt else "") + " ORDER BY id",
                        (a.olt,) if a.olt else ())
+    if not a.olt and len(rows) > 1:
+        # Each OLT in its own process, all at once: one after another, a slow OLT (big MAC backlog) used up the
+        # unit's time limit and the OLTs after it were never polled. Each one stays within ~5 minutes on its own.
+        import subprocess
+        import sys
+        procs = [subprocess.Popen([sys.executable, "-m", "engine.olt_sync", "--olt", str(o["id"])]) for o in rows]
+        for pr in procs:
+            pr.wait()
+        return
     for o in rows:
         t0 = time.time()
         try:
