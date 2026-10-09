@@ -12,6 +12,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
 use RuntimeException;
 
@@ -106,6 +107,9 @@ class TicketActions
     {
         return Action::make('newTicket')->label('নতুন টিকিট')->icon(Heroicon::OutlinedPlusCircle)
             ->modalHeading('বিলিং সফটওয়্যারে নতুন টিকিট')
+            ->modalDescription('কাস্টমার বাছলে তার লাইনের এখনকার অবস্থা দেখাবে')
+            ->modalIcon(Heroicon::OutlinedTicket)
+            ->modalWidth('4xl')
             ->modalSubmitActionLabel('টিকিট খুলুন')
             ->fillForm(function () use ($customerId) {
                 $data = ['priority' => '2', 'sms_client' => false, 'sms_employees' => false];
@@ -130,25 +134,27 @@ class TicketActions
                     ->getOptionLabelUsing(fn ($value) => 'ID '.(explode('|', (string) $value)[1] ?? '').' · '.(explode('|', (string) $value)[2] ?? ''))
                     ->live()
                     ->afterStateUpdated(fn ($state, callable $set) => $set('mobile', explode('|', (string) $state)[3] ?? null)),
-                \Filament\Forms\Components\Placeholder::make('info')->hiddenLabel()
+                \Filament\Forms\Components\Placeholder::make('info')->hiddenLabel()->columnSpanFull()
                     ->visible(fn ($get) => filled($get('customer')))
                     ->content(fn ($get) => static::infoView($get('customer'))),
-                Grid::make(2)->schema([
-                    Select::make('category_id')->label('সমস্যার ধরন')->required()->searchable()
-                        ->options(fn () => static::options('categories')),
-                    Select::make('priority')->label('Priority')->required()
-                        ->options(fn () => static::options('priorities') ?: ['1' => 'Low', '2' => 'Medium', '3' => 'High']),
-                ]),
-                TextInput::make('mobile')->label('যোগাযোগের মোবাইল')->tel()->required(),
-                Textarea::make('comment')->label('সমস্যার বিবরণ')->required()->rows(3)->maxLength(1900),
-                Grid::make(2)->schema([
-                    Select::make('dept_id')->label('ডিপার্টমেন্ট (ঐচ্ছিক)')->options(fn () => static::options('departments')),
-                    Select::make('employees')->label('কর্মী assign (ঐচ্ছিক)')->multiple()->searchable()
-                        ->options(fn () => static::options('employees')),
-                ]),
-                Grid::make(2)->schema([
-                    Toggle::make('sms_client')->label('কাস্টমারকে SMS'),
-                    Toggle::make('sms_employees')->label('কর্মীকে SMS'),
+                Section::make('টিকিটের তথ্য')->icon(Heroicon::OutlinedPencilSquare)->schema([
+                    Grid::make(2)->schema([
+                        Select::make('category_id')->label('সমস্যার ধরন')->required()->searchable()
+                            ->options(fn () => static::options('categories')),
+                        Select::make('priority')->label('Priority')->required()
+                            ->options(fn () => static::options('priorities') ?: ['1' => 'Low', '2' => 'Medium', '3' => 'High']),
+                    ]),
+                    TextInput::make('mobile')->label('যোগাযোগের মোবাইল')->tel()->required(),
+                    Textarea::make('comment')->label('সমস্যার বিবরণ')->required()->rows(3)->maxLength(1900),
+                    Grid::make(2)->schema([
+                        Select::make('dept_id')->label('ডিপার্টমেন্ট (ঐচ্ছিক)')->options(fn () => static::options('departments')),
+                        Select::make('employees')->label('কর্মী assign (ঐচ্ছিক)')->multiple()->searchable()
+                            ->options(fn () => static::options('employees')),
+                    ]),
+                    Grid::make(2)->schema([
+                        Toggle::make('sms_client')->label('কাস্টমারকে SMS'),
+                        Toggle::make('sms_employees')->label('কর্মীকে SMS'),
+                    ]),
                 ]),
             ])
             ->action(function (array $data, Action $action) {
