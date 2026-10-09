@@ -154,7 +154,8 @@ class TicketResource extends Resource
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
             ->deferFilters(false)
             ->filtersFormColumns(4)
-            ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')->modalWidth('5xl')])
+            ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')->modalWidth('5xl')
+                ->extraModalFooterActions(fn () => [TicketActions::assign()->label('কর্মী যোগ / বাদ')->button()])])
             ->recordAction('view');
     }
 
