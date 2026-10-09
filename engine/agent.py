@@ -1,4 +1,5 @@
 """AI replies per company: the company's own keys, provider, model and instructions."""
+import base64
 import json
 import logging
 import re
@@ -195,7 +196,58 @@ def draft_reply(t: Tenant, history: list[dict], context: dict | None,
     return _whatsapp_format(text), provider, model
 
 
+GEMINI_VOICE_MODEL = "gemini-2.5-flash"
+GEMINI_VOICE_PROMPT = (
+    "এটা বাংলাদেশের একটা ইন্টারনেট সার্ভিস প্রোভাইডারের কাস্টমারের WhatsApp ভয়েস মেসেজ। কাস্টমার যা বলেছেন হুবহু "
+    "বাংলা হরফে লেখো, আঞ্চলিক টান থাকলেও অর্থ ঠিক রেখে। router, net, slow, ID, line-এর মতো ইংরেজি শব্দ যেভাবে বলা "
+    "হয়েছে সেভাবে রাখো। মুখে বলা সংখ্যা (কাস্টমার ID, মোবাইল নম্বর, টাকা) অঙ্কে লেখো, যেমন \"ডাবল জিরো ফাইভ টু\" → 0052। "
+    "শুধু কাস্টমারের কথাটা লেখো, কোনো ব্যাখ্যা বা মন্তব্য না। কিছুই বোঝা না গেলে খালি উত্তর দাও।"
+)
+
+
+def _transcribe_gemini(t: Tenant, audio: bytes, mime: str, contact_id: int | None) -> str | None:
+    """Gemini listens to the audio itself: regional Bangla and spoken numbers come out far better than with Whisper
+    (2026-10-09 test: 15/15 understandable vs 7/15). None when the company has no Gemini key or every key fails."""
+    for row in _keys(t, "gemini", usable_only=True):
+        try:
+            r = httpx.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_VOICE_MODEL}:generateContent",
+                headers={"x-goog-api-key": db.decrypt(row["api_key"])},
+                json={"contents": [{"parts": [
+                          {"text": GEMINI_VOICE_PROMPT},
+                          {"inline_data": {"mime_type": mime.split(";")[0] or "audio/ogg",
+                                           "data": base64.b64encode(audio).decode()}}]}],
+                      "generationConfig": {"temperature": 0, "thinkingConfig": {"thinkingBudget": 0}}},
+                timeout=45,
+            )
+        except httpx.TransportError as e:
+            record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id, error=f"{type(e).__name__}: {e}")
+            continue
+        if r.status_code != 200:
+            record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id,
+                         error=f"HTTP {r.status_code}: {r.text[:300]}")
+            if r.status_code in (429, 503):  # free-tier limit / overloaded: give the key a minute
+                db.execute("UPDATE ai_keys SET rate_limited_until = now() + interval '60 seconds' WHERE id = %s", (row["id"],))
+            continue
+        body = r.json()
+        u = body.get("usageMetadata") or {}
+        record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id,
+                     {"input": u.get("promptTokenCount") or 0, "output": u.get("candidatesTokenCount") or 0})
+        parts = ((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+        text = "".join(p.get("text", "") for p in parts).strip()
+        if text:
+            return text
+    return None
+
+
 def transcribe(t: Tenant, audio: bytes, mime: str, contact_id: int | None = None) -> str | None:
+    try:
+        text = _transcribe_gemini(t, audio, mime, contact_id)
+    except Exception:
+        log.exception("Gemini voice transcription failed, falling back to Whisper")
+        text = None
+    if text:
+        return text
     ext = "ogg" if "ogg" in mime else ("mp4" if "mp4" in mime else ("mpeg" if "mpeg" in mime else "ogg"))
     for row in _keys(t, "groq"):
         r = httpx.post(
@@ -211,7 +263,7 @@ def transcribe(t: Tenant, audio: bytes, mime: str, contact_id: int | None = None
             continue
         r.raise_for_status()
         body = r.json()
-        # Whisper is billed per audio second, not tokens: keep the seconds in input_tokens for this purpose
+        # Whisper is billed per audio second, not tokens: keep the seconds in input_tokens for this model
         record_usage(t, row["id"], "groq", "whisper-large-v3", "voice", contact_id,
                      {"input": round(float(body.get("duration") or 0))}, _limits(r.headers))
         return (body.get("text") or "").strip() or None
