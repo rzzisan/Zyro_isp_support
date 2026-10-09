@@ -307,7 +307,7 @@ def map_macs(o: dict, s: SNMP, vlan_list: list[int], budget: float = 240) -> tup
         _save_macs(o, macs, hits)
         return len(macs), sum(1 for m in macs if m in hits)
     bridge = {idx(oid): v for oid, v in walk(s, BRIDGE_IFINDEX)}
-    # VLANs that already gave us customers first; batches of 100 MACs, each finished and saved before the next,
+    # VLANs that already gave us customers first; batches of MACs, each finished and saved before the next,
     # and at most `budget` seconds per run (the rest continues next run), so a big router never blocks the sync.
     known = [r["vlan"] for r in db.all_rows("SELECT vlan, count(*) n FROM customer_onus WHERE olt_id = %s AND vlan IS NOT NULL "
                                             "GROUP BY vlan ORDER BY n DESC", (o["id"],))]
@@ -315,10 +315,11 @@ def map_macs(o: dict, s: SNMP, vlan_list: list[int], budget: float = 240) -> tup
     if DRIVERS[o["brand"]].get("fdb") == "dot1d":
         order = [None]
     started, asked = time.time(), 0
-    for b0 in range(0, len(macs), 100):
+    size = 100 if len(order) <= 4 else 25   # many VLANs = many requests per MAC; smaller batches keep to the budget
+    for b0 in range(0, len(macs), size):
         if time.time() - started > budget:
             break
-        batch = macs[b0:b0 + 100]
+        batch = macs[b0:b0 + size]
         asked += len(batch)
         for vlan in order:
             todo = [m for m in batch if m not in hits]
