@@ -395,6 +395,22 @@ def deliver(t: Tenant, contact: dict, message_id: int, text: str, note: str | No
     return "failed" if error else mode
 
 
+def send_voice_reply(t: Tenant, contact: dict, text: str) -> None:
+    """The customer spoke: after the text reply, the same reply as a voice message (বট সেটিংস → ভয়েসের উত্তর ভয়েসেও).
+    Any failure only skips the voice; the text has already gone."""
+    try:
+        from engine.agent import speak
+        from engine import whatsapp
+        audio = speak(t, text, contact["id"])
+        if not audio:
+            return
+        res = whatsapp.send_audio(t, contact["wa_number"], audio)
+        save_message(t, contact["id"], res.get("messages", [{}])[0].get("id"), "out", "bot", "audio",
+                     f"[ভয়েস উত্তর] {text}", {"id": res.get("media_id"), "mime_type": "audio/ogg"})
+    except Exception:
+        log.exception("voice reply failed for company %s", t.company_id)
+
+
 def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str | None = None) -> tuple[str, str | None]:
     if DRY_RUN or not t.bot.get("auto_ticket", True):
         return f"{note} → (টিকেট খোলা হয়নি: {'dry run' if DRY_RUN else 'বন্ধ'})", None
@@ -459,10 +475,10 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
         if bot_paused(contact):  # staff took over while we waited
             return
         text = unanswered_text(t, contact["id"]) or text
-        _answer(t, contact, text, message_id)
+        _answer(t, contact, text, message_id, voice=mtype == "audio")
 
 
-def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
+def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = False) -> None:
     from engine.agent import draft_reply
     from engine.technician import handle_tech, technician_for
     tech = technician_for(t, contact["wa_number"])
@@ -509,7 +525,9 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
             save_draft(t, contact["id"], message_id, "superseded", draft, context=context, provider=provider, model=model)
             return
         if draft:
-            deliver(t, contact, message_id, draft, ticket_note, context=context, provider=provider, model=model)
+            mode = deliver(t, contact, message_id, draft, ticket_note, context=context, provider=provider, model=model)
+            if voice and mode == "sent" and t.bot.get("voice_reply"):
+                send_voice_reply(t, contact, draft)
     except Exception as e:
         log.exception("engine failed for company %s", t.company_id)
         save_draft(t, contact["id"], message_id, "error", None, context=context, error=str(e)[:500])

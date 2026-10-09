@@ -1,6 +1,7 @@
 """AI replies per company: the company's own keys, provider, model and instructions."""
 import base64
 import json
+import subprocess
 import logging
 import re
 import time
@@ -297,4 +298,52 @@ def transcribe(t: Tenant, audio: bytes, mime: str, contact_id: int | None = None
             return text
     if not any(_keys(t, p) for p in VOICE_PROVIDERS):
         raise RuntimeError("no Gemini or Groq key for voice transcription")
+    return None
+
+
+GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+
+
+def speak(t: Tenant, text: str, contact_id: int | None = None) -> bytes | None:
+    """The reply read aloud by Gemini TTS (voice from বট সেটিংস, default Kore), as OGG/Opus for a WhatsApp voice
+    message. None when there is no usable Gemini key, every key fails, or ffmpeg is missing: the text reply is enough."""
+    words = re.sub(r"[*_~`]", "", text).strip()
+    if not words:
+        return None
+    voice = t.bot.get("voice_reply_voice") or "Kore"
+    for row in _keys(t, "gemini", usable_only=True):
+        try:
+            r = httpx.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_TTS_MODEL}:generateContent",
+                headers={"x-goog-api-key": db.decrypt(row["api_key"])},
+                json={"contents": [{"parts": [{"text": f"বাংলাদেশি উচ্চারণে, স্বাভাবিক কথার মতো বলো: {words}"}]}],
+                      "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
+                          "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}},
+                timeout=60,
+            )
+        except httpx.TransportError as e:
+            record_usage(t, row["id"], "gemini", GEMINI_TTS_MODEL, "voice_reply", contact_id, error=f"{type(e).__name__}: {e}")
+            continue
+        if r.status_code != 200:
+            record_usage(t, row["id"], "gemini", GEMINI_TTS_MODEL, "voice_reply", contact_id,
+                         error=f"HTTP {r.status_code}: {r.text[:300]}")
+            if r.status_code in (429, 503):
+                db.execute("UPDATE ai_keys SET rate_limited_until = now() + interval '60 seconds' WHERE id = %s", (row["id"],))
+            continue
+        body = r.json()
+        u = body.get("usageMetadata") or {}
+        record_usage(t, row["id"], "gemini", GEMINI_TTS_MODEL, "voice_reply", contact_id,
+                     {"input": u.get("promptTokenCount") or 0, "output": u.get("candidatesTokenCount") or 0})
+        parts = ((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+        pcm = b"".join(base64.b64decode(p["inlineData"]["data"]) for p in parts if p.get("inlineData"))
+        if not pcm:
+            continue
+        # Gemini TTS returns raw 16-bit PCM, 24 kHz mono
+        out = subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "pipe:0",
+                              "-c:a", "libopus", "-b:a", "32k", "-f", "ogg", "pipe:1"],
+                             input=pcm, capture_output=True, timeout=60)
+        if out.returncode != 0 or not out.stdout:
+            log.error("ffmpeg could not encode the voice reply: %s", out.stderr[:300])
+            return None
+        return out.stdout
     return None

@@ -55,6 +55,11 @@ class BotSettings extends CompanySettingsPage
                 Select::make('voice_provider')->label('ভয়েস মেসেজ পড়বে')->required()->default('gemini')
                     ->options(['gemini' => 'Google Gemini (আঞ্চলিক বাংলা ও মুখে বলা নম্বর ভালো বোঝে)', 'groq' => 'Groq Whisper'])
                     ->helperText('আগে এই AI-এর সব key একে একে চেষ্টা করবে; সবগুলো ব্যর্থ বা লিমিটে আটকালে অন্য AI-তে যাবে।'),
+                Toggle::make('voice_reply')->label('কাস্টমার ভয়েস পাঠালে উত্তর ভয়েসেও দাও')->live()
+                    ->helperText('লেখা উত্তর আগের মতোই যাবে, তারপর একই উত্তর ভয়েস মেসেজে (Gemini key লাগবে)। ভয়েস বানানো না গেলে শুধু লেখা যায়।'),
+                Select::make('voice_reply_voice')->label('ভয়েস উত্তরের কণ্ঠ')->default('Kore')
+                    ->options(['Kore' => 'Kore (নারী)', 'Charon' => 'Charon (পুরুষ)'])
+                    ->visible(fn ($get) => (bool) $get('voice_reply')),
             ]),
             Section::make('বট কীভাবে কাজ করবে')->schema([
                 Select::make('bot_mode')->label('বট মোড')->required()->options([
