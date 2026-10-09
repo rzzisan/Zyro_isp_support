@@ -30,7 +30,7 @@
     $stateTone = ['pending' => 'bad', 'processing' => 'warn', 'solved' => 'good'][$t->state] ?? 'mute';
     $prioTone = ['high' => 'bad', 'medium' => 'warn'][$t->priority] ?? 'mute';
     $conn = $mk === null ? 'mute' : ($online ? 'good' : 'bad');
-    $initial = mb_strtoupper(mb_substr(trim((string) $t->customer_name) ?: '?', 0, 1));
+    $initial = mb_strtoupper(mb_substr(trim(preg_replace('/^(md|mohammad|mohammed|muhammad|mst|mosammat)\.?\s+/iu', '', trim((string) $t->customer_name))) ?: '?', 0, 1));
     $steps = [
         ['খোলা', $dt($t->opened_at), $t->created_by, true],
         ['দায়িত্বে', $t->assigned_to ? 'assign হয়েছে' : null, $t->assigned_to, (bool) $t->assigned_to],
@@ -185,7 +185,7 @@
             {{-- MikroTik --}}
             <div class="ztd-card">
                 <div class="ztd-head">
-                    <div class="ztd-title"><span class="ztd-ico">🛜</span>MikroTik</div>
+                    <div class="ztd-title"><span class="ztd-ico">📡</span>MikroTik</div>
                     <span class="ztd-chip tone-{{ $conn }}"><span class="ztd-dot {{ $online ? 'live' : '' }}"></span>{{ $mk['router'] ?? 'রাউটার' }}</span>
                 </div>
                 <div class="ztd-rows">

@@ -181,8 +181,8 @@ class TicketResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
-        return $schema->components([
-            Placeholder::make('details')->hiddenLabel()
+        return $schema->columns(1)->components([
+            Placeholder::make('details')->hiddenLabel()->columnSpanFull()
                 ->content(fn (BillingTicket $record) => TicketActions::details($record)),
         ]);
     }
