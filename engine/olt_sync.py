@@ -281,7 +281,7 @@ def _fdb_oid(mac: str, vlan: int | None) -> str:
     return f"{FDB_PORT}.{vlan}.{octets}"
 
 
-def map_macs(o: dict, s: SNMP, vlan_list: list[int]) -> tuple[int, int]:
+def map_macs(o: dict, s: SNMP, vlan_list: list[int], budget: float = 240) -> tuple[int, int]:
     """Look up the customer MACs we don't know yet (or not checked lately) in this OLT's MAC table."""
     cand = db.all_rows(
         f"""SELECT DISTINCT upper(s.caller_id) AS mac FROM ppp_sessions s JOIN mikrotik_routers r ON r.id = s.router_id
@@ -308,7 +308,7 @@ def map_macs(o: dict, s: SNMP, vlan_list: list[int]) -> tuple[int, int]:
         return len(macs), sum(1 for m in macs if m in hits)
     bridge = {idx(oid): v for oid, v in walk(s, BRIDGE_IFINDEX)}
     # VLANs that already gave us customers first; batches of 100 MACs, each finished and saved before the next,
-    # and at most ~4 minutes per run (the rest continues next run), so a big router never blocks the sync.
+    # and at most `budget` seconds per run (the rest continues next run), so a big router never blocks the sync.
     known = [r["vlan"] for r in db.all_rows("SELECT vlan, count(*) n FROM customer_onus WHERE olt_id = %s AND vlan IS NOT NULL "
                                             "GROUP BY vlan ORDER BY n DESC", (o["id"],))]
     order = known + [v for v in vlan_list if v not in known]
@@ -316,7 +316,7 @@ def map_macs(o: dict, s: SNMP, vlan_list: list[int]) -> tuple[int, int]:
         order = [None]
     started, asked = time.time(), 0
     for b0 in range(0, len(macs), 100):
-        if time.time() - started > 240:
+        if time.time() - started > budget:
             break
         batch = macs[b0:b0 + 100]
         asked += len(batch)
@@ -370,11 +370,13 @@ def sync_olt(o: dict) -> dict:
 def _sync_olt(o: dict) -> dict:
     if o["brand"] not in DRIVERS:
         raise RuntimeError(f"{o['brand']} OLT এখনো সমর্থিত নয়")
+    t0 = time.time()
     s = client(o)
     info = check(o)
     n = poll_onus(o, s)
     vl = vlans(o, s)
-    asked, found = map_macs(o, s, vl)
+    # the whole OLT within ~7 minutes, under the unit's limit: a slow ONU poll leaves less time for the MAC backlog
+    asked, found = map_macs(o, s, vl, budget=max(60, 420 - (time.time() - t0)))
     db.execute("""UPDATE olts SET sys_name = %s, sys_descr = %s, last_poll_at = now(), last_poll_ok = true,
                   last_poll_message = %s, updated_at = now() WHERE id = %s""",
                (info["sys_name"], info["sys_descr"], f"{n} ONU · {found}/{asked} নতুন MAC মিলেছে", o["id"]))
