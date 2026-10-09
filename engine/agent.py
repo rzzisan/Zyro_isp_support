@@ -302,6 +302,7 @@ def transcribe(t: Tenant, audio: bytes, mime: str, contact_id: int | None = None
 
 
 GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+TTS_STYLE = "বাংলাদেশি উচ্চারণে, নম্র ও বন্ধুসুলভ কাস্টমার সাপোর্টের মতো স্বাভাবিক গতিতে বলো: "
 
 
 def speak(t: Tenant, text: str, contact_id: int | None = None) -> bytes | None:
@@ -312,23 +313,33 @@ def speak(t: Tenant, text: str, contact_id: int | None = None) -> bytes | None:
         return None
     voice = t.bot.get("voice_reply_voice") or "Kore"
     for row in _keys(t, "gemini", usable_only=True):
-        try:
-            r = httpx.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_TTS_MODEL}:generateContent",
-                headers={"x-goog-api-key": db.decrypt(row["api_key"])},
-                json={"contents": [{"parts": [{"text": f"বাংলাদেশি উচ্চারণে, স্বাভাবিক কথার মতো বলো: {words}"}]}],
-                      "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
-                          "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}},
-                timeout=60,
-            )
-        except httpx.TransportError as e:
-            record_usage(t, row["id"], "gemini", GEMINI_TTS_MODEL, "voice_reply", contact_id, error=f"{type(e).__name__}: {e}")
+        r = None
+        for attempt in range(2):  # free tier: a 429/503 usually passes on a second try a few seconds later
+            try:
+                r = httpx.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_TTS_MODEL}:generateContent",
+                    headers={"x-goog-api-key": db.decrypt(row["api_key"])},
+                    json={"contents": [{"parts": [{"text": TTS_STYLE + words}]}],
+                          "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
+                              "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}},
+                    timeout=60,
+                )
+            except httpx.TransportError as e:
+                record_usage(t, row["id"], "gemini", GEMINI_TTS_MODEL, "voice_reply", contact_id,
+                             error=f"{type(e).__name__}: {e}")
+                r = None
+                break
+            if r.status_code in (429, 503) and attempt == 0:
+                time.sleep(5)
+                continue
+            break
+        if r is None:
             continue
         if r.status_code != 200:
+            # no key cool-down here: Gemini limits are per model, and the TTS model's small free quota running out
+            # must not push voice transcription (same key, other model) over to Whisper
             record_usage(t, row["id"], "gemini", GEMINI_TTS_MODEL, "voice_reply", contact_id,
                          error=f"HTTP {r.status_code}: {r.text[:300]}")
-            if r.status_code in (429, 503):
-                db.execute("UPDATE ai_keys SET rate_limited_until = now() + interval '60 seconds' WHERE id = %s", (row["id"],))
             continue
         body = r.json()
         u = body.get("usageMetadata") or {}
