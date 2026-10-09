@@ -47,10 +47,15 @@ class TicketActions
             ->map(fn ($c) => $c->only(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone', 'is_left', 'left_on']))->all();
     }
 
-    /** Info box under the customer: bill (our DB), connection (our MikroTik), OLT/ONU (billing). */
+    /** Info box under the customer: bill (our DB), connection (our MikroTik), OLT/ONU (our OLT, else billing). */
     private static function infoView(?string $customer)
     {
-        $headerId = (int) (explode('|', (string) $customer)[0] ?? 0);
+        return static::customerInfo((int) (explode('|', (string) $customer)[0] ?? 0));
+    }
+
+    /** The same box for a billing customer header id (new-ticket form and ticket details). */
+    public static function customerInfo(int $headerId)
+    {
         if (! $headerId) {
             return null;
         }

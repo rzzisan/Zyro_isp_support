@@ -4,7 +4,9 @@ namespace App\Filament\App\Resources\Tickets;
 
 use App\Filament\App\Resources\Tickets\Pages\ListTickets;
 use App\Filament\App\TicketActions;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
+use Filament\Schemas\Components\Section;
 use Filament\Tables\Enums\FiltersLayout;
 use Illuminate\Support\Carbon;
 use App\Models\BillingTicket;
@@ -152,7 +154,8 @@ class TicketResource extends Resource
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
             ->deferFilters(false)
             ->filtersFormColumns(4)
-            ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')]);
+            ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')->modalWidth('5xl')])
+            ->recordAction('view');
     }
 
     /** [from, until) in Bangladesh time for the date filter, or [null, null]. */
@@ -196,6 +199,13 @@ class TicketResource extends Resource
             TextEntry::make('solved_at')->label('সমাধান হয়েছে')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->placeholder('—'),
             TextEntry::make('description')->label('সমস্যার বিবরণ')->placeholder('—')->columnSpanFull(),
             TextEntry::make('note')->label('মন্তব্য')->placeholder('—')->columnSpanFull(),
+            Section::make('কাস্টমারের লাইন এখন')->description('MikroTik আর OLT থেকে এই মুহূর্তের তথ্য')->columnSpanFull()
+                ->schema([
+                    Placeholder::make('live')->hiddenLabel()
+                        ->content(fn (BillingTicket $record) => $record->customer_header_id
+                            ? TicketActions::customerInfo((int) $record->customer_header_id)
+                            : 'এই টিকিটে কাস্টমারের বিলিং ID নেই, তাই লাইনের তথ্য আনা যায়নি'),
+                ]),
         ]);
     }
 
