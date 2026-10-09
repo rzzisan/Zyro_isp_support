@@ -182,5 +182,5 @@
 
 ## 2026-10-09: Voice messages via Gemini first
 - Test on the last 15 customer voices: Groq Whisper (bn) 6/15 understandable, with an ISP word prompt 7/15, Gemini 2.5 Flash (native audio) 15/15 with spoken IDs as digits. Details on the server: /home/claude-dev/voice-review-2026-10-09.md.
-- বট সেটিংস → "ভয়েস মেসেজ পড়বে" (`bot_settings.voice_provider`, default gemini, migration 2026_10_09_000001). `agent.transcribe` tries every key of that AI in turn, then the other voice AI (`VOICE_PROVIDERS`: gemini = `_transcribe_gemini`, generateContent with inline audio, thinking off; groq = Whisper bn). 429/503 from Gemini cools that key 60 s. Every call is recorded in ai_usage (purpose voice).
+- বট সেটিংস → "ভয়েস মেসেজ পড়বে" (`bot_settings.voice_provider`, default gemini, migration 2026_10_09_000001). `agent.transcribe` tries every key of that AI in turn, then the other voice AI (`VOICE_PROVIDERS`: gemini = `_transcribe_gemini`, generateContent with inline audio, one retry after 5 s on 429/503; groq = Whisper bn). 429/503 from Gemini cools that key 60 s. Every call is recorded in ai_usage (purpose voice).
 - The key is free tier: Zisan accepted that Google may use/review the audio. A paid Gemini key removes that.

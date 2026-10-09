@@ -209,24 +209,33 @@ def _transcribe_gemini(t: Tenant, audio: bytes, mime: str, contact_id: int | Non
     """Gemini listens to the audio itself: regional Bangla and spoken numbers come out far better than with Whisper
     (2026-10-09 test: 15/15 understandable vs 7/15). None when the company has no Gemini key or every key fails."""
     for row in _keys(t, "gemini", usable_only=True):
-        try:
-            r = httpx.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_VOICE_MODEL}:generateContent",
-                headers={"x-goog-api-key": db.decrypt(row["api_key"])},
-                json={"contents": [{"parts": [
-                          {"text": GEMINI_VOICE_PROMPT},
-                          {"inline_data": {"mime_type": mime.split(";")[0] or "audio/ogg",
-                                           "data": base64.b64encode(audio).decode()}}]}],
-                      "generationConfig": {"temperature": 0, "thinkingConfig": {"thinkingBudget": 0}}},
-                timeout=45,
-            )
-        except httpx.TransportError as e:
-            record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id, error=f"{type(e).__name__}: {e}")
+        payload = {"contents": [{"parts": [
+                       {"text": GEMINI_VOICE_PROMPT},
+                       {"inline_data": {"mime_type": mime.split(";")[0] or "audio/ogg",
+                                        "data": base64.b64encode(audio).decode()}}]}],
+                   "generationConfig": {"temperature": 0}}
+        r = None
+        for attempt in range(2):  # free tier: a 429/503 usually passes on a second try a few seconds later
+            try:
+                r = httpx.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_VOICE_MODEL}:generateContent",
+                    headers={"x-goog-api-key": db.decrypt(row["api_key"])}, json=payload, timeout=45)
+            except httpx.TransportError as e:
+                record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id, error=f"{type(e).__name__}: {e}")
+                r = None
+                break
+            if r.status_code in (429, 503) and attempt == 0:
+                record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id,
+                             error=f"HTTP {r.status_code} (retrying): {r.text[:200]}")
+                time.sleep(5)
+                continue
+            break
+        if r is None:
             continue
         if r.status_code != 200:
             record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id,
                          error=f"HTTP {r.status_code}: {r.text[:300]}")
-            if r.status_code in (429, 503):  # free-tier limit / overloaded: give the key a minute
+            if r.status_code in (429, 503):  # still limited / overloaded: give the key a minute
                 db.execute("UPDATE ai_keys SET rate_limited_until = now() + interval '60 seconds' WHERE id = %s", (row["id"],))
             continue
         body = r.json()
