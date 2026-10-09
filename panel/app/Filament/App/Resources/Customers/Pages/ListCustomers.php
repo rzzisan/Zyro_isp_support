@@ -27,13 +27,28 @@ class ListCustomers extends ListRecords
         $last = DB::table('billing_customer_syncs')->where('company_id', $company)->whereNull('error')
             ->whereNotNull('finished_at')->max('finished_at');
 
-        return "{$n} জন কাস্টমার · Left {$left} জন · বিলিং থেকে প্রতিদিন রাত ৩টায় আপডেট হয়"
+        return "{$n} জন কাস্টমার · Left {$left} জন · বিলিং থেকে প্রতিদিন রাত ৩টায় আপডেট হয়, নতুন কাস্টমার আসে ২০ মিনিট পরপর"
             .($last ? ' · শেষ আপডেট '.\Illuminate\Support\Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : '');
     }
 
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('syncNew')->label('নতুন কাস্টমার আনুন')->icon(Heroicon::OutlinedUserPlus)->color('gray')
+                ->visible(fn () => CustomerResource::managers())
+                ->action(function () {
+                    try {
+                        $r = Engine::syncNewCustomers(Filament::getTenant()->getKey());
+                    } catch (RuntimeException $e) {
+                        Notification::make()->danger()->title('নতুন কাস্টমার আনা যায়নি')->body($e->getMessage())->send();
+
+                        return;
+                    }
+                    $found = $r['found'] ?? [];
+                    Notification::make()->success()
+                        ->title($found ? count($found).' জন নতুন কাস্টমার আনা হয়েছে' : 'নতুন কাস্টমার নেই')
+                        ->body('শেষ ID '.($r['last_id'] ?? '-').($found ? ' · নতুন: '.implode(', ', $found) : ''))->send();
+                }),
             Action::make('sync')->label('এখনই Sync')->icon(Heroicon::OutlinedArrowPath)->color('gray')
                 ->visible(fn () => CustomerResource::managers())
                 ->requiresConfirmation()->modalDescription('বিলিং থেকে সব কাস্টমারের তথ্য নতুন করে আনা হবে (প্রায় ২০ সেকেন্ড)।')

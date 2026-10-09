@@ -4,7 +4,11 @@ Three cheap list calls give nearly everything: Customer list (identity, address,
 (this month's bill) and the Left list (customers who left; same CustomerHeaderId space, is_left = true, their PPPoE
 user is deleted from the MikroTik). A customer moves between Active and Left both ways; every move the sync sees is
 written to billing_customer_changes. PPPoE passwords are stored encrypted (Laravel-compatible, APP_KEY); portal passwords never.
-  set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.customer_sync [--company ID]
+  set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.customer_sync [--company ID] [--new]
+
+--new (every 20 minutes, zyro-customer-new.timer): only look for customer IDs after the highest one we have
+(5959 -> 5960, 5961, ...), one billing search per ID, and copy the ones found. Stops after NEW_MISSES IDs in a row
+are not found, so a deleted ID in between doesn't stop it.
 """
 import argparse
 import json
@@ -134,16 +138,67 @@ def sync_company(t) -> dict:
         raise
 
 
+NEW_MISSES = 3
+NEW_LIMIT = 50
+
+
+def _id_num(v) -> int | None:
+    v = str(v or "").strip()
+    return int(v) if v.isdigit() else None
+
+
+def _search(api, path: str, query: str) -> list[dict]:
+    d = api._get(path, {"draw": 1, "start": 0, "length": 100, "search[value]": query, "search[regex]": "false"})
+    return d.get("aaData") or []
+
+
+def find_by_id(api, n: int) -> tuple[dict, dict | None] | None:
+    """(customer list row, bill row) of the customer whose ID is n (leading zeros ignored), or None."""
+    q = str(n)
+    rows = [r for r in _search(api, "/Customer/AjaxCustomerList", q) if _id_num(r.get("CustomerId")) == n]
+    bills = [b for b in _search(api, "/Billing/AjaxCustomerBillList", q) if _id_num(b.get("CustomerId")) == n]
+    if not rows and bills and bills[0].get("UserName"):
+        # the customer list search may not look at the ID column: find the row by its PPPoE user instead
+        hid = int(bills[0]["CustomerHeaderId"])
+        rows = [r for r in _search(api, "/Customer/AjaxCustomerList", bills[0]["UserName"]) if int(r["CustomerHeaderId"]) == hid]
+    if not rows:
+        return None
+    hid = int(rows[0]["CustomerHeaderId"])
+    return rows[0], next((b for b in bills if int(b["CustomerHeaderId"]) == hid), None)
+
+
+def sync_new(t) -> dict:
+    """Copy customers whose ID is above the highest ID we have. Cheap: about two billing searches per ID checked."""
+    api = tenants.billing(t)
+    last = db.one("""SELECT max(customer_id::bigint) AS n FROM billing_customers
+                     WHERE company_id = %s AND customer_id ~ '^[0-9]{1,9}$'""", (t.company_id,))["n"]
+    if last is None:
+        return {"last_id": None, "checked": 0, "found": [], "note": "no customers yet, run the full sync first"}
+    found, n, misses = [], int(last), 0
+    while misses < NEW_MISSES and len(found) < NEW_LIMIT:
+        n += 1
+        hit = find_by_id(api, n)
+        if not hit:
+            misses += 1
+            continue
+        misses = 0
+        row, bill = hit
+        db.execute(UPSERT, row_for(t.company_id, row, bill))
+        found.append(row.get("CustomerId"))
+    return {"last_id": int(last), "checked": n - int(last), "found": found}
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     p = argparse.ArgumentParser()
     p.add_argument("--company", type=int)
+    p.add_argument("--new", action="store_true", help="only look for new customer IDs after the highest one")
     a = p.parse_args()
     from engine.ticket_sync import companies
     for t in companies(a.company):
         try:
-            log.info("company %s: %s", t.company_id, sync_company(t))
+            log.info("company %s: %s", t.company_id, sync_new(t) if a.new else sync_company(t))
         except Exception:
             log.exception("customer sync failed for company %s", t.company_id)
 

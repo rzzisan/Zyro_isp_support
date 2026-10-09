@@ -661,6 +661,13 @@ def customers_sync_now(request: Request, company_id: int):
     return billing_call(lambda: sync_company(t))
 
 
+@app.post("/internal/{company_id}/customers/sync-new")
+def customers_sync_new(request: Request, company_id: int):
+    t = internal_tenant(request, company_id)
+    from engine.customer_sync import sync_new
+    return billing_call(lambda: sync_new(t))
+
+
 _customer_refresh = threading.Lock()
 
 

@@ -75,6 +75,12 @@ class Engine
         return static::call('post', "/internal/{$companyId}/customers/sync") ?? [];
     }
 
+    /** Look for customer IDs after the highest one we have and copy the new ones (also every 20 minutes); returns last_id / checked / found. */
+    public static function syncNewCustomers(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/customers/sync-new") ?? [];
+    }
+
     /** Background customer sync if the last one is older than $maxAge seconds; returns started / running. */
     public static function refreshCustomers(int $companyId, int $maxAge = 600): array
     {
