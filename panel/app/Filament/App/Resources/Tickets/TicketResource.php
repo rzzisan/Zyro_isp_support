@@ -92,6 +92,8 @@ class TicketResource extends Resource
     {
         return $table
             ->poll('60s')
+            ->paginated([10, 25, 50, 100])
+            ->defaultPaginationPageOption(50)
             ->defaultSort('opened_at', 'desc')
             ->columns([
                 TextColumn::make('complain_id')->label('টিকিট')->prefix('#')->searchable()->sortable(),
