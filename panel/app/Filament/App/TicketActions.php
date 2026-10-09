@@ -53,22 +53,40 @@ class TicketActions
         return static::customerInfo((int) (explode('|', (string) $customer)[0] ?? 0));
     }
 
-    /** The same box for a billing customer header id (new-ticket form and ticket details). */
+    /** [info, error] for a billing customer header id: bill, MikroTik now, OLT/ONU now (cached 60 s). */
+    public static function liveInfo(int $headerId, bool $fresh = false): array
+    {
+        if (! $headerId) {
+            return [null, null];
+        }
+        $key = 'ticket-info:'.static::company().':'.$headerId;
+        if ($fresh) {
+            \Illuminate\Support\Facades\Cache::forget($key);
+        }
+        try {
+            return [\Illuminate\Support\Facades\Cache::remember($key, 60, fn () => Engine::ticketInfo(static::company(), $headerId)), null];
+        } catch (RuntimeException $e) {
+            return [null, $e->getMessage()];
+        }
+    }
+
+    /** The info box for the new-ticket form. */
     public static function customerInfo(int $headerId)
     {
         if (! $headerId) {
             return null;
         }
-        try {
-            $info = \Illuminate\Support\Facades\Cache::remember('ticket-info:'.static::company().':'.$headerId, 60,
-                fn () => Engine::ticketInfo(static::company(), $headerId));
-            $error = null;
-        } catch (RuntimeException $e) {
-            $info = null;
-            $error = $e->getMessage();
-        }
+        [$info, $error] = static::liveInfo($headerId);
 
         return view('filament.app.tickets.customer-info', ['info' => $info, 'error' => $error]);
+    }
+
+    /** Compact ticket details: the ticket, then the customer's line now (MikroTik, OLT/ONU, bill). */
+    public static function details(BillingTicket $ticket)
+    {
+        [$info, $error] = static::liveInfo((int) $ticket->customer_header_id);
+
+        return view('filament.app.tickets.details', ['t' => $ticket, 'info' => $info, 'error' => $error]);
     }
 
     /** "header_id|customer_id|username|mobile" so the choice carries what the ticket needs. */
@@ -90,7 +108,7 @@ class TicketActions
             ->modalHeading('বিলিং সফটওয়্যারে নতুন টিকিট')
             ->modalSubmitActionLabel('টিকিট খুলুন')
             ->fillForm(function () use ($customerId) {
-                $data = ['priority' => '2', 'sms_client' => false, 'sms_employees' => true];
+                $data = ['priority' => '2', 'sms_client' => false, 'sms_employees' => false];
                 if ($customerId) {
                     try {
                         $c = collect(static::searchCustomers($customerId))->firstWhere('customer_id', $customerId);
@@ -218,7 +236,7 @@ class TicketActions
                 }
 
                 return ['dept_id' => isset($s['DepartmentId']) ? (string) $s['DepartmentId'] : null,
-                    'employees' => array_map('strval', $s['EmployeeIds'] ?? []), 'sms_employees' => true];
+                    'employees' => array_map('strval', $s['EmployeeIds'] ?? []), 'sms_employees' => false];
             })
             ->schema([
                 Select::make('dept_id')->label('ডিপার্টমেন্ট (ঐচ্ছিক)')->options(fn () => static::options('departments')),
