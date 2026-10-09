@@ -240,31 +240,52 @@ def _transcribe_gemini(t: Tenant, audio: bytes, mime: str, contact_id: int | Non
     return None
 
 
-def transcribe(t: Tenant, audio: bytes, mime: str, contact_id: int | None = None) -> str | None:
-    try:
-        text = _transcribe_gemini(t, audio, mime, contact_id)
-    except Exception:
-        log.exception("Gemini voice transcription failed, falling back to Whisper")
-        text = None
-    if text:
-        return text
+def _transcribe_groq(t: Tenant, audio: bytes, mime: str, contact_id: int | None) -> str | None:
     ext = "ogg" if "ogg" in mime else ("mp4" if "mp4" in mime else ("mpeg" if "mpeg" in mime else "ogg"))
-    for row in _keys(t, "groq"):
-        r = httpx.post(
-            "https://api.groq.com/openai/v1/audio/transcriptions",
-            headers={"Authorization": f"Bearer {db.decrypt(row['api_key'])}"},
-            files={"file": (f"voice.{ext}", audio, mime.split(";")[0])},
-            data={"model": "whisper-large-v3", "language": "bn", "response_format": "verbose_json"},
-            timeout=60,
-        )
-        if r.status_code in (401, 403, 429):
+    for row in _keys(t, "groq", usable_only=True):
+        try:
+            r = httpx.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {db.decrypt(row['api_key'])}"},
+                files={"file": (f"voice.{ext}", audio, mime.split(";")[0])},
+                data={"model": "whisper-large-v3", "language": "bn", "response_format": "verbose_json"},
+                timeout=60,
+            )
+        except httpx.TransportError as e:
+            record_usage(t, row["id"], "groq", "whisper-large-v3", "voice", contact_id, error=f"{type(e).__name__}: {e}")
+            continue
+        if r.status_code != 200:
             record_usage(t, row["id"], "groq", "whisper-large-v3", "voice", contact_id, limits=_limits(r.headers),
                          error=f"HTTP {r.status_code}: {r.text[:300]}")
             continue
-        r.raise_for_status()
         body = r.json()
         # Whisper is billed per audio second, not tokens: keep the seconds in input_tokens for this model
         record_usage(t, row["id"], "groq", "whisper-large-v3", "voice", contact_id,
                      {"input": round(float(body.get("duration") or 0))}, _limits(r.headers))
-        return (body.get("text") or "").strip() or None
-    raise RuntimeError("no usable Groq key for voice transcription")
+        text = (body.get("text") or "").strip()
+        if text:
+            return text
+    return None
+
+
+# voice provider id -> transcriber; the company picks the first one in বট সেটিংস (voice_provider)
+VOICE_PROVIDERS = {"gemini": _transcribe_gemini, "groq": _transcribe_groq}
+
+
+def transcribe(t: Tenant, audio: bytes, mime: str, contact_id: int | None = None) -> str | None:
+    """The company's voice AI first, every one of its keys in turn, then the other voice AIs the company has keys for."""
+    first = t.bot.get("voice_provider") or "gemini"
+    for provider in [first] + [p for p in VOICE_PROVIDERS if p != first]:
+        fn = VOICE_PROVIDERS.get(provider)
+        if not fn:
+            continue
+        try:
+            text = fn(t, audio, mime, contact_id)
+        except Exception:
+            log.exception("voice transcription with %s failed", provider)
+            text = None
+        if text:
+            return text
+    if not any(_keys(t, p) for p in VOICE_PROVIDERS):
+        raise RuntimeError("no Gemini or Groq key for voice transcription")
+    return None

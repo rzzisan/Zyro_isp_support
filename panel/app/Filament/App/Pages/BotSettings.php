@@ -39,7 +39,7 @@ class BotSettings extends CompanySettingsPage
     protected function record(Company $company): Model
     {
         return $company->botSetting()->firstOrNew([], [
-            'ai_provider' => 'groq', 'bot_mode' => 'shadow', 'auto_ticket' => true,
+            'ai_provider' => 'groq', 'voice_provider' => 'gemini', 'bot_mode' => 'shadow', 'auto_ticket' => true,
             'reply_signature' => '- '.$company->name,
         ]);
     }
@@ -52,6 +52,9 @@ class BotSettings extends CompanySettingsPage
                 TextInput::make('ai_model')->label('মডেল')
                     ->placeholder(fn ($get) => AiKey::PROVIDERS[$get('ai_provider')][2] ?? '')
                     ->helperText('খালি রাখলে প্রোভাইডারের সাজেস্টেড মডেল; key-গুলো "AI key" পেজে যোগ করুন'),
+                Select::make('voice_provider')->label('ভয়েস মেসেজ পড়বে')->required()->default('gemini')
+                    ->options(['gemini' => 'Google Gemini (আঞ্চলিক বাংলা ও মুখে বলা নম্বর ভালো বোঝে)', 'groq' => 'Groq Whisper'])
+                    ->helperText('আগে এই AI-এর সব key একে একে চেষ্টা করবে; সবগুলো ব্যর্থ বা লিমিটে আটকালে অন্য AI-তে যাবে।'),
             ]),
             Section::make('বট কীভাবে কাজ করবে')->schema([
                 Select::make('bot_mode')->label('বট মোড')->required()->options([
