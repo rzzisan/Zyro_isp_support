@@ -26,9 +26,23 @@ class Engine
         }
     }
 
-    /** categories / priorities / departments / employees: [id => name], cached for 10 minutes. */
+    /**
+     * categories / priorities / departments / employees: [id => name], from the desk's own copy (billing_options,
+     * refreshed hourly by the ticket sync). Only when there is no copy yet is billing asked (the engine saves it).
+     */
     public static function ticketOptions(int $companyId): array
     {
+        $rows = \App\Models\BillingOption::where('company_id', $companyId)->where('active', true)->orderBy('id')
+            ->get(['kind', 'option_id', 'name']);
+        if ($rows->isNotEmpty()) {
+            $out = ['categories' => [], 'priorities' => [], 'departments' => [], 'employees' => []];
+            foreach ($rows as $r) {
+                $out[$r->kind][$r->option_id] = $r->name;
+            }
+
+            return $out;
+        }
+
         return Cache::remember("ticket-options:{$companyId}", 600, fn () => static::call('get', "/internal/{$companyId}/ticket-options"));
     }
 

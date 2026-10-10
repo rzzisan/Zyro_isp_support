@@ -107,4 +107,17 @@ class TechnicianTest extends TestCase
             'employee_id' => '3', 'wa_number' => $t->wa_number, 'status' => 'sent', 'channel' => 'text']);
         Livewire::test(ManageTechnicians::class)->assertSee('Nazmul (Technician)')->assertSee('#57301');
     }
+
+    public function test_employee_list_comes_from_the_desk_copy(): void
+    {
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        \App\Models\BillingOption::create(['company_id' => $this->company->id, 'kind' => 'employees', 'option_id' => '3', 'name' => 'Nazmul']);
+        \App\Models\BillingOption::create(['company_id' => $this->company->id, 'kind' => 'employees', 'option_id' => '9', 'name' => 'Gone', 'active' => false]);
+        $this->assertSame(['3' => 'Nazmul'], \App\Services\Engine::ticketOptions($this->company->id)['employees']);
+        $this->as($this->owner);
+        Livewire::test(ManageTechnicians::class)
+            ->callAction(TestAction::make('create')->table(), ['name' => 'Nazmul', 'wa_number' => '01711000111', 'billing_employee_id' => '3'])
+            ->assertHasNoFormErrors();
+        $this->assertSame('Nazmul', Technician::sole()->billing_employee_name);
+    }
 }

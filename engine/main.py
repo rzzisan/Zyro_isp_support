@@ -566,7 +566,10 @@ def billing_call(fn):
 @app.get("/internal/{company_id}/ticket-options")
 def ticket_options(request: Request, company_id: int):
     t = internal_tenant(request, company_id)
-    return billing_call(lambda: tenants.billing(t).support_options())
+    opts = billing_call(lambda: tenants.billing(t).support_options())
+    from engine.ticket_sync import save_options
+    save_options(company_id, opts)  # the desk keeps its own copy from now on
+    return opts
 
 
 @app.get("/internal/{company_id}/bot-prompts")

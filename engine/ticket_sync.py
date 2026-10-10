@@ -107,8 +107,38 @@ def fill_descriptions(api, company_id: int) -> int:
     return n
 
 
+def save_options(company_id: int, options: dict) -> None:
+    """The support page's lists into billing_options (the desk reads them from there); missing ones -> inactive."""
+    for kind, items in options.items():
+        if not items:  # page didn't parse: keep what we have
+            continue
+        for oid, name in items.items():
+            db.execute(
+                """INSERT INTO billing_options (company_id, kind, option_id, name, active, synced_at, created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, true, now(), now(), now())
+                   ON CONFLICT (company_id, kind, option_id) DO UPDATE
+                     SET name = EXCLUDED.name, active = true, synced_at = now(), updated_at = now()""",
+                (company_id, kind, str(oid), name))
+        db.execute("""UPDATE billing_options SET active = false, updated_at = now()
+                      WHERE company_id = %s AND kind = %s AND active AND NOT (option_id = ANY(%s))""",
+                   (company_id, kind, [str(k) for k in items]))
+
+
+def refresh_options(api, company_id: int, max_age_minutes: int = 60) -> bool:
+    last = db.one("SELECT max(synced_at) AS at FROM billing_options WHERE company_id = %s", (company_id,))
+    if last and last["at"] and last["at"] > datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=max_age_minutes):
+        return False
+    try:
+        save_options(company_id, api.support_options())
+        return True
+    except Exception:
+        log.warning("billing option lists not refreshed for company %s", company_id, exc_info=True)
+        return False
+
+
 def sync_company(t, days: int) -> dict:
     api = tenants.billing(t)
+    refresh_options(api, t.company_id)
     open_rows = fetch_all(api, "/ClientSupport/AjaxDailyComplainList", {})
     processing = {str(r.get("ComplainId")) for r in fetch_all(api, "/ClientSupport/AjaxDailyComplainList",
                                                                 {"customQueryString": "processing"})}
