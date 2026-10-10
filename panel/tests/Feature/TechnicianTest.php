@@ -90,4 +90,21 @@ class TechnicianTest extends TestCase
         Livewire::test(ListConversations::class)->call('setBox', 'staff')->assertSee('Nazmul')->assertDontSee('net nai')
             ->call('setBox', 'waiting')->assertSee('net nai')->assertDontSee('5629?');
     }
+
+    public function test_owner_links_technician_to_billing_employee(): void
+    {
+        config(['services.engine.url' => 'http://engine.test', 'services.engine.key' => 'k']);
+        \Illuminate\Support\Facades\Http::fake(["engine.test/internal/{$this->company->id}/ticket-options" => \Illuminate\Support\Facades\Http::response(
+            ['categories' => [], 'priorities' => [], 'departments' => [], 'employees' => ['3' => 'Nazmul (Technician)', '9' => 'Rakib']])]);
+        $this->as($this->owner);
+        Livewire::test(ManageTechnicians::class)
+            ->callAction(TestAction::make('create')->table(), ['name' => 'Nazmul', 'wa_number' => '01711000111', 'billing_employee_id' => '3'])
+            ->assertHasNoFormErrors();
+        $t = Technician::sole();
+        $this->assertSame(['3', 'Nazmul (Technician)', true], [$t->billing_employee_id, $t->billing_employee_name, $t->notify_tickets]);
+
+        \App\Models\TicketNotification::create(['company_id' => $this->company->id, 'complain_id' => '57301', 'technician_id' => $t->id,
+            'employee_id' => '3', 'wa_number' => $t->wa_number, 'status' => 'sent', 'channel' => 'text']);
+        Livewire::test(ManageTechnicians::class)->assertSee('Nazmul (Technician)')->assertSee('#57301');
+    }
 }

@@ -112,9 +112,21 @@ def sync_company(t, days: int) -> dict:
     open_rows = fetch_all(api, "/ClientSupport/AjaxDailyComplainList", {})
     processing = {str(r.get("ComplainId")) for r in fetch_all(api, "/ClientSupport/AjaxDailyComplainList",
                                                                 {"customQueryString": "processing"})}
+    before = {r["complain_id"]: r["assigned_to"] for r in db.all_rows(
+        "SELECT complain_id, assigned_to FROM billing_tickets WHERE company_id = %s AND state IN ('pending', 'processing')",
+        (t.company_id,))}
     for r in open_rows:
         upsert(t.company_id, r, "processing" if str(r.get("ComplainId")) in processing else "pending")
     described = fill_descriptions(api, t.company_id)
+    # staff changed (new ticket with staff, assigned, re-assigned): tell the linked technicians on WhatsApp
+    reassigned = [str(r.get("ComplainId")) for r in open_rows
+                  if names(r.get("SolvedBy")) and names(r.get("SolvedBy")) != before.get(str(r.get("ComplainId")))]
+    try:
+        from engine.ticket_notify import notify
+        notified = notify(t, api, reassigned)
+    except Exception:
+        log.exception("technician ticket messages failed for company %s", t.company_id)
+        notified = 0
 
     today = datetime.now(DHAKA).date()
     solved = fetch_all(api, "/ClientSupport/AjaxMonthlyComplainList", {
@@ -130,7 +142,8 @@ def sync_company(t, days: int) -> dict:
                       WHERE company_id = %s AND state IN ('pending', 'processing') AND NOT (complain_id = ANY(%s))
                       RETURNING 1)
            SELECT count(*) AS n FROM u""", (t.company_id, open_ids))
-    return {"open": len(open_rows), "processing": len(processing), "solved": len(solved), "closed": gone["n"], "described": described}
+    return {"open": len(open_rows), "processing": len(processing), "solved": len(solved), "closed": gone["n"], "described": described,
+            "reassigned": len(reassigned), "notified": notified}
 
 
 def companies(only: int | None) -> list:
