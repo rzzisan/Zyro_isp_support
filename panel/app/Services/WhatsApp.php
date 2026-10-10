@@ -82,7 +82,7 @@ class WhatsApp
         ]);
         $contact->forceFill([
             'last_message_at' => now(),
-            'bot_paused_until' => $pauseHours > 0 ? now()->addHours($pauseHours) : $contact->bot_paused_until,
+            'bot_paused_until' => $pauseHours > 0 && ! $contact->technician() ? now()->addHours($pauseHours) : $contact->bot_paused_until,
             'assigned_user_id' => $contact->assigned_user_id ?? $user->id,
         ])->save();
 
@@ -147,7 +147,7 @@ class WhatsApp
         Storage::disk('local')->put("media/{$contact->company_id}/{$message->id}", file_get_contents($path));
         $contact->forceFill([
             'last_message_at' => now(),
-            'bot_paused_until' => $pauseHours > 0 ? now()->addHours($pauseHours) : $contact->bot_paused_until,
+            'bot_paused_until' => $pauseHours > 0 && ! $contact->technician() ? now()->addHours($pauseHours) : $contact->bot_paused_until,
             'assigned_user_id' => $contact->assigned_user_id ?? $user->id,
         ])->save();
 

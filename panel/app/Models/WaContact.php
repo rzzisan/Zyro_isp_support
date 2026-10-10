@@ -48,8 +48,13 @@ class WaContact extends Model
         return $this->hasOne(WaMessage::class, 'contact_id')->latestOfMany();
     }
 
+    /** Staff took the chat over. A technician's chat never pauses: the bot always answers them. */
     public function isBotPaused(): bool
     {
+        if ($this->technician()) {
+            return false;
+        }
+
         return $this->bot_paused || ($this->bot_paused_until && $this->bot_paused_until->isFuture());
     }
 

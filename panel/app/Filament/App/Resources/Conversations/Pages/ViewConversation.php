@@ -97,7 +97,7 @@ class ViewConversation extends Page
                     Notification::make()->success()->title('দায়িত্ব বদলানো হয়েছে')->send();
                 }),
             Action::make('pause')->label('বট থামান')->icon(Heroicon::OutlinedPause)->color('warning')
-                ->visible(fn () => ! $this->contact()->isBotPaused())
+                ->visible(fn () => ! $this->contact()->isBotPaused() && ! $this->contact()->technician())
                 ->requiresConfirmation()
                 ->modalDescription('এই নম্বরে বট আর উত্তর দেবে না, যতক্ষণ না আবার চালু করেন।')
                 ->action(function () {

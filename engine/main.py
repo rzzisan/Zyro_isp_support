@@ -360,7 +360,11 @@ def said_recently(t: Tenant, contact_id: int, text: str, hours: int = 12) -> boo
 
 
 # --- rules ------------------------------------------------------------------------------------
-def bot_paused(contact: dict) -> bool:
+def bot_paused(t: Tenant, contact: dict) -> bool:
+    """Staff took this chat over (panel pause, or a staff reply's hours). Never for a technician's chat."""
+    from engine.technician import technician_for
+    if technician_for(t, contact["wa_number"]):
+        return False
     row = db.one("SELECT bot_paused OR COALESCE(bot_paused_until > now(), false) AS paused FROM wa_contacts WHERE id = %s",
                  (contact["id"],))
     return bool(row and row["paused"])
@@ -438,7 +442,7 @@ def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str
 def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
     from engine.agent import draft_reply, transcribe
 
-    if not t.active or (t.bot.get("bot_mode") or "shadow") == "off" or bot_paused(contact):
+    if not t.active or (t.bot.get("bot_mode") or "shadow") == "off" or bot_paused(t, contact):
         return
     mtype = m.get("type")
     if mtype == "button":
@@ -472,7 +476,7 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
         return
     with _contact_locks.setdefault(contact["id"], threading.Lock()):
         contact = db.one("SELECT * FROM wa_contacts WHERE id = %s", (contact["id"],)) or contact
-        if bot_paused(contact):  # staff took over while we waited
+        if bot_paused(t, contact):  # staff took over while we waited
             return
         text = unanswered_text(t, contact["id"]) or text
         _answer(t, contact, text, message_id, voice=mtype == "audio")
