@@ -18,7 +18,8 @@ trait InboxList
     #[Url(as: 'box')]
     public string $box = 'all';
 
-    public const BOXES = ['all' => 'সব', 'waiting' => 'উত্তরের অপেক্ষায়', 'mine' => 'আমার', 'paused' => 'বট থামানো', 'staff' => 'স্টাফ'];
+    public const BOXES = ['all' => 'সব', 'waiting' => 'উত্তরের অপেক্ষায়', 'mine' => 'আমার', 'paused' => 'বট থামানো', 'staff' => 'স্টাফ',
+        'muted' => 'নোটিফিকেশন বন্ধ'];
 
     /** Up to 60 chats for the list, newest first, with their last message and the "waiting" flag. */
     public function chatList(): Collection
@@ -39,6 +40,7 @@ trait InboxList
                 ->whereColumn('technicians.company_id', 'wa_contacts.company_id')->whereColumn('technicians.wa_number', 'wa_contacts.wa_number')),
             'mine' => $q->where('assigned_user_id', auth()->id()),
             'paused' => $q->where(fn ($w) => $w->where('bot_paused', true)->orWhere('bot_paused_until', '>', now())),
+            'muted' => $q->where('notify_muted', true),
             default => null,
         };
 

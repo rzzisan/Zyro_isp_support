@@ -77,7 +77,7 @@ Route::get('/notify/{company:slug}/poll', function (\App\Models\Company $company
     $rows = (clone $base)->where('id', '>', (int) $after)->with('contact')->orderBy('id')->limit(20)->get();
     $staff = \App\Models\Technician::where('company_id', $company->id)->where('active', true)->pluck('wa_number')->all();
     $botLive = \App\Models\BotSetting::where('company_id', $company->id)->value('bot_mode') === 'live';
-    $items = $rows->map(function (\App\Models\WaMessage $m) use ($company, $staff, $botLive) {
+    $items = $rows->reject(fn (\App\Models\WaMessage $m) => $m->contact?->notify_muted)->map(function (\App\Models\WaMessage $m) use ($company, $staff, $botLive) {
         $c = $m->contact;
         $body = trim((string) $m->body);
         if ($body === '') {

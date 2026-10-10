@@ -56,6 +56,8 @@ def new_message(company_id: int, contact: dict, mtype: str | None, body: str | N
 
 def _send_all(company_id: int, contact: dict, mtype: str | None, body: str | None, staff: bool) -> None:
     try:
+        if (db.one("SELECT notify_muted FROM wa_contacts WHERE id = %s", (contact["id"],)) or {}).get("notify_muted"):
+            return  # muted in the inbox: no push for this number
         subs = db.all_rows(
             """SELECT s.id, s.endpoint, s.p256dh, s.auth, c.slug FROM push_subscriptions s
                JOIN companies c ON c.id = s.company_id

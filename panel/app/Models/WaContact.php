@@ -11,13 +11,14 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class WaContact extends Model
 {
     protected $fillable = ['company_id', 'wa_number', 'name', 'customer_id', 'ident_state', 'bot_paused_until',
-        'bot_paused', 'assigned_user_id', 'last_message_at'];
+        'bot_paused', 'assigned_user_id', 'last_message_at', 'notify_muted'];
 
     protected function casts(): array
     {
         return [
             'ident_state' => 'array',
             'bot_paused' => 'boolean',
+            'notify_muted' => 'boolean',
             'bot_paused_until' => 'datetime',
             'last_message_at' => 'datetime',
         ];
