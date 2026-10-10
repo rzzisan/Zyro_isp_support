@@ -635,6 +635,34 @@ async def assign(request: Request, company_id: int, complain_id: int):
     return {"ok": True}
 
 
+@app.post("/internal/{company_id}/tickets/{complain_id}/edit")
+async def edit_ticket(request: Request, company_id: int, complain_id: int):
+    """Desk "Edit": category, priority, complaint mobile, description (and staff, when given) of an open ticket."""
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    row = db.one("SELECT customer_header_id, state FROM billing_tickets WHERE company_id = %s AND complain_id = %s",
+                 (company_id, str(complain_id)))
+    if not row:
+        raise HTTPException(status_code=404, detail="টিকিট পাওয়া যায়নি")
+    if row["state"] not in ("pending", "processing"):
+        raise HTTPException(status_code=400, detail="সমাধান হওয়া টিকিট বিলিংয়ে এডিট করা যায় না")
+    if not (b.get("category_id") and b.get("mobile") and (b.get("comment") or "").strip()):
+        raise HTTPException(status_code=400, detail="সমস্যার ধরন, মোবাইল আর বিবরণ লাগবে")
+    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
+
+    def run():
+        msg = api.update_ticket(complain_id, int(row["customer_header_id"]), str(b["category_id"]),
+                                int(b.get("priority") or 2),
+                                normalize_bd_mobile(b["mobile"]) or b["mobile"], b["comment"].strip()[:1900])
+        if b.get("employees"):
+            api.assign_ticket(complain_id, [int(e) for e in b["employees"]], b.get("dept_id"), bool(b.get("sms_employees")))
+        return msg
+
+    msg = billing_call(run)
+    refresh_tickets(t)
+    return {"ok": True, "message": msg}
+
+
 @app.post("/internal/{company_id}/tickets/{complain_id}/solve")
 async def solve(request: Request, company_id: int, complain_id: int):
     """Desk "Solve": only when the customer's PPPoE is online on our MikroTik right now."""

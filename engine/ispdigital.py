@@ -141,10 +141,25 @@ class ISPDigital:
     def create_ticket(self, header_id: int, category_id: str, priority_id: int, mobile: str,
                       comment: str, send_sms: bool = False) -> str:
         """Opens a client support ticket like the admin 'Open New Ticket' form. Returns the panel's message."""
+        return self._submit_ticket(0, 0, header_id, category_id, priority_id, mobile, comment, send_sms)
+
+    def update_ticket(self, complain_id: int, header_id: int, category_id: str, priority_id: int, mobile: str,
+                      comment: str) -> str:
+        """Edits an open ticket like the support page's Edit button: same form, with the ticket number and the id of
+        its first staff-to-staff conversation (that entry holds the description)."""
+        info = self._get("/ClientSupport/GetCustomerOtherData", {"id": int(header_id), "ticketId": int(complain_id)})
+        conv = int((info or {}).get("TicketConversationIdOfEmployeeToEmployee") or 0)
+        if not conv:
+            raise RuntimeError("বিলিংয়ে এই টিকিটের বিবরণ পাওয়া যায়নি, তাই এডিট করা গেল না")
+        body = "".join(f"<p>{html.escape(line)}</p>" for line in comment.splitlines() if line.strip()) or html.escape(comment)
+        return self._submit_ticket(complain_id, conv, header_id, category_id, priority_id, mobile, body, False)
+
+    def _submit_ticket(self, complain_id: int, conversation_id: int, header_id: int, category_id: str,
+                       priority_id: int, mobile: str, comment: str, send_sms: bool) -> str:
         token, _ = self.ticket_form()
         data = {
             "__RequestVerificationToken": token,
-            "TicketNumber": "0", "TicketConversationId": "0",
+            "TicketNumber": str(int(complain_id)), "TicketConversationId": str(int(conversation_id)),
             "CustomerHeaderId": str(header_id),
             "ProblemCategoryId": str(category_id),
             "ProblemPriorityId": str(priority_id),

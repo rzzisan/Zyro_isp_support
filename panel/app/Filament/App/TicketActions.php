@@ -264,6 +264,80 @@ class TicketActions
             });
     }
 
+    /** "Edit": category, priority, complaint mobile, description and staff of an open ticket, saved in billing. */
+    public static function edit(): Action
+    {
+        return Action::make('edit')->label('এডিট')->icon(Heroicon::OutlinedPencilSquare)->color('gray')
+            ->visible(fn (BillingTicket $record) => $record->isOpen())
+            ->modalHeading(fn (BillingTicket $record) => "টিকিট #{$record->complain_id} এডিট")
+            ->modalDescription('বিলিং সফটওয়্যারেও বদলাবে (আপনার নিজের বিলিং লগইনে)। কাস্টমারকে SMS যাবে না।')
+            ->modalWidth('2xl')
+            ->modalSubmitActionLabel('সেভ করুন')
+            ->fillForm(function (BillingTicket $record) {
+                try {
+                    $s = Engine::solvers(static::company(), $record->complain_id);
+                } catch (RuntimeException) {
+                    $s = [];
+                }
+                $raw = $record->raw ?? [];
+
+                return [
+                    'category_id' => isset($raw['ProblemCategoryId']) ? (string) $raw['ProblemCategoryId'] : null,
+                    'priority' => isset($raw['ProblemPriorityId']) ? (string) $raw['ProblemPriorityId'] : '2',
+                    'mobile' => $record->complainNumber() ?? $record->mobile,
+                    'comment' => (string) $record->description,
+                    'dept_id' => isset($s['DepartmentId']) ? (string) $s['DepartmentId'] : null,
+                    'employees' => array_map('strval', $s['EmployeeIds'] ?? []),
+                    'sms_employees' => false,
+                ];
+            })
+            ->schema([
+                Grid::make(2)->schema([
+                    Select::make('category_id')->label('সমস্যার ধরন')->required()->searchable()
+                        ->options(fn () => static::options('categories')),
+                    Select::make('priority')->label('Priority')->required()
+                        ->options(fn () => static::options('priorities') ?: ['1' => 'Low', '2' => 'Medium', '3' => 'High']),
+                ]),
+                TextInput::make('mobile')->label('যোগাযোগের মোবাইল')->tel()->required(),
+                Textarea::make('comment')->label('সমস্যার বিবরণ')->required()->rows(4)->maxLength(1900),
+                Grid::make(2)->schema([
+                    Select::make('dept_id')->label('ডিপার্টমেন্ট (ঐচ্ছিক)')->options(fn () => static::options('departments')),
+                    Select::make('employees')->label('কর্মী')->multiple()->searchable()
+                        ->helperText('খালি রাখলে কর্মী যেমন আছে থাকবে')
+                        ->options(fn () => static::options('employees')),
+                ]),
+                Toggle::make('sms_employees')->label('কর্মীকে SMS'),
+            ])
+            ->action(function (array $data, BillingTicket $record, Action $action) {
+                // re-assign only when the staff list really changed (AddSolver restarts the assignment)
+                $employees = array_map('strval', array_values($data['employees'] ?? []));
+                try {
+                    $now = array_map('strval', Engine::solvers(static::company(), $record->complain_id)['EmployeeIds'] ?? []);
+                } catch (RuntimeException) {
+                    $now = [];
+                }
+                sort($employees);
+                sort($now);
+                if ($employees === $now) {
+                    $employees = [];
+                }
+                try {
+                    Engine::editTicket(static::company(), $record->complain_id, [
+                        'category_id' => $data['category_id'], 'priority' => (int) $data['priority'],
+                        'mobile' => $data['mobile'], 'comment' => $data['comment'],
+                        'employees' => $employees, 'dept_id' => $data['dept_id'] ?? null,
+                        'sms_employees' => (bool) ($data['sms_employees'] ?? false),
+                    ]);
+                } catch (RuntimeException $e) {
+                    Notification::make()->danger()->title('এডিট হয়নি')->body($e->getMessage())->send();
+                    $action->halt();
+
+                    return;
+                }
+                Notification::make()->success()->title("টিকিট #{$record->complain_id} আপডেট হয়েছে")->send();
+            });
+    }
+
     /** "Solve" in the ticket details: only while the customer is online on MikroTik (the engine checks again). */
     public static function solve(): Action
     {

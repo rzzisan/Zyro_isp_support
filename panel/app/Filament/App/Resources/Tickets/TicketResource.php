@@ -22,7 +22,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-/** Billing software support tickets, synced every 5 minutes. Read-only. */
+/** Billing software support tickets, synced every 5 minutes. Open ones can be edited, assigned and solved (in billing). */
 class TicketResource extends Resource
 {
     protected static ?string $model = BillingTicket::class;
@@ -155,7 +155,7 @@ class TicketResource extends Resource
             ->deferFilters(false)
             ->filtersFormColumns(4)
             ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')->modalWidth('4xl')->modalHeading(fn (BillingTicket $record) => 'টিকিট #'.$record->complain_id)
-                ->extraModalFooterActions(fn () => [TicketActions::solve(), TicketActions::assign()->label('কর্মী যোগ / বাদ')->button()])])
+                ->extraModalFooterActions(fn () => [TicketActions::solve(), TicketActions::edit()->button(), TicketActions::assign()->label('কর্মী যোগ / বাদ')->button()])])
             ->recordAction('view');
     }
 

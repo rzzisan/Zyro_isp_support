@@ -51,6 +51,12 @@ class Engine
                 'user_id' => auth()->id()]);
     }
 
+    /** Edits an open ticket in billing (category, priority, mobile, description; staff when given). */
+    public static function editTicket(int $companyId, string $complainId, array $data): array
+    {
+        return static::call('post', "/internal/{$companyId}/tickets/{$complainId}/edit", $data + ['user_id' => auth()->id()]) ?? [];
+    }
+
     /** Runs the ticket sync for this company right away; returns counts. */
     public static function syncTickets(int $companyId): array
     {
