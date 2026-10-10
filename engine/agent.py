@@ -200,6 +200,8 @@ def draft_reply(t: Tenant, history: list[dict], context: dict | None,
 # tried in order on each key: Google no longer serves gemini-2.5-flash to keys of new accounts (404 "no longer available
 # to new users ... use models/gemini-3.8-flash"), so those keys go on to the newer model
 GEMINI_VOICE_MODELS = ["gemini-2.5-flash", "gemini-3.8-flash"]
+# 3.8 thinks by default and then takes 25-60 s per voice; with thinking off it took ~10 s and wrote the same transcript
+GEMINI_VOICE_EXTRA = {"gemini-3.8-flash": {"thinkingConfig": {"thinkingBudget": 0}}}
 GEMINI_VOICE_PROMPT = (
     "এটা বাংলাদেশের একটা ইন্টারনেট সার্ভিস প্রোভাইডারের কাস্টমারের WhatsApp ভয়েস মেসেজ। কাস্টমার যা বলেছেন হুবহু "
     "বাংলা হরফে লেখো, আঞ্চলিক টান থাকলেও অর্থ ঠিক রেখে। router, net, slow, ID, line-এর মতো ইংরেজি শব্দ যেভাবে বলা "
@@ -223,7 +225,9 @@ def _transcribe_gemini(t: Tenant, audio: bytes, mime: str, contact_id: int | Non
                 try:
                     r = httpx.post(
                         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                        headers={"x-goog-api-key": db.decrypt(row["api_key"])}, json=payload, timeout=45)
+                        headers={"x-goog-api-key": db.decrypt(row["api_key"])},
+                        json={**payload, "generationConfig": {**payload["generationConfig"], **GEMINI_VOICE_EXTRA.get(model, {})}},
+                        timeout=60)
                 except httpx.TransportError as e:
                     record_usage(t, row["id"], "gemini", model, "voice", contact_id, error=f"{type(e).__name__}: {e}")
                     r = None
