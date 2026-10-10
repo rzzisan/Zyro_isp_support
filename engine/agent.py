@@ -197,7 +197,9 @@ def draft_reply(t: Tenant, history: list[dict], context: dict | None,
     return _whatsapp_format(text), provider, model
 
 
-GEMINI_VOICE_MODEL = "gemini-2.5-flash"
+# tried in order on each key: Google no longer serves gemini-2.5-flash to keys of new accounts (404 "no longer available
+# to new users ... use models/gemini-3.8-flash"), so those keys go on to the newer model
+GEMINI_VOICE_MODELS = ["gemini-2.5-flash", "gemini-3.8-flash"]
 GEMINI_VOICE_PROMPT = (
     "এটা বাংলাদেশের একটা ইন্টারনেট সার্ভিস প্রোভাইডারের কাস্টমারের WhatsApp ভয়েস মেসেজ। কাস্টমার যা বলেছেন হুবহু "
     "বাংলা হরফে লেখো, আঞ্চলিক টান থাকলেও অর্থ ঠিক রেখে। router, net, slow, ID, line-এর মতো ইংরেজি শব্দ যেভাবে বলা "
@@ -209,44 +211,50 @@ GEMINI_VOICE_PROMPT = (
 def _transcribe_gemini(t: Tenant, audio: bytes, mime: str, contact_id: int | None) -> str | None:
     """Gemini listens to the audio itself: regional Bangla and spoken numbers come out far better than with Whisper
     (2026-10-09 test: 15/15 understandable vs 7/15). None when the company has no Gemini key or every key fails."""
+    payload = {"contents": [{"parts": [
+                   {"text": GEMINI_VOICE_PROMPT},
+                   {"inline_data": {"mime_type": mime.split(";")[0] or "audio/ogg",
+                                    "data": base64.b64encode(audio).decode()}}]}],
+               "generationConfig": {"temperature": 0}}
     for row in _keys(t, "gemini", usable_only=True):
-        payload = {"contents": [{"parts": [
-                       {"text": GEMINI_VOICE_PROMPT},
-                       {"inline_data": {"mime_type": mime.split(";")[0] or "audio/ogg",
-                                        "data": base64.b64encode(audio).decode()}}]}],
-                   "generationConfig": {"temperature": 0}}
-        r = None
-        for attempt in range(2):  # free tier: a 429/503 usually passes on a second try a few seconds later
-            try:
-                r = httpx.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_VOICE_MODEL}:generateContent",
-                    headers={"x-goog-api-key": db.decrypt(row["api_key"])}, json=payload, timeout=45)
-            except httpx.TransportError as e:
-                record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id, error=f"{type(e).__name__}: {e}")
-                r = None
+        for model in GEMINI_VOICE_MODELS:
+            r = None
+            for attempt in range(2):  # free tier: a 429/503 usually passes on a second try a few seconds later
+                try:
+                    r = httpx.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                        headers={"x-goog-api-key": db.decrypt(row["api_key"])}, json=payload, timeout=45)
+                except httpx.TransportError as e:
+                    record_usage(t, row["id"], "gemini", model, "voice", contact_id, error=f"{type(e).__name__}: {e}")
+                    r = None
+                    break
+                if r.status_code in (429, 503) and attempt == 0:
+                    record_usage(t, row["id"], "gemini", model, "voice", contact_id,
+                                 error=f"HTTP {r.status_code} (retrying): {r.text[:200]}")
+                    time.sleep(5)
+                    continue
                 break
-            if r.status_code in (429, 503) and attempt == 0:
-                record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id,
-                             error=f"HTTP {r.status_code} (retrying): {r.text[:200]}")
-                time.sleep(5)
+            if r is None:
+                break  # connection trouble: next key
+            if r.status_code == 404:  # this key can't use this model: try the next model on the same key
+                record_usage(t, row["id"], "gemini", model, "voice", contact_id, error=f"HTTP 404: {r.text[:300]}")
                 continue
+            if r.status_code != 200:
+                record_usage(t, row["id"], "gemini", model, "voice", contact_id,
+                             error=f"HTTP {r.status_code}: {r.text[:300]}")
+                if r.status_code in (429, 503):  # still limited / overloaded: give the key a minute
+                    db.execute("UPDATE ai_keys SET rate_limited_until = now() + interval '60 seconds' WHERE id = %s",
+                               (row["id"],))
+                break
+            body = r.json()
+            u = body.get("usageMetadata") or {}
+            record_usage(t, row["id"], "gemini", model, "voice", contact_id,
+                         {"input": u.get("promptTokenCount") or 0, "output": u.get("candidatesTokenCount") or 0})
+            parts = ((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+            text = "".join(p.get("text", "") for p in parts).strip()
+            if text:
+                return text
             break
-        if r is None:
-            continue
-        if r.status_code != 200:
-            record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id,
-                         error=f"HTTP {r.status_code}: {r.text[:300]}")
-            if r.status_code in (429, 503):  # still limited / overloaded: give the key a minute
-                db.execute("UPDATE ai_keys SET rate_limited_until = now() + interval '60 seconds' WHERE id = %s", (row["id"],))
-            continue
-        body = r.json()
-        u = body.get("usageMetadata") or {}
-        record_usage(t, row["id"], "gemini", GEMINI_VOICE_MODEL, "voice", contact_id,
-                     {"input": u.get("promptTokenCount") or 0, "output": u.get("candidatesTokenCount") or 0})
-        parts = ((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
-        text = "".join(p.get("text", "") for p in parts).strip()
-        if text:
-            return text
     return None
 
 
