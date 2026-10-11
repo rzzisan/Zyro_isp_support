@@ -9,9 +9,7 @@ use BackedEnum;
 use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
 use Filament\GlobalSearch\GlobalSearchResult;
-use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -133,47 +131,9 @@ class CustomerResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
+        // identity, connection and bill as cards, the same look as the live MikroTik / OLT box above
         return $schema->components([
-            Section::make('পরিচয়')->columns(3)->schema([
-                TextEntry::make('customer_id')->label('কাস্টমার ID'),
-                TextEntry::make('name')->label('নাম'),
-                TextEntry::make('username')->label('PPPoE ID')->copyable(),
-                TextEntry::make('mobile')->label('মোবাইল')->copyable()->placeholder('—'),
-                TextEntry::make('email')->label('ইমেইল')->placeholder('—'),
-                TextEntry::make('nid')->label('NID')->placeholder('—'),
-                TextEntry::make('address')->label('ঠিকানা')->placeholder('—')
-                    ->state(fn (BillingCustomer $r) => collect([$r->house, $r->road, $r->address, $r->thana, $r->district])->filter()->join(', ') ?: null),
-                TextEntry::make('joined_on')->label('যোগ দিয়েছেন')->date('d M Y')->placeholder('—'),
-                TextEntry::make('assigned_employee')->label('দায়িত্বে')->placeholder('—'),
-            ]),
-            Section::make('সংযোগ')->columns(3)->schema([
-                TextEntry::make('zone')->label('Zone / Subzone / Box')
-                    ->state(fn (BillingCustomer $r) => collect([$r->zone, $r->subzone, $r->box])->filter()->join(' / ') ?: null)->placeholder('—'),
-                TextEntry::make('package')->label('প্যাকেজ')->placeholder('—'),
-                TextEntry::make('speed')->label('স্পিড')->placeholder('—'),
-                TextEntry::make('connection_type')->label('সংযোগের ধরন')->placeholder('—'),
-                TextEntry::make('protocol')->label('Protocol / Server')
-                    ->state(fn (BillingCustomer $r) => trim($r->protocol.' · '.$r->server, ' ·') ?: null)->placeholder('—'),
-                TextEntry::make('customer_type')->label('কাস্টমারের ধরন')->placeholder('—'),
-            ]),
-            Section::make('বিল (শেষ sync অনুযায়ী)')->columns(4)->schema([
-                TextEntry::make('monthly_bill')->label('মাসিক বিল')->numeric(2)->suffix(' টাকা'),
-                TextEntry::make('due')->label('বকেয়া')->numeric(2)->suffix(' টাকা')->placeholder('০'),
-                TextEntry::make('paid')->label('এই মাসে দিয়েছেন')->numeric(2)->suffix(' টাকা')->placeholder('—'),
-                TextEntry::make('bill_day')->label('বিলের শেষ তারিখ')->placeholder('—')->suffix(' তারিখ'),
-                TextEntry::make('last_payment_date')->label('শেষ পেমেন্ট')->date('d M Y')->placeholder('—'),
-                TextEntry::make('status')->label('অবস্থা')
-                    ->state(fn (BillingCustomer $r) => ($r->status ?: '—').($r->is_left
-                        ? ($r->left_on ? ' · '.$r->left_on->format('d M Y').' থেকে' : '')
-                        : ($r->disabled ? ' (লাইন বন্ধ)' : ''))),
-                TextEntry::make('changes')->label('Active / Left বদল')->placeholder('—')
-                    ->state(fn (BillingCustomer $r) => \Illuminate\Support\Facades\DB::table('billing_customer_changes')
-                        ->where('company_id', $r->company_id)->where('header_id', $r->header_id)->orderByDesc('seen_at')->limit(5)->get()
-                        ->map(fn ($c) => ($c->change === 'left' ? 'Left হয়েছেন' : 'আবার Active')
-                            .' · '.\Illuminate\Support\Carbon::parse($c->seen_at, 'UTC')->timezone('Asia/Dhaka')->format('d M Y'))
-                        ->join(', ') ?: null),
-                TextEntry::make('synced_at')->label('শেষ sync')->since(),
-            ]),
+            \Filament\Schemas\Components\View::make('filament.app.customers.profile-cards')->columnSpanFull(),
         ]);
     }
 
