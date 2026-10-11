@@ -140,7 +140,7 @@ class DailyBillTest extends TestCase
             ->assertSee('11 Oct 2026, 07:16 PM')->assertSee('525.00')->assertSee('Zisan Ahammed')->assertDontSee('approve বাকি');
         // pending: its own number, no engine call needed
         $this->actingAs($this->owner)->get("/print/{$slug}/bill/2?print=0")->assertOk()
-            ->assertSee('B-2')->assertSee('approve বাকি')->assertSee('500.00')->assertSee('25.00')->assertSee('Abdul Jobbar');
+            ->assertSee('B-2')->assertDontSee('approve বাকি')->assertSee('500.00')->assertSee('25.00')->assertSee('Abdul Jobbar');
         \Illuminate\Support\Facades\Http::assertSentCount(1);
         // deleted and other companies' bills don't print
         $this->actingAs($this->owner)->get("/print/{$slug}/bill/4")->assertNotFound();

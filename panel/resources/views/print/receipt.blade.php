@@ -41,7 +41,6 @@
         .by { display: flex; justify-content: space-between; gap: 2mm; }
         .by b { white-space: nowrap; }
         .by span { border-left: 1.5px solid #000; padding-left: 2mm; text-align: center; flex: 1; }
-        .pending { text-align: center; font-size: .85em; margin-top: -1mm; margin-bottom: 1.5mm; }
         .dots { border-top: 2px dotted #000; margin: 2.5mm 0 2mm; }
         .foot { white-space: pre-line; text-align: {{ $width == 58 ? 'left' : 'justify' }}; }
         @media screen { body { background: #f3f4f6; } .r { background: #fff; margin: 8px auto; padding: 4mm; box-shadow: 0 1px 4px rgba(0,0,0,.15); width: {{ $width }}mm; } }
@@ -73,9 +72,6 @@
         <tr><td>Pay. Date</td><td>{{ $c->created_at->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</td></tr>
         <tr><td>P. Method</td><td>{{ $c->payment_method ?: '—' }}</td></tr>
     </table></div>
-    @if ($pending ?? ! $c->money_receipt_no)
-        <div class="pending">(বিলিং-এ approve বাকি)</div>
-    @endif
 
     <div class="box"><table class="money">
         <tr><td>Total Bill:</td><td>{{ $amt($payable) }}</td></tr>

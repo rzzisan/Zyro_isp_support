@@ -60,7 +60,7 @@ Route::get('/print/{company:slug}/receipt/{collection}', function (\App\Models\C
 })->middleware('web')->name('receipts.print');
 
 // money receipt of any bill in billing's Daily Bill Collection (synced), same layout as above; members who may see
-// that bill on the বিল কালেকশন page. Billing's receipt number once approved, else "B-{DailyBillId}" + approve বাকি.
+// that bill on the বিল কালেকশন page. Billing's receipt number once approved, else "B-{DailyBillId}".
 Route::get('/print/{company:slug}/bill/{dailyBill}', function (\App\Models\Company $company, int $dailyBill, \Illuminate\Http\Request $request) {
     $user = Auth::user();
     abort_unless($user && \App\Support\Menu::allows($user, $company, 'bills'), 403);
@@ -86,7 +86,7 @@ Route::get('/print/{company:slug}/bill/{dailyBill}', function (\App\Models\Compa
 
     return view('print.receipt', ['company' => $company, 'c' => $c, 'settings' => $settings, 'width' => $width,
         'customer' => $d->customer_header_id ? \App\Models\BillingCustomer::where('company_id', $company->id)->where('header_id', $d->customer_header_id)->first() : null,
-        'receiptNo' => $d->money_receipt_no ?: 'B-'.$d->daily_bill_id, 'pending' => ! $d->is_approved,
+        'receiptNo' => $d->money_receipt_no ?: 'B-'.$d->daily_bill_id,
         'autoPrint' => $request->query('print') !== '0']);
 })->middleware('web')->name('bills.receipt');
 
