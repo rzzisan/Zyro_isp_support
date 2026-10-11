@@ -281,11 +281,14 @@ def identify(t: Tenant, contact: dict, text: str):
         return None, "জি, আপনার লাইনটা খুঁজে বের করতে কাস্টমার ID বা লাইনের মোবাইল নম্বরটা লিখে দিন।", None, None, False
     if stage == "agent":
         return None, None, None, None, False
+    # a known sender goes straight to what they need, no "is this X's line?" question
     own = customers.by_whatsapp(t, api, contact["wa_number"])
-    if own:
-        save(stage="confirm", candidate=own.get("CustomerId"), candidate_name=own.get("CustomerName"), pending=text)
-        return None, (f"আসসালামু আলাইকুম। আপনি কি *{own.get('CustomerName')}* (ID {own.get('CustomerId')}) "
-                      "লাইনের বিষয়ে কথা বলছেন?"), None, None, False
+    if own:  # the line's registered number (one line only; a number on several lines is asked for the ID)
+        return ok(own, verified=True)
+    if contact.get("customer_id"):  # helped before: the line they gave last time (bill only if verified again)
+        c = customers.by_text(t, api, contact["customer_id"], allow_bare_id=True)
+        if c:
+            return ok(c)
     save(stage="ask_id", tries=1, pending=text)
     return None, "আসসালামু আলাইকুম। " + ASK_ID, None, None, False
 
