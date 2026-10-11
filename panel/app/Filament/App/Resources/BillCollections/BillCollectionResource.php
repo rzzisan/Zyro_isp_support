@@ -56,9 +56,9 @@ class BillCollectionResource extends Resource
                 TextColumn::make('customer_name')->label('কাস্টমার')
                     ->description(fn (BillCollection $r) => trim('ID '.$r->customer_id.($r->username ? ' · '.$r->username : '')))
                     ->searchable(['customer_name', 'customer_id', 'username']),
-                TextColumn::make('paid')->label('টাকা')->formatStateUsing($tk)->suffix(' টাকা')
+                TextColumn::make('paid')->label('টাকা')->formatStateUsing(fn ($state) => $tk($state))->suffix(' টাকা')
                     ->description(fn (BillCollection $r) => (float) $r->discount > 0 ? 'ডিসকাউন্ট '.$tk($r->discount) : null),
-                TextColumn::make('payable')->label('তখন বকেয়া')->formatStateUsing($tk)->placeholder('—')->toggleable(),
+                TextColumn::make('payable')->label('তখন বকেয়া')->formatStateUsing(fn ($state) => $tk($state))->placeholder('—')->toggleable(),
                 TextColumn::make('payment_method')->label('মাধ্যম')->placeholder('—'),
                 TextColumn::make('received_by')->label('Received By')->placeholder('—'),
                 TextColumn::make('user.name')->label('Desk থেকে কে')->placeholder('—'),

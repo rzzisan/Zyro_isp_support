@@ -135,7 +135,7 @@ class BillCollectionTest extends TestCase
     {
         $other = Company::create(['name' => 'Other ISP']);
         $mk = fn (Company $c, string $result) => BillCollection::create(['company_id' => $c->id, 'user_id' => $this->owner->id,
-            'customer_header_id' => 3, 'customer_id' => '0003', 'customer_name' => 'Bulbul', 'paid' => 525, 'result' => $result]);
+            'customer_header_id' => 3, 'customer_id' => '0003', 'customer_name' => 'Bulbul', 'paid' => 525, 'payable' => 600, 'result' => $result]);
         $a = $mk($this->company, 'saved');
         $b = $mk($this->company, 'blocked');
         $x = $mk($other, 'saved');
@@ -143,6 +143,7 @@ class BillCollectionTest extends TestCase
         $this->get("/app/{$this->company->slug}/bill-collections")->assertOk()->assertSee('Bulbul');
         Livewire::test(ListBillCollections::class)
             ->assertCanSeeTableRecords([$a, $b])->assertCanNotSeeTableRecords([$x])
+            ->assertTableColumnFormattedStateSet('paid', '525 টাকা', $a)->assertTableColumnFormattedStateSet('payable', '600', $a)
             ->filterTable('result', 'saved')->assertCanSeeTableRecords([$a])->assertCanNotSeeTableRecords([$b]);
     }
 }
