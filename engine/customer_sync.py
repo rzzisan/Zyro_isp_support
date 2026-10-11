@@ -86,7 +86,8 @@ N = COLS.count(",") + 1
 UPSERT = f"""INSERT INTO billing_customers ({COLS}, synced_at, gone_at, created_at, updated_at)
     VALUES ({", ".join(["%s"] * N)}, now(), NULL, now(), now())
     ON CONFLICT (company_id, header_id) DO UPDATE SET
-    {", ".join(f"{c.strip()} = EXCLUDED.{c.strip()}" for c in COLS.split(",") if c.strip() not in ("company_id", "header_id"))},
+    {", ".join(f"{c} = COALESCE(EXCLUDED.{c}, billing_customers.{c})" if c == "last_payment_date" else f"{c} = EXCLUDED.{c}"
+               for c in (c.strip() for c in COLS.split(",")) if c not in ("company_id", "header_id"))},
     synced_at = now(), gone_at = NULL, updated_at = now()
     RETURNING (xmax = 0) AS inserted"""
 
@@ -223,17 +224,44 @@ def find_in_billing(t, q: str) -> dict:
     return {"header_ids": [hid for hid, _ in hits if hid in have or hid in synced], "synced": synced}
 
 
+def backfill_last_payments(t, limit: int | None = None) -> dict:
+    """Customers whose last payment was before this bill month have no PaymentDate in the bill list: read their
+    payment history (newest first) and keep the latest real receipt's date. Read-only on billing."""
+    api = tenants.billing(t)
+    todo = [r["header_id"] for r in db.all_rows(
+        "SELECT header_id FROM billing_customers WHERE company_id = %s AND last_payment_date IS NULL AND gone_at IS NULL"
+        " ORDER BY is_left, header_id", (t.company_id,))][:limit]
+    found = 0
+    for i, hid in enumerate(todo, 1):
+        try:
+            pays = [p for p in api.payments(hid, 5) if not p.get("IsBillReceiveCanceled")]
+        except Exception as e:
+            log.warning("payments of %s: %s", hid, e)
+            continue
+        d = next((x for x in (day(p.get("PaymentDate") or p.get("BillReceivedDate"), "%d %b %Y") for p in pays) if x), None)
+        if d:
+            db.execute("UPDATE billing_customers SET last_payment_date = %s WHERE company_id = %s AND header_id = %s"
+                       " AND last_payment_date IS NULL", (d, t.company_id, hid))
+            found += 1
+        if i % 200 == 0:
+            log.info("company %s: last payments %s/%s, found %s", t.company_id, i, len(todo), found)
+    return {"checked": len(todo), "found": found}
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     p = argparse.ArgumentParser()
     p.add_argument("--company", type=int)
     p.add_argument("--new", action="store_true", help="only look for new customer IDs after the highest one")
+    p.add_argument("--last-payments", action="store_true", help="fill missing last payment dates from payment history")
+    p.add_argument("--limit", type=int)
     a = p.parse_args()
     from engine.ticket_sync import companies
     for t in companies(a.company):
         try:
-            log.info("company %s: %s", t.company_id, sync_new(t) if a.new else sync_company(t))
+            log.info("company %s: %s", t.company_id, backfill_last_payments(t, a.limit) if a.last_payments
+                     else sync_new(t) if a.new else sync_company(t))
         except Exception:
             log.exception("customer sync failed for company %s", t.company_id)
 
