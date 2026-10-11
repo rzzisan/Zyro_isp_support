@@ -10,15 +10,17 @@ class ListBillCollections extends ListRecords
 {
     protected static string $resource = BillCollectionResource::class;
 
-    protected static ?string $title = 'বিল কালেকশন';
+    protected static ?string $title = 'Desk বিল লগ';
 
     public function getSubheading(): ?string
     {
-        return 'Desk থেকে বিলিং সফটওয়্যারে নেওয়া বিল। approve বিলিং-এর Daily Bill Collection-এ হাতে করতে হয়।';
+        return 'Desk থেকে বিলিং-এ নেওয়ার প্রতিটা চেষ্টা (জমা, আটকানো, ব্যর্থ) আর রিসিট। সব বিলের তালিকা: বিল কালেকশন।';
     }
 
     protected function getHeaderActions(): array
     {
-        return [BillActions::receive()];
+        return [BillActions::receive(),
+            \Filament\Actions\Action::make('all')->label('বিল কালেকশন')->color('gray')
+                ->url(\App\Filament\App\Resources\DailyBills\DailyBillResource::getUrl('index'))];
     }
 }

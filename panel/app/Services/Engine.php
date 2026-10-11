@@ -175,6 +175,12 @@ class Engine
         return static::call('get', "/internal/{$companyId}/customers/{$headerId}/bill-form", ['user_id' => auth()->id()]) ?? [];
     }
 
+    /** Copy the last 3 days of billing's Daily Bill Collection now. */
+    public static function syncDailyBills(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/daily-bills/sync") ?? [];
+    }
+
     /** Billing's MoneyReceiptNo for a Desk collection (null until the bill is approved there); the engine keeps it. */
     public static function receiptNo(int $companyId, int $collectionId): ?string
     {

@@ -10,13 +10,13 @@ class Membership extends Model
 {
     protected $table = 'company_user';
 
-    protected $fillable = ['company_id', 'user_id', 'role', 'billing_username', 'billing_password', 'permissions'];
+    protected $fillable = ['company_id', 'user_id', 'role', 'billing_username', 'billing_password', 'permissions', 'bill_view_employees'];
 
     protected $hidden = ['billing_password'];
 
     protected function casts(): array
     {
-        return ['permissions' => 'array', 'billing_password' => 'encrypted', 'billing_checked_at' => 'datetime', 'billing_check_ok' => 'boolean'];
+        return ['permissions' => 'array', 'bill_view_employees' => 'array', 'billing_password' => 'encrypted', 'billing_checked_at' => 'datetime', 'billing_check_ok' => 'boolean'];
     }
 
     public function hasBillingLogin(): bool

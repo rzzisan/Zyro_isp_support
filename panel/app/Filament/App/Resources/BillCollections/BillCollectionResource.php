@@ -24,7 +24,9 @@ class BillCollectionResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static ?string $navigationLabel = 'বিল কালেকশন';
+    protected static ?string $navigationLabel = 'Desk বিল লগ';
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $modelLabel = 'বিল কালেকশন';
 

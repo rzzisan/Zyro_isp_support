@@ -71,7 +71,14 @@ class MembershipResource extends Resource
                 ->options(\App\Support\Menu::options())
                 ->columns(3)->bulkToggleable()
                 ->formatStateUsing(fn ($state, ?Membership $record) => $state ?? \App\Support\Menu::defaults($record?->role ?? 'agent'))
+                ->live()
                 ->helperText('ড্যাশবোর্ড আর "আমার বিলিং লগইন" সবাই দেখেন। সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin হলে কাজ করে, Agent-এর জন্য টিক দিলেও খুলবে না।'),
+            Select::make('bill_view_employees')->label('বিল কালেকশনে কার কার নেওয়া বিল দেখবেন')->visibleOn('edit')->multiple()
+                ->visible(fn ($get) => $get('role') === 'agent' && in_array('bills', (array) $get('permissions'), true))
+                ->options(fn () => \App\Models\BillingDailyBill::collectors(Filament::getTenant()->getKey()))
+                ->formatStateUsing(fn ($state) => array_map('strval', (array) ($state ?? [])))
+                ->dehydrateStateUsing(fn ($state) => array_values(array_map('intval', (array) ($state ?? []))) ?: null)
+                ->helperText('বিলিং-এর Received By (যিনি টাকা নিয়েছেন)। খালি রাখলে শুধু নিজের এন্ট্রি দেওয়া বিল দেখবেন (ওপরের বিলিং ইউজারনেম মিলিয়ে)। Owner/Admin সবার বিল দেখেন।'),
         ]);
     }
 

@@ -719,6 +719,15 @@ def sync_now(request: Request, company_id: int):
     return billing_call(lambda: sync_company(t, 3))
 
 
+@app.post("/internal/{company_id}/daily-bills/sync")
+def daily_bills_sync_now(request: Request, company_id: int):
+    """বিল কালেকশন page's "এখনই Sync": the last 3 days of billing's Daily Bill Collection."""
+    t = internal_tenant(request, company_id)
+    from engine import daily_bill_sync
+    frm, to = daily_bill_sync.date_range(3, None, None, None)
+    return billing_call(lambda: daily_bill_sync.sync_company(t, frm, to))
+
+
 @app.post("/internal/{company_id}/customers/sync")
 def customers_sync_now(request: Request, company_id: int):
     t = internal_tenant(request, company_id)
