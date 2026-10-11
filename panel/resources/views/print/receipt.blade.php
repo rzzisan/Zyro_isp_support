@@ -65,7 +65,7 @@
         <tr><td>Client Code</td><td>{{ $c->customer_id }}</td></tr>
         <tr><td>Client Name</td><td>{{ $customer?->name ?? $c->customer_name }}</td></tr>
         <tr><td>User Name</td><td>{{ $c->username ?? $customer?->username }}</td></tr>
-        <tr><td>Mobile No.</td><td>{{ $customer?->mobile ?? '—' }}</td></tr>
+        <tr><td>Mobile No.</td><td>{{ $customer?->mobile ?? ($c->mobile ?? '—') }}</td></tr>
     </table></div>
 
     <div class="box"><table class="kv">
@@ -73,7 +73,7 @@
         <tr><td>Pay. Date</td><td>{{ $c->created_at->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</td></tr>
         <tr><td>P. Method</td><td>{{ $c->payment_method ?: '—' }}</td></tr>
     </table></div>
-    @if (! $c->money_receipt_no)
+    @if ($pending ?? ! $c->money_receipt_no)
         <div class="pending">(বিলিং-এ approve বাকি)</div>
     @endif
 

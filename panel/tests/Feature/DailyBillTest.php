@@ -121,11 +121,31 @@ class DailyBillTest extends TestCase
         $this->actingAs($this->owner)->get("/app/{$this->company->slug}/daily-bills")->assertOk()->assertSee('বিল কালেকশন');
     }
 
-    public function test_receipt_action_only_for_bills_taken_from_the_desk(): void
+    public function test_every_bill_but_deleted_has_a_receipt(): void
     {
-        BillCollection::create(['company_id' => $this->company->id, 'customer_header_id' => 1, 'paid' => 525, 'result' => 'saved', 'daily_bill_id' => 1]);
         $this->panel($this->owner);
         Livewire::test(ListDailyBills::class)
-            ->assertTableActionVisible('receipt', $this->b['zisan'])->assertTableActionHidden('receipt', $this->b['jobbar']);
+            ->assertTableActionVisible('receipt', $this->b['zisan'])->assertTableActionVisible('receipt', $this->b['jobbar'])
+            ->filterTable('status', 'deleted')->assertTableActionHidden('receipt', $this->b['deleted']);
+    }
+
+    public function test_receipt_of_a_billing_bill(): void
+    {
+        config(['services.engine.url' => 'http://engine.test', 'services.engine.key' => 'k']);
+        \Illuminate\Support\Facades\Http::fake(["engine.test/internal/{$this->company->id}/daily-bills/1/receipt-no" => \Illuminate\Support\Facades\Http::response(['receipt_no' => '0001-202610-1119-abcRV'])]);
+        $slug = $this->company->slug;
+        // approved: billing's number, total = paid + discount + due
+        $this->actingAs($this->owner)->get("/print/{$slug}/bill/1?print=0")->assertOk()
+            ->assertSee('MONEY RECEIPT')->assertSee('0001-202610-1119-abcRV')->assertSee('C1')->assertSee('u1')
+            ->assertSee('11 Oct 2026, 07:16 PM')->assertSee('525.00')->assertSee('Zisan Ahammed')->assertDontSee('approve বাকি');
+        // pending: its own number, no engine call needed
+        $this->actingAs($this->owner)->get("/print/{$slug}/bill/2?print=0")->assertOk()
+            ->assertSee('B-2')->assertSee('approve বাকি')->assertSee('500.00')->assertSee('25.00')->assertSee('Abdul Jobbar');
+        \Illuminate\Support\Facades\Http::assertSentCount(1);
+        // deleted and other companies' bills don't print
+        $this->actingAs($this->owner)->get("/print/{$slug}/bill/4")->assertNotFound();
+        // an agent only prints bills they may see
+        $this->actingAs($this->agent)->get("/print/{$slug}/bill/2?print=0")->assertOk();
+        $this->actingAs($this->agent)->get("/print/{$slug}/bill/1")->assertNotFound();
     }
 }

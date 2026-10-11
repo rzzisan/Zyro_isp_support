@@ -149,14 +149,45 @@ def receipt_no(company_id: int, api: ISPDigital, collection_id: int) -> str | No
     taken = {r["money_receipt_no"] for r in db.all_rows(
         "SELECT money_receipt_no FROM bill_collections WHERE company_id = %s AND customer_header_id = %s "
         "AND money_receipt_no IS NOT NULL AND id <> %s", (company_id, row["customer_header_id"], row["id"]))}
-    day = row["local_at"].strftime("%d %b %Y")
-    for p in api.payments(int(row["customer_header_id"]), 10):
+    no = _match_receipt(api, int(row["customer_header_id"]), row["local_at"], float(row["paid"]), float(row["discount"]),
+                        row["received_by"], taken)
+    if no:
+        db.execute("UPDATE bill_collections SET money_receipt_no = %s WHERE id = %s", (no, row["id"]))
+    return no
+
+
+def _match_receipt(api: ISPDigital, header_id: int, local_at, paid: float, discount: float, received_by: str | None,
+                   taken: set) -> str | None:
+    """The MoneyReceiptNo in the customer's received history for a payment of that day, amount, discount and receiver."""
+    day = local_at.strftime("%d %b %Y")
+    for p in api.payments(header_id, 10):
         no = p.get("MoneyReceiptNo")
         if (not no or no in taken or p.get("IsBillReceiveCanceled") or p.get("BillReceivedDate") != day
-                or abs(float(p.get("PaidAmount") or 0) - float(row["paid"])) > 0.001
-                or abs(float(p.get("Discount") or 0) - float(row["discount"])) > 0.001
-                or (row["received_by"] and (p.get("ReceivedBy") or "") != row["received_by"])):
+                or abs(float(p.get("PaidAmount") or 0) - paid) > 0.001
+                or abs(float(p.get("Discount") or 0) - discount) > 0.001
+                or (received_by and (p.get("ReceivedBy") or "") != received_by)):
             continue
-        db.execute("UPDATE bill_collections SET money_receipt_no = %s WHERE id = %s", (no, row["id"]))
         return no
     return None
+
+
+def daily_receipt_no(company_id: int, api: ISPDigital, daily_bill_id: int) -> str | None:
+    """Billing's MoneyReceiptNo of a synced bill (billing_daily_bills), once approved; kept after the first find."""
+    row = db.one("""SELECT id, customer_header_id, receive_amount, discount_amount, received_by, money_receipt_no, is_approved,
+                           (collected_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Dhaka' AS local_at
+                    FROM billing_daily_bills WHERE company_id = %s AND daily_bill_id = %s AND NOT is_deleted""",
+                 (company_id, daily_bill_id))
+    if not row or not row["customer_header_id"]:
+        return None
+    if row["money_receipt_no"]:
+        return row["money_receipt_no"]
+    if not row["is_approved"]:
+        return None  # billing gives the number only after approval
+    taken = {r["money_receipt_no"] for r in db.all_rows(
+        "SELECT money_receipt_no FROM billing_daily_bills WHERE company_id = %s AND customer_header_id = %s "
+        "AND money_receipt_no IS NOT NULL AND id <> %s", (company_id, row["customer_header_id"], row["id"]))}
+    no = _match_receipt(api, int(row["customer_header_id"]), row["local_at"], float(row["receive_amount"]),
+                        float(row["discount_amount"]), row["received_by"], taken)
+    if no:
+        db.execute("UPDATE billing_daily_bills SET money_receipt_no = %s WHERE id = %s", (no, row["id"]))
+    return no

@@ -181,6 +181,12 @@ class Engine
         return static::call('post', "/internal/{$companyId}/daily-bills/sync") ?? [];
     }
 
+    /** Billing's MoneyReceiptNo of a synced bill (null until approved there); the engine keeps it. */
+    public static function dailyReceiptNo(int $companyId, int $dailyBillId): ?string
+    {
+        return static::call('get', "/internal/{$companyId}/daily-bills/{$dailyBillId}/receipt-no")['receipt_no'] ?? null;
+    }
+
     /** Billing's MoneyReceiptNo for a Desk collection (null until the bill is approved there); the engine keeps it. */
     public static function receiptNo(int $companyId, int $collectionId): ?string
     {

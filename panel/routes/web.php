@@ -59,6 +59,37 @@ Route::get('/print/{company:slug}/receipt/{collection}', function (\App\Models\C
         'receiptNo' => $c->money_receipt_no ?: 'D-'.$c->id, 'autoPrint' => $request->query('print') !== '0']);
 })->middleware('web')->name('receipts.print');
 
+// money receipt of any bill in billing's Daily Bill Collection (synced), same layout as above; members who may see
+// that bill on the বিল কালেকশন page. Billing's receipt number once approved, else "B-{DailyBillId}" + approve বাকি.
+Route::get('/print/{company:slug}/bill/{dailyBill}', function (\App\Models\Company $company, int $dailyBill, \Illuminate\Http\Request $request) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'bills'), 403);
+    $m = \App\Models\Membership::where('company_id', $company->id)->where('user_id', $user->id)->first();
+    $d = \App\Models\BillingDailyBill::where('company_id', $company->id)->where('daily_bill_id', $dailyBill)
+        ->where('is_deleted', false)->visibleTo($m)->firstOrFail();
+    if (! $d->money_receipt_no && $d->is_approved) {
+        try {
+            $d->money_receipt_no = \App\Services\Engine::dailyReceiptNo($company->id, $d->daily_bill_id);
+        } catch (\Throwable $e) {
+            report($e); // billing unreachable: print with the bill's own number
+        }
+    }
+    // the receipt layout reads a collection; fill one (unsaved) from the synced bill
+    $c = new \App\Models\BillCollection(['customer_id' => $d->customer_id, 'customer_name' => $d->customer_name,
+        'username' => $d->username, 'payable' => round((float) $d->receive_amount + (float) $d->discount_amount + max(0, (float) $d->balance_due), 2),
+        'paid' => $d->receive_amount, 'discount' => $d->discount_amount, 'payment_method' => $d->payment_method,
+        'received_by' => $d->received_by, 'money_receipt_no' => $d->money_receipt_no]);
+    $c->created_at = $d->collected_at;
+    $c->mobile = $d->mobile;
+    $settings = \App\Models\ReceiptSetting::forCompany($company);
+    $width = in_array((int) $request->query('w'), [58, 80], true) ? (int) $request->query('w') : ($settings->paper_width ?: 80);
+
+    return view('print.receipt', ['company' => $company, 'c' => $c, 'settings' => $settings, 'width' => $width,
+        'customer' => $d->customer_header_id ? \App\Models\BillingCustomer::where('company_id', $company->id)->where('header_id', $d->customer_header_id)->first() : null,
+        'receiptNo' => $d->money_receipt_no ?: 'B-'.$d->daily_bill_id, 'pending' => ! $d->is_approved,
+        'autoPrint' => $request->query('print') !== '0']);
+})->middleware('web')->name('bills.receipt');
+
 // all billing customers as CSV (no passwords); owner/admin of that company only
 Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company $company) {
     abort_unless(Auth::user()?->managesCompany($company), 403);

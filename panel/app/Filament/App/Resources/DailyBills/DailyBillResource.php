@@ -111,9 +111,8 @@ class DailyBillResource extends Resource
             ])
             ->recordActions([
                 Action::make('receipt')->label('রিসিট')->icon(Heroicon::OutlinedPrinter)
-                    ->visible(fn (BillingDailyBill $record) => (bool) $record->desk_collection_id)
-                    ->url(fn (BillingDailyBill $record) => $record->desk_collection_id
-                        ? route('receipts.print', ['company' => Filament::getTenant()->slug, 'collection' => $record->desk_collection_id]) : null)
+                    ->visible(fn (BillingDailyBill $record) => ! $record->is_deleted)
+                    ->url(fn (BillingDailyBill $record) => route('bills.receipt', ['company' => Filament::getTenant()->slug, 'dailyBill' => $record->daily_bill_id]))
                     ->openUrlInNewTab(),
             ])
             ->filters([

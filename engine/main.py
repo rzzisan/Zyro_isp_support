@@ -719,6 +719,14 @@ def sync_now(request: Request, company_id: int):
     return billing_call(lambda: sync_company(t, 3))
 
 
+@app.get("/internal/{company_id}/daily-bills/{daily_bill_id}/receipt-no")
+def daily_bill_receipt_no(request: Request, company_id: int, daily_bill_id: int):
+    """Billing's MoneyReceiptNo of a synced bill, once approved there (kept in billing_daily_bills)."""
+    t = internal_tenant(request, company_id)
+    from engine import bills
+    return {"receipt_no": billing_call(lambda: bills.daily_receipt_no(company_id, tenants.billing(t), daily_bill_id))}
+
+
 @app.post("/internal/{company_id}/daily-bills/sync")
 def daily_bills_sync_now(request: Request, company_id: int):
     """বিল কালেকশন page's "এখনই Sync": the last 3 days of billing's Daily Bill Collection."""
