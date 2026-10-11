@@ -51,6 +51,22 @@ class Engine
         return static::call('get', "/internal/{$companyId}/customers", ['q' => $q]) ?? [];
     }
 
+    /**
+     * Header search found nothing in the desk's copy: the billing header search, copying customers we don't have yet.
+     * Returns the header ids of every billing hit ([] when billing can't be reached in time).
+     */
+    public static function findInBilling(int $companyId, string $q): array
+    {
+        try {
+            return static::http()->timeout(25)->post("/internal/{$companyId}/customers/find?".http_build_query(['q' => $q]))
+                ->throw()->json('header_ids') ?? [];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [];
+        }
+    }
+
     /** Opens a ticket in the billing software; returns ['message' => ..., 'complain_id' => ...]. */
     public static function createTicket(int $companyId, array $data): array
     {

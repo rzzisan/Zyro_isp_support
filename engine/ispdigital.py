@@ -94,6 +94,13 @@ class ISPDigital:
         )
         return [self._clean(r) for r in data.get("aaData", [])]
 
+    def quick_search(self, term: str, with_left: bool = True) -> list[dict]:
+        """The billing header search box: [{"id": CustomerHeaderId, "text": "pppoe.user (CustomerId)"}].
+        Matches any part of ID, PPPoE user, name or mobile. The header box itself skips Left customers."""
+        path = "/Customer/GetAllCustomerUserName" if with_left else "/Customer/GetAllCustomerUserNameWithoutLeft"
+        data = self._get(path, {"term": term[:30], "permissionId": 1, "isComeFrom": "CustomerSearch"})
+        return data if isinstance(data, list) else []
+
     def live_status(self, header_id: int) -> dict:
         """Live connection + bill status (same data as the New Ticket form)."""
         data = self._get(f"/ClientSupport/GetCustomerOtherData/{header_id}")

@@ -717,6 +717,19 @@ def customers_sync_new(request: Request, company_id: int):
     return billing_call(lambda: sync_new(t))
 
 
+@app.post("/internal/{company_id}/customers/find")
+def customers_find(request: Request, company_id: int, q: str = ""):
+    """Desk header search fallback: the billing header search, copying customers the desk doesn't have yet."""
+    t = internal_tenant(request, company_id)
+    if len(q.strip()) < 3:
+        return {"header_ids": [], "synced": []}
+    from engine.customer_sync import find_in_billing
+    res = billing_call(lambda: find_in_billing(t, q))
+    if res["synced"]:
+        log.info("header search %r company %s: copied %s from billing", q, company_id, res["synced"])
+    return res
+
+
 _customer_refresh = threading.Lock()
 
 

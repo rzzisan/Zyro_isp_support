@@ -13,6 +13,7 @@ are not found, so a deleted ID in between doesn't stop it.
 import argparse
 import json
 import logging
+import re
 from datetime import datetime
 
 from engine import db, tenant as tenants
@@ -186,6 +187,40 @@ def sync_new(t) -> dict:
         db.execute(UPSERT, row_for(t.company_id, row, bill))
         found.append(row.get("CustomerId"))
     return {"last_id": int(last), "checked": n - int(last), "found": found}
+
+
+FIND_LIMIT = 20
+FIND_SYNC_LIMIT = 5
+
+
+def find_in_billing(t, q: str) -> dict:
+    """Desk header search found nothing in our copy: ask the billing header search, copy the customers we don't have
+    yet (at most FIND_SYNC_LIMIT, about two list searches each), and return the header ids of every billing hit."""
+    api = tenants.billing(t)
+    hits = []
+    for h in api.quick_search(q.strip())[:FIND_LIMIT]:
+        m = re.match(r"^\s*(.*?)\s*\(([^()]*)\)\s*$", str(h.get("text") or ""))
+        if str(h.get("id") or "").isdigit():
+            hits.append((int(h["id"]), m.group(1) if m else str(h.get("text") or "").strip()))
+    have = {r["header_id"] for r in db.all_rows(
+        "SELECT header_id FROM billing_customers WHERE company_id = %s AND header_id = ANY(%s)",
+        (t.company_id, [hid for hid, _ in hits]))} if hits else set()
+    synced = []
+    for hid, user in [h for h in hits if h[0] not in have][:FIND_SYNC_LIMIT]:
+        if not user:
+            continue
+        rows = [r for r in _search(api, "/Customer/AjaxCustomerList", user) if int(r["CustomerHeaderId"]) == hid]
+        if rows:
+            bill = next((b for b in _search(api, "/Billing/AjaxCustomerBillList", user)
+                         if int(b["CustomerHeaderId"]) == hid), None)
+            db.execute(UPSERT, row_for(t.company_id, rows[0], bill))
+        else:
+            rows = [r for r in _search(api, "/Customer/AjaxLeftCustomerList", user) if int(r["CustomerHeaderId"]) == hid]
+            if not rows:
+                continue
+            db.execute(UPSERT, row_for(t.company_id, rows[0], None, left=True))
+        synced.append(hid)
+    return {"header_ids": [hid for hid, _ in hits if hid in have or hid in synced], "synced": synced}
 
 
 def main() -> None:
