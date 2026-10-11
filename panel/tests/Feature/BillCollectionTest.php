@@ -75,6 +75,20 @@ class BillCollectionTest extends TestCase
             && $r['expected_payable'] == 525 && $r['user_id'] === $this->owner->id);
     }
 
+    public function test_form_shows_live_balance(): void
+    {
+        $html = view('filament.app.bills.summary', ['payable' => 525, 'discount' => 25, 'paid' => 300])->render();
+        foreach (['মোট বকেয়া', '525 টাকা', '− 25 টাকা', '− 300 টাকা', 'বাকি বকেয়া', '200 টাকা'] as $needle) {
+            $this->assertStringContainsString($needle, $html);
+        }
+        $this->assertStringContainsString('#dc2626', $html);
+        $html = view('filament.app.bills.summary', ['payable' => 525, 'discount' => 0, 'paid' => 525])->render();
+        $this->assertStringContainsString('0 টাকা', $html);
+        $this->assertStringContainsString('#16a34a', $html);
+        $html = view('filament.app.bills.summary', ['payable' => 525, 'discount' => 0, 'paid' => 600])->render();
+        $this->assertStringContainsString('75 টাকা বেশি নেওয়া হচ্ছে', $html);
+    }
+
     public function test_partial_payment_needs_a_note(): void
     {
         $this->fakeEngine();

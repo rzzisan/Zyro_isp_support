@@ -119,8 +119,15 @@ class BillActions
                     }),
                 Hidden::make('expected_payable'),
                 Grid::make(2)->schema([
-                    TextInput::make('paid')->label('টাকা নিলেন')->numeric()->minValue(0)->suffix('টাকা')->required()->live(onBlur: true),
-                    TextInput::make('discount')->label('ডিসকাউন্ট')->numeric()->minValue(0)->suffix('টাকা')->default(0)->live(onBlur: true),
+                    TextInput::make('paid')->label('টাকা নিলেন')->numeric()->minValue(0)->suffix('টাকা')->required()->live(debounce: 400),
+                    TextInput::make('discount')->label('ডিসকাউন্ট')->numeric()->minValue(0)->suffix('টাকা')->default(0)->live(debounce: 400),
+                ]),
+                // live sum like the billing form's Details box: due - discount - received = balance
+                Placeholder::make('summary')->hiddenLabel()
+                    ->visible(fn ($get) => (bool) $headerOf($get) && $get('expected_payable') !== null)
+                    ->content(fn ($get) => view('filament.app.bills.summary', ['payable' => (float) $get('expected_payable'),
+                        'discount' => (float) $get('discount'), 'paid' => (float) $get('paid')])),
+                Grid::make(2)->schema([
                     Select::make('method_id')->label('পেমেন্টের মাধ্যম')->required()
                         ->options(fn ($get) => static::tryForm($headerOf($get))[0]['methods'] ?? []),
                     Select::make('received_by_id')->label('কে টাকা নিলেন (Received By)')->required()->searchable()
