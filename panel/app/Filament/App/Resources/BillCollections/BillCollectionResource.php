@@ -70,6 +70,12 @@ class BillCollectionResource extends Resource
                 TextColumn::make('remarks')->label('নোট')->placeholder('—')->limit(50)->toggleable(isToggledHiddenByDefault: true),
                 IconColumn::make('send_sms')->label('SMS')->boolean()->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->recordActions([
+                \Filament\Actions\Action::make('receipt')->label('রিসিট')->icon(\Filament\Support\Icons\Heroicon::OutlinedPrinter)
+                    ->visible(fn (BillCollection $record) => $record->result === 'saved')
+                    ->url(fn (BillCollection $record) => route('receipts.print', ['company' => Filament::getTenant()->slug, 'collection' => $record->id]))
+                    ->openUrlInNewTab(),
+            ])
             ->filters([
                 SelectFilter::make('result')->label('ফল')->options(BillCollection::RESULTS),
                 SelectFilter::make('user_id')->label('Desk থেকে কে')->relationship('user', 'name'),

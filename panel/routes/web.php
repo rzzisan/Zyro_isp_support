@@ -38,6 +38,27 @@ Route::get('/print/{company:slug}/tickets', function (\App\Models\Company $compa
         'now' => now('Asia/Dhaka')]);
 })->middleware('web')->name('tickets.print');
 
+// money receipt of a bill collected from the Desk, for a thermal printer (?w=58 narrow paper, ?print=0 no print dialog);
+// members with the bills menu only. Billing's own receipt number is fetched (and kept) once the bill is approved there.
+Route::get('/print/{company:slug}/receipt/{collection}', function (\App\Models\Company $company, int $collection, \Illuminate\Http\Request $request) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'bills'), 403);
+    $c = \App\Models\BillCollection::where('company_id', $company->id)->where('result', 'saved')->findOrFail($collection);
+    if (! $c->money_receipt_no) {
+        try {
+            $c->money_receipt_no = \App\Services\Engine::receiptNo($company->id, $c->id);
+        } catch (\Throwable $e) {
+            report($e); // billing unreachable: print with the Desk number
+        }
+    }
+    $settings = \App\Models\ReceiptSetting::forCompany($company);
+    $width = in_array((int) $request->query('w'), [58, 80], true) ? (int) $request->query('w') : ($settings->paper_width ?: 80);
+
+    return view('print.receipt', ['company' => $company, 'c' => $c, 'settings' => $settings, 'width' => $width,
+        'customer' => \App\Models\BillingCustomer::where('company_id', $company->id)->where('header_id', $c->customer_header_id)->first(),
+        'receiptNo' => $c->money_receipt_no ?: 'D-'.$c->id, 'autoPrint' => $request->query('print') !== '0']);
+})->middleware('web')->name('receipts.print');
+
 // all billing customers as CSV (no passwords); owner/admin of that company only
 Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company $company) {
     abort_unless(Auth::user()?->managesCompany($company), 403);

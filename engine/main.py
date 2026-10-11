@@ -890,6 +890,14 @@ async def bill_receive(request: Request, company_id: int, header_id: int):
     return billing_call(lambda: bills.collect(company_id, user_id, api, header_id, b))
 
 
+@app.get("/internal/{company_id}/bill-collections/{collection_id}/receipt-no")
+def bill_receipt_no(request: Request, company_id: int, collection_id: int):
+    """Billing's MoneyReceiptNo for a Desk collection, once approved there (kept in bill_collections)."""
+    t = internal_tenant(request, company_id)
+    from engine import bills
+    return {"receipt_no": billing_call(lambda: bills.receipt_no(company_id, tenants.billing(t), collection_id))}
+
+
 @app.get("/internal/{company_id}/customers/{header_id}/ticket-info")
 def ticket_info(request: Request, company_id: int, header_id: int):
     """New-ticket form: customer and bill from our copy, connection from our MikroTik, OLT/ONU from billing."""

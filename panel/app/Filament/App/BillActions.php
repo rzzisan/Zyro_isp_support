@@ -165,7 +165,11 @@ class BillActions
                     Cache::forget('bill-form:'.static::company().':'.auth()->id().':'.$headerId);
                 }
                 Notification::make()->success()->title('বিল জমা হয়েছে, বিলিং-এ approve বাকি')
-                    ->body(trim(($res['message'] ?? '').' · বাকি বকেয়া '.($res['balance'] ?? 0).' টাকা', ' ·'))->send();
+                    ->body(trim(($res['message'] ?? '').' · বাকি বকেয়া '.($res['balance'] ?? 0).' টাকা', ' ·'))
+                    ->actions(! empty($res['collection_id']) ? [Action::make('printReceipt')->label('রিসিট প্রিন্ট')->button()
+                        ->url(route('receipts.print', ['company' => Filament::getTenant()->slug, 'collection' => $res['collection_id']]))
+                        ->openUrlInNewTab()] : [])
+                    ->persistent()->send();
             });
     }
 }

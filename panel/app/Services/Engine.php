@@ -175,6 +175,12 @@ class Engine
         return static::call('get', "/internal/{$companyId}/customers/{$headerId}/bill-form", ['user_id' => auth()->id()]) ?? [];
     }
 
+    /** Billing's MoneyReceiptNo for a Desk collection (null until the bill is approved there); the engine keeps it. */
+    public static function receiptNo(int $companyId, int $collectionId): ?string
+    {
+        return static::call('get', "/internal/{$companyId}/bill-collections/{$collectionId}/receipt-no")['receipt_no'] ?? null;
+    }
+
     /** Collect a bill in the billing software with the member's own login (stays pending until approved there). */
     public static function receiveBill(int $companyId, int $headerId, array $data): array
     {
