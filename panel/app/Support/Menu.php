@@ -20,6 +20,7 @@ class Menu
         'customers' => ['কাস্টমার', true, false],
         'monitoring' => ['অনলাইন মনিটরিং', true, false],
         'tickets' => ['টিকিট', true, false],
+        'bills' => ['বিল কালেকশন', false, false],
         'line_enables' => ['লাইন চালু/বন্ধের রেকর্ড', true, false],
         'onus' => ['ONU মনিটরিং', true, false],
         'whatsapp' => ['WhatsApp সেটিং', false, true],

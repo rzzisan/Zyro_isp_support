@@ -7,6 +7,8 @@ passwords to callers.
 import html
 import re
 import threading
+from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from urllib.parse import urlencode
 
 import httpx
@@ -27,8 +29,15 @@ TRACER_FIELDS = ["IPAddress", "CountryName", "Region", "CityName", "PostalCode",
                  "Latitude", "Longitude", "TimeZone", "Organization"]
 
 
+BD_TZ = timezone(timedelta(hours=6))
+
+
 class LoginError(RuntimeError):
     pass
+
+
+class BillingRefused(RuntimeError):
+    """The billing software answered with its own error message."""
 
 
 class ISPDigital:
@@ -232,6 +241,69 @@ class ISPDigital:
             raise LoginError("billing session expired, try again")
         return body
 
+    # --- write: bill collection (Daily Bill Collection -> Receive Bill) -------------------
+    def bill_form(self, header_id: int) -> dict:
+        """The Receive Bill form for one customer, as the billing page loads it into its modal."""
+        with self._lock:
+            for attempt in (1, 2):
+                if not self._logged_in:
+                    self.login()
+                r = self._client.get("/DailyAccountClosing/BillReceivePartial", params={"id": int(header_id)},
+                                     headers={"X-Requested-With": "XMLHttpRequest"})
+                form = parse_bill_form(r.text) if r.status_code == 200 else None
+                if form:
+                    return form
+                self._logged_in = False
+                if attempt == 2:
+                    raise LoginError("bill receive form not available")
+
+    def pending_bills(self, username: str, days: int = 31) -> list[dict]:
+        """Collections not approved yet (Daily Bill Collection, status pending) matching a username."""
+        today = datetime.now(BD_TZ).date()
+        cols = ["CreationTime", "CustomerHeaderId", "CustomerId", "UserName", "CustomerName", "MobileNumber",
+                "Description", "EmpHeaderId", "MonthlyBill", "ReceiveAmount", "VatAmount", "DiscountAmount",
+                "BalanceDue", "PaymentMethod", "ReceivedBy", "ApprovedBy", "CreatedBy"]
+        params = {"draw": 1, "start": 0, "length": 50, "search[value]": username, "search[regex]": "false",
+                  "id": 0, "fromDateString": (today - timedelta(days=days)).strftime("%d-%m-%Y"),
+                  "toDateString": today.strftime("%d-%m-%Y"), "EmpHeaderId": "", "ApprovedById": "",
+                  "CreatedBy": "", "transStatus": "pending", "orderBy": "", "paymentMethod": "", "permissionId": 1}
+        for i, c in enumerate(cols):
+            params.update({f"columns[{i}][data]": c, f"columns[{i}][name]": "", f"columns[{i}][searchable]": "true",
+                           f"columns[{i}][orderable]": "false", f"columns[{i}][search][value]": "",
+                           f"columns[{i}][search][regex]": "false"})
+        data = self._get("/DailyAccountClosing/AjaxDailyBillQuery", params)
+        return [r for r in (data or {}).get("data", []) if not r.get("IsApproved") and not r.get("IsDeleted")]
+
+    def receive_bill(self, form: dict, paid: float, discount: float, method_id: str, received_by_id: str,
+                     remarks: str = "", trx_no: str = "", send_sms: bool = True, next_billing_date: bool = False,
+                     received_from: str | None = None, bill_month: str | None = None) -> str:
+        """Submit a filled Receive Bill form (from bill_form) like the modal's Submit. Returns the panel's message.
+        The collection stays pending until a staff member approves it in the billing software."""
+        payable = form["payable"]
+        values = {
+            "ReceivedFrom": form["values"].get("ReceivedFrom", "") if received_from is None else received_from,
+            "ReceivedById": str(received_by_id), "PaymentMethodId": str(method_id),
+            "BillMonthName": bill_month or form["values"].get("BillMonthName", ""),
+            "Discount": money(discount), "PaidAmount": money(paid), "ReceiptOrTransactionNo": trx_no,
+            "BalanceDue": f"{payable - paid - discount:.2f}", "Remarks": remarks,
+        }
+        checked = {"SetNextBillingDate": next_billing_date, "isSMSSendable": send_sms}
+        data: list[tuple[str, str]] = []
+        for kind, name, value in form["fields"]:
+            if kind == "checkbox":
+                if checked.get(name, False):
+                    data.append((name, value or "true"))
+            else:
+                data.append((name, values.get(name, value)))
+        r = self._post(form["action"], data)
+        if r.text.lstrip().startswith("<"):
+            self._logged_in = False
+            raise LoginError("billing session expired, the bill was not saved")
+        res = r.json()
+        if res.get("errorMSG"):
+            raise BillingRefused(res["errorMSG"])
+        return res.get("successMSG") or "ok"
+
     def open_tickets_for(self, username: str) -> list[dict]:
         rows = self.open_tickets(username)
         # the daily complain list holds unresolved tickets: Status 0 = pending, 1 = processing
@@ -342,4 +414,102 @@ def diagnose(api: ISPDigital, customer: dict) -> dict:
             "last_deregister": onu.get("LastDeregisterTime"),
             "deregister_reason": onu.get("DeregisterReason"),
         },
+    }
+
+
+def money(v: float) -> str:
+    return str(int(v)) if float(v).is_integer() else f"{v:.2f}"
+
+
+def _num(v) -> float:
+    try:
+        return float(str(v or "0").replace(",", ""))
+    except ValueError:
+        return 0.0
+
+
+class _FormParser(HTMLParser):
+    """Inputs of the Receive Bill form in page order, the way jQuery would serialize them."""
+
+    def __init__(self, form_id: str):
+        super().__init__(convert_charrefs=True)
+        self.form_id, self.depth, self.action = form_id, 0, None
+        self.fields: list[list] = []        # [kind, name, value]
+        self.ids: dict[str, str] = {}       # id -> value (also unnamed inputs, e.g. CurrentEmployeeID)
+        self.options: dict[str, dict[str, str]] = {}
+        self._select = self._option = None
+        self._text = ""
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "form":
+            if self.depth:
+                self.depth += 1
+            elif a.get("id") == self.form_id:
+                self.depth, self.action = 1, html.unescape(a.get("action") or "")
+            return
+        if not self.depth or "disabled" in a:
+            return
+        name, value = a.get("name"), a.get("value") or ""
+        if tag == "input":
+            kind = (a.get("type") or "text").lower()
+            if a.get("id"):
+                self.ids[a["id"]] = value
+            if not name or kind in ("submit", "button", "file", "reset"):
+                return
+            if kind == "radio" and "checked" not in a:
+                return
+            self.fields.append(["checkbox" if kind == "checkbox" else "value", name, value])
+        elif tag == "select":
+            self._select = name
+            if name:
+                self.options[name] = {}
+                self.fields.append(["value", name, ""])
+        elif tag == "option" and self._select:
+            self._option, self._text = (a.get("value"), "selected" in a), ""
+        elif tag == "textarea" and name:
+            self.fields.append(["value", name, ""])
+            self._select, self._option = None, ("__textarea__", False)
+            self._text = ""
+
+    def handle_data(self, data):
+        if self._option:
+            self._text += data
+
+    def handle_endtag(self, tag):
+        if tag == "form" and self.depth:
+            self.depth -= 1
+        elif tag == "option" and self._option and self._select:
+            val, sel = self._option
+            text = self._text.strip()
+            val = text if val is None else val
+            self.options[self._select][val] = text
+            if sel:
+                self.fields[-1][2] = val
+            self._option = None
+        elif tag == "textarea" and self._option and self._option[0] == "__textarea__":
+            self.fields[-1][2] = self._text
+            self._option = None
+        elif tag == "select":
+            self._select = None
+
+
+def parse_bill_form(page: str) -> dict | None:
+    p = _FormParser("DailyBillReceiveMainForm")
+    p.feed(page)
+    names = {f[1] for f in p.fields}
+    if not p.action or "CustomerHeaderId" not in names or "PaidAmount" not in names:
+        return None
+    values = {}
+    for kind, name, value in p.fields:
+        if kind == "value":
+            values.setdefault(name, value)
+    return {
+        "action": p.action, "fields": [tuple(f) for f in p.fields], "values": values,
+        "payable": _num(values.get("PayabaleBill")), "monthly": _num(values.get("MonthlyBill")),
+        "period_id": values.get("FromBillPeriodId"), "status": values.get("BillingStatus"),
+        "username": p.ids.get("UserName"), "current_employee_id": p.ids.get("CurrentEmployeeID"),
+        "received_by": {k: v for k, v in p.options.get("ReceivedById", {}).items() if k},
+        "methods": {k: v for k, v in p.options.get("PaymentMethodId", {}).items() if k},
+        "has_tokens": "FormSubmissionToken" in names and "__RequestVerificationToken" in names,
     }
