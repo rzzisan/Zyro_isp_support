@@ -168,4 +168,16 @@ class Engine
     {
         return static::call('get', "/internal/{$companyId}/bot-prompts") ?? [];
     }
+
+    /** Receive Bill form of one customer: payable, Received By / payment method choices, pending collections. */
+    public static function billForm(int $companyId, int $headerId): array
+    {
+        return static::call('get', "/internal/{$companyId}/customers/{$headerId}/bill-form", ['user_id' => auth()->id()]) ?? [];
+    }
+
+    /** Collect a bill in the billing software with the member's own login (stays pending until approved there). */
+    public static function receiveBill(int $companyId, int $headerId, array $data): array
+    {
+        return static::call('post', "/internal/{$companyId}/customers/{$headerId}/bill", $data + ['user_id' => auth()->id()]) ?? [];
+    }
 }

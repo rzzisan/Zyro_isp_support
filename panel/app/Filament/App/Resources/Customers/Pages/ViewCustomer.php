@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\Customers\Pages;
 
 use App\Filament\App\Resources\Conversations\ConversationResource;
 use App\Filament\App\Resources\Customers\CustomerResource;
+use App\Filament\App\BillActions;
 use App\Filament\App\TicketActions;
 use App\Models\BillingCustomer;
 use App\Services\Engine;
@@ -54,6 +55,7 @@ class ViewCustomer extends ViewRecord
                         'billing_customer_id' => $c->id, 'customer_id' => $c->customer_id, 'viewed_at' => now()]);
                     $this->replaceMountedAction('showPassword');
                 }),
+            BillActions::receive($c),
             TicketActions::newTicket($c->customer_id)->label('টিকিট খুলুন')->color('gray'),
             Action::make('chat')->label('চ্যাট')->icon(Heroicon::OutlinedChatBubbleLeftRight)->color('gray')
                 ->visible((bool) $chat)
