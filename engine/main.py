@@ -240,25 +240,11 @@ def _is_ack(text: str) -> bool:
     return len(w) <= 5 and all(x in acks for x in w)
 
 
-def _mobile_matches(customer: dict, wa: str) -> bool:
-    m = normalize_bd_mobile(customer.get("MobileNumber") or "")
-    return bool(m) and m == normalize_bd_mobile(wa)
-
-
-def _names_match(customer: dict, text: str) -> bool:
-    """Someone writing from another number proves the line is theirs by writing the account name."""
-    common = set(_words("mohammad mohammed muhammad mohammod abdul abdur hossain hosen islam uddin ahmed begum khatun "
-                        "akter akhter miah mia sheikh shaikh মোহাম্মদ মোঃ"))
-    said = {x for x in _words(text) if len(x) >= 3}
-    name = [x for x in _words(customer.get("CustomerName") or "") if len(x) >= 3 and x not in common]
-    return bool(name) and any(x in said for x in name)
-
-
 def identify(t: Tenant, contact: dict, text: str):
     """Returns (customer, fixed_reply, pending_question, agent_note, verified).
 
-    verified = the chat is from the line's registered number (or the sender wrote the account name);
-    only then the bot may talk about the bill, payments or the name.
+    verified is always True once the line is known (registered number, or the sender gave a phone number or
+    customer ID): the bot may talk about the bill too.
     """
     api = tenants.billing(t)
     state = contact.get("ident_state") or {}
@@ -272,14 +258,11 @@ def identify(t: Tenant, contact: dict, text: str):
         db.execute("UPDATE wa_contacts SET ident_state = %s, updated_at = now() WHERE id = %s",
                    (json.dumps({**kw, "at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False), contact["id"]))
 
-    def ok(customer, pending=None, verified=None):
-        same = state.get("stage") == "ok" and state.get("customer_id") == customer.get("CustomerId")
-        if verified is None:
-            verified = _mobile_matches(customer, contact["wa_number"]) or (same and state.get("verified", True)) \
-                or _names_match(customer, text)
-        save(stage="ok", customer_id=customer.get("CustomerId"), verified=bool(verified))
+    def ok(customer, pending=None, verified=True):
+        # Zisan 2026-10-11: whoever gives the line's phone number or customer ID gets full support, bill included
+        save(stage="ok", customer_id=customer.get("CustomerId"), verified=True)
         db.execute("UPDATE wa_contacts SET customer_id = %s WHERE id = %s", (customer.get("CustomerId"), contact["id"]))
-        return customer, None, pending, None, bool(verified)
+        return customer, None, pending, None, True
 
     typed = customers.by_text(t, api, text, allow_bare_id=stage in ("ask_id", "confirm"))
     if typed:
@@ -315,7 +298,7 @@ def identify(t: Tenant, contact: dict, text: str):
     own = customers.by_whatsapp(t, api, contact["wa_number"])
     if own:  # the line's registered number (one line only; a number on several lines is asked for the ID)
         return ok(own, verified=True)
-    if contact.get("customer_id"):  # helped before: the line they gave last time (bill only if verified again)
+    if contact.get("customer_id"):  # helped before: the line they gave last time
         c = customers.by_text(t, api, contact["customer_id"], allow_bare_id=True)
         if c:
             return ok(c)
