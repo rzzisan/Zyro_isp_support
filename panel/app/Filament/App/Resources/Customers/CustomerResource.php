@@ -173,7 +173,7 @@ class CustomerResource extends Resource
             details: array_filter([
                 'নাম' => $r->name,
                 'মোবাইল' => $r->mobile,
-                'Zone' => collect([$r->zone, $r->subzone])->filter()->join(' / ') ?: null,
+                'Zone' => collect([$r->zone, $r->subzone, $r->box])->filter()->join(' / ') ?: null,
                 'অবস্থা' => $r->is_left ? 'Left'.($r->left_on ? ' ('.$r->left_on->format('d M Y').')' : '')
                     : ($r->disabled ? 'লাইন বন্ধ' : ($r->status ?: null)),
                 'বকেয়া' => $r->due > 0 ? number_format((float) $r->due).' টাকা' : null,

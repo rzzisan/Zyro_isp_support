@@ -870,6 +870,26 @@ def ppp_sync_now(request: Request, company_id: int):
     return out
 
 
+@app.get("/internal/{company_id}/customers/{header_id}/bill-form")
+def bill_form(request: Request, company_id: int, header_id: int, user_id: int = 0):
+    """Receive Bill form data (with the member's own billing login, so Received By defaults to them)."""
+    t = internal_tenant(request, company_id)
+    from engine import bills
+    api = billing_call(lambda: tenants.billing_for_user(t, user_id))
+    return billing_call(lambda: bills.form_info(api, header_id))
+
+
+@app.post("/internal/{company_id}/customers/{header_id}/bill")
+async def bill_receive(request: Request, company_id: int, header_id: int):
+    """Collect a bill in the billing software (it stays pending until staff approve it there)."""
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    from engine import bills
+    user_id = int(b.get("user_id") or 0)
+    api = billing_call(lambda: tenants.billing_for_user(t, user_id))
+    return billing_call(lambda: bills.collect(company_id, user_id, api, header_id, b))
+
+
 @app.get("/internal/{company_id}/customers/{header_id}/ticket-info")
 def ticket_info(request: Request, company_id: int, header_id: int):
     """New-ticket form: customer and bill from our copy, connection from our MikroTik, OLT/ONU from billing."""

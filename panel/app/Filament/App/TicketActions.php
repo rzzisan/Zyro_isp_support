@@ -44,8 +44,8 @@ class TicketActions
                 ->orWhere('username', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%")
                 ->when(strlen($digits) >= 5, fn ($x) => $x->orWhere('mobile', 'like', "%{$digits}%")))
             ->orderByRaw("ltrim(customer_id, '0') = ltrim(?, '0') DESC", [$search])->orderBy('is_left')->orderBy('customer_id')->limit(15)
-            ->get(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone', 'is_left', 'left_on'])
-            ->map(fn ($c) => $c->only(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone', 'is_left', 'left_on']))->all();
+            ->get(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone', 'subzone', 'box', 'is_left', 'left_on'])
+            ->map(fn ($c) => $c->only(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone', 'subzone', 'box', 'is_left', 'left_on']))->all();
     }
 
     /** Info box under the customer: bill (our DB), connection (our MikroTik), OLT/ONU (our OLT, else billing). */
@@ -98,8 +98,7 @@ class TicketActions
 
     private static function customerLabel(array $c): string
     {
-        return trim('ID '.$c['customer_id'].' · '.$c['name'].' · '.($c['mobile'] ?? '').($c['zone'] ? ' · '.$c['zone'] : ''), ' ·')
-            .(! empty($c['is_left']) ? ' · LEFT'.(! empty($c['left_on']) ? ' ('.$c['left_on']->format('d M Y').')' : '') : '');
+        return \App\Models\BillingCustomer::searchLabel($c);
     }
 
     /** @param  string|null  $customerId  prefill (e.g. from a chat) */
@@ -131,7 +130,12 @@ class TicketActions
                     ->helperText('কাস্টমার ID, মোবাইল বা username লিখে খুঁজুন')
                     ->getSearchResultsUsing(fn (string $search) => collect(static::searchCustomers($search))
                         ->mapWithKeys(fn ($c) => [static::customerKey($c) => static::customerLabel($c)])->all())
-                    ->getOptionLabelUsing(fn ($value) => 'ID '.(explode('|', (string) $value)[1] ?? '').' · '.(explode('|', (string) $value)[2] ?? ''))
+                    ->getOptionLabelUsing(function ($value) {
+                        $c = \App\Models\BillingCustomer::where('company_id', static::company())->where('header_id', (int) explode('|', (string) $value)[0])->first();
+
+                        return $c ? \App\Models\BillingCustomer::searchLabel($c)
+                            : 'ID '.(explode('|', (string) $value)[1] ?? '').' · '.(explode('|', (string) $value)[2] ?? '');
+                    })
                     ->live()
                     ->afterStateUpdated(fn ($state, callable $set) => $set('mobile', explode('|', (string) $state)[3] ?? null)),
                 \Filament\Forms\Components\Placeholder::make('info')->hiddenLabel()->columnSpanFull()
