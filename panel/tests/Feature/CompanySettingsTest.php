@@ -113,6 +113,49 @@ class CompanySettingsTest extends TestCase
         $this->assertSame('- Zyro', $s->reply_signature);
     }
 
+    public function test_bot_prompts_show_default_and_save_only_real_edits(): void
+    {
+        Http::fake(['*/bot-prompts' => Http::response(['customer' => 'full', 'technician' => 'full',
+            'customer_default' => 'ডিফল্ট কাস্টমার নিয়ম', 'technician_default' => 'ডিফল্ট {tech} নিয়ম'])]);
+        $this->as($this->owner);
+
+        Livewire::test(BotSettings::class)
+            ->assertSet('data.customer_prompt', 'ডিফল্ট কাস্টমার নিয়ম')
+            ->assertSet('data.technician_prompt', 'ডিফল্ট {tech} নিয়ম')
+            ->fillForm(['ai_provider' => 'groq', 'bot_mode' => 'shadow', 'customer_prompt' => "ডিফল্ট কাস্টমার নিয়ম\n",
+                'technician_prompt' => 'নিজের {tech} নিয়ম'])
+            ->call('save')->assertHasNoFormErrors();
+
+        $s = $this->company->botSetting()->first();
+        $this->assertNull($s->customer_prompt);
+        $this->assertSame('নিজের {tech} নিয়ম', $s->technician_prompt);
+
+        Livewire::test(BotSettings::class)->assertSet('data.technician_prompt', 'নিজের {tech} নিয়ম')
+            ->fillForm(['technician_prompt' => ''])->call('save')->assertHasNoFormErrors();
+        $this->assertNull($s->fresh()->technician_prompt);
+    }
+
+    public function test_bot_settings_open_when_engine_is_down(): void
+    {
+        Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('engine down'));
+        $this->as($this->owner);
+
+        Livewire::test(BotSettings::class)->assertOk()->assertSet('data.customer_prompt', null);
+    }
+
+    public function test_ai_cost_prices_cached_input_at_a_tenth(): void
+    {
+        DB::table('ai_usage')->insert(['company_id' => $this->company->id, 'provider' => 'claude', 'model' => 'claude-haiku-5-5',
+            'purpose' => 'customer', 'input_tokens' => 10000, 'output_tokens' => 1000, 'cached_tokens' => 9000, 'ok' => true,
+            'created_at' => now()]);
+        $this->as($this->owner);
+
+        $today = Livewire::test(\App\Filament\App\Pages\AiUsage::class)->instance()->totals()['today'];
+        // 1,000 uncached x $0.10 + 9,000 cached x $0.01 + 1,000 output x $0.50, per 1M tokens
+        $this->assertEqualsWithDelta(0.00069, $today['cost'], 1e-9);
+        $this->assertTrue($today['priced']);
+    }
+
     public function test_ai_key_is_encrypted_and_scoped_to_company(): void
     {
         $other = Company::create(['name' => 'Other ISP']);

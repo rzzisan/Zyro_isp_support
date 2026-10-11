@@ -45,6 +45,7 @@
                                     {{ \Illuminate\Support\Str::limit($m?->body ?: ($m ? '['.$m->type.']' : ''), 60) }}
                                 </span>
                                 @if ($c->isBotPaused())<span class="zi-tag" title="বট থামানো">⏸</span>@endif
+                                @if ($c->notify_muted)<span class="zi-tag" title="নোটিফিকেশন বন্ধ">🔕</span>@endif
                                 @if ($c->assignedUser)<span class="zi-tag" title="দায়িত্বে {{ $c->assignedUser->name }}">{{ $this::initials($c->assignedUser->name, '?') }}</span>@endif
                                 @if ($isWaiting)<span class="zi-dot" title="উত্তরের অপেক্ষায়"></span>@endif
                             </span>

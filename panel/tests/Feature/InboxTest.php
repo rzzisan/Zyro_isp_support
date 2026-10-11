@@ -150,6 +150,26 @@ class InboxTest extends TestCase
         $this->assertNull($this->contact->ident_state);
     }
 
+    public function test_muted_chat_gets_no_notification_and_is_listed(): void
+    {
+        [, , $other] = $this->companyWithChat('Temp', '8801711000002');
+        $other->forceFill(['company_id' => $this->company->id, 'name' => 'Other Person'])->save();
+        WaMessage::where('contact_id', $other->id)->update(['company_id' => $this->company->id]);
+        $this->as($this->owner);
+        Livewire::test(ViewConversation::class, ['record' => $this->contact->id])->callAction('mute');
+        $this->assertTrue($this->contact->refresh()->notify_muted);
+
+        $poll = $this->getJson("/notify/{$this->company->slug}/poll?after=0")->assertOk();
+        $this->assertSame([$other->id], array_column($poll->json('items'), 'contact'));
+        $this->assertSame((int) WaMessage::max('id'), $poll->json('last'));   // muted messages are still skipped past
+
+        Livewire::test(ListConversations::class)->call('setBox', 'muted')
+            ->assertSee('Customer of Century Link Network')->assertDontSee('Other Person');
+
+        Livewire::test(ViewConversation::class, ['record' => $this->contact->id])->callAction('unmute');
+        $this->assertFalse($this->contact->refresh()->notify_muted);
+    }
+
     public function test_cannot_use_another_companys_draft(): void
     {
         [$otherCo, , $other] = $this->companyWithChat('Other ISP', '8801711999999');

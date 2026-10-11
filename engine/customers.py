@@ -8,7 +8,8 @@ import logging
 import re
 
 from engine import db
-from engine.ispdigital import ISPDigital, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
+from engine.ispdigital import (ISPDigital, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile,
+                               number_text, without_urls)
 from engine.tenant import Tenant
 
 log = logging.getLogger("zyro-engine")
@@ -16,7 +17,7 @@ ID_HINT = re.compile(r"(\bid\b|আইডি|আই ডি|customer|কাস্�
 
 
 def _rows(t: Tenant, where: str, params: tuple) -> list[dict]:
-    rows = db.all_rows(f"SELECT extra FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND {where} LIMIT 3",
+    rows = db.all_rows(f"SELECT extra FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND NOT is_left AND {where} LIMIT 3",
                        (t.company_id, *params))
     return [r["extra"] for r in rows if r["extra"]]
 
@@ -32,13 +33,14 @@ def local_by_whatsapp(t: Tenant, wa_number: str) -> dict | None:
 
 def local_by_text(t: Tenant, text: str, allow_bare_id: bool = True) -> dict | None:
     """Same rules as ispdigital.find_customer_by_text, against our table."""
-    text = text or ""
-    for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", text)):
+    text = without_urls(text)
+    nums = number_text(text)
+    for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", nums)):
         hit = _one(_rows(t, "mobile_normalized = %s", ("88" + normalize_bd_mobile(m),)))
         if hit:
             return hit
     bare_ok = allow_bare_id or bool(ID_HINT.search(text)) or text.strip().isdigit()
-    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", text) if bare_ok else []):
+    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", nums) if bare_ok else []):
         hit = _one(_rows(t, "ltrim(customer_id, '0') = %s", (cid.lstrip("0") or "0",)))
         if hit:
             return hit
@@ -64,7 +66,11 @@ def by_text(t: Tenant, api: ISPDigital, text: str, allow_bare_id: bool = True) -
     hit = local_by_text(t, text, allow_bare_id)
     if hit:
         return hit
-    hit = find_customer_by_text(api, text, allow_bare_id=allow_bare_id)
+    try:
+        hit = find_customer_by_text(api, text, allow_bare_id=allow_bare_id)
+    except Exception as e:  # billing slow or down: same as not found, the bot still answers
+        log.warning("billing search failed: %s", e)
+        hit = None
     if hit:
         remember(t, hit)
     return hit
@@ -74,7 +80,11 @@ def by_whatsapp(t: Tenant, api: ISPDigital, wa_number: str) -> dict | None:
     hit = local_by_whatsapp(t, wa_number)
     if hit:
         return hit
-    hit = find_customer_by_whatsapp(api, wa_number)
+    try:
+        hit = find_customer_by_whatsapp(api, wa_number)
+    except Exception as e:  # billing slow or down: same as not found, the bot still answers
+        log.warning("billing search failed: %s", e)
+        hit = None
     if hit:
         remember(t, hit)
     return hit
@@ -96,7 +106,7 @@ def search(t: Tenant, q: str, limit: int = 10) -> list[dict]:
     q = q.strip()
     digits = re.sub(r"\D", "", q)
     rows = db.all_rows(
-        """SELECT extra FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND (
+        """SELECT extra FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND NOT is_left AND (
                ltrim(customer_id, '0') = ltrim(%s, '0') OR lower(username) LIKE %s OR name ILIKE %s
                OR (length(%s) >= 5 AND mobile_normalized LIKE %s))
            ORDER BY (ltrim(customer_id, '0') = ltrim(%s, '0')) DESC, customer_id LIMIT %s""",

@@ -27,7 +27,7 @@ def sync_router(r: dict) -> int:
                     [(r["company_id"], r["id"], x.get("name"), x.get("address"), x.get("caller-id"), x.get("uptime"))
                      for x in rows if x.get("name")])
             # count only PPPoE users that exist in the billing software
-            n = c.execute("""SELECT count(*) AS n FROM billing_customers WHERE company_id = %s AND gone_at IS NULL
+            n = c.execute("""SELECT count(*) AS n FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND NOT is_left
                              AND username = ANY(%s)""", (r["company_id"], [x.get("name") for x in rows if x.get("name")])).fetchone()["n"]
             c.execute("""UPDATE mikrotik_routers SET ppp_active = %s, last_checked_at = now(), last_check_ok = true,
                          updated_at = now() WHERE id = %s""", (n, r["id"]))
@@ -57,6 +57,13 @@ def online_now(company_id: int, username: str, server: str | None) -> dict | Non
         try:
             with RouterOS(r["host"], r["api_port"], r["username"], db.decrypt(r["password"]), timeout=6) as api:
                 rows = api.talk("/ppp/active/print", query={"name": username})
+                iface = {}
+                if rows:  # bytes moved this session; the router's tx to the customer is the customer's download
+                    try:
+                        iface = (api.talk("/interface/print", {".proplist": "rx-byte,tx-byte"},
+                                          query={"name": f"<pppoe-{username}>"}) or [{}])[0]
+                    except Exception as e:
+                        log.warning("interface bytes for %s: %s", username, e)
         except Exception as e:
             log.warning("router %s not reachable: %s", r["identity"], e)
             continue
@@ -64,7 +71,9 @@ def online_now(company_id: int, username: str, server: str | None) -> dict | Non
         if rows:
             x = rows[0]
             return {"online": True, "router": r["identity"], "uptime": x.get("uptime"), "address": x.get("address"),
-                    "caller_id": x.get("caller-id")}
+                    "caller_id": x.get("caller-id"),
+                    "download_bytes": int(iface["tx-byte"]) if str(iface.get("tx-byte", "")).isdigit() else None,
+                    "upload_bytes": int(iface["rx-byte"]) if str(iface.get("rx-byte", "")).isdigit() else None}
         if r["billing_server"] and r["billing_server"] == server:
             return answered  # its own router says offline
     return answered

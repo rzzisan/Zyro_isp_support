@@ -18,7 +18,7 @@ class BillingCustomer extends Model
             'pppoe_password' => 'encrypted', 'extra' => 'array', 'disabled' => 'boolean', 'is_vip' => 'boolean',
             'monthly_bill' => 'decimal:2', 'payable' => 'decimal:2', 'paid' => 'decimal:2', 'due' => 'decimal:2',
             'advance' => 'decimal:2', 'last_payment_date' => 'date', 'joined_on' => 'date', 'registered_on' => 'date',
-            'synced_at' => 'datetime', 'gone_at' => 'datetime', 'details_fetched_at' => 'datetime',
+            'synced_at' => 'datetime', 'gone_at' => 'datetime', 'is_left' => 'boolean', 'left_on' => 'date', 'details_fetched_at' => 'datetime',
         ];
     }
 

@@ -93,6 +93,11 @@ class Company extends Model
         return $this->hasMany(Technician::class);
     }
 
+    public function botFaqs(): HasMany
+    {
+        return $this->hasMany(BotFaq::class);
+    }
+
     public function lineEnables(): HasMany
     {
         return $this->hasMany(LineEnable::class);

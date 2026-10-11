@@ -26,15 +26,45 @@ class Engine
         }
     }
 
-    /** categories / priorities / departments / employees: [id => name], cached for 10 minutes. */
+    /**
+     * categories / priorities / departments / employees: [id => name], from the desk's own copy (billing_options,
+     * refreshed hourly by the ticket sync). Only when there is no copy yet is billing asked (the engine saves it).
+     */
     public static function ticketOptions(int $companyId): array
     {
+        $rows = \App\Models\BillingOption::where('company_id', $companyId)->where('active', true)->orderBy('id')
+            ->get(['kind', 'option_id', 'name']);
+        if ($rows->isNotEmpty()) {
+            $out = ['categories' => [], 'priorities' => [], 'departments' => [], 'employees' => []];
+            foreach ($rows as $r) {
+                $out[$r->kind][$r->option_id] = $r->name;
+            }
+
+            return $out;
+        }
+
         return Cache::remember("ticket-options:{$companyId}", 600, fn () => static::call('get', "/internal/{$companyId}/ticket-options"));
     }
 
     public static function customers(int $companyId, string $q): array
     {
         return static::call('get', "/internal/{$companyId}/customers", ['q' => $q]) ?? [];
+    }
+
+    /**
+     * Header search found nothing in the desk's copy: the billing header search, copying customers we don't have yet.
+     * Returns the header ids of every billing hit ([] when billing can't be reached in time).
+     */
+    public static function findInBilling(int $companyId, string $q): array
+    {
+        try {
+            return static::http()->timeout(25)->post("/internal/{$companyId}/customers/find?".http_build_query(['q' => $q]))
+                ->throw()->json('header_ids') ?? [];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [];
+        }
     }
 
     /** Opens a ticket in the billing software; returns ['message' => ..., 'complain_id' => ...]. */
@@ -51,10 +81,23 @@ class Engine
                 'user_id' => auth()->id()]);
     }
 
+    /** Edits an open ticket in billing (category, priority, mobile, description; staff when given). */
+    public static function editTicket(int $companyId, string $complainId, array $data): array
+    {
+        return static::call('post', "/internal/{$companyId}/tickets/{$complainId}/edit", $data + ['user_id' => auth()->id()]) ?? [];
+    }
+
     /** Runs the ticket sync for this company right away; returns counts. */
     public static function syncTickets(int $companyId): array
     {
         return static::call('post', "/internal/{$companyId}/tickets/sync") ?? [];
+    }
+
+    /** Mark a ticket solved in billing; the engine refuses unless the customer is online on MikroTik now. */
+    public static function solve(int $companyId, string $complainId, ?string $remark): array
+    {
+        return static::call('post', "/internal/{$companyId}/tickets/{$complainId}/solve",
+            ['remark' => (string) $remark, 'user_id' => auth()->id()]) ?? [];
     }
 
     public static function solvers(int $companyId, string $complainId): array
@@ -66,6 +109,12 @@ class Engine
     public static function syncCustomers(int $companyId): array
     {
         return static::call('post', "/internal/{$companyId}/customers/sync") ?? [];
+    }
+
+    /** Look for customer IDs after the highest one we have and copy the new ones (also every 20 minutes); returns last_id / checked / found. */
+    public static function syncNewCustomers(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/customers/sync-new") ?? [];
     }
 
     /** Background customer sync if the last one is older than $maxAge seconds; returns started / running. */
@@ -112,6 +161,12 @@ class Engine
     public static function testOlt(int $companyId, int $oltId): array
     {
         return static::call('post', "/internal/{$companyId}/olt/{$oltId}/test") ?? [];
+    }
+
+    /** The full instructions the bots get now: ['customer' => ..., 'technician' => ...]. */
+    public static function botPrompts(int $companyId): array
+    {
+        return static::call('get', "/internal/{$companyId}/bot-prompts") ?? [];
     }
 
     /** Receive Bill form of one customer: payable, Received By / payment method choices, pending collections. */

@@ -4,19 +4,27 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Technician extends Model
 {
-    protected $fillable = ['company_id', 'name', 'wa_number', 'active', 'can_switch_lines', 'note'];
+    protected $fillable = ['company_id', 'name', 'wa_number', 'active', 'can_switch_lines', 'note',
+        'billing_employee_id', 'billing_employee_name', 'notify_tickets'];
 
     protected function casts(): array
     {
-        return ['active' => 'boolean', 'can_switch_lines' => 'boolean'];
+        return ['active' => 'boolean', 'can_switch_lines' => 'boolean', 'notify_tickets' => 'boolean'];
     }
 
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /** The latest ticket message sent to this technician. */
+    public function lastTicketNotification(): HasOne
+    {
+        return $this->hasOne(TicketNotification::class)->latestOfMany();
     }
 
     /** 01XXXXXXXXX / +8801XXXXXXXXX / 8801XXXXXXXXX -> 8801XXXXXXXXX (WhatsApp's form). */

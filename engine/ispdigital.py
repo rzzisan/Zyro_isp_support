@@ -5,6 +5,7 @@ calls the JSON endpoints the web pages use. Never returns PPPoE/portal
 passwords to callers.
 """
 import html
+import logging
 import re
 import threading
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,8 @@ from html.parser import HTMLParser
 from urllib.parse import urlencode
 
 import httpx
+
+log = logging.getLogger("zyro-engine")
 
 SECRET_FIELDS = {"Password", "LoginPassword"}
 
@@ -103,6 +106,13 @@ class ISPDigital:
         )
         return [self._clean(r) for r in data.get("aaData", [])]
 
+    def quick_search(self, term: str, with_left: bool = True) -> list[dict]:
+        """The billing header search box: [{"id": CustomerHeaderId, "text": "pppoe.user (CustomerId)"}].
+        Matches any part of ID, PPPoE user, name or mobile. The header box itself skips Left customers."""
+        path = "/Customer/GetAllCustomerUserName" if with_left else "/Customer/GetAllCustomerUserNameWithoutLeft"
+        data = self._get(path, {"term": term[:30], "permissionId": 1, "isComeFrom": "CustomerSearch"})
+        return data if isinstance(data, list) else []
+
     def live_status(self, header_id: int) -> dict:
         """Live connection + bill status (same data as the New Ticket form)."""
         data = self._get(f"/ClientSupport/GetCustomerOtherData/{header_id}")
@@ -150,10 +160,25 @@ class ISPDigital:
     def create_ticket(self, header_id: int, category_id: str, priority_id: int, mobile: str,
                       comment: str, send_sms: bool = False) -> str:
         """Opens a client support ticket like the admin 'Open New Ticket' form. Returns the panel's message."""
+        return self._submit_ticket(0, 0, header_id, category_id, priority_id, mobile, comment, send_sms)
+
+    def update_ticket(self, complain_id: int, header_id: int, category_id: str, priority_id: int, mobile: str,
+                      comment: str) -> str:
+        """Edits an open ticket like the support page's Edit button: same form, with the ticket number and the id of
+        its first staff-to-staff conversation (that entry holds the description)."""
+        info = self._get("/ClientSupport/GetCustomerOtherData", {"id": int(header_id), "ticketId": int(complain_id)})
+        conv = int((info or {}).get("TicketConversationIdOfEmployeeToEmployee") or 0)
+        if not conv:
+            raise RuntimeError("বিলিংয়ে এই টিকিটের বিবরণ পাওয়া যায়নি, তাই এডিট করা গেল না")
+        body = "".join(f"<p>{html.escape(line)}</p>" for line in comment.splitlines() if line.strip()) or html.escape(comment)
+        return self._submit_ticket(complain_id, conv, header_id, category_id, priority_id, mobile, body, False)
+
+    def _submit_ticket(self, complain_id: int, conversation_id: int, header_id: int, category_id: str,
+                       priority_id: int, mobile: str, comment: str, send_sms: bool) -> str:
         token, _ = self.ticket_form()
         data = {
             "__RequestVerificationToken": token,
-            "TicketNumber": "0", "TicketConversationId": "0",
+            "TicketNumber": str(int(complain_id)), "TicketConversationId": str(int(conversation_id)),
             "CustomerHeaderId": str(header_id),
             "ProblemCategoryId": str(category_id),
             "ProblemPriorityId": str(priority_id),
@@ -218,6 +243,17 @@ class ISPDigital:
         if sms_employees and res:
             self._post("/sms/SendAsync", jquery_params({"vmSms": res}))
         return res
+
+    def solve_ticket(self, complain_id: int, remark: str = "") -> None:
+        """Mark a ticket solved like the support page's Solve button (no customer SMS)."""
+        r = self._post("/ClientSupport/Solved/", jquery_params({"complainSolved": {
+            "ComplainId": int(complain_id), "IsSmsSendable": False, "Remark": remark or ""}}))
+        body = r.text.strip().strip('"').lower()
+        if body.startswith("<"):
+            self._logged_in = False
+            raise LoginError("billing session expired, try again")
+        if body != "true":
+            raise RuntimeError(f"billing did not solve the ticket ({r.text.strip()[:100]})")
 
     def enable_customer(self, header_id: int) -> str:
         """Turn a (bill-)disabled line back on, like Billing -> select -> Enable. Returns the panel's answer."""
@@ -339,22 +375,35 @@ def find_customer_by_whatsapp(api: ISPDigital, wa_number: str) -> dict | None:
 
 
 ID_HINT = re.compile(r"(\bid\b|আইডি|আই ডি|customer|কাস্টমার|গ্রাহক|user)", re.I)
+URL_RE = re.compile(r"(?:https?|ftp)://\S+|\bwww\.\S+", re.I)
+# IPs, MACs, times, amounts like 172.19.178.178 / 10:30 / 1.5: their digits are never a customer ID or mobile
+DOTTED_RE = re.compile(r"\d+(?:[.:]\d+)+|\b[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}\b", re.I)
+
+
+def without_urls(text: str) -> str:
+    return URL_RE.sub(" ", text or "")
+
+
+def number_text(text: str) -> str:
+    """The text with links, IPs, MACs and dotted numbers removed: what is left may hold a mobile or customer ID."""
+    return DOTTED_RE.sub(" ", without_urls(text))
 
 
 def find_customer_by_text(api: ISPDigital, text: str, allow_bare_id: bool = True) -> dict | None:
     """The customer typed an identifier: mobile (01XXXXXXXXX / +880...), customer ID (e.g. 0071) or PPPoE username.
     allow_bare_id=False: a short number counts as a customer ID only if the text says so ("id 71")
     or is just the number, so "520 taka diyechi" isn't read as customer 520."""
-    text = text or ""
+    text = without_urls(text)
+    nums = number_text(text)
     # mobile numbers
-    for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", text)):
+    for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", nums)):
         mobile = normalize_bd_mobile(m)
         rows = [r for r in api.search_customers(mobile) if normalize_bd_mobile(r.get("MobileNumber", "")) == mobile]
         if len(rows) == 1:
             return rows[0]
     # customer IDs (short numbers, keep leading zeros)
     bare_ok = allow_bare_id or bool(ID_HINT.search(text)) or text.strip().isdigit()
-    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", text) if bare_ok else []):
+    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", nums) if bare_ok else []):
         rows = [r for r in api.search_customers(cid, limit=50)
                 if (r.get("CustomerId") or "").lstrip("0") == cid.lstrip("0")]
         if len(rows) == 1:
@@ -370,8 +419,17 @@ def find_customer_by_text(api: ISPDigital, text: str, allow_bare_id: bool = True
 def diagnose(api: ISPDigital, customer: dict) -> dict:
     """Collect everything the bot needs, in the order: bill -> ONU -> PPPoE."""
     hid = customer["CustomerHeaderId"]
-    live = api.live_status(hid)
-    onu = api.onu_info(live.get("calledid"))
+    # the billing software is sometimes slow (timeouts): answer with what we have instead of not answering
+    try:
+        live = api.live_status(hid)
+    except Exception as e:
+        log.warning("billing live status failed for %s: %s", hid, e)
+        live = {}
+    try:
+        onu = api.onu_info(live.get("calledid"))
+    except Exception as e:
+        log.warning("billing ONU info failed for %s: %s", hid, e)
+        onu = None
     try:
         payments = [{
             "date": p.get("PaymentDate"), "month": p.get("BillMonth"), "paid": p.get("PaidAmount"),

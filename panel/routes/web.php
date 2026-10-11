@@ -50,7 +50,7 @@ Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF"); // Excel reads Bangla correctly with a BOM
         fputcsv($out, array_values($cols));
-        \App\Models\BillingCustomer::where('company_id', $company->id)->whereNull('gone_at')->orderBy('customer_id')
+        \App\Models\BillingCustomer::where('company_id', $company->id)->whereNull('gone_at')->where('is_left', false)->orderBy('customer_id')
             ->select(array_keys($cols))->chunk(1000, function ($rows) use ($out, $cols) {
                 foreach ($rows as $r) {
                     fputcsv($out, array_map(fn ($c) => match ($c) {
@@ -63,3 +63,66 @@ Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company
         fclose($out);
     }, $company->slug.'-customers-'.now('Asia/Dhaka')->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
 })->middleware('web')->name('customers.csv');
+
+// new incoming WhatsApp messages for the browser notifier (public/js/zyro-notify.js); inbox users of that company only.
+// Without ?after it only returns the newest id, so opening the panel never replays old messages.
+Route::get('/notify/{company:slug}/poll', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'inbox'), 403);
+    $base = \App\Models\WaMessage::where('company_id', $company->id)->where('direction', 'in');
+    $after = $request->query('after');
+    if (! is_numeric($after)) {
+        return response()->json(['last' => (int) $base->max('id'), 'items' => []]);
+    }
+    $rows = (clone $base)->where('id', '>', (int) $after)->with('contact')->orderBy('id')->limit(20)->get();
+    $staff = \App\Models\Technician::where('company_id', $company->id)->where('active', true)->pluck('wa_number')->all();
+    $botLive = \App\Models\BotSetting::where('company_id', $company->id)->value('bot_mode') === 'live';
+    $items = $rows->reject(fn (\App\Models\WaMessage $m) => $m->contact?->notify_muted)->map(function (\App\Models\WaMessage $m) use ($company, $staff, $botLive) {
+        $c = $m->contact;
+        $body = trim((string) $m->body);
+        if ($body === '') {
+            $body = match ($m->type) {
+                'image' => '📷 ছবি', 'audio' => '🎤 ভয়েস', 'video' => '🎬 ভিডিও', 'document' => '📄 ফাইল',
+                'sticker' => 'স্টিকার', 'location' => '📍 লোকেশন', default => 'নতুন মেসেজ',
+            };
+        }
+
+        return [
+            'id' => $m->id,
+            'contact' => $c->id,
+            'name' => $c->name ?: $c->displayNumber(),
+            'number' => $c->displayNumber(),
+            'body' => \Illuminate\Support\Str::limit($body, 140),
+            'staff' => in_array($c->wa_number, $staff, true),
+            'human' => ! $botLive || $c->isBotPaused(),   // the bot will not answer this one
+            'url' => \App\Filament\App\Resources\Conversations\ConversationResource::getUrl('view', ['record' => $c], panel: 'app', tenant: $company),
+        ];
+    })->values();
+
+    return response()->json(['last' => (int) ($rows->max('id') ?? $after), 'items' => $items])
+        ->header('Cache-Control', 'no-store');
+})->middleware('web')->name('notify.poll');
+
+// this browser's Web Push subscription (bell in the top bar), so the engine can alert it with the panel closed
+Route::post('/notify/{company:slug}/push', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'inbox'), 403);
+    $data = $request->validate(['endpoint' => 'required|url|starts_with:https://|max:2000',
+        'keys.p256dh' => 'required|string|max:255', 'keys.auth' => 'required|string|max:255']);
+    \Illuminate\Support\Facades\DB::table('push_subscriptions')->upsert([[
+        'company_id' => $company->id, 'user_id' => $user->id, 'endpoint' => $data['endpoint'],
+        'p256dh' => $data['keys']['p256dh'], 'auth' => $data['keys']['auth'],
+        'user_agent' => \Illuminate\Support\Str::limit((string) $request->userAgent(), 250, ''),
+        'created_at' => now(), 'updated_at' => now(),
+    ]], ['company_id', 'endpoint'], ['user_id', 'p256dh', 'auth', 'user_agent', 'updated_at']);
+
+    return response()->json(['ok' => true]);
+})->middleware('web')->name('notify.push');
+
+Route::post('/notify/{company:slug}/push/delete', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
+    abort_unless(Auth::check(), 403);
+    \Illuminate\Support\Facades\DB::table('push_subscriptions')->where('company_id', $company->id)
+        ->where('user_id', Auth::id())->where('endpoint', (string) $request->input('endpoint'))->delete();
+
+    return response()->json(['ok' => true]);
+})->middleware('web')->name('notify.push.delete');

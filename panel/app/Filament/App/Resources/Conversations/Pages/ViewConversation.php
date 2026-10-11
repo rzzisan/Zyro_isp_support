@@ -96,6 +96,20 @@ class ViewConversation extends Page
                     $this->contact()->forceFill(['assigned_user_id' => $id])->save();
                     Notification::make()->success()->title('দায়িত্ব বদলানো হয়েছে')->send();
                 }),
+            Action::make('mute')->label('নোটিফিকেশন বন্ধ')->icon(Heroicon::OutlinedBellSlash)->color('gray')
+                ->visible(fn () => ! $this->contact()->notify_muted)
+                ->requiresConfirmation()
+                ->modalDescription('এই নম্বর মেসেজ দিলে কেউ বেল, সাউন্ড বা পুশ নোটিফিকেশন পাবে না। চ্যাট ইনবক্সে আগের মতোই আসবে, বটও আগের মতো উত্তর দেবে।')
+                ->action(function () {
+                    $this->contact()->forceFill(['notify_muted' => true])->save();
+                    Notification::make()->success()->title('এই নম্বরের নোটিফিকেশন বন্ধ')->send();
+                }),
+            Action::make('unmute')->label('নোটিফিকেশন চালু')->icon(Heroicon::OutlinedBell)->color('gray')
+                ->visible(fn () => $this->contact()->notify_muted)
+                ->action(function () {
+                    $this->contact()->forceFill(['notify_muted' => false])->save();
+                    Notification::make()->success()->title('এই নম্বরের নোটিফিকেশন আবার চালু')->send();
+                }),
             Action::make('pause')->label('বট থামান')->icon(Heroicon::OutlinedPause)->color('warning')
                 ->visible(fn () => ! $this->contact()->isBotPaused())
                 ->requiresConfirmation()

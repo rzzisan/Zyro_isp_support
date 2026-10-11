@@ -137,6 +137,13 @@ class TicketActionsTest extends TestCase
         $this->assertSame(['0976'], array_column($found, 'customer_id'));
         $this->assertSame('Mitu akter', $found[0]['name']);
         $this->assertCount(1, (fn () => static::searchCustomers('01400016191'))->call(new \App\Filament\App\TicketActions));
+        // left customers are found too, after the current ones, marked LEFT
+        \App\Models\BillingCustomer::create(['company_id' => $cid, 'header_id' => 15619, 'customer_id' => '5618', 'name' => 'Saddam',
+            'username' => 'kpt.saddam', 'mobile' => '01933635909', 'status' => 'Left', 'disabled' => true, 'is_left' => true, 'left_on' => '2026-10-04']);
+        $left = (fn () => static::searchCustomers('kpt.saddam'))->call(new \App\Filament\App\TicketActions);
+        $this->assertSame(['5618'], array_column($left, 'customer_id'));
+        $this->assertStringContainsString('LEFT (04 Oct 2026)', (fn () => static::customerLabel($left[0]))->call(new \App\Filament\App\TicketActions));
+        $this->assertStringNotContainsString('LEFT', (fn () => static::customerLabel($found[0]))->call(new \App\Filament\App\TicketActions));
 
         config(['services.engine.url' => 'http://engine3.test']);
         Http::fake(["engine3.test/internal/{$cid}/customers/1977/ticket-info" => Http::response([

@@ -9,4 +9,4 @@ WorkingDirectory=/var/www/zyro_isp_support
 EnvironmentFile=/var/www/zyro_isp_support/engine/.env
 Environment=PYTHONPATH=/var/www/zyro_isp_support
 ExecStart=/var/www/zyro_isp_support/.venv/bin/python -m engine.olt_sync
-TimeoutStartSec=540
+TimeoutStartSec=840

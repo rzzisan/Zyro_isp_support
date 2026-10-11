@@ -1,0 +1,11 @@
+[Unit]
+Description=Look for new billing customer IDs every 20 minutes
+
+[Timer]
+OnCalendar=*:0/20
+RandomizedDelaySec=60
+Persistent=true
+Unit=zyro-customer-new.service
+
+[Install]
+WantedBy=timers.target

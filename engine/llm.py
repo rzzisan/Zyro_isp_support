@@ -64,21 +64,54 @@ SYSTEM_PROMPT = """তুমি Century Link Network (একটি ISP)-এর W
 7. লেখার আগে কথোপকথনে তোমার আগের উত্তরগুলো দেখে নাও। আগের উত্তরে যে পরামর্শ একবার দেওয়া হয়েছে, সেটা আবার দেবে না ("আবার রিস্টার্ট করুন" বা অন্য কথায় রাউটার বন্ধ-চালু বলাও একই পরামর্শ)। কাস্টমার যদি বলে করেছে কিন্তু হয়নি, বা বিরক্ত হয়ে প্রশ্ন করে (যেমন "শুধু রাউটার অন অফ কেন?"), তাহলে এক লাইনে সহজ করে কারণ বলো বা দুঃখ প্রকাশ করো, তারপর নতুন কোনো ধাপ দাও। দেওয়ার মতো নতুন ধাপ না থাকলে বা দুইবার চেষ্টার পরও না হলে আর ধাপ না দিয়ে টিকেট খোলো (উপরের [[TICKET: ...]] নিয়মে)। একই উত্তরে নতুন ধাপও দেবে আবার টিকেটও খুলবে, এমন করবে না; ধাপ দিলে শুধু বলো "করে জানাবেন"।
 8. শুধু কাস্টমারকে পাঠানোর মতো লেখা দাও, কোনো ব্যাখ্যা বা নোট না। নিজের উত্তরে কখনো "[স্টাফ]" লিখবে না।
 8a. কথোপকথনে "[স্টাফ]" দিয়ে শুরু মেসেজগুলো অফিসের মানুষ পাঠিয়েছেন, তুমি না। স্টাফ কিছু করবে বলে থাকলে (যেমন "নম্বর দিন, লাইন চেক করে জানাচ্ছি") কাস্টমারের পরের মেসেজের উত্তরে ঠিক সেই কাজটা করো (যেমন live_data দেখে লাইনের অবস্থা জানাও), অন্য কিছু (যেমন বিল) না। স্টাফের কথার সাথে উল্টো কিছু বলবে না।
+5a. অফিস কোথায়, কোন স্টাফ অফিসে আছেন/নেই, কে কখন আসবেন, প্যাকেজ/অফার/দাম, FTP বা অন্য সার্ভিস: শুধু অ্যাডমিনের নির্দেশনা বা কথোপকথনে [স্টাফ]-এর কথা থেকে বলবে। "এমন প্যাকেজ নেই" বা "নতুন অফার আসেনি" নিজে থেকে বলবে না; নির্দেশনায় না থাকলে বলো টিমের কাছ থেকে জেনে জানাচ্ছি। কাস্টমার নির্দিষ্ট কোনো স্টাফকে চাইলে বলো তাঁকে জানানো হয়েছে, তিনি কোথায় আছেন বানাবে না।
+5b. ইন্টারনেট লাইন, বিল, প্যাকেজ বা কোম্পানির সার্ভিসের বাইরের প্রশ্নে (গেম, অ্যাপের তালিকা, খেলা কোথায় দেখবে ইত্যাদি) এক লাইনে ভদ্রভাবে বলো এ বিষয়ে আমরা সাহায্য করতে পারি না, লাইন বা বিল নিয়ে কিছু লাগলে জানাতে। এসবে [[TICKET]] খুলবে না।
+8b. কাস্টমার শুধু সালাম/হাই দিলে সালামের উত্তর দিয়ে এক লাইনে জিজ্ঞেস করো কী সমস্যা বা কী জানতে চান। কোন লাইনের বিষয়ে কথা বলছেন বা নাম/ID নিশ্চিত করতে বলবে না, সিস্টেম লাইন আগেই চিনে নিয়েছে; সমস্যা বললে সরাসরি সেটার সমাধানে যাও।
 9. কাস্টমার "ওকে", "ঠিক আছে", "ধন্যবাদ", ইনশাআল্লাহ বা শুধু ইমোজি দিয়ে কথা শেষ করলে এক লাইনে ছোট উত্তর দাও; "কী সাহায্য দরকার?" জাতীয় প্রশ্ন করবে না।"""
 
 
 class KeyFailed(Exception):
     """This key can't be used right now (bad key, rate limited, provider down) - try the next one."""
 
+    def __init__(self, msg: str, limits: dict | None = None):
+        super().__init__(msg)
+        self.limits = limits or {}
 
-def _call(provider: str, model: str, api_key: str, system: str, messages: list[dict], max_tokens: int = 2000) -> str | None:
+
+def _limits(headers) -> dict:
+    """Rate-limit headers the provider sent (Groq/OpenAI/xAI: x-ratelimit-*, Anthropic: anthropic-ratelimit-*)."""
+    return {k.lower(): v for k, v in headers.items()
+            if k.lower().startswith(("x-ratelimit-", "anthropic-ratelimit-")) or k.lower() == "retry-after"}
+
+
+# Claude prompt caching: the instructions are the same for every chat, so Anthropic keeps them for 5 minutes
+# and later replies read them at a tenth of the price. A cache read refreshes the 5 minutes. The 1h cache
+# costs 2x input per write against 1.25x here, and in practice every read came within 5 minutes anyway.
+CLAUDE_CACHE_TTL = "5m"
+# the FAQ part can change per message (only the matching entries are sent), so it stays outside the cached part
+_FAQ_HEADER = "=== কোম্পানির FAQ"
+
+
+def _claude_system(system: str) -> list[dict]:
+    """The system prompt as Anthropic blocks: the stable instructions cached, the FAQ part (if any) after it."""
+    cut = system.find(_FAQ_HEADER)
+    head, tail = (system, "") if cut <= 0 else (system[:cut], system[cut:])
+    blocks = [{"type": "text", "text": head, "cache_control": {"type": "ephemeral", "ttl": CLAUDE_CACHE_TTL}}]
+    if tail.strip():
+        blocks.append({"type": "text", "text": tail})
+    return blocks
+
+
+def _call(provider: str, model: str, api_key: str, system: str, messages: list[dict],
+          max_tokens: int = 2000) -> tuple[str | None, dict, dict]:
+    """Reply text, token usage {input, output, cached} and the rate-limit headers of the response."""
     if provider == "claude":
         client = anthropic.Anthropic(api_key=api_key, max_retries=1)
         try:
-            response = client.beta.messages.create(
+            raw = client.beta.messages.with_raw_response.create(
                 model=model,
                 max_tokens=max_tokens,
-                system=system,
+                system=_claude_system(system),
                 messages=messages,
                 output_config={"effort": "low"},
                 betas=["server-side-fallback-2026-07-01"],
@@ -86,10 +119,15 @@ def _call(provider: str, model: str, api_key: str, system: str, messages: list[d
             )
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.RateLimitError,
                 anthropic.InternalServerError, anthropic.APIConnectionError) as e:
-            raise KeyFailed(str(e)) from e
+            resp = getattr(e, "response", None)
+            raise KeyFailed(str(e), _limits(resp.headers) if resp is not None else None) from e
+        response = raw.parse()
+        u = response.usage
+        usage = {"input": (u.input_tokens or 0) + (u.cache_read_input_tokens or 0) + (u.cache_creation_input_tokens or 0),
+                 "output": u.output_tokens or 0, "cached": u.cache_read_input_tokens or 0}
         if response.stop_reason == "refusal":
-            return None
-        return "".join(b.text for b in response.content if b.type == "text").strip() or None
+            return None, usage, _limits(raw.headers)
+        return "".join(b.text for b in response.content if b.type == "text").strip() or None, usage, _limits(raw.headers)
 
     base_url = PROVIDERS[provider]["base_url"]
     try:
@@ -102,9 +140,13 @@ def _call(provider: str, model: str, api_key: str, system: str, messages: list[d
     except httpx.TransportError as e:  # timeout / connection: move on to the next key or provider
         raise KeyFailed(f"{type(e).__name__}: {e}") from e
     if r.status_code in (401, 403, 429) or r.status_code >= 500:  # 5xx e.g. Gemini "model overloaded"
-        raise KeyFailed(f"HTTP {r.status_code}: {r.text[:200]}")
+        raise KeyFailed(f"HTTP {r.status_code}: {r.text[:300]}", _limits(r.headers))
     r.raise_for_status()
-    return (r.json()["choices"][0]["message"].get("content") or "").strip() or None
+    body = r.json()
+    u = body.get("usage") or {}
+    usage = {"input": u.get("prompt_tokens") or 0, "output": u.get("completion_tokens") or 0,
+             "cached": (u.get("prompt_tokens_details") or {}).get("cached_tokens") or 0}
+    return (body["choices"][0]["message"].get("content") or "").strip() or None, usage, _limits(r.headers)
 
 
 def _whatsapp_format(text: str | None) -> str | None:

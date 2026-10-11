@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\Tickets;
 
 use App\Filament\App\Resources\Tickets\Pages\ListTickets;
 use App\Filament\App\TicketActions;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Tables\Enums\FiltersLayout;
 use Illuminate\Support\Carbon;
@@ -12,7 +13,6 @@ use BackedEnum;
 use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
-use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -22,7 +22,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-/** Billing software support tickets, synced every 5 minutes. Read-only. */
+/** Billing software support tickets, synced every 5 minutes. Open ones can be edited, assigned and solved (in billing). */
 class TicketResource extends Resource
 {
     protected static ?string $model = BillingTicket::class;
@@ -92,6 +92,8 @@ class TicketResource extends Resource
     {
         return $table
             ->poll('60s')
+            ->paginated([10, 25, 50, 100])
+            ->defaultPaginationPageOption(50)
             ->defaultSort('opened_at', 'desc')
             ->columns([
                 TextColumn::make('complain_id')->label('টিকিট')->prefix('#')->searchable()->sortable(),
@@ -152,7 +154,9 @@ class TicketResource extends Resource
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
             ->deferFilters(false)
             ->filtersFormColumns(4)
-            ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')]);
+            ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')->modalWidth('4xl')->modalHeading(fn (BillingTicket $record) => 'টিকিট #'.$record->complain_id)
+                ->extraModalFooterActions(fn () => [TicketActions::solve(), TicketActions::edit()->button(), TicketActions::assign()->label('কর্মী যোগ / বাদ')->button()])])
+            ->recordAction('view');
     }
 
     /** [from, until) in Bangladesh time for the date filter, or [null, null]. */
@@ -177,25 +181,9 @@ class TicketResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
-        return $schema->columns(2)->components([
-            TextEntry::make('complain_id')->label('টিকিট নম্বর')->prefix('#'),
-            TextEntry::make('state')->label('অবস্থা')->formatStateUsing(fn ($state) => BillingTicket::STATES[$state] ?? $state),
-            TextEntry::make('customer_name')->label('কাস্টমার'),
-            TextEntry::make('customer_id')->label('কাস্টমার ID'),
-            TextEntry::make('username')->label('Username')->placeholder('—'),
-            TextEntry::make('mobile')->label('মোবাইল (বিলিং)')->placeholder('—'),
-            TextEntry::make('complain_number')->label('অভিযোগের নম্বর')->state(fn (BillingTicket $r) => $r->complainNumber())->placeholder('—'),
-            TextEntry::make('zone')->label('Zone / Subzone / Box')
-                ->state(fn (BillingTicket $r) => collect([$r->zone, $r->subzone, $r->box])->filter()->join(' / ')),
-            TextEntry::make('category')->label('সমস্যা'),
-            TextEntry::make('priority')->label('Priority')->formatStateUsing(fn ($state) => BillingTicket::PRIORITIES[$state] ?? $state),
-            TextEntry::make('created_by')->label('খুলেছেন')->placeholder('—'),
-            TextEntry::make('assigned_to')->label('দায়িত্বে')->placeholder('—'),
-            TextEntry::make('solved_by')->label('সমাধান করেছেন')->placeholder('—'),
-            TextEntry::make('opened_at')->label('খোলা হয়েছে')->dateTime('d M Y, g:i A', 'Asia/Dhaka'),
-            TextEntry::make('solved_at')->label('সমাধান হয়েছে')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->placeholder('—'),
-            TextEntry::make('description')->label('সমস্যার বিবরণ')->placeholder('—')->columnSpanFull(),
-            TextEntry::make('note')->label('মন্তব্য')->placeholder('—')->columnSpanFull(),
+        return $schema->columns(1)->components([
+            Placeholder::make('details')->hiddenLabel()->columnSpanFull()
+                ->content(fn (BillingTicket $record) => TicketActions::details($record)),
         ]);
     }
 

@@ -18,14 +18,14 @@ class AiKey extends Model
     ];
 
     protected $fillable = ['company_id', 'provider', 'label', 'api_key', 'model', 'rate_limited_until',
-        'last_checked_at', 'last_check_ok'];
+        'last_checked_at', 'last_check_ok', 'quota', 'quota_at'];
 
     protected $hidden = ['api_key'];
 
     protected function casts(): array
     {
         return ['api_key' => 'encrypted', 'rate_limited_until' => 'datetime',
-            'last_checked_at' => 'datetime', 'last_check_ok' => 'boolean'];
+            'last_checked_at' => 'datetime', 'last_check_ok' => 'boolean', 'quota' => 'array', 'quota_at' => 'datetime'];
     }
 
     public static function providerOptions(): array
@@ -36,6 +36,42 @@ class AiKey extends Model
     public function maskedKey(): string
     {
         return '••••'.substr((string) $this->api_key, -4);
+    }
+
+    /**
+     * What the provider last told us about this key's limits, as readable lines
+     * (Groq/OpenAI/xAI x-ratelimit-* headers, Anthropic anthropic-ratelimit-*, and the daily limit from Groq's 429 text).
+     */
+    public function quotaLines(): array
+    {
+        $q = $this->quota ?? [];
+        $lines = [];
+        $pair = function (string $label, ?string $limit, ?string $remaining, ?string $reset) use (&$lines) {
+            if ($limit === null && $remaining === null) {
+                return;
+            }
+            $lines[] = $label.': '.($remaining !== null ? number_format((int) $remaining) : '?').' বাকি / '
+                .($limit !== null ? number_format((int) $limit) : '?').($reset ? " (রিসেট {$reset})" : '');
+        };
+        $groq = $this->provider === 'groq';
+        $pair($groq ? 'আজকের রিকোয়েস্ট' : 'রিকোয়েস্ট', $q['x-ratelimit-limit-requests'] ?? null,
+            $q['x-ratelimit-remaining-requests'] ?? null, $q['x-ratelimit-reset-requests'] ?? null);
+        $pair('মিনিটে টোকেন', $q['x-ratelimit-limit-tokens'] ?? null,
+            $q['x-ratelimit-remaining-tokens'] ?? null, $q['x-ratelimit-reset-tokens'] ?? null);
+        $pair('রিকোয়েস্ট', $q['anthropic-ratelimit-requests-limit'] ?? null,
+            $q['anthropic-ratelimit-requests-remaining'] ?? null, null);
+        $pair('মিনিটে টোকেন', $q['anthropic-ratelimit-tokens-limit'] ?? null,
+            $q['anthropic-ratelimit-tokens-remaining'] ?? null, null);
+        $names = ['tpd' => 'দৈনিক টোকেন', 'rpd' => 'দৈনিক রিকোয়েস্ট', 'tpm' => 'মিনিটে টোকেন', 'rpm' => 'মিনিটে রিকোয়েস্ট'];
+        foreach ($q as $k => $v) {
+            $at = isset($v['at']) ? \Illuminate\Support\Carbon::parse($v['at']) : null;
+            if (str_starts_with($k, 'limit:') && is_array($v) && $at && $at->gt(now()->subDay())) {
+                $lines[] = ($names[substr($k, 6)] ?? strtoupper(substr($k, 6))).' শেষ হয়েছিল: '.number_format((int) $v['used']).' / '
+                    .number_format((int) $v['limit']).' ('.$at->timezone('Asia/Dhaka')->format('j M g:i A').')';
+            }
+        }
+
+        return $lines;
     }
 
     public function company(): BelongsTo

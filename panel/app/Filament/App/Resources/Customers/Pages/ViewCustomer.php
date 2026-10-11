@@ -63,6 +63,16 @@ class ViewCustomer extends ViewRecord
         ];
     }
 
+    protected function getHeaderWidgets(): array
+    {
+        return [\App\Filament\App\Resources\Customers\Widgets\CustomerLiveInfo::class];
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 1;
+    }
+
     public function showPasswordAction(): Action
     {
         $c = $this->customer();

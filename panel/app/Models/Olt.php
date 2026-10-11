@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Olt extends Model
 {
-    public const BRANDS = ['bdcom' => 'BDCOM EPON', 'vsol' => 'VSOL EPON', 'ecom' => 'ECOM EPON (শীঘ্রই)'];
+    public const BRANDS = ['bdcom' => 'BDCOM EPON', 'vsol' => 'VSOL EPON', 'ecom' => 'ECOM EPON'];
 
     protected $fillable = ['company_id', 'name', 'brand', 'host', 'snmp_port', 'community', 'router_identity', 'enabled'];
 

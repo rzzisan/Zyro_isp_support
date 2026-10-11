@@ -107,14 +107,56 @@ def fill_descriptions(api, company_id: int) -> int:
     return n
 
 
+def save_options(company_id: int, options: dict) -> None:
+    """The support page's lists into billing_options (the desk reads them from there); missing ones -> inactive."""
+    for kind, items in options.items():
+        if not items:  # page didn't parse: keep what we have
+            continue
+        for oid, name in items.items():
+            db.execute(
+                """INSERT INTO billing_options (company_id, kind, option_id, name, active, synced_at, created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, true, now(), now(), now())
+                   ON CONFLICT (company_id, kind, option_id) DO UPDATE
+                     SET name = EXCLUDED.name, active = true, synced_at = now(), updated_at = now()""",
+                (company_id, kind, str(oid), name))
+        db.execute("""UPDATE billing_options SET active = false, updated_at = now()
+                      WHERE company_id = %s AND kind = %s AND active AND NOT (option_id = ANY(%s))""",
+                   (company_id, kind, [str(k) for k in items]))
+
+
+def refresh_options(api, company_id: int, max_age_minutes: int = 60) -> bool:
+    last = db.one("SELECT max(synced_at) AS at FROM billing_options WHERE company_id = %s", (company_id,))
+    if last and last["at"] and last["at"] > datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=max_age_minutes):
+        return False
+    try:
+        save_options(company_id, api.support_options())
+        return True
+    except Exception:
+        log.warning("billing option lists not refreshed for company %s", company_id, exc_info=True)
+        return False
+
+
 def sync_company(t, days: int) -> dict:
     api = tenants.billing(t)
+    refresh_options(api, t.company_id)
     open_rows = fetch_all(api, "/ClientSupport/AjaxDailyComplainList", {})
     processing = {str(r.get("ComplainId")) for r in fetch_all(api, "/ClientSupport/AjaxDailyComplainList",
                                                                 {"customQueryString": "processing"})}
+    before = {r["complain_id"]: r["assigned_to"] for r in db.all_rows(
+        "SELECT complain_id, assigned_to FROM billing_tickets WHERE company_id = %s AND state IN ('pending', 'processing')",
+        (t.company_id,))}
     for r in open_rows:
         upsert(t.company_id, r, "processing" if str(r.get("ComplainId")) in processing else "pending")
     described = fill_descriptions(api, t.company_id)
+    # staff changed (new ticket with staff, assigned, re-assigned): tell the linked technicians on WhatsApp
+    reassigned = [str(r.get("ComplainId")) for r in open_rows
+                  if names(r.get("SolvedBy")) and names(r.get("SolvedBy")) != before.get(str(r.get("ComplainId")))]
+    try:
+        from engine.ticket_notify import notify
+        notified = notify(t, api, reassigned)
+    except Exception:
+        log.exception("technician ticket messages failed for company %s", t.company_id)
+        notified = 0
 
     today = datetime.now(DHAKA).date()
     solved = fetch_all(api, "/ClientSupport/AjaxMonthlyComplainList", {
@@ -130,7 +172,8 @@ def sync_company(t, days: int) -> dict:
                       WHERE company_id = %s AND state IN ('pending', 'processing') AND NOT (complain_id = ANY(%s))
                       RETURNING 1)
            SELECT count(*) AS n FROM u""", (t.company_id, open_ids))
-    return {"open": len(open_rows), "processing": len(processing), "solved": len(solved), "closed": gone["n"], "described": described}
+    return {"open": len(open_rows), "processing": len(processing), "solved": len(solved), "closed": gone["n"], "described": described,
+            "reassigned": len(reassigned), "notified": notified}
 
 
 def companies(only: int | None) -> list:

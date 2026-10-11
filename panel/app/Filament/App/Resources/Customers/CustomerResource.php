@@ -8,9 +8,8 @@ use App\Models\BillingCustomer;
 use BackedEnum;
 use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
-use Filament\Infolists\Components\TextEntry;
+use Filament\GlobalSearch\GlobalSearchResult;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -18,7 +17,10 @@ use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use App\Services\Engine;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 /** All billing customers from our own copy (synced nightly). Everyone can look; passwords and CSV are owner/admin. */
 class CustomerResource extends Resource
@@ -56,7 +58,7 @@ class CustomerResource extends Resource
 
     private static function options(string $column): array
     {
-        return BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')
+        return BillingCustomer::where('company_id', Filament::getTenant()?->getKey() ?? 0)->whereNull('gone_at')->where('is_left', false)
             ->whereNotNull($column)->distinct()->orderBy($column)->pluck($column, $column)->all();
     }
 
@@ -94,8 +96,9 @@ class CustomerResource extends Resource
                     ->description(fn (BillingCustomer $r) => $r->online_uptime)
                     ->color(fn (string $state) => $state === 'অনলাইন' ? 'success' : 'gray'),
                 TextColumn::make('status')->label('অবস্থা')->badge()
-                    ->state(fn (BillingCustomer $r) => $r->gone_at ? 'বিলিংয়ে নেই' : ($r->disabled ? 'বন্ধ' : ($r->status ?: '—')))
-                    ->color(fn (string $state) => match ($state) { 'Active' => 'success', 'বন্ধ' => 'danger', default => 'gray' }),
+                    ->state(fn (BillingCustomer $r) => $r->gone_at ? 'বিলিংয়ে নেই' : ($r->is_left ? 'Left' : ($r->disabled ? 'বন্ধ' : ($r->status ?: '—'))))
+                    ->description(fn (BillingCustomer $r) => $r->is_left && $r->left_on ? $r->left_on->format('d M Y') : null)
+                    ->color(fn (string $state) => match ($state) { 'Active' => 'success', 'বন্ধ' => 'danger', 'Left' => 'warning', default => 'gray' }),
                 TextColumn::make('bill_day')->label('বিলের তারিখ')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('joined_on')->label('যোগ দিয়েছেন')->date('d M Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -111,8 +114,14 @@ class CustomerResource extends Resource
                 TernaryFilter::make('has_due')->label('বকেয়া')->trueLabel('বকেয়া আছে')->falseLabel('বকেয়া নেই')
                     ->queries(true: fn (Builder $query) => $query->where('due', '>', 0),
                         false: fn (Builder $query) => $query->where(fn ($w) => $w->whereNull('due')->orWhere('due', '<=', 0))),
-                TernaryFilter::make('gone')->label('বিলিংয়ে আছে')->default(true)->trueLabel('আছে')->falseLabel('নেই (left)')
-                    ->queries(true: fn (Builder $query) => $query->whereNull('gone_at'), false: fn (Builder $query) => $query->whereNotNull('gone_at')),
+                SelectFilter::make('list')->label('তালিকা')->default('current')->selectablePlaceholder(false)
+                    ->options(['current' => 'বর্তমান কাস্টমার', 'left' => 'Left কাস্টমার', 'gone' => 'বিলিংয়ে নেই', 'all' => 'সব'])
+                    ->query(fn (Builder $query, array $data) => match ($data['value'] ?? 'current') {
+                        'left' => $query->whereNull('gone_at')->where('is_left', true),
+                        'gone' => $query->whereNotNull('gone_at'),
+                        'all' => $query,
+                        default => $query->whereNull('gone_at')->where('is_left', false),
+                    }),
             ])
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
             ->deferFilters(false)
@@ -122,40 +131,59 @@ class CustomerResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
+        // identity, connection and bill as cards, the same look as the live MikroTik / OLT box above
         return $schema->components([
-            Section::make('পরিচয়')->columns(3)->schema([
-                TextEntry::make('customer_id')->label('কাস্টমার ID'),
-                TextEntry::make('name')->label('নাম'),
-                TextEntry::make('username')->label('PPPoE ID')->copyable(),
-                TextEntry::make('mobile')->label('মোবাইল')->copyable()->placeholder('—'),
-                TextEntry::make('email')->label('ইমেইল')->placeholder('—'),
-                TextEntry::make('nid')->label('NID')->placeholder('—'),
-                TextEntry::make('address')->label('ঠিকানা')->placeholder('—')
-                    ->state(fn (BillingCustomer $r) => collect([$r->house, $r->road, $r->address, $r->thana, $r->district])->filter()->join(', ') ?: null),
-                TextEntry::make('joined_on')->label('যোগ দিয়েছেন')->date('d M Y')->placeholder('—'),
-                TextEntry::make('assigned_employee')->label('দায়িত্বে')->placeholder('—'),
-            ]),
-            Section::make('সংযোগ')->columns(3)->schema([
-                TextEntry::make('zone')->label('Zone / Subzone / Box')
-                    ->state(fn (BillingCustomer $r) => collect([$r->zone, $r->subzone, $r->box])->filter()->join(' / ') ?: null)->placeholder('—'),
-                TextEntry::make('package')->label('প্যাকেজ')->placeholder('—'),
-                TextEntry::make('speed')->label('স্পিড')->placeholder('—'),
-                TextEntry::make('connection_type')->label('সংযোগের ধরন')->placeholder('—'),
-                TextEntry::make('protocol')->label('Protocol / Server')
-                    ->state(fn (BillingCustomer $r) => trim($r->protocol.' · '.$r->server, ' ·') ?: null)->placeholder('—'),
-                TextEntry::make('customer_type')->label('কাস্টমারের ধরন')->placeholder('—'),
-            ]),
-            Section::make('বিল (শেষ sync অনুযায়ী)')->columns(4)->schema([
-                TextEntry::make('monthly_bill')->label('মাসিক বিল')->numeric(2)->suffix(' টাকা'),
-                TextEntry::make('due')->label('বকেয়া')->numeric(2)->suffix(' টাকা')->placeholder('০'),
-                TextEntry::make('paid')->label('এই মাসে দিয়েছেন')->numeric(2)->suffix(' টাকা')->placeholder('—'),
-                TextEntry::make('bill_day')->label('বিলের শেষ তারিখ')->placeholder('—')->suffix(' তারিখ'),
-                TextEntry::make('last_payment_date')->label('শেষ পেমেন্ট')->date('d M Y')->placeholder('—'),
-                TextEntry::make('status')->label('অবস্থা')
-                    ->state(fn (BillingCustomer $r) => ($r->status ?: '—').($r->disabled ? ' (লাইন বন্ধ)' : '')),
-                TextEntry::make('synced_at')->label('শেষ sync')->since(),
-            ]),
+            \Filament\Schemas\Components\View::make('filament.app.customers.profile-cards')->columnSpanFull(),
         ]);
+    }
+
+    /**
+     * Header search, like the billing software's: any part of the customer ID, PPPoE user, name or mobile. Reads the
+     * desk's own copy; when that has nobody, asks billing's header search and copies the customers we don't have.
+     * Left customers are included (marked) after the current ones.
+     */
+    public static function getGlobalSearchResults(string $search): Collection
+    {
+        $q = trim(mb_substr($search, 0, 30));
+        if ($q === '' || ! ($company = Filament::getTenant())) {
+            return collect();
+        }
+        $rows = static::globalSearchQuery()->where(function (Builder $w) use ($q) {
+            $like = '%'.addcslashes($q, '%_\\').'%';
+            $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$q])->orWhere('customer_id', 'ilike', $like)
+                ->orWhere('username', 'ilike', $like)->orWhere('name', 'ilike', $like);
+            $digits = ltrim(preg_replace('/\D/', '', $q), '0');
+            if (strlen($digits) >= 4 && strlen($digits) * 2 >= strlen($q)) {
+                $w->orWhere('mobile_normalized', 'like', "%{$digits}%");
+            }
+        })
+            ->orderByRaw("(ltrim(customer_id, '0') = ltrim(?, '0') OR lower(username) = lower(?)) DESC", [$q, $q])
+            ->orderBy('is_left')->orderByRaw("CASE WHEN customer_id ~ '^[0-9]{1,9}$' THEN customer_id::bigint END")
+            ->limit(30)->get();
+
+        if ($rows->isEmpty() && mb_strlen($q) >= 3) {
+            $ids = Cache::remember('header-search:'.$company->getKey().':'.mb_strtolower($q), 300,
+                fn () => Engine::findInBilling($company->getKey(), $q));
+            $rows = $ids ? static::globalSearchQuery()->whereIn('header_id', $ids)->orderBy('is_left')->limit(30)->get() : $rows;
+        }
+
+        return $rows->map(fn (BillingCustomer $r) => new GlobalSearchResult(
+            title: trim(($r->username ?: $r->name).' ('.$r->customer_id.')'),
+            url: static::getUrl('view', ['record' => $r]),
+            details: array_filter([
+                'নাম' => $r->name,
+                'মোবাইল' => $r->mobile,
+                'Zone' => collect([$r->zone, $r->subzone])->filter()->join(' / ') ?: null,
+                'অবস্থা' => $r->is_left ? 'Left'.($r->left_on ? ' ('.$r->left_on->format('d M Y').')' : '')
+                    : ($r->disabled ? 'লাইন বন্ধ' : ($r->status ?: null)),
+                'বকেয়া' => $r->due > 0 ? number_format((float) $r->due).' টাকা' : null,
+            ]),
+        ));
+    }
+
+    private static function globalSearchQuery(): Builder
+    {
+        return static::getEloquentQuery()->whereNull('gone_at');
     }
 
     public static function getEloquentQuery(): Builder

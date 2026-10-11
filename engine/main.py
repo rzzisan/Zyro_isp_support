@@ -4,6 +4,7 @@ The receiving business number (phone_number_id) decides the company; that compan
 connection, AI keys and bot settings are used. ENGINE_DRY_RUN=1: nothing is sent to WhatsApp and
 no billing tickets are opened (drafts are stored with mode 'dry_run').
 """
+import dataclasses
 import hashlib
 import hmac
 import json
@@ -17,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
-from engine import customers, db, tenant as tenants
+from engine import customers, db, tenant as tenants, webpush
 from engine.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
 from engine.tenant import Tenant
 
@@ -33,6 +34,14 @@ MEDIA_TYPES = ("audio", "image", "video", "document", "sticker")
 log = logging.getLogger("zyro-engine")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.on_event("startup")
+def _push_keys() -> None:
+    try:
+        webpush.keys()  # the panel needs the public key before the first browser can subscribe
+    except Exception:
+        log.exception("could not load/create web push keys")
 
 
 @app.get("/health")
@@ -55,30 +64,58 @@ def signature_ok(raw: bytes, header: str) -> bool:
 
 
 # --- storage helpers ---------------------------------------------------------------------
-def contact_for(t: Tenant, wa: str, name: str | None) -> dict:
+def contact_for(t: Tenant, wa: str | None, name: str | None, user_id: str | None = None,
+                username: str | None = None) -> dict:
+    """The chat for a WhatsApp user. Meta now sends some users without a phone number, only a business-scoped
+    user ID (BSUID, "BD.1234..."); such a chat keeps the BSUID in wa_number (replies then go to it) until a
+    message with the number arrives."""
+    if user_id:
+        c = db.one("SELECT * FROM wa_contacts WHERE company_id = %s AND wa_user_id = %s", (t.company_id, user_id))
+        if c:
+            number = wa if wa and wa != c["wa_number"] and not db.one(
+                "SELECT 1 FROM wa_contacts WHERE company_id = %s AND wa_number = %s", (t.company_id, wa)) else None
+            return db.execute(
+                """UPDATE wa_contacts SET wa_number = COALESCE(%s, wa_number), name = COALESCE(%s, name),
+                     wa_username = COALESCE(%s, wa_username), last_message_at = now(), updated_at = now()
+                   WHERE id = %s RETURNING *""", (number, name, username, c["id"]))
     return db.execute(
-        """INSERT INTO wa_contacts (company_id, wa_number, name, last_message_at, created_at, updated_at)
-           VALUES (%s, %s, %s, now(), now(), now())
+        """INSERT INTO wa_contacts (company_id, wa_number, name, wa_user_id, wa_username, last_message_at,
+                                    created_at, updated_at)
+           VALUES (%s, %s, %s, %s, %s, now(), now(), now())
            ON CONFLICT (company_id, wa_number) DO UPDATE
-             SET name = COALESCE(EXCLUDED.name, wa_contacts.name), last_message_at = now(), updated_at = now()
+             SET name = COALESCE(EXCLUDED.name, wa_contacts.name),
+                 wa_user_id = COALESCE(wa_contacts.wa_user_id, EXCLUDED.wa_user_id),
+                 wa_username = COALESCE(EXCLUDED.wa_username, wa_contacts.wa_username),
+                 last_message_at = now(), updated_at = now()
            RETURNING *""",
-        (t.company_id, wa, name),
+        (t.company_id, wa or user_id, name, user_id, username),
     )
+
+
+def sender_of(m: dict, value: dict, echo: bool) -> tuple[str | None, str | None, str | None, str | None]:
+    """(phone, BSUID, profile name, username) of the customer in one webhook message."""
+    wa = m.get("to") if echo else m.get("from")
+    uid = m.get("to_user_id") if echo else m.get("from_user_id")
+    for c in value.get("contacts", []):
+        if (wa and c.get("wa_id") == wa) or (uid and c.get("user_id") == uid):
+            prof = c.get("profile") or {}
+            return wa, uid or c.get("user_id"), prof.get("name"), prof.get("username")
+    return wa, uid, None, None
 
 
 def save_message(t: Tenant, contact_id: int, wa_message_id: str | None, direction: str, sender: str,
-                 mtype: str, body: str | None, media: dict | None = None) -> dict | None:
+                 mtype: str, body: str | None, media: dict | None = None, at: datetime | None = None) -> dict | None:
     return db.execute(
         """INSERT INTO wa_messages (company_id, contact_id, wa_account_id, wa_message_id, direction, sender,
                                     type, body, media_id, media_mime, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, now()))
            ON CONFLICT (wa_message_id) DO NOTHING RETURNING id""",
         (t.company_id, contact_id, t.wa_account_id, wa_message_id, direction, sender, mtype, body,
-         media.get("id") if media else None, media.get("mime_type") if media else None),
+         media.get("id") if media else None, media.get("mime_type") if media else None, at),
     )
 
 
-def history_for(t: Tenant, contact_id: int, limit: int = 12) -> list[dict]:
+def history_for(t: Tenant, contact_id: int, limit: int = 6) -> list[dict]:
     rows = db.all_rows(
         """SELECT direction, sender, body FROM wa_messages
            WHERE company_id = %s AND contact_id = %s AND type IN ('text', 'audio') AND body IS NOT NULL
@@ -145,10 +182,12 @@ async def receive(request: Request):
             if change.get("field") not in ("messages", "smb_message_echoes"):
                 continue
             echo = change.get("field") == "smb_message_echoes"
-            names = {c.get("wa_id"): c.get("profile", {}).get("name") for c in value.get("contacts", [])}
             for m in value.get("messages", []) + value.get("message_echoes", []):
-                wa = m.get("to") if echo else m.get("from")
-                c = contact_for(t, wa, names.get(wa))
+                phone, uid, name, username = sender_of(m, value, echo)
+                if not (phone or uid):
+                    continue
+                c = contact_for(t, phone, name, uid, username)
+                wa = c["wa_number"]
                 mtype = m.get("type")
                 media = m.get(mtype) if mtype in MEDIA_TYPES else None
                 body = (m.get("text") or {}).get("body") or (media or {}).get("caption") \
@@ -159,6 +198,7 @@ async def receive(request: Request):
                                      mtype, body, media)
                 if not echo and saved:  # skip Meta retries
                     jobs.append((t, c, m, saved["id"]))
+                    webpush.new_message(t.company_id, c, mtype, body, sender == "technician")
     for job in jobs:
         threading.Thread(target=handle_message, args=job, daemon=True).start()
     return {"ok": True}
@@ -200,25 +240,11 @@ def _is_ack(text: str) -> bool:
     return len(w) <= 5 and all(x in acks for x in w)
 
 
-def _mobile_matches(customer: dict, wa: str) -> bool:
-    m = normalize_bd_mobile(customer.get("MobileNumber") or "")
-    return bool(m) and m == normalize_bd_mobile(wa)
-
-
-def _names_match(customer: dict, text: str) -> bool:
-    """Someone writing from another number proves the line is theirs by writing the account name."""
-    common = set(_words("mohammad mohammed muhammad mohammod abdul abdur hossain hosen islam uddin ahmed begum khatun "
-                        "akter akhter miah mia sheikh shaikh মোহাম্মদ মোঃ"))
-    said = {x for x in _words(text) if len(x) >= 3}
-    name = [x for x in _words(customer.get("CustomerName") or "") if len(x) >= 3 and x not in common]
-    return bool(name) and any(x in said for x in name)
-
-
 def identify(t: Tenant, contact: dict, text: str):
     """Returns (customer, fixed_reply, pending_question, agent_note, verified).
 
-    verified = the chat is from the line's registered number (or the sender wrote the account name);
-    only then the bot may talk about the bill, payments or the name.
+    verified is always True once the line is known (registered number, or the sender gave a phone number or
+    customer ID): the bot may talk about the bill too.
     """
     api = tenants.billing(t)
     state = contact.get("ident_state") or {}
@@ -232,14 +258,11 @@ def identify(t: Tenant, contact: dict, text: str):
         db.execute("UPDATE wa_contacts SET ident_state = %s, updated_at = now() WHERE id = %s",
                    (json.dumps({**kw, "at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False), contact["id"]))
 
-    def ok(customer, pending=None, verified=None):
-        same = state.get("stage") == "ok" and state.get("customer_id") == customer.get("CustomerId")
-        if verified is None:
-            verified = _mobile_matches(customer, contact["wa_number"]) or (same and state.get("verified", True)) \
-                or _names_match(customer, text)
-        save(stage="ok", customer_id=customer.get("CustomerId"), verified=bool(verified))
+    def ok(customer, pending=None, verified=True):
+        # Zisan 2026-10-11: whoever gives the line's phone number or customer ID gets full support, bill included
+        save(stage="ok", customer_id=customer.get("CustomerId"), verified=True)
         db.execute("UPDATE wa_contacts SET customer_id = %s WHERE id = %s", (customer.get("CustomerId"), contact["id"]))
-        return customer, None, pending, None, bool(verified)
+        return customer, None, pending, None, True
 
     typed = customers.by_text(t, api, text, allow_bare_id=stage in ("ask_id", "confirm"))
     if typed:
@@ -271,16 +294,24 @@ def identify(t: Tenant, contact: dict, text: str):
         return None, "জি, আপনার লাইনটা খুঁজে বের করতে কাস্টমার ID বা লাইনের মোবাইল নম্বরটা লিখে দিন।", None, None, False
     if stage == "agent":
         return None, None, None, None, False
+    # a known sender goes straight to what they need, no "is this X's line?" question
     own = customers.by_whatsapp(t, api, contact["wa_number"])
-    if own:
-        save(stage="confirm", candidate=own.get("CustomerId"), candidate_name=own.get("CustomerName"), pending=text)
-        return None, (f"আসসালামু আলাইকুম। আপনি কি *{own.get('CustomerName')}* (ID {own.get('CustomerId')}) "
-                      "লাইনের বিষয়ে কথা বলছেন?"), None, None, False
+    if own:  # the line's registered number (one line only; a number on several lines is asked for the ID)
+        return ok(own, verified=True)
+    if contact.get("customer_id"):  # helped before: the line they gave last time
+        c = customers.by_text(t, api, contact["customer_id"], allow_bare_id=True)
+        if c:
+            return ok(c)
     save(stage="ask_id", tries=1, pending=text)
     return None, "আসসালামু আলাইকুম। " + ASK_ID, None, None, False
 
 
-def customer_view(context: dict, verified: bool) -> dict:
+# the customer talks about a payment: then the bot gets the last 6 payments, otherwise only the latest one
+PAYMENT_WORDS = re.compile(r"পেমেন্ট|পরিশোধ|জমা|দিয়েছি|দিছি|দিলাম|দিসি|দিয়েছিলাম|বিকাশ|নগদ|রকেট|টাকা|মাস|রিসিট|"
+                           r"pay|paid|bkash|bikash|nagad|rocket|diyechi|disi|dilam|joma|taka|month|history|receipt", re.I)
+
+
+def customer_view(context: dict, verified: bool, text: str = "") -> dict:
     """What the customer-facing bot may see: never mobile numbers, IPs or MACs; nothing about the bill,
     payments or the name unless the chat is verified."""
     ctx = json.loads(json.dumps(context, ensure_ascii=False, default=str))
@@ -294,13 +325,15 @@ def customer_view(context: dict, verified: bool) -> dict:
         ctx.pop("payments", None)
         for k in ("name", "username", "package", "zone", "bill_day"):
             c.pop(k, None)
+    if ctx.get("payments") and not PAYMENT_WORDS.search(text or ""):
+        ctx["payments"] = ctx["payments"][:1]
     ctx["verified"] = verified
     ctx["today"] = (datetime.now(timezone.utc) + timedelta(hours=6)).strftime("%Y-%m-%d")  # Asia/Dhaka
     return ctx
 
 
 # --- one reply per burst of messages ------------------------------------------------------------
-BURST_WAIT = 4  # seconds to wait for the rest of a burst ("হায়" / "নেট নাই" / "চালান যায় না")
+BURST_WAIT = 7  # seconds to wait for the rest of a burst ("হায়" / "নেট নাই" / "চালান যায় না")
 _contact_locks: dict[int, threading.Lock] = {}
 
 
@@ -378,6 +411,22 @@ def deliver(t: Tenant, contact: dict, message_id: int, text: str, note: str | No
     return "failed" if error else mode
 
 
+def send_voice_reply(t: Tenant, contact: dict, text: str) -> None:
+    """The customer spoke: after the text reply, the same reply as a voice message (বট সেটিংস → ভয়েসের উত্তর ভয়েসেও).
+    Any failure only skips the voice; the text has already gone."""
+    try:
+        from engine.agent import speak
+        from engine import whatsapp
+        audio = speak(t, text, contact["id"])
+        if not audio:
+            return
+        res = whatsapp.send_audio(t, contact["wa_number"], audio)
+        save_message(t, contact["id"], res.get("messages", [{}])[0].get("id"), "out", "bot", "audio",
+                     f"[ভয়েস উত্তর] {text}", {"id": res.get("media_id"), "mime_type": "audio/ogg"})
+    except Exception:
+        log.exception("voice reply failed for company %s", t.company_id)
+
+
 def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str | None = None) -> tuple[str, str | None]:
     if DRY_RUN or not t.bot.get("auto_ticket", True):
         return f"{note} → (টিকেট খোলা হয়নি: {'dry run' if DRY_RUN else 'বন্ধ'})", None
@@ -420,7 +469,7 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
         try:
             from engine import whatsapp
             data, mime = whatsapp.download_media(t, (m.get("audio") or {}).get("id", ""))
-            spoken = transcribe(t, data, mime)
+            spoken = transcribe(t, data, mime, contact["id"])
         except Exception:
             log.exception("voice transcription failed")
             spoken = None
@@ -442,10 +491,10 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
         if bot_paused(contact):  # staff took over while we waited
             return
         text = unanswered_text(t, contact["id"]) or text
-        _answer(t, contact, text, message_id)
+        _answer(t, contact, text, message_id, voice=mtype == "audio")
 
 
-def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
+def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = False) -> None:
     from engine.agent import draft_reply
     from engine.technician import handle_tech, technician_for
     tech = technician_for(t, contact["wa_number"])
@@ -469,11 +518,12 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
         if not pending and _is_ack(text) and ack_already_answered(t, contact["id"]):
             return  # "ওকে" after our "ঠিক আছে, জানাবেন": nothing more to say
         api = tenants.billing(t)
-        context = customer_view(customers.add_online(t, diagnose(api, customers.fresh(api, customer)), customer), verified)
+        context = customer_view(customers.add_online(t, diagnose(api, customers.fresh(api, customer)), customer), verified,
+                                "\n".join(x for x in (pending, text) if x))
         history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": text})
-        draft, provider, model = draft_reply(t, history, context)
+        draft, provider, model = draft_reply(t, history, context, contact["id"])
         ticket_note = None
         if draft:
             mm = re.search(r"\[\[TICKET:\s*(.*?)\]\]", draft, re.S)
@@ -485,8 +535,15 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int) -> None:
             no = re.search(r"\d{4,}", extra or "")
             if extra and not (no and said_recently(t, contact["id"], no.group(0))):  # the ticket number once, not every reply
                 draft += "\n" + extra
+        if draft and newer_inbound(t, contact["id"], message_id):
+            # the customer wrote again while we were answering: that message's turn answers all of them
+            # (otherwise two replies go out for one question)
+            save_draft(t, contact["id"], message_id, "superseded", draft, context=context, provider=provider, model=model)
+            return
         if draft:
-            deliver(t, contact, message_id, draft, ticket_note, context=context, provider=provider, model=model)
+            mode = deliver(t, contact, message_id, draft, ticket_note, context=context, provider=provider, model=model)
+            if voice and mode == "sent" and t.bot.get("voice_reply"):
+                send_voice_reply(t, contact, draft)
     except Exception as e:
         log.exception("engine failed for company %s", t.company_id)
         save_draft(t, contact["id"], message_id, "error", None, context=context, error=str(e)[:500])
@@ -525,7 +582,31 @@ def billing_call(fn):
 @app.get("/internal/{company_id}/ticket-options")
 def ticket_options(request: Request, company_id: int):
     t = internal_tenant(request, company_id)
-    return billing_call(lambda: tenants.billing(t).support_options())
+    opts = billing_call(lambda: tenants.billing(t).support_options())
+    from engine.ticket_sync import save_options
+    save_options(company_id, opts)  # the desk keeps its own copy from now on
+    return opts
+
+
+@app.get("/internal/{company_id}/bot-prompts")
+def bot_prompts(request: Request, company_id: int):
+    """Bot settings page: the full instructions the bots get now (built-in rules + company instructions + FAQ)."""
+    key = request.headers.get("x-internal-key", "")
+    if not INTERNAL_KEY or not hmac.compare_digest(key, INTERNAL_KEY):
+        raise HTTPException(status_code=403)
+    row = db.one("SELECT phone_number_id FROM wa_accounts WHERE company_id = %s ORDER BY id LIMIT 1", (company_id,))
+    t = tenants.by_phone_number_id(row["phone_number_id"]) if row else None
+    if not t:
+        raise HTTPException(status_code=404, detail="এই কোম্পানির WhatsApp নম্বর যুক্ত নেই")
+    from engine.agent import system_prompt
+    from engine.technician import tech_prompt
+    bot = db.one("SELECT * FROM bot_settings WHERE company_id = %s", (company_id,)) or {}
+    t = dataclasses.replace(t, bot=dict(bot))  # the saved settings, not the cached copy
+    from engine.llm import SYSTEM_PROMPT
+    from engine.technician import TECH_PROMPT
+    return {"customer": system_prompt(t), "technician": tech_prompt(t, "(টেকনিশিয়ানের নাম)"),
+            # the built-in rules, for the edit boxes and "back to default"
+            "customer_default": SYSTEM_PROMPT, "technician_default": TECH_PROMPT}
 
 
 @app.get("/internal/{company_id}/customers")
@@ -573,6 +654,58 @@ async def assign(request: Request, company_id: int, complain_id: int):
     return {"ok": True}
 
 
+@app.post("/internal/{company_id}/tickets/{complain_id}/edit")
+async def edit_ticket(request: Request, company_id: int, complain_id: int):
+    """Desk "Edit": category, priority, complaint mobile, description (and staff, when given) of an open ticket."""
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    row = db.one("SELECT customer_header_id, state FROM billing_tickets WHERE company_id = %s AND complain_id = %s",
+                 (company_id, str(complain_id)))
+    if not row:
+        raise HTTPException(status_code=404, detail="টিকিট পাওয়া যায়নি")
+    if row["state"] not in ("pending", "processing"):
+        raise HTTPException(status_code=400, detail="সমাধান হওয়া টিকিট বিলিংয়ে এডিট করা যায় না")
+    if not (b.get("category_id") and b.get("mobile") and (b.get("comment") or "").strip()):
+        raise HTTPException(status_code=400, detail="সমস্যার ধরন, মোবাইল আর বিবরণ লাগবে")
+    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
+
+    def run():
+        msg = api.update_ticket(complain_id, int(row["customer_header_id"]), str(b["category_id"]),
+                                int(b.get("priority") or 2),
+                                normalize_bd_mobile(b["mobile"]) or b["mobile"], b["comment"].strip()[:1900])
+        if b.get("employees"):
+            api.assign_ticket(complain_id, [int(e) for e in b["employees"]], b.get("dept_id"), bool(b.get("sms_employees")))
+        return msg
+
+    msg = billing_call(run)
+    refresh_tickets(t)
+    return {"ok": True, "message": msg}
+
+
+@app.post("/internal/{company_id}/tickets/{complain_id}/solve")
+async def solve(request: Request, company_id: int, complain_id: int):
+    """Desk "Solve": only when the customer's PPPoE is online on our MikroTik right now."""
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    row = db.one("""SELECT bt.username, bt.state, bc.server FROM billing_tickets bt
+                    LEFT JOIN billing_customers bc ON bc.company_id = bt.company_id AND bc.header_id = bt.customer_header_id
+                    WHERE bt.company_id = %s AND bt.complain_id = %s""", (company_id, str(complain_id)))
+    if not row:
+        raise HTTPException(status_code=404, detail="টিকিট পাওয়া যায়নি")
+    if row["state"] not in ("pending", "processing"):
+        raise HTTPException(status_code=400, detail="টিকিটটা আগেই সমাধান হয়েছে")
+    from engine.ppp_sync import online_now
+    mk = online_now(company_id, row["username"] or "", row["server"])
+    if mk is None:
+        raise HTTPException(status_code=400, detail="MikroTik থেকে উত্তর আসেনি, তাই অনলাইন কিনা যাচাই করা গেল না")
+    if not mk.get("online"):
+        raise HTTPException(status_code=400, detail="কাস্টমার MikroTik-এ অফলাইন, লাইন চালু হলে Solve করুন")
+    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
+    billing_call(lambda: api.solve_ticket(complain_id, (b.get("remark") or "")[:500]))
+    refresh_tickets(t)
+    return {"ok": True, "uptime": mk.get("uptime")}
+
+
 @app.get("/internal/{company_id}/tickets/{complain_id}/solvers")
 def solvers(request: Request, company_id: int, complain_id: int):
     t = internal_tenant(request, company_id)
@@ -591,6 +724,26 @@ def customers_sync_now(request: Request, company_id: int):
     t = internal_tenant(request, company_id)
     from engine.customer_sync import sync_company
     return billing_call(lambda: sync_company(t))
+
+
+@app.post("/internal/{company_id}/customers/sync-new")
+def customers_sync_new(request: Request, company_id: int):
+    t = internal_tenant(request, company_id)
+    from engine.customer_sync import sync_new
+    return billing_call(lambda: sync_new(t))
+
+
+@app.post("/internal/{company_id}/customers/find")
+def customers_find(request: Request, company_id: int, q: str = ""):
+    """Desk header search fallback: the billing header search, copying customers the desk doesn't have yet."""
+    t = internal_tenant(request, company_id)
+    if len(q.strip()) < 3:
+        return {"header_ids": [], "synced": []}
+    from engine.customer_sync import find_in_billing
+    res = billing_call(lambda: find_in_billing(t, q))
+    if res["synced"]:
+        log.info("header search %r company %s: copied %s from billing", q, company_id, res["synced"])
+    return res
 
 
 _customer_refresh = threading.Lock()
@@ -658,7 +811,7 @@ def mikrotik_test(request: Request, company_id: int, router_id: int):
                       updated_at = now() WHERE id = %s""", (msg, router_id))
         raise HTTPException(status_code=400, detail=f"MikroTik-এ সংযোগ হয়নি: {msg}")
     # only PPPoE users that exist in the billing software count
-    info["ppp_active"] = db.one("""SELECT count(*) AS n FROM billing_customers WHERE company_id = %s AND gone_at IS NULL
+    info["ppp_active"] = db.one("""SELECT count(*) AS n FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND NOT is_left
                                    AND username = ANY(%s)""", (company_id, info.pop("names")))["n"]
     servers = [x["server"] for x in db.all_rows(
         "SELECT DISTINCT server FROM billing_customers WHERE company_id = %s AND server IS NOT NULL", (company_id,))]
