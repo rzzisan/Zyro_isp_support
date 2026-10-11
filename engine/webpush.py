@@ -45,7 +45,9 @@ def keys() -> tuple[str, str]:
         return _keys
 
 
-def _display(wa: str) -> str:
+def _display(wa: str, username: str | None = None) -> str:
+    if "." in wa:  # no number from Meta, only a business-scoped user ID
+        return "@" + username.lstrip("@") if username else "নম্বর লুকানো"
     return "0" + wa[3:] if wa.startswith("880") else wa
 
 
@@ -71,7 +73,7 @@ def _send_all(company_id: int, contact: dict, mtype: str | None, body: str | Non
         _, priv = keys()
         text = (body or "").strip() or MEDIA.get(mtype or "", "নতুন মেসেজ")
         payload = json.dumps({
-            "title": ("[স্টাফ] " if staff else "") + (contact.get("name") or _display(contact["wa_number"])),
+            "title": ("[স্টাফ] " if staff else "") + (contact.get("name") or _display(contact["wa_number"], contact.get("wa_username"))),
             "body": text[:140],
             "tag": f"wa-{contact['id']}",
             "url": f"/app/{subs[0]['slug']}/inbox/{contact['id']}",

@@ -64,26 +64,54 @@ def signature_ok(raw: bytes, header: str) -> bool:
 
 
 # --- storage helpers ---------------------------------------------------------------------
-def contact_for(t: Tenant, wa: str, name: str | None) -> dict:
+def contact_for(t: Tenant, wa: str | None, name: str | None, user_id: str | None = None,
+                username: str | None = None) -> dict:
+    """The chat for a WhatsApp user. Meta now sends some users without a phone number, only a business-scoped
+    user ID (BSUID, "BD.1234..."); such a chat keeps the BSUID in wa_number (replies then go to it) until a
+    message with the number arrives."""
+    if user_id:
+        c = db.one("SELECT * FROM wa_contacts WHERE company_id = %s AND wa_user_id = %s", (t.company_id, user_id))
+        if c:
+            number = wa if wa and wa != c["wa_number"] and not db.one(
+                "SELECT 1 FROM wa_contacts WHERE company_id = %s AND wa_number = %s", (t.company_id, wa)) else None
+            return db.execute(
+                """UPDATE wa_contacts SET wa_number = COALESCE(%s, wa_number), name = COALESCE(%s, name),
+                     wa_username = COALESCE(%s, wa_username), last_message_at = now(), updated_at = now()
+                   WHERE id = %s RETURNING *""", (number, name, username, c["id"]))
     return db.execute(
-        """INSERT INTO wa_contacts (company_id, wa_number, name, last_message_at, created_at, updated_at)
-           VALUES (%s, %s, %s, now(), now(), now())
+        """INSERT INTO wa_contacts (company_id, wa_number, name, wa_user_id, wa_username, last_message_at,
+                                    created_at, updated_at)
+           VALUES (%s, %s, %s, %s, %s, now(), now(), now())
            ON CONFLICT (company_id, wa_number) DO UPDATE
-             SET name = COALESCE(EXCLUDED.name, wa_contacts.name), last_message_at = now(), updated_at = now()
+             SET name = COALESCE(EXCLUDED.name, wa_contacts.name),
+                 wa_user_id = COALESCE(wa_contacts.wa_user_id, EXCLUDED.wa_user_id),
+                 wa_username = COALESCE(EXCLUDED.wa_username, wa_contacts.wa_username),
+                 last_message_at = now(), updated_at = now()
            RETURNING *""",
-        (t.company_id, wa, name),
+        (t.company_id, wa or user_id, name, user_id, username),
     )
 
 
+def sender_of(m: dict, value: dict, echo: bool) -> tuple[str | None, str | None, str | None, str | None]:
+    """(phone, BSUID, profile name, username) of the customer in one webhook message."""
+    wa = m.get("to") if echo else m.get("from")
+    uid = m.get("to_user_id") if echo else m.get("from_user_id")
+    for c in value.get("contacts", []):
+        if (wa and c.get("wa_id") == wa) or (uid and c.get("user_id") == uid):
+            prof = c.get("profile") or {}
+            return wa, uid or c.get("user_id"), prof.get("name"), prof.get("username")
+    return wa, uid, None, None
+
+
 def save_message(t: Tenant, contact_id: int, wa_message_id: str | None, direction: str, sender: str,
-                 mtype: str, body: str | None, media: dict | None = None) -> dict | None:
+                 mtype: str, body: str | None, media: dict | None = None, at: datetime | None = None) -> dict | None:
     return db.execute(
         """INSERT INTO wa_messages (company_id, contact_id, wa_account_id, wa_message_id, direction, sender,
                                     type, body, media_id, media_mime, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, now()))
            ON CONFLICT (wa_message_id) DO NOTHING RETURNING id""",
         (t.company_id, contact_id, t.wa_account_id, wa_message_id, direction, sender, mtype, body,
-         media.get("id") if media else None, media.get("mime_type") if media else None),
+         media.get("id") if media else None, media.get("mime_type") if media else None, at),
     )
 
 
@@ -154,10 +182,12 @@ async def receive(request: Request):
             if change.get("field") not in ("messages", "smb_message_echoes"):
                 continue
             echo = change.get("field") == "smb_message_echoes"
-            names = {c.get("wa_id"): c.get("profile", {}).get("name") for c in value.get("contacts", [])}
             for m in value.get("messages", []) + value.get("message_echoes", []):
-                wa = m.get("to") if echo else m.get("from")
-                c = contact_for(t, wa, names.get(wa))
+                phone, uid, name, username = sender_of(m, value, echo)
+                if not (phone or uid):
+                    continue
+                c = contact_for(t, phone, name, uid, username)
+                wa = c["wa_number"]
                 mtype = m.get("type")
                 media = m.get(mtype) if mtype in MEDIA_TYPES else None
                 body = (m.get("text") or {}).get("body") or (media or {}).get("caption") \

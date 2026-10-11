@@ -14,9 +14,14 @@ def _check(r: httpx.Response) -> dict:
     return data
 
 
+def recipient(to: str) -> dict:
+    """A phone number goes in "to"; a user who hides the number has only a business-scoped user ID ("BD.1234...")."""
+    return {"recipient": to} if "." in to else {"to": to}
+
+
 def send_text(t: Tenant, to: str, body: str) -> dict:
     r = httpx.post(f"{GRAPH}/{t.phone_number_id}/messages",
-                   json={"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": body}},
+                   json={"messaging_product": "whatsapp", **recipient(to), "type": "text", "text": {"body": body}},
                    headers={"Authorization": f"Bearer {t.wa_token}"}, timeout=30)
     return _check(r)
 
@@ -27,7 +32,7 @@ def send_audio(t: Tenant, to: str, data: bytes, mime: str = "audio/ogg") -> dict
                            data={"messaging_product": "whatsapp", "type": mime},
                            files={"file": ("reply.ogg", data, mime)}, timeout=60))
     r = httpx.post(f"{GRAPH}/{t.phone_number_id}/messages",
-                   json={"messaging_product": "whatsapp", "to": to, "type": "audio", "audio": {"id": up["id"]}},
+                   json={"messaging_product": "whatsapp", **recipient(to), "type": "audio", "audio": {"id": up["id"]}},
                    headers={"Authorization": f"Bearer {t.wa_token}"}, timeout=30)
     return {**_check(r), "media_id": up["id"]}
 

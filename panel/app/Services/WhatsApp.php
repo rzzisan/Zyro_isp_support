@@ -60,7 +60,7 @@ class WhatsApp
                 $res = Http::withToken($account->access_token)->timeout(30)
                     ->post(static::graph($account->phone_number_id.'/messages'), [
                         'messaging_product' => 'whatsapp',
-                        'to' => $contact->wa_number,
+                        ...$contact->recipient(),
                         'type' => 'text',
                         'text' => ['body' => $body, 'preview_url' => false],
                     ])->throw()->json();
@@ -129,7 +129,7 @@ class WhatsApp
                     + ($type === 'document' ? ['filename' => $fileName] : []);
                 $res = Http::withToken($account->access_token)->timeout(30)
                     ->post(static::graph($account->phone_number_id.'/messages'), [
-                        'messaging_product' => 'whatsapp', 'to' => $contact->wa_number, 'type' => $type, $type => $media,
+                        'messaging_product' => 'whatsapp', ...$contact->recipient(), 'type' => $type, $type => $media,
                     ])->throw()->json();
             } catch (RequestException $e) {
                 $msg = $e->response->json('error.message') ?? $e->getMessage();

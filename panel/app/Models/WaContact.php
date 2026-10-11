@@ -69,10 +69,26 @@ class WaContact extends Model
         return $at !== null && $at->gt(now()->subHours(24));
     }
 
-    /** 8801XXXXXXXXX -> 01XXXXXXXXX for display. */
+    /** 8801XXXXXXXXX -> 01XXXXXXXXX for display; a user who hides the number shows the username. */
     public function displayNumber(): string
     {
+        if ($this->hidesNumber()) {
+            return $this->wa_username ? '@'.ltrim($this->wa_username, '@') : 'নম্বর লুকানো';
+        }
+
         return str_starts_with($this->wa_number, '880') ? '0'.substr($this->wa_number, 3) : $this->wa_number;
+    }
+
+    /** No phone number from Meta, only a business-scoped user ID ("BD.1234...") kept in wa_number. */
+    public function hidesNumber(): bool
+    {
+        return str_contains((string) $this->wa_number, '.');
+    }
+
+    /** Who a Cloud API message goes to: the phone number, or the BSUID for a user who hides it. */
+    public function recipient(): array
+    {
+        return $this->hidesNumber() ? ['recipient' => $this->wa_number] : ['to' => $this->wa_number];
     }
 
     /** The field technician using this number, if it is one of the company's technicians. */
