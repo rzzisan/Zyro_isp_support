@@ -89,6 +89,19 @@ class BillCollectionTest extends TestCase
         $this->assertStringContainsString('75 টাকা বেশি নেওয়া হচ্ছে', $html);
     }
 
+    public function test_customer_search_label_has_pppoe_and_place(): void
+    {
+        $this->customer->update(['zone' => 'Zisan', 'subzone' => 'এনায়েতনগর', 'box' => 'Sudipta']);
+        $this->assertSame('ID 0003 · Bulbul · en.enamul · 01714080210 · Zisan / এনায়েতনগর / Sudipta',
+            BillingCustomer::searchLabel($this->customer->fresh()));
+        $this->assertSame('ID 0007 · Rana · 01700000000 · Zisan · LEFT (04 Oct 2026)', BillingCustomer::searchLabel(
+            ['customer_id' => '0007', 'name' => 'Rana', 'username' => '', 'mobile' => '01700000000', 'zone' => 'Zisan',
+                'subzone' => null, 'box' => ' ', 'is_left' => true, 'left_on' => '2026-10-04']));
+        $this->as($this->owner);
+        $results = (fn () => static::searchCustomers('en.enamul'))->call(new \App\Filament\App\BillActions);
+        $this->assertSame(['3' => 'ID 0003 · Bulbul · en.enamul · 01714080210 · Zisan / এনায়েতনগর / Sudipta'], $results);
+    }
+
     public function test_partial_payment_needs_a_note(): void
     {
         $this->fakeEngine();

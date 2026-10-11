@@ -69,8 +69,8 @@ class BillActions
                 ->orWhere('username', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%")
                 ->when(strlen($digits) >= 5, fn ($x) => $x->orWhere('mobile', 'like', "%{$digits}%")))
             ->orderByRaw("ltrim(customer_id, '0') = ltrim(?, '0') DESC", [$search])->orderBy('customer_id')->limit(15)
-            ->get(['header_id', 'customer_id', 'name', 'mobile', 'zone'])
-            ->mapWithKeys(fn ($c) => [(string) $c->header_id => trim('ID '.$c->customer_id.' · '.$c->name.' · '.$c->mobile, ' ·')])
+            ->get(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone', 'subzone', 'box', 'is_left', 'left_on'])
+            ->mapWithKeys(fn ($c) => [(string) $c->header_id => BillingCustomer::searchLabel($c)])
             ->all();
     }
 
@@ -101,7 +101,7 @@ class BillActions
                     ->getOptionLabelUsing(function ($value) {
                         $c = BillingCustomer::where('company_id', static::company())->where('header_id', (int) $value)->first();
 
-                        return $c ? "ID {$c->customer_id} · {$c->name}" : (string) $value;
+                        return $c ? BillingCustomer::searchLabel($c) : (string) $value;
                     })
                     ->live()
                     ->afterStateUpdated(function ($state, callable $set) {

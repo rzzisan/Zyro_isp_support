@@ -22,6 +22,20 @@ class BillingCustomer extends Model
         ];
     }
 
+    /** Customer search dropdown label: "ID 0003 · Bulbul · en.enamul · 0171… · Zone / Subzone / Box", empty parts skipped. */
+    public static function searchLabel(array|self $c): string
+    {
+        $c = $c instanceof self ? $c->only(['customer_id', 'name', 'username', 'mobile', 'zone', 'subzone', 'box', 'is_left', 'left_on']) : $c;
+        $place = collect([$c['zone'] ?? null, $c['subzone'] ?? null, $c['box'] ?? null])->map(fn ($v) => trim((string) $v))->filter()->join(' / ');
+        $label = collect(['ID '.($c['customer_id'] ?? ''), $c['name'] ?? null, $c['username'] ?? null, $c['mobile'] ?? null, $place])
+            ->map(fn ($v) => trim((string) $v))->filter()->join(' · ');
+        if (! empty($c['is_left'])) {
+            $label .= ' · LEFT'.(! empty($c['left_on']) ? ' ('.\Illuminate\Support\Carbon::parse($c['left_on'])->format('d M Y').')' : '');
+        }
+
+        return $label;
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
