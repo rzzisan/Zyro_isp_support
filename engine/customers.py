@@ -66,7 +66,11 @@ def by_text(t: Tenant, api: ISPDigital, text: str, allow_bare_id: bool = True) -
     hit = local_by_text(t, text, allow_bare_id)
     if hit:
         return hit
-    hit = find_customer_by_text(api, text, allow_bare_id=allow_bare_id)
+    try:
+        hit = find_customer_by_text(api, text, allow_bare_id=allow_bare_id)
+    except Exception as e:  # billing slow or down: same as not found, the bot still answers
+        log.warning("billing search failed: %s", e)
+        hit = None
     if hit:
         remember(t, hit)
     return hit
@@ -76,7 +80,11 @@ def by_whatsapp(t: Tenant, api: ISPDigital, wa_number: str) -> dict | None:
     hit = local_by_whatsapp(t, wa_number)
     if hit:
         return hit
-    hit = find_customer_by_whatsapp(api, wa_number)
+    try:
+        hit = find_customer_by_whatsapp(api, wa_number)
+    except Exception as e:  # billing slow or down: same as not found, the bot still answers
+        log.warning("billing search failed: %s", e)
+        hit = None
     if hit:
         remember(t, hit)
     return hit

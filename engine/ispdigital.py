@@ -5,11 +5,14 @@ calls the JSON endpoints the web pages use. Never returns PPPoE/portal
 passwords to callers.
 """
 import html
+import logging
 import re
 import threading
 from urllib.parse import urlencode
 
 import httpx
+
+log = logging.getLogger("zyro-engine")
 
 SECRET_FIELDS = {"Password", "LoginPassword"}
 
@@ -344,8 +347,17 @@ def find_customer_by_text(api: ISPDigital, text: str, allow_bare_id: bool = True
 def diagnose(api: ISPDigital, customer: dict) -> dict:
     """Collect everything the bot needs, in the order: bill -> ONU -> PPPoE."""
     hid = customer["CustomerHeaderId"]
-    live = api.live_status(hid)
-    onu = api.onu_info(live.get("calledid"))
+    # the billing software is sometimes slow (timeouts): answer with what we have instead of not answering
+    try:
+        live = api.live_status(hid)
+    except Exception as e:
+        log.warning("billing live status failed for %s: %s", hid, e)
+        live = {}
+    try:
+        onu = api.onu_info(live.get("calledid"))
+    except Exception as e:
+        log.warning("billing ONU info failed for %s: %s", hid, e)
+        onu = None
     try:
         payments = [{
             "date": p.get("PaymentDate"), "month": p.get("BillMonth"), "paid": p.get("PaidAmount"),
