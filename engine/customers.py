@@ -8,12 +8,12 @@ import logging
 import re
 
 from engine import db
-from engine.ispdigital import (ISPDigital, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile,
+from engine.ispdigital import (ISPDigital, customer_ids, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile,
                                number_text, without_urls)
 from engine.tenant import Tenant
 
 log = logging.getLogger("zyro-engine")
-ID_HINT = re.compile(r"(\bid\b|আইডি|আই ডি|customer|কাস্টমার|গ্রাহক|user)", re.I)
+ID_HINT = re.compile(r"(\bid\b|আইডি|আই ডি|customer|কাস্টমার|গ্রাহক|user|লাইন|\bline\b|\blain\b)", re.I)  # "5033 লাইনের নেট নাই"
 
 
 def _rows(t: Tenant, where: str, params: tuple) -> list[dict]:
@@ -40,7 +40,7 @@ def local_by_text(t: Tenant, text: str, allow_bare_id: bool = True) -> dict | No
         if hit:
             return hit
     bare_ok = allow_bare_id or bool(ID_HINT.search(text)) or text.strip().isdigit()
-    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", nums) if bare_ok else []):
+    for cid in (customer_ids(nums) if bare_ok else []):
         hit = _one(_rows(t, "ltrim(customer_id, '0') = %s", (cid.lstrip("0") or "0",)))
         if hit:
             return hit

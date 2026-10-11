@@ -374,7 +374,7 @@ def find_customer_by_whatsapp(api: ISPDigital, wa_number: str) -> dict | None:
     return rows[0] if len(rows) == 1 else None
 
 
-ID_HINT = re.compile(r"(\bid\b|আইডি|আই ডি|customer|কাস্টমার|গ্রাহক|user)", re.I)
+ID_HINT = re.compile(r"(\bid\b|আইডি|আই ডি|customer|কাস্টমার|গ্রাহক|user|লাইন|\bline\b|\blain\b)", re.I)  # "5033 লাইনের নেট নাই"
 URL_RE = re.compile(r"(?:https?|ftp)://\S+|\bwww\.\S+", re.I)
 # IPs, MACs, times, amounts like 172.19.178.178 / 10:30 / 1.5: their digits are never a customer ID or mobile
 DOTTED_RE = re.compile(r"\d+(?:[.:]\d+)+|\b[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}\b", re.I)
@@ -387,6 +387,14 @@ def without_urls(text: str) -> str:
 def number_text(text: str) -> str:
     """The text with links, IPs, MACs and dotted numbers removed: what is left may hold a mobile or customer ID."""
     return DOTTED_RE.sub(" ", without_urls(text))
+
+
+# "10 দিন", "500 টাকা", "20 mbps": an amount, not a customer ID
+UNIT_AFTER = re.compile(r"\s*(দিন|ঘণ্টা|ঘন্টা|মিনিট|টাকা|তারিখ|মাস|বার|din|day|ghonta|hour|min|taka|tk|mb|gb|month|bar)", re.I)
+
+
+def customer_ids(nums: str) -> list[str]:
+    return [m.group(0) for m in re.finditer(r"(?<!\d)\d{2,6}(?!\d)", nums) if not UNIT_AFTER.match(nums, m.end())]
 
 
 def find_customer_by_text(api: ISPDigital, text: str, allow_bare_id: bool = True) -> dict | None:
@@ -403,7 +411,7 @@ def find_customer_by_text(api: ISPDigital, text: str, allow_bare_id: bool = True
             return rows[0]
     # customer IDs (short numbers, keep leading zeros)
     bare_ok = allow_bare_id or bool(ID_HINT.search(text)) or text.strip().isdigit()
-    for cid in (re.findall(r"(?<!\d)\d{2,6}(?!\d)", nums) if bare_ok else []):
+    for cid in (customer_ids(nums) if bare_ok else []):
         rows = [r for r in api.search_customers(cid, limit=50)
                 if (r.get("CustomerId") or "").lstrip("0") == cid.lstrip("0")]
         if len(rows) == 1:
