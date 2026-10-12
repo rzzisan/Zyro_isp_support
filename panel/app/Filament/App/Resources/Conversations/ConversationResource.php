@@ -31,7 +31,9 @@ class ConversationResource extends Resource
 
     protected static ?string $slug = 'inbox';
 
-    protected static ?int $navigationSort = -10;
+    protected static string|\UnitEnum|null $navigationGroup = 'সাপোর্ট';
+
+    protected static ?int $navigationSort = 1;
 
     public static function canAccess(): bool
     {

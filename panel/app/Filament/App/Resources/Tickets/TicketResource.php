@@ -37,7 +37,9 @@ class TicketResource extends Resource
 
     protected static ?string $slug = 'tickets';
 
-    protected static ?int $navigationSort = -5;
+    protected static string|\UnitEnum|null $navigationGroup = 'সাপোর্ট';
+
+    protected static ?int $navigationSort = 2;
 
     public static function canAccess(): bool
     {

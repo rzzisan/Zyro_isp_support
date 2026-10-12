@@ -7,6 +7,7 @@ use App\Http\Middleware\AppPanelAuthenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use App\Filament\App\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -36,6 +37,16 @@ class AppPanelProvider extends PanelProvider
             ->brandLogoHeight('2.5rem')
             ->font('Geist')
             ->maxContentWidth(Width::Full)
+            ->sidebarCollapsibleOnDesktop()
+            // sidebar order: daily work first, setup last (items set their group in $navigationGroup)
+            ->navigationGroups([
+                NavigationGroup::make('সাপোর্ট'),
+                NavigationGroup::make('কাস্টমার ও বিল'),
+                NavigationGroup::make('নেটওয়ার্ক'),
+                NavigationGroup::make('বিলিং কনফিগারেশন'),
+                NavigationGroup::make('WhatsApp ও AI'),
+                NavigationGroup::make('সেটিংস'),
+            ])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString('<link rel="stylesheet" href="'.asset('css/zyro-theme.css').'?v='.filemtime(public_path('css/zyro-theme.css')).'">'))
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn () => view('filament.notify-bell'))
             ->tenant(Company::class, slugAttribute: 'slug')

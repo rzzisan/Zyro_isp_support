@@ -21,7 +21,7 @@ class LineEnableResource extends Resource
 {
     protected static ?string $model = LineEnable::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBolt;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPower;
 
     protected static ?string $navigationLabel = 'লাইন চালু/বন্ধের রেকর্ড';
 
@@ -31,7 +31,9 @@ class LineEnableResource extends Resource
 
     protected static ?string $slug = 'line-enables';
 
-    protected static ?int $navigationSort = -4;
+    protected static string|\UnitEnum|null $navigationGroup = 'কাস্টমার ও বিল';
+
+    protected static ?int $navigationSort = 3;
 
     public static function canAccess(): bool
     {

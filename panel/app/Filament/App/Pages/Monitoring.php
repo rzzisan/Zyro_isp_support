@@ -43,7 +43,9 @@ class Monitoring extends Page implements HasTable
 
     protected static ?string $slug = 'monitoring';
 
-    protected static ?int $navigationSort = -7;
+    protected static string|\UnitEnum|null $navigationGroup = 'নেটওয়ার্ক';
+
+    protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.app.monitoring';
 

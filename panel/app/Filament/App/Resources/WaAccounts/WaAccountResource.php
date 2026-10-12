@@ -38,9 +38,9 @@ class WaAccountResource extends Resource
 
     protected static ?string $slug = 'whatsapp';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp ও AI';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 1;
 
     public static function canAccess(): bool
     {

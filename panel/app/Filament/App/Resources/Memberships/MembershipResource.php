@@ -25,7 +25,7 @@ class MembershipResource extends Resource
 {
     protected static ?string $model = Membership::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;
 
     protected static ?string $navigationLabel = 'টিম';
 
@@ -35,7 +35,7 @@ class MembershipResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
 
-    protected static ?int $navigationSort = 40;
+    protected static ?int $navigationSort = 4;
 
     public static function canAccess(): bool
     {

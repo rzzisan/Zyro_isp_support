@@ -38,7 +38,9 @@ class DailyBillResource extends Resource
 
     protected static ?string $slug = 'daily-bills';
 
-    protected static ?int $navigationSort = -5;
+    protected static string|\UnitEnum|null $navigationGroup = 'কাস্টমার ও বিল';
+
+    protected static ?int $navigationSort = 2;
 
     public const STATUSES = ['active' => 'approve + pending', 'approved' => 'Approved', 'pending' => 'Pending (approve বাকি)', 'deleted' => 'Deleted'];
 

@@ -22,7 +22,7 @@ use Throwable;
  */
 class MyBillingLogin extends CompanySettingsPage
 {
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedKey;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedLockClosed;
 
     protected static ?string $navigationLabel = 'আমার বিলিং লগইন';
 

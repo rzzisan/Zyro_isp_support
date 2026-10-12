@@ -28,9 +28,9 @@ class AiUsage extends Page
 
     protected static ?string $slug = 'ai-usage';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp ও AI';
 
-    protected static ?int $navigationSort = 31;
+    protected static ?int $navigationSort = 5;
 
     protected string $view = 'filament.app.ai-usage';
 

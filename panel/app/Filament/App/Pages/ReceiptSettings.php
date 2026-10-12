@@ -24,7 +24,7 @@ class ReceiptSettings extends CompanySettingsPage
 
     protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
 
-    protected static ?int $navigationSort = 15;
+    protected static ?int $navigationSort = 3;
 
     protected function record(Company $company): Model
     {

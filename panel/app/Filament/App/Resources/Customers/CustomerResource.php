@@ -37,7 +37,9 @@ class CustomerResource extends Resource
 
     protected static ?string $slug = 'customers';
 
-    protected static ?int $navigationSort = -8;
+    protected static string|\UnitEnum|null $navigationGroup = 'কাস্টমার ও বিল';
+
+    protected static ?int $navigationSort = 1;
 
     public static function canAccess(): bool
     {

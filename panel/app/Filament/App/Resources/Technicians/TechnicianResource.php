@@ -25,7 +25,7 @@ class TechnicianResource extends Resource
 {
     protected static ?string $model = Technician::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrench;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
 
     protected static ?string $navigationLabel = 'টেকনিশিয়ান';
 
@@ -35,7 +35,7 @@ class TechnicianResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
 
-    protected static ?int $navigationSort = 45;
+    protected static ?int $navigationSort = 5;
 
     public static function canAccess(): bool
     {

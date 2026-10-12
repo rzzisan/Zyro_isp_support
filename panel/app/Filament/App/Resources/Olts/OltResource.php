@@ -40,9 +40,9 @@ class OltResource extends Resource
 
     protected static ?string $slug = 'olts';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'নেটওয়ার্ক';
 
-    protected static ?int $navigationSort = 13;
+    protected static ?int $navigationSort = 4;
 
     public static function canAccess(): bool
     {

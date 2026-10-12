@@ -34,9 +34,9 @@ class AiKeyResource extends Resource
 
     protected static ?string $pluralModelLabel = 'AI key';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp ও AI';
 
-    protected static ?int $navigationSort = 30;
+    protected static ?int $navigationSort = 4;
 
     public static function canAccess(): bool
     {

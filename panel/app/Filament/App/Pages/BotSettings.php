@@ -21,15 +21,15 @@ use Throwable;
 
 class BotSettings extends CompanySettingsPage
 {
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCpuChip;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
     protected static ?string $navigationLabel = 'বট সেটিংস';
 
     protected static ?string $title = 'বট সেটিংস';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp ও AI';
 
-    protected static ?int $navigationSort = 20;
+    protected static ?int $navigationSort = 2;
 
     public static function canAccess(): bool
     {

@@ -40,9 +40,9 @@ class MikrotikResource extends Resource
 
     protected static ?string $slug = 'mikrotik';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'নেটওয়ার্ক';
 
-    protected static ?int $navigationSort = 12;
+    protected static ?int $navigationSort = 3;
 
     public static function canAccess(): bool
     {

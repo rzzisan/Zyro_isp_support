@@ -86,10 +86,10 @@ html.dark .fi-body .fi-sidebar {
 }
 
 .fi-body .fi-sidebar-group-label {
-    color: var(--z-muted);
-    font-size: 0.72rem;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    color: color-mix(in srgb, var(--z-muted) 85%, var(--z-accent));
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
 }
 
 .fi-body .fi-sidebar-item-btn {
@@ -236,3 +236,52 @@ html.dark .fi-simple-layout {
     background: #f59e0b; box-shadow: 0 0 0 0 rgba(245, 158, 11, .6); animation: z-bell-pulse 1.6s infinite; }
 .z-notify-bell[data-state="ask"] .z-bell-dot { display: block; }
 @keyframes z-bell-pulse { 70% { box-shadow: 0 0 0 .45rem rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
+
+/* sidebar polish: group spacing and divider, active accent bar, badge pill */
+.fi-body .fi-sidebar-nav {
+    padding-top: 1rem;
+    row-gap: 0.85rem;
+}
+
+.fi-body .fi-sidebar-nav-groups {
+    row-gap: 0.85rem;
+}
+
+.fi-body .fi-sidebar-group + .fi-sidebar-group {
+    border-top: 1px dashed var(--z-border);
+    padding-top: 0.85rem;
+}
+
+.fi-body .fi-sidebar-group-btn {
+    padding-inline: 0.5rem;
+}
+
+.fi-body .fi-sidebar-group-items {
+    row-gap: 2px;
+}
+
+.fi-body .fi-sidebar-item-btn {
+    position: relative;
+    padding-block: 0.45rem;
+}
+
+.fi-body .fi-sidebar-item.fi-active > .fi-sidebar-item-btn::before {
+    content: "";
+    position: absolute;
+    left: -0.35rem;
+    top: 22%;
+    bottom: 22%;
+    width: 3px;
+    border-radius: 3px;
+    background: var(--z-accent);
+}
+
+.fi-body .fi-sidebar-item-btn .fi-badge {
+    border-radius: 9999px;
+    font-weight: 700;
+}
+
+/* collapsed (icon-only) sidebar on desktop: center icons, hide the accent bar */
+.fi-body .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item.fi-active > .fi-sidebar-item-btn::before {
+    display: none;
+}

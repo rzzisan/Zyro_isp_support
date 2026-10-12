@@ -23,7 +23,7 @@ class OnuResource extends Resource
 {
     protected static ?string $model = Onu::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedLightBulb;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWifi;
 
     protected static ?string $navigationLabel = 'ONU মনিটরিং';
 
@@ -33,7 +33,9 @@ class OnuResource extends Resource
 
     protected static ?string $slug = 'onus';
 
-    protected static ?int $navigationSort = -6;
+    protected static string|\UnitEnum|null $navigationGroup = 'নেটওয়ার্ক';
+
+    protected static ?int $navigationSort = 2;
 
     public static function canCreate(): bool
     {

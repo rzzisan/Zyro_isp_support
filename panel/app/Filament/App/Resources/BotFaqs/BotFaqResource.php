@@ -33,9 +33,9 @@ class BotFaqResource extends Resource
 
     protected static ?string $pluralModelLabel = 'বটের FAQ';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp ও AI';
 
-    protected static ?int $navigationSort = 21;
+    protected static ?int $navigationSort = 3;
 
     public static function canAccess(): bool
     {
