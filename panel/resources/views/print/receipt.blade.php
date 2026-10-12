@@ -14,11 +14,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        @page { size: {{ $width }}mm auto; margin: 0; }
+        @page { size: {{ $width }}mm 210mm; margin: 0; }
         * { box-sizing: border-box; }
-        html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+        html, body { margin: 0; padding: 0; background: #fff; color: #000; width: {{ $width }}mm; }
         body { font-family: 'Noto Sans Bengali', Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .r { width: {{ $width - 8 }}mm; margin: 0 auto; padding: 3mm 0 6mm; font-size: {{ $width == 58 ? '10px' : '12.5px' }}; line-height: 1.35; }
+        .r { width: {{ $width == 58 ? 46 : 66 }}mm; margin: 0 auto; padding: 2mm 0 3mm; page-break-inside: avoid; font-size: {{ $width == 58 ? '10px' : '12.5px' }}; line-height: 1.35; }
         .qr { display: flex; align-items: center; gap: 2.5mm; margin-bottom: 2.5mm; }
         .qr svg { width: {{ $width == 58 ? '17mm' : '22mm' }}; height: auto; flex: none; }
         .qr svg .dark, .qr svg rect, .qr svg path { fill: #000; }
@@ -43,7 +43,7 @@
         .by span { border-left: 1.5px solid #000; padding-left: 2mm; text-align: center; flex: 1; }
         .dots { border-top: 2px dotted #000; margin: 2.5mm 0 2mm; }
         .foot { white-space: pre-line; text-align: {{ $width == 58 ? 'left' : 'justify' }}; }
-        @media screen { body { background: #f3f4f6; } .r { background: #fff; margin: 8px auto; padding: 4mm; box-shadow: 0 1px 4px rgba(0,0,0,.15); width: {{ $width }}mm; } }
+        @media screen { html, body { width: auto; } body { background: #f3f4f6; } .r { background: #fff; margin: 8px auto; padding: 4mm {{ $width == 58 ? 6 : 7 }}mm; box-shadow: 0 1px 4px rgba(0,0,0,.15); } }
         @media print { .noprint { display: none; } }
     </style>
 </head>

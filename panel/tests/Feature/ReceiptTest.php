@@ -78,7 +78,7 @@ class ReceiptTest extends TestCase
     {
         $this->fakeReceiptNo(null);
         $this->actingAs($this->owner)->get($this->url($this->bill, '?w=58&print=0'))->assertOk()
-            ->assertSee('D-'.$this->bill->id)->assertDontSee('approve বাকি')->assertSee('size: 58mm auto', false)
+            ->assertSee('D-'.$this->bill->id)->assertDontSee('approve বাকি')->assertSee('size: 58mm 210mm', false)
             ->assertDontSee('window.print', false);
     }
 
