@@ -60,6 +60,10 @@ class ReceiptTest extends TestCase
 
     public function test_owner_prints_receipt_with_billing_number(): void
     {
+        // approved in billing (synced), so the receipt asks for billing's number
+        $this->bill->update(['daily_bill_id' => 170243]);
+        \App\Models\BillingDailyBill::create(['company_id' => $this->company->id, 'daily_bill_id' => 170243, 'customer_header_id' => 15605,
+            'collected_at' => '2026-10-11 14:00:00', 'receive_amount' => 520, 'is_approved' => true]);
         $this->fakeReceiptNo('5604-202610-1119-b39ceae1RV');
         $this->actingAs($this->owner)->get($this->url($this->bill))->assertOk()
             ->assertSee('MONEY RECEIPT')->assertSee('Century Link Network')->assertSee('Mobile: 09613009900,01777858289')
@@ -77,14 +81,22 @@ class ReceiptTest extends TestCase
     public function test_before_approval_it_prints_desk_number(): void
     {
         $this->fakeReceiptNo(null);
+        // pending in billing: no lookup at all, so the receipt opens at once
+        $this->bill->update(['daily_bill_id' => 170243]);
+        \App\Models\BillingDailyBill::create(['company_id' => $this->company->id, 'daily_bill_id' => 170243, 'customer_header_id' => 15605,
+            'collected_at' => '2026-10-11 14:00:00', 'receive_amount' => 520, 'is_approved' => false]);
         $this->actingAs($this->owner)->get($this->url($this->bill, '?w=58&print=0'))->assertOk()
             ->assertSee('D-'.$this->bill->id)->assertDontSee('approve বাকি')->assertSee('size: 58mm 210mm', false)
             ->assertDontSee('window.print', false);
+        Http::assertNothingSent();
     }
 
     public function test_engine_down_still_prints(): void
     {
         Http::fake(['engine.test/*' => Http::response(['detail' => 'down'], 500)]);
+        $this->bill->update(['daily_bill_id' => 170243]);
+        \App\Models\BillingDailyBill::create(['company_id' => $this->company->id, 'daily_bill_id' => 170243, 'customer_header_id' => 15605,
+            'collected_at' => '2026-10-11 14:00:00', 'receive_amount' => 520, 'is_approved' => true]);
         $this->actingAs($this->owner)->get($this->url($this->bill))->assertOk()->assertSee('D-'.$this->bill->id);
     }
 

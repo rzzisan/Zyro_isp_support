@@ -4,10 +4,15 @@ No official API: logs in with a staff user like the browser does, then
 calls the JSON endpoints the web pages use. Never returns PPPoE/portal
 passwords to callers.
 """
+import fcntl
+import hashlib
 import html
+import json
 import logging
+import os
 import re
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from urllib.parse import urlencode
@@ -34,6 +39,11 @@ TRACER_FIELDS = ["IPAddress", "CountryName", "Region", "CityName", "PostalCode",
 
 BD_TZ = timezone(timedelta(hours=6))
 
+# Billing keeps one session per staff login: a new login logs the previous session out. The engine and every sync
+# timer (separate processes) used to log in on their own and kept kicking each other out, so almost every Desk step
+# paid for a fresh login (1.5-2 s). The session cookies are now kept on disk (owner-only) and shared.
+SESSION_DIR = os.environ.get("BILLING_SESSION_DIR") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "billing-sessions")
+
 
 class LoginError(RuntimeError):
     pass
@@ -52,9 +62,60 @@ class ISPDigital:
                                     headers=browser_headers(self.base_url))
         self._lock = threading.Lock()
         self._logged_in = False
+        self._session_mtime = 0.0
+        self._load_session()
 
     # --- session -------------------------------------------------------------
+    def _session_path(self) -> str:
+        key = hashlib.sha256(f"{self.base_url}|{self._username}".encode()).hexdigest()[:24]
+        return os.path.join(SESSION_DIR, key + ".json")
+
+    def _load_session(self) -> bool:
+        """Use the cookies another process saved for this login, if newer than what this client has."""
+        path = self._session_path()
+        try:
+            mtime = os.path.getmtime(path)
+            if mtime <= self._session_mtime:
+                return False
+            with open(path) as f:
+                cookies = json.load(f)
+        except (OSError, ValueError):
+            return False
+        self._client.cookies.clear()
+        for c in cookies:
+            self._client.cookies.set(c["name"], c["value"], domain=c.get("domain") or "", path=c.get("path") or "/")
+        self._session_mtime = mtime
+        self._logged_in = True
+        return True
+
+    def _save_session(self) -> None:
+        try:
+            os.makedirs(SESSION_DIR, mode=0o700, exist_ok=True)
+            path = self._session_path()
+            tmp = f"{path}.{os.getpid()}.tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                json.dump([{"name": c.name, "value": c.value, "domain": c.domain, "path": c.path}
+                           for c in self._client.cookies.jar], f)
+            os.replace(tmp, path)
+            self._session_mtime = os.path.getmtime(path)
+        except OSError:
+            log.warning("could not save the billing session", exc_info=True)
+
     def login(self) -> None:
+        """Get a working session: a newer one saved by another process if there is one, else a real login
+        (one process at a time per login, so they don't log each other out)."""
+        if self._load_session():
+            return
+        os.makedirs(SESSION_DIR, mode=0o700, exist_ok=True)
+        with open(self._session_path() + ".lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if self._load_session():  # someone logged in while we waited
+                return
+            self._real_login()
+            self._save_session()
+
+    def _real_login(self) -> None:
         if not self._username or not self._password:
             raise LoginError("billing username / password not set")
         USERNAME, PASSWORD = self._username, self._password

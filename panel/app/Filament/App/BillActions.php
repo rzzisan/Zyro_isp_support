@@ -23,6 +23,9 @@ use RuntimeException;
  */
 class BillActions
 {
+    /** Enter in the amount fields saves the bill (the modal's submit button), like the billing form's Submit. */
+    private const ENTER_SUBMITS = 'if ($el.form) { $el.form.requestSubmit() } else { $el.closest(".fi-modal-window")?.querySelector(".fi-modal-footer-actions button[type=submit], .fi-modal-footer button[type=submit]")?.click() }';
+
     private static function company(): int
     {
         return (int) Filament::getTenant()->getKey();
@@ -56,7 +59,7 @@ class BillActions
         return ['paid' => (float) ($f['payable'] ?? 0) ?: null, 'discount' => 0,
             'method_id' => $f['method_default'] ?? null, 'received_by_id' => $f['received_by_default'] ?? null,
             'bill_month' => $f['bill_month'] ?? null, 'expected_payable' => $f['payable'] ?? null,
-            'sms' => true, 'next_billing_date' => false];
+            'sms' => false, 'next_billing_date' => false, 'print' => true];
     }
 
     private static function searchCustomers(string $search): array
@@ -86,16 +89,16 @@ class BillActions
             ->modalSubmitActionLabel('বিল জমা দিন')
             ->fillForm(function () use ($customer) {
                 if (! $customer) {
-                    return ['sms' => true];
+                    return ['sms' => false, 'print' => true];
                 }
                 try {
                     return static::defaults(static::form((int) $customer->header_id, true));
                 } catch (RuntimeException) {
-                    return ['sms' => true];  // the info box shows the error
+                    return ['sms' => false, 'print' => true];  // the info box shows the error
                 }
             })
             ->schema([
-                Select::make('header_id')->label('কাস্টমার')->required(! $customer)->visible(! $customer)->searchable()
+                Select::make('header_id')->label('কাস্টমার')->required(! $customer)->visible(! $customer)->searchable()->autofocus()
                     ->helperText('কাস্টমার ID, মোবাইল, username বা নাম লিখে খুঁজুন')
                     ->getSearchResultsUsing(fn (string $search) => static::searchCustomers($search))
                     ->getOptionLabelUsing(function ($value) {
@@ -104,11 +107,13 @@ class BillActions
                         return $c ? BillingCustomer::searchLabel($c) : (string) $value;
                     })
                     ->live()
-                    ->afterStateUpdated(function ($state, callable $set) {
+                    ->afterStateUpdated(function ($state, callable $set, $livewire) {
                         [$f] = static::tryForm((int) $state ?: null);
                         foreach (static::defaults($f ?? []) as $k => $v) {
                             $set($k, $v);
                         }
+                        // customer picked: straight to the amount, Enter there saves
+                        $livewire->js("setTimeout(() => { const i = document.querySelector('input[id$=\\'.paid\\']'); if (i) { i.focus(); i.select(); } }, 300)");
                     }),
                 Placeholder::make('info')->hiddenLabel()
                     ->visible(fn ($get) => (bool) $headerOf($get))
@@ -119,8 +124,11 @@ class BillActions
                     }),
                 Hidden::make('expected_payable'),
                 Grid::make(2)->schema([
-                    TextInput::make('paid')->label('টাকা নিলেন')->numeric()->minValue(0)->suffix('টাকা')->required()->live(debounce: 400),
-                    TextInput::make('discount')->label('ডিসকাউন্ট')->numeric()->minValue(0)->suffix('টাকা')->default(0)->live(debounce: 400),
+                    TextInput::make('paid')->label('টাকা নিলেন')->numeric()->minValue(0)->suffix('টাকা')->required()->live(debounce: 400)
+                        ->autofocus((bool) $customer)
+                        ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
+                    TextInput::make('discount')->label('ডিসকাউন্ট')->numeric()->minValue(0)->suffix('টাকা')->default(0)->live(debounce: 400)
+                        ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
                 ]),
                 // live sum like the billing form's Details box: due - discount - received = balance
                 Placeholder::make('summary')->hiddenLabel()
@@ -141,11 +149,13 @@ class BillActions
                         || abs((float) $get('paid') + (float) $get('discount') - (float) $get('expected_payable')) > 0.001)
                     ->helperText('আংশিক টাকা বা ডিসকাউন্ট হলে লিখতে হবে'),
                 Grid::make(2)->schema([
-                    Toggle::make('sms')->label('কাস্টমারকে SMS'),
+                    Toggle::make('sms')->label('কাস্টমারকে SMS')
+                        ->helperText('চালু করলে বিলিং SMS পাঠিয়ে তবে উত্তর দেয়, জমা হতে ২০-৬০ সেকেন্ড লাগে'),
+                    Toggle::make('print')->label('জমার পর রিসিট প্রিন্ট')->default(true),
                     Toggle::make('next_billing_date')->label('পরের বিলিং তারিখ সেট করুন (Is it next billing date?)'),
                 ]),
             ])
-            ->action(function (array $data, Action $action) use ($customer) {
+            ->action(function (array $data, Action $action, $livewire) use ($customer) {
                 $headerId = $customer ? (int) $customer->header_id : (int) ($data['header_id'] ?? 0);
                 try {
                     $res = Engine::receiveBill(static::company(), $headerId, [
@@ -163,6 +173,13 @@ class BillActions
                     return;
                 } finally {
                     Cache::forget('bill-form:'.static::company().':'.auth()->id().':'.$headerId);
+                }
+                $receipt = ! empty($res['collection_id'])
+                    ? route('receipts.print', ['company' => Filament::getTenant()->slug, 'collection' => $res['collection_id']]) : null;
+                if ($receipt && ($data['print'] ?? true)) {
+                    // print in a hidden frame on this page: no new tab; with Chrome's --kiosk-printing no dialog either
+                    $livewire->js('(() => { const f = document.createElement("iframe"); f.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0"; f.src = '
+                        .json_encode($receipt).'; document.body.appendChild(f); setTimeout(() => f.remove(), 120000); })()');
                 }
                 Notification::make()->success()->title('বিল জমা হয়েছে, বিলিং-এ approve বাকি')
                     ->body(trim(($res['message'] ?? '').' · বাকি বকেয়া '.($res['balance'] ?? 0).' টাকা', ' ·'))

@@ -67,11 +67,11 @@ class BillCollectionTest extends TestCase
         Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])
             ->assertActionVisible('receiveBill')
             ->mountAction('receiveBill')
-            ->assertSchemaStateSet(['paid' => 525.0, 'method_id' => '71', 'received_by_id' => '1', 'bill_month' => 'October', 'sms' => true], 'mountedActionSchema0')
+            ->assertSchemaStateSet(['paid' => 525.0, 'method_id' => '71', 'received_by_id' => '1', 'bill_month' => 'October', 'sms' => false], 'mountedActionSchema0')
             ->callMountedAction()->assertHasNoActionErrors();
         Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/customers/3/bill"
             && $r->hasHeader('x-internal-key', 'k') && $r['paid'] == 525 && $r['discount'] == 0 && $r['method_id'] === '71'
-            && $r['received_by_id'] === '1' && $r['sms'] === true && $r['next_billing_date'] === false
+            && $r['received_by_id'] === '1' && $r['sms'] === false && $r['next_billing_date'] === false
             && $r['expected_payable'] == 525 && $r['user_id'] === $this->owner->id);
     }
 

@@ -44,7 +44,10 @@ Route::get('/print/{company:slug}/receipt/{collection}', function (\App\Models\C
     $user = Auth::user();
     abort_unless($user && \App\Support\Menu::allows($user, $company, 'bills'), 403);
     $c = \App\Models\BillCollection::where('company_id', $company->id)->where('result', 'saved')->findOrFail($collection);
-    if (! $c->money_receipt_no) {
+    // billing only has a receipt number after approval; asking before that just makes printing slower
+    $approved = $c->daily_bill_id && \App\Models\BillingDailyBill::where('company_id', $company->id)
+        ->where('daily_bill_id', $c->daily_bill_id)->where('is_approved', true)->exists();
+    if (! $c->money_receipt_no && $approved) {
         try {
             $c->money_receipt_no = \App\Services\Engine::receiptNo($company->id, $c->id);
         } catch (\Throwable $e) {
