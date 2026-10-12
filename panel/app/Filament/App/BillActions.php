@@ -13,6 +13,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Group;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
@@ -99,6 +100,9 @@ class BillActions
             })
             ->schema([
                 Select::make('header_id')->label('কাস্টমার')->required(! $customer)->visible(! $customer)->searchable()->autofocus()
+                    ->searchDebounce(300)
+                    // picking a customer re-renders only this form, not the whole page behind the modal (~900 KB on বিল কালেকশন)
+                    ->partiallyRenderComponentsAfterStateUpdated(['billBody'])
                     ->helperText('কাস্টমার ID, মোবাইল, username বা নাম লিখে খুঁজুন')
                     ->getSearchResultsUsing(fn (string $search) => static::searchCustomers($search))
                     ->getOptionLabelUsing(function ($value) {
@@ -115,6 +119,7 @@ class BillActions
                         // customer picked: straight to the amount, Enter there saves
                         $livewire->js("setTimeout(() => { const i = document.querySelector('input[id$=\\'.paid\\']'); if (i) { i.focus(); i.select(); } }, 300)");
                     }),
+                Group::make([
                 Placeholder::make('info')->hiddenLabel()
                     ->visible(fn ($get) => (bool) $headerOf($get))
                     ->content(function ($get) use ($headerOf) {
@@ -125,13 +130,15 @@ class BillActions
                 Hidden::make('expected_payable'),
                 Grid::make(2)->schema([
                     TextInput::make('paid')->label('টাকা নিলেন')->numeric()->minValue(0)->suffix('টাকা')->required()->live(debounce: 400)
+                        ->partiallyRenderComponentsAfterStateUpdated(['summary'])
                         ->autofocus((bool) $customer)
                         ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
                     TextInput::make('discount')->label('ডিসকাউন্ট')->numeric()->minValue(0)->suffix('টাকা')->default(0)->live(debounce: 400)
+                        ->partiallyRenderComponentsAfterStateUpdated(['summary'])
                         ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
                 ]),
                 // live sum like the billing form's Details box: due - discount - received = balance
-                Placeholder::make('summary')->hiddenLabel()
+                Placeholder::make('summary')->hiddenLabel()->key('summary')
                     ->visible(fn ($get) => (bool) $headerOf($get) && $get('expected_payable') !== null)
                     ->content(fn ($get) => view('filament.app.bills.summary', ['payable' => (float) $get('expected_payable'),
                         'discount' => (float) $get('discount'), 'paid' => (float) $get('paid')])),
@@ -154,6 +161,7 @@ class BillActions
                     Toggle::make('print')->label('জমার পর রিসিট প্রিন্ট')->default(true),
                     Toggle::make('next_billing_date')->label('পরের বিলিং তারিখ সেট করুন (Is it next billing date?)'),
                 ]),
+                ])->key('billBody'),
             ])
             ->action(function (array $data, Action $action, $livewire) use ($customer) {
                 $headerId = $customer ? (int) $customer->header_id : (int) ($data['header_id'] ?? 0);

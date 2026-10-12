@@ -102,6 +102,21 @@ class BillCollectionTest extends TestCase
         $this->assertSame(['3' => 'ID 0003 · Bulbul · en.enamul · 01714080210 · Zisan / এনায়েতনগর / Sudipta'], $results);
     }
 
+    public function test_typing_amounts_and_picking_a_customer_render_only_the_form(): void
+    {
+        $this->fakeEngine();
+        $this->as($this->owner);
+        // customer page: amount fields re-render the live total only (throws if the component can't be found)
+        Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])
+            ->mountAction('receiveBill')->fillForm(['paid' => 300, 'discount' => 25])
+            ->assertSchemaStateSet(['paid' => 300, 'discount' => 25], 'mountedActionSchema0');
+        // বিল কালেকশন page: picking a customer fills the form and re-renders just its body
+        Livewire::test(\App\Filament\App\Resources\DailyBills\Pages\ListDailyBills::class)
+            ->mountAction('receiveBill')->fillForm(['header_id' => '3'])
+            ->assertSchemaStateSet(['paid' => 525.0, 'method_id' => '71', 'received_by_id' => '1', 'sms' => false], 'mountedActionSchema0')
+            ->fillForm(['paid' => 500, 'discount' => 25]);
+    }
+
     public function test_partial_payment_needs_a_note(): void
     {
         $this->fakeEngine();
