@@ -60,7 +60,7 @@ class BillActions
         return ['paid' => (float) ($f['payable'] ?? 0) ?: null, 'discount' => 0,
             'method_id' => $f['method_default'] ?? null, 'received_by_id' => $f['received_by_default'] ?? null,
             'bill_month' => $f['bill_month'] ?? null, 'expected_payable' => $f['payable'] ?? null,
-            'sms' => false, 'next_billing_date' => false, 'print' => true];
+            'sms' => false, 'next_billing_date' => true, 'print' => true];
     }
 
     private static function searchCustomers(string $search): array
@@ -90,12 +90,12 @@ class BillActions
             ->modalSubmitActionLabel('বিল জমা দিন')
             ->fillForm(function () use ($customer) {
                 if (! $customer) {
-                    return ['sms' => false, 'print' => true];
+                    return ['sms' => false, 'next_billing_date' => true, 'print' => true];
                 }
                 try {
                     return static::defaults(static::form((int) $customer->header_id, true));
                 } catch (RuntimeException) {
-                    return ['sms' => false, 'print' => true];  // the info box shows the error
+                    return ['sms' => false, 'next_billing_date' => true, 'print' => true];  // the info box shows the error
                 }
             })
             ->schema([
@@ -172,7 +172,7 @@ class BillActions
                         'method_id' => (string) $data['method_id'], 'received_by_id' => (string) $data['received_by_id'],
                         'trx_no' => $data['trx_no'] ?? '', 'remarks' => $data['remarks'] ?? '',
                         'bill_month' => $data['bill_month'] ?? null, 'sms' => (bool) ($data['sms'] ?? true),
-                        'next_billing_date' => (bool) ($data['next_billing_date'] ?? false),
+                        'next_billing_date' => (bool) ($data['next_billing_date'] ?? true),
                         'expected_payable' => isset($data['expected_payable']) ? (float) $data['expected_payable'] : null,
                     ]);
                 } catch (RuntimeException $e) {
