@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\BillingConfig;
 
 use App\Filament\App\Resources\BillingConfig\Pages\DistrictList;
+use App\Filament\App\Clusters\BillingConfig\AreaCluster;
 use BackedEnum;
 use Filament\Support\Icons\Heroicon;
 
@@ -10,7 +11,9 @@ class DistrictResource extends BillingConfigResource
 {
     protected static string $kind = 'districts';
 
-    protected static ?int $navigationSort = 9;
+    protected static ?string $cluster = AreaCluster::class;
+
+    protected static ?int $navigationSort = 4;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGlobeAsiaAustralia;
 

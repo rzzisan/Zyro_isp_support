@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\BillingConfig;
 
 use App\Filament\App\Resources\BillingConfig\Pages\BoxList;
+use App\Filament\App\Clusters\BillingConfig\AreaCluster;
 use BackedEnum;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -10,6 +11,8 @@ use Filament\Tables\Columns\TextColumn;
 class BoxResource extends BillingConfigResource
 {
     protected static string $kind = 'boxes';
+
+    protected static ?string $cluster = AreaCluster::class;
 
     protected static ?int $navigationSort = 3;
 

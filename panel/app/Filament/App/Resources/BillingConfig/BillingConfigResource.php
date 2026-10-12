@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * One billing list kept in the desk (billing_options of one kind): a read-only copy of billing's page, refreshed
- * only by the page's Sync button. Each list is a small subclass with its own menu item. Owner/Admin only.
+ * only by the page's Sync button. Each list is a small subclass, shown as a tab of its cluster menu item
+ * (Clusters/BillingConfig: এলাকা, প্যাকেজ ও সংযোগ, সাপোর্ট তালিকা). Owner/Admin only.
  */
 abstract class BillingConfigResource extends Resource
 {
@@ -28,8 +29,6 @@ abstract class BillingConfigResource extends Resource
     protected static string $kind;
 
     protected static ?string $model = BillingOption::class;
-
-    protected static string|\UnitEnum|null $navigationGroup = 'বিলিং কনফিগারেশন';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedListBullet;
 
@@ -58,7 +57,7 @@ abstract class BillingConfigResource extends Resource
 
     public static function getSlug(?\Filament\Panel $panel = null): string
     {
-        return 'billing-config/'.str_replace('_', '-', static::$kind);
+        return str_replace('_', '-', static::$kind); // under its cluster: /billing-config/area/boxes
     }
 
     public static function canAccess(): bool

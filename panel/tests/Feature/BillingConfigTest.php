@@ -59,7 +59,16 @@ class BillingConfigTest extends TestCase
         Livewire::test(ZoneList::class)->assertCanSeeTableRecords([$zisan])->assertCanNotSeeTableRecords([$other, $gone])
             ->assertTableColumnStateSet('customers', 2, $zisan);
         Livewire::test(BoxList::class)->assertCanSeeTableRecords([$box])->assertTableColumnStateSet('customers', 2, $box);
-        $this->assertStringContainsString('billing-config/boxes', BoxResource::getUrl('index'));
+        $this->assertStringContainsString('billing-config/area/boxes', BoxResource::getUrl('index'));
+    }
+
+    public function test_lists_are_tabs_of_three_menu_items(): void
+    {
+        $this->as($this->owner);
+        $this->get(BoxResource::getUrl('index'))->assertOk()
+            ->assertSee(['এলাকা', 'প্যাকেজ ও সংযোগ', 'সাপোর্ট তালিকা', 'Sub Zone', 'Upazila'])
+            ->assertDontSee('Connection Type'); // another menu item's tab
+        $this->get(\App\Filament\App\Clusters\BillingConfig\ServiceCluster::getUrl())->assertRedirect();
     }
 
     public function test_sync_button_asks_the_engine_for_that_list(): void

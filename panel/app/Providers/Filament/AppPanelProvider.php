@@ -41,6 +41,7 @@ class AppPanelProvider extends PanelProvider
             ->tenant(Company::class, slugAttribute: 'slug')
             ->colors(['primary' => Color::hex('#0f7c7b')])
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\Filament\App\Resources')
+            ->discoverClusters(in: app_path('Filament/App/Clusters'), for: 'App\Filament\App\Clusters')
             ->discoverPages(in: app_path('Filament/App/Pages'), for: 'App\Filament\App\Pages')
             ->pages([Dashboard::class])
             ->discoverWidgets(in: app_path('Filament/App/Widgets'), for: 'App\\Filament\\App\\Widgets')

@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\BillingConfig;
 
 use App\Filament\App\Resources\BillingConfig\Pages\PackageList;
+use App\Filament\App\Clusters\BillingConfig\ServiceCluster;
 use BackedEnum;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -11,7 +12,9 @@ class PackageResource extends BillingConfigResource
 {
     protected static string $kind = 'packages';
 
-    protected static ?int $navigationSort = 8;
+    protected static ?string $cluster = ServiceCluster::class;
+
+    protected static ?int $navigationSort = 1;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRocketLaunch;
 
