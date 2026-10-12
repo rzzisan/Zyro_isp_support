@@ -6,6 +6,7 @@ collection; otherwise the same bill could be taken twice. Every attempt is logge
 """
 import re
 import threading
+import time
 
 from engine import db
 from engine.ispdigital import BillingRefused, ISPDigital, LoginError, money
@@ -30,6 +31,19 @@ def _pending(api: ISPDigital, header_id: int, username: str) -> list[dict]:
              "discount": r.get("DiscountAmount"), "method": r.get("PaymentMethod"), "received_by": r.get("ReceivedBy"),
              "created_by": r.get("CreatedBy")}
             for r in api.pending_bills(username) if int(r.get("CustomerHeaderId") or 0) == int(header_id)]
+
+
+def _new_pending(api: ISPDigital, header_id: int, username: str, paid: float, discount: float) -> dict | None:
+    """The pending collection of this customer with this amount and discount, if billing lists one (a few tries)."""
+    for wait in (0, 3, 6):
+        time.sleep(wait)
+        try:
+            for p in _pending(api, header_id, username):
+                if abs(float(p["amount"] or 0) - paid) < 0.001 and abs(float(p["discount"] or 0) - discount) < 0.001:
+                    return p
+        except Exception:
+            continue
+    return None
 
 
 def form_info(api: ISPDigital, header_id: int) -> dict:
@@ -112,9 +126,17 @@ def collect(company_id: int, user_id: int, api: ISPDigital, header_id: int, b: d
             _save(log, "failed", str(e)[:500])
             raise BillError(f"বিলিং বিলটা নেয়নি: {e}")
         except Exception as e:
-            _save(log, "failed", str(e)[:500])
-            raise BillError("বিলিং-এর উত্তর বোঝা যায়নি। বিল জমা হয়েছে কি না Daily Bill Collection-এ দেখে নিন, "
-                            "আবার জমা দেওয়ার আগে।")
+            # no clear answer (e.g. billing answered too late): there was no pending bill before, so a pending one
+            # with this amount now means billing did save it
+            found = _new_pending(api, header_id, f["username"], paid, discount)
+            if not found:
+                _save(log, "failed", str(e)[:500])
+                raise BillError("বিলিং-এর উত্তর বোঝা যায়নি। বিল জমা হয়েছে কি না Daily Bill Collection-এ দেখে নিন, "
+                                "আবার জমা দেওয়ার আগে।")
+            message = f"বিলিং দেরিতে উত্তর দিয়েছে, তবে বিল জমা হয়েছে (Daily Bill Collection #{found['id']})"
+            collection_id = _save(log, "saved", message, found["id"])
+            return {"message": message, "daily_bill_id": found["id"], "payable": f["payable"],
+                    "balance": round(f["payable"] - paid - discount, 2), "collection_id": collection_id}
         # find the new pending row so the panel can show its billing id
         try:
             after = _pending(api, header_id, f["username"])

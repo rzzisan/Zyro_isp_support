@@ -196,13 +196,13 @@ class ISPDigital:
             raise RuntimeError(res["errMSG"])
         return res.get("sucMSG") or "ok"
 
-    def _post(self, path: str, data) -> httpx.Response:
+    def _post(self, path: str, data, timeout: float | None = None) -> httpx.Response:
         with self._lock:
             if not self._logged_in:
                 self.login()
             # repeated keys (empIds=3&empIds=9) need a pre-encoded body; httpx data= only takes a dict
             body = urlencode(data) if isinstance(data, list) else urlencode(data, doseq=True)
-            r = self._client.post(path, content=body, headers={
+            r = self._client.post(path, content=body, timeout=timeout or self._client.timeout, headers={
                 "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
         if r.status_code in (301, 302):
             self._logged_in = False
@@ -317,7 +317,8 @@ class ISPDigital:
         The collection stays pending until a staff member approves it in the billing software."""
         data = receive_payload(form, paid, discount, method_id, received_by_id, remarks, trx_no, send_sms,
                                next_billing_date, received_from, bill_month)
-        r = self._post(form["action"], data)
+        # saving a bill (and its SMS) can take billing well over the usual 20 s
+        r = self._post(form["action"], data, timeout=90)
         if r.text.lstrip().startswith("<"):
             self._logged_in = False
             raise LoginError("billing session expired, the bill was not saved")
