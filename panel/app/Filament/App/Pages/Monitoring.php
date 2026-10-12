@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages;
 
 use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Models\BillingCustomer;
+use App\Models\BillingOption;
 use App\Models\MikrotikRouter;
 use App\Models\PppSession;
 use App\Services\Engine;
@@ -158,7 +159,19 @@ class Monitoring extends Page implements HasTable
             }
         }
 
-        return $q->distinct()->orderBy($column)->pluck($column, $column)->all();
+        $used = $q->distinct()->orderBy($column)->pluck($column, $column)->all();
+        // plus the billing list kept in the desk (বিলিং কনফিগারেশন), narrowed the same way
+        $zone = $this->tableFilters['zone']['value'] ?? null;
+        $subzone = $this->tableFilters['subzone']['value'] ?? null;
+        $where = $column === 'subzone' ? array_filter(['parent_name' => $zone])
+            : array_filter(['zone_name' => $zone, 'parent_name' => $subzone]);
+
+        return BillingOption::names(Filament::getTenant()?->getKey() ?? 0, $column === 'subzone' ? 'subzones' : 'boxes', $used, $where);
+    }
+
+    private static function listOptions(string $kind, string $column): array
+    {
+        return BillingOption::names(Filament::getTenant()?->getKey() ?? 0, $kind, static::options($column));
     }
 
     private static function speed(int $bps): string
@@ -201,13 +214,13 @@ class Monitoring extends Page implements HasTable
                 TernaryFilter::make('online')->label('অবস্থা')->trueLabel('অনলাইন')->falseLabel('অফলাইন')
                     ->queries(true: fn (Builder $q) => $q->where('s.seen_at', '>', $fresh()),
                         false: fn (Builder $q) => $q->where(fn ($w) => $w->whereNull('s.seen_at')->orWhere('s.seen_at', '<=', $fresh()))),
-                SelectFilter::make('zone')->label('Zone')->options(fn () => static::options('zone'))->searchable()
+                SelectFilter::make('zone')->label('Zone')->options(fn () => static::listOptions('zones', 'zone'))->searchable()
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.zone', $v))),
                 SelectFilter::make('subzone')->label('Subzone')->options(fn () => $this->scopedOptions('subzone', ['zone']))->searchable()
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.subzone', $v))),
                 SelectFilter::make('box')->label('Box')->options(fn () => $this->scopedOptions('box', ['zone', 'subzone']))->searchable()
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.box', $v))),
-                SelectFilter::make('connection_type')->label('Connection Type')->options(fn () => static::options('connection_type'))
+                SelectFilter::make('connection_type')->label('Connection Type')->options(fn () => static::listOptions('connection_types', 'connection_type'))
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.connection_type', $v))),
             ])
             ->filtersLayout(FiltersLayout::AboveContent)

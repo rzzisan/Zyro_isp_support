@@ -25,6 +25,7 @@ class Menu
         'onus' => ['ONU মনিটরিং', true, false],
         'whatsapp' => ['WhatsApp সেটিং', false, true],
         'billing' => ['বিলিং সংযোগ', false, true],
+        'billing_config' => ['বিলিং কনফিগারেশন', false, true],
         'mikrotik' => ['MikroTik', false, true],
         'olt' => ['OLT', false, true],
         'bot' => ['বট সেটিংস', false, true],

@@ -28,7 +28,7 @@ class Engine
 
     /**
      * categories / priorities / departments / employees: [id => name], from the desk's own copy (billing_options,
-     * refreshed hourly by the ticket sync). Only when there is no copy yet is billing asked (the engine saves it).
+     * refreshed only by the বিলিং কনফিগারেশন pages' Sync). Only when there is no copy yet is billing asked (the engine saves it).
      */
     public static function ticketOptions(int $companyId): array
     {
@@ -44,6 +44,14 @@ class Engine
         }
 
         return Cache::remember("ticket-options:{$companyId}", 600, fn () => static::call('get', "/internal/{$companyId}/ticket-options"));
+    }
+
+    /** Copies one billing list (BillingOption::KINDS key) or, with null, all of them; returns [kind => [total, inactive]]. */
+    public static function syncBillingConfig(int $companyId, ?string $kind = null): array
+    {
+        Cache::forget("ticket-options:{$companyId}");
+
+        return static::call('post', "/internal/{$companyId}/billing-config/sync".($kind ? '?'.http_build_query(['kind' => $kind]) : '')) ?? [];
     }
 
     public static function customers(int $companyId, string $q): array

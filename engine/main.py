@@ -590,11 +590,20 @@ def billing_call(fn):
 
 @app.get("/internal/{company_id}/ticket-options")
 def ticket_options(request: Request, company_id: int):
+    """Only when the desk has no copy yet (first use): the support page's lists, saved so the desk keeps them."""
     t = internal_tenant(request, company_id)
     opts = billing_call(lambda: tenants.billing(t).support_options())
-    from engine.ticket_sync import save_options
-    save_options(company_id, opts)  # the desk keeps its own copy from now on
+    from engine.billing_config import save_support
+    save_support(company_id, opts)
     return opts
+
+
+@app.post("/internal/{company_id}/billing-config/sync")
+def billing_config_sync(request: Request, company_id: int, kind: str | None = None):
+    """Billing config pages' "Sync": one list (kind) or all of them, from billing into billing_options."""
+    t = internal_tenant(request, company_id)
+    from engine.billing_config import sync
+    return billing_call(lambda: sync(tenants.billing(t), company_id, [kind] if kind else None))
 
 
 @app.get("/internal/{company_id}/bot-prompts")

@@ -62,6 +62,12 @@ class CustomerResource extends Resource
             ->whereNotNull($column)->distinct()->orderBy($column)->pluck($column, $column)->all();
     }
 
+    /** A billing list kept in the desk (বিলিং কনফিগারেশন) plus any other value our customers have. */
+    private static function listOptions(string $kind, string $column): array
+    {
+        return \App\Models\BillingOption::names(Filament::getTenant()?->getKey() ?? 0, $kind, static::options($column));
+    }
+
     /** Subquery: a PPPoE session for this customer seen in the last few minutes. */
     public static function freshSession(): \Closure
     {
@@ -103,9 +109,11 @@ class CustomerResource extends Resource
                 TextColumn::make('joined_on')->label('যোগ দিয়েছেন')->date('d M Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('zone')->label('Zone')->options(fn () => static::options('zone'))->searchable(),
-                SelectFilter::make('subzone')->label('Subzone')->options(fn () => static::options('subzone'))->searchable(),
-                SelectFilter::make('package')->label('প্যাকেজ')->options(fn () => static::options('package'))->searchable(),
+                SelectFilter::make('zone')->label('Zone')->options(fn () => static::listOptions('zones', 'zone'))->searchable(),
+                SelectFilter::make('subzone')->label('Subzone')->options(fn () => static::listOptions('subzones', 'subzone'))->searchable(),
+                SelectFilter::make('box')->label('Box')->options(fn () => static::listOptions('boxes', 'box'))->searchable(),
+                SelectFilter::make('package')->label('প্যাকেজ')->options(fn () => static::listOptions('packages', 'package'))->searchable(),
+                SelectFilter::make('connection_type')->label('Connection Type')->options(fn () => static::listOptions('connection_types', 'connection_type')),
                 SelectFilter::make('status')->label('অবস্থা')->options(fn () => static::options('status')),
                 TernaryFilter::make('online')->label('এখন')->trueLabel('অনলাইন')->falseLabel('অফলাইন')
                     ->queries(true: fn (Builder $query) => $query->whereExists(static::freshSession()),

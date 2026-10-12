@@ -69,6 +69,12 @@ class TicketResource extends Resource
             ->whereNotNull($column)->distinct()->orderBy($column)->pluck($column, $column)->all();
     }
 
+    /** A billing list kept in the desk (বিলিং কনফিগারেশন) plus any other value found on tickets (old names too). */
+    private static function listOptions(string $kind, string $column): array
+    {
+        return \App\Models\BillingOption::names(Filament::getTenant()?->getKey() ?? 0, $kind, static::options($column));
+    }
+
     /** Employee names found in "Arif (10-07-26), Rifat" style assigned_to / solved_by values. */
     public static function employees(): array
     {
@@ -145,8 +151,8 @@ class TicketResource extends Resource
 
                         return $label.': '.($from?->format('d M') ?? '…').' – '.($until?->subDay()->format('d M') ?? 'আজ');
                     }),
-                SelectFilter::make('zone')->label('Zone')->options(fn () => static::options('zone'))->searchable(),
-                SelectFilter::make('category')->label('সমস্যা')->options(fn () => static::options('category'))->searchable(),
+                SelectFilter::make('zone')->label('Zone')->options(fn () => static::listOptions('zones', 'zone'))->searchable(),
+                SelectFilter::make('category')->label('সমস্যা')->options(fn () => static::listOptions('categories', 'category'))->searchable(),
                 SelectFilter::make('employee')->label('কর্মী (assign / সমাধান)')->options(fn () => static::employees())->searchable()
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($q, $name) => $q->forEmployee($name))),
                 SelectFilter::make('priority')->label('Priority')->options(BillingTicket::PRIORITIES),
