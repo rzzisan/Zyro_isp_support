@@ -86,7 +86,7 @@ class BillActions
         return Action::make('receiveBill')->label('বিল নিন')->icon(Heroicon::OutlinedBanknotes)
             ->visible(fn () => \App\Support\Menu::can('bills'))
             ->modalHeading($customer ? "{$customer->name} (ID {$customer->customer_id}): বিল নিন" : 'বিল নিন')
-            ->modalDescription('বিলিং সফটওয়্যারে Receive Bill হিসেবে জমা হবে। বিলিং-এ approve না করা পর্যন্ত বকেয়া কমবে না।')
+            ->modalWidth('3xl')->stickyModalHeader()->stickyModalFooter()
             ->modalSubmitActionLabel('বিল জমা দিন')
             ->fillForm(function () use ($customer) {
                 if (! $customer) {
@@ -103,7 +103,7 @@ class BillActions
                     ->searchDebounce(300)
                     // picking a customer re-renders only this form, not the whole page behind the modal (~900 KB on বিল কালেকশন)
                     ->partiallyRenderComponentsAfterStateUpdated(['billBody'])
-                    ->helperText('কাস্টমার ID, মোবাইল, username বা নাম লিখে খুঁজুন')
+                    ->placeholder('কাস্টমার ID, মোবাইল, PPPoE বা নাম লিখুন')
                     ->getSearchResultsUsing(fn (string $search) => static::searchCustomers($search))
                     ->getOptionLabelUsing(function ($value) {
                         $c = BillingCustomer::where('company_id', static::company())->where('header_id', (int) $value)->first();
@@ -128,7 +128,7 @@ class BillActions
                         return view('filament.app.bills.form-info', ['info' => $f, 'error' => $error]);
                     }),
                 Hidden::make('expected_payable'),
-                Grid::make(2)->schema([
+                Grid::make(3)->schema([
                     TextInput::make('paid')->label('টাকা নিলেন')->numeric()->minValue(0)->suffix('টাকা')->required()->live(debounce: 400)
                         ->partiallyRenderComponentsAfterStateUpdated(['summary'])
                         ->autofocus((bool) $customer)
@@ -136,30 +136,31 @@ class BillActions
                     TextInput::make('discount')->label('ডিসকাউন্ট')->numeric()->minValue(0)->suffix('টাকা')->default(0)->live(debounce: 400)
                         ->partiallyRenderComponentsAfterStateUpdated(['summary'])
                         ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
+                    Select::make('method_id')->label('মাধ্যম')->required()
+                        ->options(fn ($get) => static::tryForm($headerOf($get))[0]['methods'] ?? []),
                 ]),
                 // live sum like the billing form's Details box: due - discount - received = balance
                 Placeholder::make('summary')->hiddenLabel()->key('summary')
                     ->visible(fn ($get) => (bool) $headerOf($get) && $get('expected_payable') !== null)
                     ->content(fn ($get) => view('filament.app.bills.summary', ['payable' => (float) $get('expected_payable'),
                         'discount' => (float) $get('discount'), 'paid' => (float) $get('paid')])),
-                Grid::make(2)->schema([
-                    Select::make('method_id')->label('পেমেন্টের মাধ্যম')->required()
-                        ->options(fn ($get) => static::tryForm($headerOf($get))[0]['methods'] ?? []),
-                    Select::make('received_by_id')->label('কে টাকা নিলেন (Received By)')->required()->searchable()
+                Grid::make(3)->schema([
+                    Select::make('received_by_id')->label('Received By')->required()->searchable()
                         ->options(fn ($get) => static::tryForm($headerOf($get))[0]['received_by'] ?? []),
-                    TextInput::make('trx_no')->label('Receipt / Transaction নম্বর')->maxLength(100)
+                    TextInput::make('trx_no')->label('Trx নম্বর')->maxLength(100)
                         ->regex('/^\S*$/')->validationMessages(['regex' => 'ফাঁকা জায়গা ছাড়া লিখুন']),
-                    TextInput::make('bill_month')->label('বিলের মাস (রসিদে ছাপা হয়)')->maxLength(100),
+                    TextInput::make('bill_month')->label('বিলের মাস')->maxLength(100),
                 ]),
                 TextInput::make('remarks')->label('নোট')->maxLength(500)
                     ->required(fn ($get) => (float) $get('discount') > 0
                         || abs((float) $get('paid') + (float) $get('discount') - (float) $get('expected_payable')) > 0.001)
-                    ->helperText('আংশিক টাকা বা ডিসকাউন্ট হলে লিখতে হবে'),
-                Grid::make(2)->schema([
-                    Toggle::make('sms')->label('কাস্টমারকে SMS')
-                        ->helperText('চালু করলে বিলিং SMS পাঠিয়ে তবে উত্তর দেয়, জমা হতে ২০-৬০ সেকেন্ড লাগে'),
+                    ->placeholder('আংশিক টাকা বা ডিসকাউন্ট হলে লিখতে হবে'),
+                Grid::make(3)->schema([
                     Toggle::make('print')->label('জমার পর রিসিট প্রিন্ট')->default(true),
-                    Toggle::make('next_billing_date')->label('পরের বিলিং তারিখ সেট করুন (Is it next billing date?)'),
+                    Toggle::make('sms')->label('কাস্টমারকে SMS')
+                        ->hintIcon('heroicon-o-information-circle', 'চালু করলে বিলিং SMS পাঠিয়ে তবে উত্তর দেয়, জমা হতে ২০-৬০ সেকেন্ড লাগে'),
+                    Toggle::make('next_billing_date')->label('পরের বিলিং তারিখ সেট')
+                        ->hintIcon('heroicon-o-information-circle', 'বিলিং-এর "Is it next billing date?"'),
                 ]),
                 ])->key('billBody'),
             ])
@@ -194,7 +195,7 @@ class BillActions
                     ->actions(! empty($res['collection_id']) ? [Action::make('printReceipt')->label('রিসিট প্রিন্ট')->button()
                         ->url(route('receipts.print', ['company' => Filament::getTenant()->slug, 'collection' => $res['collection_id']]))
                         ->openUrlInNewTab()] : [])
-                    ->persistent()->send();
+                    ->duration(3000)->send();
             });
     }
 }
