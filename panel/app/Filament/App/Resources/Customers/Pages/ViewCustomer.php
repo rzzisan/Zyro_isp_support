@@ -2,17 +2,19 @@
 
 namespace App\Filament\App\Resources\Customers\Pages;
 
+use App\Filament\App\BillActions;
 use App\Filament\App\Resources\Conversations\ConversationResource;
 use App\Filament\App\Resources\Customers\CustomerResource;
-use App\Filament\App\BillActions;
+use App\Filament\App\Resources\Customers\Widgets\CustomerHistoryStatus;
+use App\Filament\App\Resources\Customers\Widgets\CustomerLiveInfo;
 use App\Filament\App\TicketActions;
 use App\Models\BillingCustomer;
 use App\Services\Engine;
 use Filament\Actions\Action;
-use Filament\Facades\Filament;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\On;
 use RuntimeException;
 
 class ViewCustomer extends ViewRecord
@@ -65,12 +67,20 @@ class ViewCustomer extends ViewRecord
 
     protected function getHeaderWidgets(): array
     {
-        return [\App\Filament\App\Resources\Customers\Widgets\CustomerLiveInfo::class];
+        return [CustomerLiveInfo::class,
+            CustomerHistoryStatus::class];
     }
 
     public function getHeaderWidgetsColumns(): int|array
     {
         return 1;
+    }
+
+    /** The background refresh from billing finished: show the new Service / Network / Personal data. */
+    #[On('customer-history-updated')]
+    public function historyUpdated(): void
+    {
+        $this->getRecord()->refresh();
     }
 
     public function showPasswordAction(): Action

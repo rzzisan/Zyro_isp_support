@@ -107,8 +107,9 @@ def sync_company(t, frm: date, to: date) -> dict:
                    payment_method = EXCLUDED.payment_method, is_deleted = EXCLUDED.is_deleted, synced_at = now()""", rows)
     # rows of the range that billing no longer lists at all (hard-removed) are marked deleted;
     # an empty answer is not trusted for that (a billing hiccup must not wipe a month)
+    receipts = refresh_receipts(t, api)
     if not live:
-        return {"from": str(frm), "to": str(to), "rows": 0, "deleted": len(deleted), "gone": 0}
+        return {"from": str(frm), "to": str(to), "rows": 0, "deleted": len(deleted), "gone": 0, "receipts": receipts}
     seen = [r[1] for r in rows]
     gone = db.execute(
         """WITH u AS (UPDATE billing_daily_bills SET is_deleted = true, is_approved = false, synced_at = now()
@@ -117,7 +118,27 @@ def sync_company(t, frm: date, to: date) -> dict:
            SELECT count(*) AS n FROM u""",
         (t.company_id, _utc(datetime.combine(frm, datetime.min.time())),
          _utc(datetime.combine(to + timedelta(days=1), datetime.min.time())), seen))
-    return {"from": str(frm), "to": str(to), "rows": len(live), "deleted": len(deleted), "gone": gone["n"]}
+    return {"from": str(frm), "to": str(to), "rows": len(live), "deleted": len(deleted), "gone": gone["n"],
+            "receipts": receipts}
+
+
+def refresh_receipts(t, api, limit: int = 30) -> int:
+    """Bills approved in the last two days that the customer's received history (billing_customer_payments) doesn't
+    have yet: read those customers' history again, which also pairs them and fills the receipt number."""
+    from engine import customer_history
+    rows = db.all_rows(
+        """SELECT DISTINCT d.customer_header_id AS h FROM billing_daily_bills d
+           WHERE d.company_id = %s AND d.is_approved AND NOT d.is_deleted AND d.customer_header_id IS NOT NULL
+             AND d.billing_updated_at > now() - interval '2 days'
+             AND NOT EXISTS (SELECT 1 FROM billing_customer_payments p WHERE p.company_id = d.company_id
+                             AND p.daily_bill_id = d.daily_bill_id)
+           LIMIT %s""", (t.company_id, limit))
+    for r in rows:
+        try:
+            customer_history.refresh(t, r["h"], ["payments"], api)
+        except Exception:
+            log.warning("receipts of customer %s", r["h"], exc_info=True)
+    return len(rows)
 
 
 def date_range(days: int | None, month: str | None, frm: str | None, to: str | None) -> tuple[date, date]:

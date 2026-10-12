@@ -10,6 +10,7 @@ use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -28,7 +29,7 @@ class ListCustomers extends ListRecords
             ->whereNotNull('finished_at')->max('finished_at');
 
         return "{$n} জন কাস্টমার · Left {$left} জন · বিলিং থেকে প্রতিদিন রাত ৩টায় আপডেট হয়, নতুন কাস্টমার আসে ২০ মিনিট পরপর"
-            .($last ? ' · শেষ আপডেট '.\Illuminate\Support\Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : '');
+            .($last ? ' · শেষ আপডেট '.Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : '');
     }
 
     protected function getHeaderActions(): array

@@ -830,6 +830,21 @@ def _norm(name: str | None) -> str:
     return "".join(ch for ch in (name or "").lower() if ch.isalnum())
 
 
+@app.post("/internal/{company_id}/customers/{header_id}/history/refresh")
+def customer_history_refresh(request: Request, company_id: int, header_id: int):
+    """Customer page opened: re-read from billing, in the background, whatever part of this customer is old."""
+    t = internal_tenant(request, company_id)
+    from engine import customer_history
+    return customer_history.refresh_in_background(t, header_id)
+
+
+@app.get("/internal/{company_id}/customers/{header_id}/history/status")
+def customer_history_status(request: Request, company_id: int, header_id: int):
+    internal_tenant(request, company_id)
+    from engine import customer_history
+    return {"running": customer_history.is_running(company_id, header_id)}
+
+
 @app.post("/internal/{company_id}/mikrotik/{router_id}/test")
 def mikrotik_test(request: Request, company_id: int, router_id: int):
     """Connect to the router, read its identity, and match it to the billing software's server name."""

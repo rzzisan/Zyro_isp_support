@@ -154,6 +154,21 @@ class ISPDigital:
                 r.raise_for_status()
                 return r.json()
 
+    def page(self, path: str, params: dict | None = None) -> str:
+        """An HTML page of the logged-in panel (e.g. a customer's details page), same session handling as _get."""
+        with self._lock:
+            for attempt in (1, 2):
+                if not self._logged_in:
+                    self.login()
+                r = self._client.get(path, params=params)
+                if r.status_code in (301, 302) or "Account/Login" in str(r.url):
+                    self._logged_in = False
+                    if attempt == 2:
+                        raise LoginError(f"session not accepted for {path}")
+                    continue
+                r.raise_for_status()
+                return r.text
+
     @staticmethod
     def _clean(row: dict) -> dict:
         return {k: v for k, v in row.items() if k not in SECRET_FIELDS}

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BillingOption;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
@@ -32,7 +33,7 @@ class Engine
      */
     public static function ticketOptions(int $companyId): array
     {
-        $rows = \App\Models\BillingOption::where('company_id', $companyId)->where('active', true)->orderBy('id')
+        $rows = BillingOption::where('company_id', $companyId)->where('active', true)->orderBy('id')
             ->get(['kind', 'option_id', 'name']);
         if ($rows->isNotEmpty()) {
             $out = ['categories' => [], 'priorities' => [], 'departments' => [], 'employees' => []];
@@ -136,6 +137,19 @@ class Engine
     }
 
     /** Live connection, ONU and bill state of one customer. */
+    /** Customer page opened: the engine re-reads, in the background, whatever part of the customer is old. */
+    public static function refreshCustomerHistory(int $companyId, int $headerId): array
+    {
+        return static::http()->timeout(8)->post("/internal/{$companyId}/customers/{$headerId}/history/refresh")
+            ->throw()->json() ?? [];
+    }
+
+    public static function customerHistoryRunning(int $companyId, int $headerId): bool
+    {
+        return (bool) (static::http()->timeout(8)->get("/internal/{$companyId}/customers/{$headerId}/history/status")
+            ->throw()->json('running'));
+    }
+
     public static function customerLive(int $companyId, int $headerId): array
     {
         return static::call('get', "/internal/{$companyId}/customers/{$headerId}/live") ?? [];

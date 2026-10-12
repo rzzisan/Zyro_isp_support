@@ -1,0 +1,10 @@
+[Unit]
+Description=Copy customers' billing history every night, 00:30 to 07:00 Bangladesh time
+
+[Timer]
+OnCalendar=*-*-* 18:30:00 UTC
+Persistent=true
+Unit=zyro-customer-history.service
+
+[Install]
+WantedBy=timers.target
