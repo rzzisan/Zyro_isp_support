@@ -315,22 +315,8 @@ class ISPDigital:
                      received_from: str | None = None, bill_month: str | None = None) -> str:
         """Submit a filled Receive Bill form (from bill_form) like the modal's Submit. Returns the panel's message.
         The collection stays pending until a staff member approves it in the billing software."""
-        payable = form["payable"]
-        values = {
-            "ReceivedFrom": form["values"].get("ReceivedFrom", "") if received_from is None else received_from,
-            "ReceivedById": str(received_by_id), "PaymentMethodId": str(method_id),
-            "BillMonthName": bill_month or form["values"].get("BillMonthName", ""),
-            "Discount": money(discount), "PaidAmount": money(paid), "ReceiptOrTransactionNo": trx_no,
-            "BalanceDue": f"{payable - paid - discount:.2f}", "Remarks": remarks,
-        }
-        checked = {"SetNextBillingDate": next_billing_date, "isSMSSendable": send_sms}
-        data: list[tuple[str, str]] = []
-        for kind, name, value in form["fields"]:
-            if kind == "checkbox":
-                if checked.get(name, False):
-                    data.append((name, value or "true"))
-            else:
-                data.append((name, values.get(name, value)))
+        data = receive_payload(form, paid, discount, method_id, received_by_id, remarks, trx_no, send_sms,
+                               next_billing_date, received_from, bill_month)
         r = self._post(form["action"], data)
         if r.text.lstrip().startswith("<"):
             self._logged_in = False
@@ -345,6 +331,33 @@ class ISPDigital:
         # the daily complain list holds unresolved tickets: Status 0 = pending, 1 = processing
         return [t for t in rows if (t.get("UserName") or "").lower() == username.lower()
                 and t.get("Status") in (0, 1)]
+
+
+def receive_payload(form: dict, paid: float, discount: float, method_id: str, received_by_id: str, remarks: str = "",
+                    trx_no: str = "", send_sms: bool = True, next_billing_date: bool = False,
+                    received_from: str | None = None, bill_month: str | None = None) -> list[tuple[str, str]]:
+    """Form fields of a filled Receive Bill form, as the modal's Submit posts them."""
+    payable = form["payable"]
+    values = {
+        "ReceivedFrom": form["values"].get("ReceivedFrom", "") if received_from is None else received_from,
+        "ReceivedById": str(received_by_id), "PaymentMethodId": str(method_id),
+        "BillMonthName": bill_month or form["values"].get("BillMonthName", ""),
+        "Discount": money(discount), "PaidAmount": money(paid), "ReceiptOrTransactionNo": trx_no,
+        "BalanceDue": f"{payable - paid - discount:.2f}", "Remarks": remarks,
+    }
+    checked = {"SetNextBillingDate": next_billing_date, "isSMSSendable": send_sms}
+    data: list[tuple[str, str]] = []
+    for kind, name, value in form["fields"]:
+        if kind == "checkbox":
+            if checked.get(name, False):
+                data.append((name, value or "true"))
+        else:
+            data.append((name, values.get(name, value)))
+    # The Discount box comes disabled in the HTML and the billing page's own script enables it, so the parser
+    # (which skips disabled inputs, like a browser) never sees it. Without it billing saved every discount as 0.
+    if not any(name == "Discount" for _, name in data):
+        data.append(("Discount", money(discount)))
+    return data
 
 
 def jquery_params(obj, prefix: str = "") -> list[tuple[str, str]]:
