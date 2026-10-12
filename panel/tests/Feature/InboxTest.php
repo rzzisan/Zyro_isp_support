@@ -228,4 +228,38 @@ class InboxTest extends TestCase
             ->call('send')->assertHasErrors(['attachment']);
         $this->assertSame(0, WaMessage::where('sender', 'staff')->count());
     }
+
+    public function test_agent_sets_changes_and_removes_the_chats_customer_id(): void
+    {
+        $line = fn (string $id, string $mobile) => \App\Models\BillingCustomer::create(['company_id' => $this->company->id,
+            'header_id' => (int) $id + 1000, 'customer_id' => $id, 'name' => "Cust {$id}", 'username' => "kp.c{$id}",
+            'mobile' => $mobile, 'mobile_normalized' => '88'.$mobile, 'status' => 'Active']);
+        $line('0101', '01711000001');
+        $line('0202', '01811000002');
+        $agent = $this->agent();
+        $this->as($agent);
+
+        // the registered number's only line is suggested before anyone sets it
+        $this->assertSame('0101', $this->contact->suggestedCustomerId());
+        Livewire::test(ViewConversation::class, ['record' => $this->contact->id])
+            ->assertActionVisible('linkCustomer')->assertActionHidden('unlinkCustomer')
+            ->mountAction('linkCustomer')->assertSchemaStateSet(['customer_id' => '0101'])
+            ->callMountedAction()->assertHasNoActionErrors();
+        $c = $this->contact->fresh();
+        $this->assertSame('0101', $c->customer_id);
+        $this->assertSame($agent->id, $c->customer_set_by);
+        $this->assertNotNull($c->customer_set_at);
+
+        Livewire::test(ViewConversation::class, ['record' => $this->contact->id])
+            ->callAction('linkCustomer', ['customer_id' => '0202'])->assertHasNoActionErrors()
+            ->assertSee('0202');
+        $this->assertSame('0202', $this->contact->fresh()->customer_id);
+
+        Livewire::test(ViewConversation::class, ['record' => $this->contact->id])
+            ->assertActionVisible('unlinkCustomer')->callAction('unlinkCustomer');
+        $c = $this->contact->fresh();
+        $this->assertNull($c->customer_set_at);
+        $this->assertNull($c->customer_set_by);
+        $this->assertSame('0202', $c->customer_id);
+    }
 }

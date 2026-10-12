@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class WaContact extends Model
 {
     protected $fillable = ['company_id', 'wa_number', 'name', 'customer_id', 'ident_state', 'bot_paused_until',
-        'bot_paused', 'assigned_user_id', 'last_message_at', 'notify_muted'];
+        'bot_paused', 'assigned_user_id', 'last_message_at', 'notify_muted', 'customer_set_by', 'customer_set_at'];
 
     protected function casts(): array
     {
@@ -21,6 +21,7 @@ class WaContact extends Model
             'notify_muted' => 'boolean',
             'bot_paused_until' => 'datetime',
             'last_message_at' => 'datetime',
+            'customer_set_at' => 'datetime',
         ];
     }
 
@@ -32,6 +33,26 @@ class WaContact extends Model
     public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    public function customerSetBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'customer_set_by');
+    }
+
+    /** The line this chat is about: the agent's or the bot's customer ID, else the only current line on this number. */
+    public function suggestedCustomerId(): ?string
+    {
+        if ($this->customer_id) {
+            return $this->customer_id;
+        }
+        if ($this->hidesNumber()) {
+            return null;
+        }
+        $ids = BillingCustomer::where('company_id', $this->company_id)->whereNull('gone_at')->where('is_left', false)
+            ->where('mobile_normalized', $this->wa_number)->limit(2)->pluck('customer_id');
+
+        return $ids->count() === 1 ? $ids->first() : null;
     }
 
     public function messages(): HasMany

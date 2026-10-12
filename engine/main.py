@@ -261,9 +261,18 @@ def identify(t: Tenant, contact: dict, text: str):
     def ok(customer, pending=None, verified=True):
         # Zisan 2026-10-11: whoever gives the line's phone number or customer ID gets full support, bill included
         save(stage="ok", customer_id=customer.get("CustomerId"), verified=True)
-        db.execute("UPDATE wa_contacts SET customer_id = %s WHERE id = %s", (customer.get("CustomerId"), contact["id"]))
+        # an agent-set ID is never replaced by the bot
+        db.execute("UPDATE wa_contacts SET customer_id = %s WHERE id = %s AND customer_set_at IS NULL",
+                   (customer.get("CustomerId"), contact["id"]))
         return customer, None, pending, None, True
 
+    if contact.get("customer_set_at") and contact.get("customer_id"):
+        # a desk agent linked this chat to a line: always that line, never asked again, no expiry
+        c = customers.by_id(t, api, contact["customer_id"])
+        if c:
+            save(stage="ok", customer_id=contact["customer_id"], verified=True, by="agent")
+            return c, None, state.get("pending") if stage in ("ask_id", "confirm") else None, None, True
+        log.warning("agent-set customer ID %s not found (contact %s)", contact["customer_id"], contact["id"])
     typed = customers.by_text(t, api, text, allow_bare_id=stage in ("ask_id", "confirm"))
     if typed:
         return ok(typed, state.get("pending"))

@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\Conversations\Pages;
 
 use App\Filament\App\Resources\Conversations\Concerns\InboxList;
 use App\Filament\App\Resources\Conversations\ConversationResource;
+use App\Models\BillingCustomer;
 use App\Models\BillingTicket;
 use App\Models\WaContact;
 use App\Models\WaDraft;
@@ -129,6 +130,52 @@ class ViewConversation extends Page
                     Notification::make()->success()->title('এই নম্বরে বট আবার চালু')->send();
                 }),
         ];
+    }
+
+    /** Agent sets or changes the chat's customer ID; the bot then always uses that line (no expiry, never asks). */
+    public function linkCustomerAction(): Action
+    {
+        return Action::make('linkCustomer')
+            ->label(fn () => $this->contact()->customer_set_at ? 'বদলান' : ($this->contact()->customer_id ? 'নিশ্চিত / বদলান' : 'ID দিন'))
+            ->icon(Heroicon::OutlinedPencilSquare)->link()->size('sm')
+            ->modalHeading('এই চ্যাটের কাস্টমার')
+            ->modalDescription('যে লাইন দেবেন, বট এই নম্বরে সবসময় সেই লাইন ধরে উত্তর দেবে, পরিচয় আর জিজ্ঞেস করবে না।')
+            ->modalSubmitActionLabel('সেভ করুন')
+            ->fillForm(fn () => ['customer_id' => $this->contact()->suggestedCustomerId()])
+            ->schema([
+                Select::make('customer_id')->label('কাস্টমার')->required()->searchable()
+                    ->helperText('কাস্টমার ID, মোবাইল, নাম বা username লিখে খুঁজুন')
+                    ->getSearchResultsUsing(fn (string $search) => collect(\App\Filament\App\TicketActions::searchCustomers($search))
+                        ->mapWithKeys(fn ($c) => [$c['customer_id'] => BillingCustomer::searchLabel($c)])->all())
+                    ->getOptionLabelUsing(function ($value) {
+                        $c = BillingCustomer::where('company_id', $this->contact()->company_id)->whereNull('gone_at')
+                            ->where('customer_id', $value)->orderBy('is_left')->first();
+
+                        return $c ? BillingCustomer::searchLabel($c) : 'ID '.$value;
+                    }),
+            ])
+            ->action(function (array $data) {
+                $id = (string) $data['customer_id'];
+                abort_unless(BillingCustomer::where('company_id', $this->contact()->company_id)->where('customer_id', $id)->exists(), 422);
+                // the engine checks customer_set_at before anything else, so ident_state can stay as it is
+                $this->contact()->forceFill(['customer_id' => $id, 'customer_set_by' => auth()->id(), 'customer_set_at' => now()])->save();
+                Notification::make()->success()->title("এই চ্যাট এখন কাস্টমার ID {$id}-এর")
+                    ->body('বট এই লাইন ধরেই উত্তর দেবে।')->send();
+            });
+    }
+
+    /** Back to the bot's own identification (the last ID stays as a hint). */
+    public function unlinkCustomerAction(): Action
+    {
+        return Action::make('unlinkCustomer')->label('সরান')->icon(Heroicon::OutlinedXMark)->link()->size('sm')->color('danger')
+            ->visible(fn () => (bool) $this->contact()->customer_set_at)
+            ->requiresConfirmation()
+            ->modalHeading('এজেন্টের দেওয়া কাস্টমার ID সরাবেন?')
+            ->modalDescription('বট আবার নিজে লাইন চিনবে (নিবন্ধিত নম্বর বা আগের ID দিয়ে), না চিনলে কাস্টমারের কাছে ID চাইবে।')
+            ->action(function () {
+                $this->contact()->forceFill(['customer_set_by' => null, 'customer_set_at' => null])->save();
+                Notification::make()->success()->title('এজেন্টের দেওয়া ID সরানো হয়েছে')->send();
+            });
     }
 
     public function send(): void

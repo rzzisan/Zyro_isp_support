@@ -76,6 +76,14 @@ def by_text(t: Tenant, api: ISPDigital, text: str, allow_bare_id: bool = True) -
     return hit
 
 
+def by_id(t: Tenant, api: ISPDigital, customer_id: str) -> dict | None:
+    """A line by its exact customer ID (a desk agent linked the chat to it); a Left line too."""
+    cid = str(customer_id).strip()
+    row = db.one("""SELECT extra FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND extra IS NOT NULL
+                      AND ltrim(customer_id, '0') = ltrim(%s, '0') ORDER BY is_left LIMIT 1""", (t.company_id, cid))
+    return row["extra"] if row else by_text(t, api, cid, allow_bare_id=True)
+
+
 def by_whatsapp(t: Tenant, api: ISPDigital, wa_number: str) -> dict | None:
     hit = local_by_whatsapp(t, wa_number)
     if hit:

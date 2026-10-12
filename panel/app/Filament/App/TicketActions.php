@@ -34,7 +34,7 @@ class TicketActions
     }
 
     /** Customer search from our own copy (billing_customers): ID, mobile, PPPoE ID or name. Left customers too, after the current ones. */
-    private static function searchCustomers(string $search): array
+    public static function searchCustomers(string $search): array
     {
         $search = trim($search);
         $digits = preg_replace('/\D/', '', $search);

@@ -220,7 +220,20 @@
                     <span>{{ $current->displayNumber() }}</span>
                 </div>
                 <dl class="zi-dl">
-                    <dt>কাস্টমার ID</dt><dd>{{ $current->customer_id ?: 'অচেনা' }}</dd>
+                    <dt>কাস্টমার ID</dt>
+                    <dd>
+                        {{ $current->customer_id ?: 'অচেনা' }}
+                        {{ $this->linkCustomerAction }} {{ $this->unlinkCustomerAction }}
+                        <small class="zi-muted" style="display: block">
+                            @if ($current->customer_set_at)
+                                {{ $current->customerSetBy?->name ?? 'এজেন্ট' }} দিয়েছেন, {{ $current->customer_set_at->timezone('Asia/Dhaka')->format('d M, g:i A') }} · বট এই লাইন ধরে
+                            @elseif ($current->customer_id)
+                                বট চিনেছে
+                            @elseif ($sid = $current->suggestedCustomerId())
+                                এই নম্বরে লাইন {{ $sid }}
+                            @endif
+                        </small>
+                    </dd>
                     <dt>দায়িত্বে</dt><dd>{{ $current->assignedUser?->name ?? 'কেউ না' }}</dd>
                     <dt>প্রথম মেসেজ</dt><dd>{{ $current->created_at?->timezone('Asia/Dhaka')->format('d M Y') }}</dd>
                     <dt>মোট মেসেজ</dt><dd>{{ $messageCount }}</dd>
