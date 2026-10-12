@@ -18,9 +18,9 @@
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; background: #fff; color: #000; width: {{ $width }}mm; }
         body { font-family: 'Noto Sans Bengali', Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .r { width: {{ $width == 58 ? 46 : 66 }}mm; margin: 0 auto; padding: 2mm 0 3mm; page-break-inside: avoid; font-size: {{ $width == 58 ? '10px' : '12.5px' }}; line-height: 1.35; }
+        .r { width: {{ $width == 58 ? 50 : 72 }}mm; margin: 0 auto; padding: 2mm 0 3mm; page-break-inside: avoid; font-size: {{ $width == 58 ? '11px' : '13.5px' }}; line-height: 1.35; }
         .qr { display: flex; align-items: center; gap: 2.5mm; margin-bottom: 2.5mm; }
-        .qr svg { width: {{ $width == 58 ? '17mm' : '22mm' }}; height: auto; flex: none; }
+        .qr svg { width: {{ $width == 58 ? '18mm' : '24mm' }}; height: auto; flex: none; }
         .qr svg .dark, .qr svg rect, .qr svg path { fill: #000; }
         .qr .note { font-size: 1.25em; font-weight: 700; line-height: 1.3; }
         .head { text-align: center; }
