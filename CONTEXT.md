@@ -255,3 +255,4 @@
 - অনুমতি (`canAccess`/`Menu::can`) একদম বদলায়নি। ডুপ্লিকেট আইকন বদলানো: টিম UserGroup, আমার বিলিং লগইন LockClosed, বট সেটিংস Sparkles, ONU Wifi, লাইন চালু/বন্ধ Power, টেকনিশিয়ান WrenchScrewdriver।
 - `->sidebarCollapsibleOnDesktop()`: টপবারের তীর দিয়ে সাইডবার শুধু আইকনে ছোট হয়। স্টাইল `public/css/zyro-theme.css` ("sidebar polish"): গ্রুপের মাঝে ড্যাশ লাইন, গ্রুপ লেবেল বোল্ড (uppercase বাদ), সক্রিয় মেনুর বাঁয়ে teal দাগ, ব্যাজ গোল।
 - টেস্ট `tests/Feature/SidebarTest.php`: owner-এর পুরো সাইডবার ক্রম, agent-এর কাছে অ্যাডমিন মেনু নেই।
+- সাইডবার accordion (2026-10-12): `resources/views/filament/sidebar-accordion.blade.php` (`SIDEBAR_NAV_END` হুক)। প্রতি পেজে শুধু বর্তমান পেজের গ্রুপ খোলা, বাকিগুলো বন্ধ (localStorage `collapsedGroups` প্রতি পেজে নতুন করে লেখে); কোনো গ্রুপে ক্লিক করলে সেটা খোলে আর অন্যগুলো বন্ধ হয় (Alpine store `sidebar.toggleCollapsedGroup` বদলে)। cluster-এর sub navigation-এ হাত দেয় না।
