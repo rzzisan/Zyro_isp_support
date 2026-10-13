@@ -948,6 +948,43 @@ async def bill_receive(request: Request, company_id: int, header_id: int):
     return billing_call(lambda: bills.collect(company_id, user_id, api, header_id, b))
 
 
+@app.post("/internal/{company_id}/customers/{header_id}/line")
+async def line_switch(request: Request, company_id: int, header_id: int):
+    """Desk customer list's M.Status toggle: turn the line on/off in billing (Billing -> Enable/Disable), with the
+    member's own billing login, then read it back. Logged in line_enables like a technician's request."""
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    on = b.get("action") == "enable"
+    user_id = int(b.get("user_id") or 0)
+    c = db.one("SELECT customer_id, name, username, due FROM billing_customers WHERE company_id = %s AND header_id = %s",
+               (company_id, header_id))
+    if not c:
+        raise HTTPException(status_code=404, detail="কাস্টমার পাওয়া যায়নি")
+    from engine.ispdigital import find_customer_by_text
+    api = billing_call(lambda: tenants.billing_for_user(t, user_id))
+    result, error = ("enabled" if on else "disabled"), None
+    try:
+        (api.enable_customer if on else api.disable_customer)(header_id)
+        after = find_customer_by_text(api, c["customer_id"] or "", allow_bare_id=True)
+        if after and int(after.get("CustomerHeaderId") or 0) == header_id and bool(after.get("Disabled")) == on:
+            result, error = "failed", f"billing still shows the line {'disabled' if on else 'enabled'}"
+    except Exception as e:
+        log.exception("desk line %s failed", "enable" if on else "disable")
+        result, error = "failed", str(e)[:500]
+    if result != "failed":
+        db.execute("UPDATE billing_customers SET disabled = %s, updated_at = now() WHERE company_id = %s AND header_id = %s",
+                   (not on, company_id, header_id))
+    db.execute(
+        """INSERT INTO line_enables (company_id, technician_name, customer_id, customer_header_id, customer_name, username,
+               due, request, action, result, error, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())""",
+        (company_id, str(b.get("by") or "Desk")[:200], c["customer_id"], header_id, c["name"], c["username"],
+         None if c["due"] is None else str(c["due"]), "Desk কাস্টমার লিস্ট থেকে", "enable" if on else "disable", result, error))
+    if result == "failed":
+        raise HTTPException(status_code=400, detail=error or "billing did not change the line")
+    return {"result": result}
+
+
 @app.get("/internal/{company_id}/bill-collections/{collection_id}/receipt-no")
 def bill_receipt_no(request: Request, company_id: int, collection_id: int):
     """Billing's MoneyReceiptNo for a Desk collection, once approved there (kept in bill_collections)."""

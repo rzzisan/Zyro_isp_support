@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\Customers;
 
+use App\Filament\App\BillActions;
 use App\Filament\App\Resources\Customers\Pages\ListCustomers;
 use App\Filament\App\Resources\Customers\Pages\ViewCustomer;
 use App\Models\BillingCustomer;
@@ -10,8 +11,10 @@ use App\Models\PppSession;
 use App\Services\Engine;
 use App\Support\Menu;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\GlobalSearch\GlobalSearchResult;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Livewire;
@@ -21,6 +24,7 @@ use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
@@ -28,6 +32,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use RuntimeException;
 
 /** All billing customers from our own copy (synced nightly). Everyone can look; passwords and CSV are owner/admin. */
 class CustomerResource extends Resource
@@ -75,6 +80,12 @@ class CustomerResource extends Resource
     private static function listOptions(string $kind, string $column): array
     {
         return BillingOption::names(Filament::getTenant()?->getKey() ?? 0, $kind, static::options($column));
+    }
+
+    /** Line on/off from the list: the member needs the line_switch permission; Left / gone customers can't be switched. */
+    public static function canSwitch(BillingCustomer $r): bool
+    {
+        return ! $r->gone_at && ! $r->is_left && Menu::can('line_switch');
     }
 
     /** This month's VAT from the billing row, when billing sends one. */
@@ -135,12 +146,30 @@ class CustomerResource extends Resource
                     ->formatStateUsing(fn ($state) => $state > 0 ? number_format((float) $state) : '—'),
                 TextColumn::make('last_payment_date')->label('PaymentDate')->date('d M Y')->sortable()->placeholder('—'),
                 TextColumn::make('server')->label('Server')->placeholder('—')->toggleable(),
-                TextColumn::make('status')->label('M.Status')->badge()
-                    ->state(fn (BillingCustomer $r) => $r->gone_at ? 'বিলিংয়ে নেই' : ($r->is_left ? 'Left' : ($r->disabled ? 'বন্ধ' : 'চালু')))
-                    ->description(fn (BillingCustomer $r) => $r->is_left && $r->left_on ? $r->left_on->format('d M Y') : null)
-                    ->color(fn (string $state) => match ($state) {
-                        'চালু' => 'success', 'বন্ধ' => 'danger', 'Left' => 'warning', default => 'gray'
-                    }),
+                ViewColumn::make('line')->label('M.Status')->view('filament.app.customers.line-switch')
+                    ->disabledClick(fn (BillingCustomer $r) => ! static::canSwitch($r))
+                    ->action(Action::make('switchLine')->requiresConfirmation()
+                        ->modalHeading(fn (BillingCustomer $record) => "{$record->name} (ID {$record->customer_id}): লাইন ".($record->disabled ? 'চালু' : 'বন্ধ').' করবেন?')
+                        ->modalDescription(fn (BillingCustomer $record) => $record->disabled
+                            ? 'বিলিং-এ লাইন Enable হবে।'.($record->due > 0 ? ' বকেয়া '.number_format((float) $record->due).' টাকা।' : '')
+                            : 'বিলিং-এ লাইন Disable হবে, কাস্টমারের ইন্টারনেট বন্ধ হয়ে যাবে।')
+                        ->modalSubmitActionLabel(fn (BillingCustomer $record) => $record->disabled ? 'চালু করুন' : 'বন্ধ করুন')
+                        ->color(fn (BillingCustomer $record) => $record->disabled ? 'success' : 'danger')
+                        ->action(function (BillingCustomer $record) {
+                            if (! static::canSwitch($record)) {
+                                return;
+                            }
+                            $on = (bool) $record->disabled;
+                            try {
+                                Engine::switchLine((int) $record->company_id, (int) $record->header_id, $on);
+                            } catch (RuntimeException $e) {
+                                Notification::make()->danger()->title('লাইন '.($on ? 'চালু' : 'বন্ধ').' হয়নি')->body($e->getMessage())->persistent()->send();
+
+                                return;
+                            }
+                            $record->refresh();
+                            Notification::make()->success()->title("{$record->name}: লাইন ".($on ? 'চালু' : 'বন্ধ').' করা হয়েছে')->send();
+                        })),
                 TextColumn::make('bill_status')->label('B.Status')->badge()
                     ->state(fn (BillingCustomer $r) => $r->due > 0 ? 'Due' : 'Paid')
                     ->color(fn (string $state) => $state === 'Due' ? 'danger' : 'success'),
@@ -172,7 +201,11 @@ class CustomerResource extends Resource
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
             ->deferFilters(false)
             ->filtersFormColumns(4)
-            ->recordActions([ViewAction::make()->label('দেখুন')]);
+            ->recordActions([
+                BillActions::receive(forRecord: true)->label('Pay')->button()->size('sm')->color('gray')
+                    ->visible(fn (BillingCustomer $record) => $record->due > 0 && ! $record->gone_at && Menu::can('bills')),
+                ViewAction::make()->label('দেখুন'),
+            ]);
     }
 
     public static function infolist(Schema $schema): Schema

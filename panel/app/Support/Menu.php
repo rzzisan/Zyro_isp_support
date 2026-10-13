@@ -22,6 +22,7 @@ class Menu
         'tickets' => ['টিকিট', true, false],
         'bills' => ['বিল কালেকশন', false, false],
         'line_enables' => ['লাইন চালু/বন্ধের রেকর্ড', true, false],
+        'line_switch' => ['কাস্টমার লিস্টে লাইন চালু/বন্ধ', false, false],
         'onus' => ['ONU মনিটরিং', true, false],
         'whatsapp' => ['WhatsApp সেটিং', false, true],
         'billing' => ['বিলিং সংযোগ', false, true],

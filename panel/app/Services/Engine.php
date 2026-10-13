@@ -226,4 +226,11 @@ class Engine
     {
         return static::call('post', "/internal/{$companyId}/customers/{$headerId}/bill", $data + ['user_id' => auth()->id()]) ?? [];
     }
+
+    /** Turn a customer's line on/off in billing with the member's own login (customer list M.Status). */
+    public static function switchLine(int $companyId, int $headerId, bool $on): array
+    {
+        return static::call('post', "/internal/{$companyId}/customers/{$headerId}/line",
+            ['action' => $on ? 'enable' : 'disable', 'user_id' => auth()->id(), 'by' => auth()->user()?->name]) ?? [];
+    }
 }

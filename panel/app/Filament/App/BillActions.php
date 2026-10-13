@@ -78,27 +78,34 @@ class BillActions
             ->all();
     }
 
-    /** @param  BillingCustomer|null  $customer  fixed customer (customer page); null = pick one in the form */
-    public static function receive(?BillingCustomer $customer = null): Action
+    /**
+     * @param  BillingCustomer|null  $customer  fixed customer (customer page); null = pick one in the form
+     * @param  bool  $forRecord  table row action: the row's customer (customer list "Pay")
+     */
+    public static function receive(?BillingCustomer $customer = null, bool $forRecord = false): Action
     {
         $headerOf = fn ($get) => $customer ? (int) $customer->header_id : (int) $get('header_id');
 
-        return Action::make('receiveBill')->label('বিল নিন')->icon(Heroicon::OutlinedBanknotes)
+        return Action::make($forRecord ? 'payBill' : 'receiveBill')->label('বিল নিন')->icon(Heroicon::OutlinedBanknotes)
             ->visible(fn () => \App\Support\Menu::can('bills'))
-            ->modalHeading($customer ? "{$customer->name} (ID {$customer->customer_id}): বিল নিন" : 'বিল নিন')
+            ->modalHeading(fn (?BillingCustomer $record = null) => ($c = $customer ?? ($forRecord ? $record : null))
+                ? "{$c->name} (ID {$c->customer_id}): বিল নিন" : 'বিল নিন')
             ->modalWidth('3xl')->stickyModalHeader()->stickyModalFooter()
             ->modalSubmitActionLabel('বিল জমা দিন')
-            ->fillForm(function () use ($customer) {
-                if (! $customer) {
+            ->fillForm(function (?BillingCustomer $record = null) use ($customer, $forRecord) {
+                $c = $customer ?? ($forRecord ? $record : null);
+                if (! $c) {
                     return ['sms' => false, 'next_billing_date' => true, 'print' => true];
                 }
+                $base = $forRecord ? ['header_id' => (int) $c->header_id] : [];
                 try {
-                    return static::defaults(static::form((int) $customer->header_id, true));
+                    return $base + static::defaults(static::form((int) $c->header_id, true));
                 } catch (RuntimeException) {
-                    return ['sms' => false, 'next_billing_date' => true, 'print' => true];  // the info box shows the error
+                    return $base + ['sms' => false, 'next_billing_date' => true, 'print' => true];  // the info box shows the error
                 }
             })
             ->schema([
+                $forRecord ? Hidden::make('header_id') :
                 Select::make('header_id')->label('কাস্টমার')->required(! $customer)->visible(! $customer)->searchable()->autofocus()
                     ->searchDebounce(300)
                     // picking a customer re-renders only this form, not the whole page behind the modal (~900 KB on বিল কালেকশন)
@@ -131,7 +138,7 @@ class BillActions
                 Grid::make(3)->schema([
                     TextInput::make('paid')->label('টাকা নিলেন')->numeric()->minValue(0)->suffix('টাকা')->required()->live(debounce: 400)
                         ->partiallyRenderComponentsAfterStateUpdated(['summary'])
-                        ->autofocus((bool) $customer)
+                        ->autofocus((bool) $customer || $forRecord)
                         ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
                     TextInput::make('discount')->label('ডিসকাউন্ট')->numeric()->minValue(0)->suffix('টাকা')->default(0)->live(debounce: 400)
                         ->partiallyRenderComponentsAfterStateUpdated(['summary'])
