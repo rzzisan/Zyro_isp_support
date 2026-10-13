@@ -48,6 +48,7 @@ class AppPanelProvider extends PanelProvider
                 NavigationGroup::make('সেটিংস'),
             ])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString('<link rel="stylesheet" href="'.asset('css/zyro-theme.css').'?v='.filemtime(public_path('css/zyro-theme.css')).'">'))
+            ->renderHook(PanelsRenderHook::BODY_END, fn () => new HtmlString('<script src="'.asset('js/zyro-page-info.js').'?v='.filemtime(public_path('js/zyro-page-info.js')).'"></script>'))
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn () => view('filament.notify-bell'))
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, fn () => view('filament.sidebar-accordion'))
             ->tenant(Company::class, slugAttribute: 'slug')

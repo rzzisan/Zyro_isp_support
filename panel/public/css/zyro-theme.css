@@ -285,3 +285,12 @@ html.dark .fi-simple-layout {
 .fi-body .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item.fi-active > .fi-sidebar-item-btn::before {
     display: none;
 }
+
+/* page description hidden behind an "i" button next to the title (public/js/zyro-page-info.js) */
+.fi-body .fi-header-subheading { display: none; }
+html[data-z-info="open"] .fi-body .fi-header-subheading { display: block; margin-top: .35rem; padding: .55rem .8rem; max-width: 48rem;
+    border-radius: 10px; background: rgba(15, 124, 123, .07); border: 1px solid rgba(15, 124, 123, .18); font-size: .875rem; }
+.z-info-btn { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; margin-left: .45rem;
+    vertical-align: middle; border: 0; padding: 0; background: transparent; border-radius: 9999px; color: var(--z-muted); transition: background .15s, color .15s; cursor: pointer; }
+.z-info-btn svg { width: 1.15rem; height: 1.15rem; }
+.z-info-btn:hover, .z-info-btn[aria-expanded="true"] { color: var(--z-accent); background: rgba(15, 124, 123, .1); }
