@@ -32,7 +32,7 @@ Route::get('/print/{company:slug}/tickets', function (\App\Models\Company $compa
     abort_if($employee === '', 404);
     $tickets = \App\Models\BillingTicket::where('company_id', $company->id)->where('state', 'processing')
         ->forEmployee($employee, assignedOnly: true)
-        ->orderBy('zone')->orderBy('subzone')->orderBy('opened_at')->get();
+        ->orderByRaw('lower(subzone) asc nulls last')->orderBy('opened_at')->get();
 
     return view('print.tickets', ['company' => $company, 'employee' => $employee, 'tickets' => $tickets,
         'now' => now('Asia/Dhaka')]);
