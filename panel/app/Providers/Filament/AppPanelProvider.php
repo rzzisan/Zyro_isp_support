@@ -37,6 +37,7 @@ class AppPanelProvider extends PanelProvider
             ->brandLogoHeight('2.5rem')
             ->font('Geist')
             ->maxContentWidth(Width::Full)
+            ->sidebarWidth('16rem')
             ->sidebarCollapsibleOnDesktop()
             // sidebar order: daily work first, setup last (items set their group in $navigationGroup)
             ->navigationGroups([
