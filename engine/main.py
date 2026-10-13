@@ -297,8 +297,11 @@ def identify(t: Tenant, contact: dict, text: str):
         if tries >= 3:
             save(stage="agent", pending=state.get("pending"))
             return None, AGENT, None, "কাস্টমার শনাক্ত করা যায়নি, এজেন্ট যোগাযোগ করবেন", False
-        save(stage="ask_id", tries=tries + 1, pending=state.get("pending"))
-        if re.search(r"\d{2,}", text):
+        # keep what the customer says while we ask for the ID ("লোক পাঠান"), it's answered once the line is found
+        said = None if re.fullmatch(r"[\s\d+\-০-৯]*", text) else text
+        save(stage="ask_id", tries=tries + 1,
+             pending="\n".join(x for x in (state.get("pending"), said) if x)[-1500:] or None)
+        if re.search(r"[\d০-৯]{2,}", text):
             return None, "দুঃখিত, এই নম্বর/ID দিয়ে কোনো লাইন খুঁজে পাইনি। " + ASK_ID, None, None, False
         return None, "জি, আপনার লাইনটা খুঁজে বের করতে কাস্টমার ID বা লাইনের মোবাইল নম্বরটা লিখে দিন।", None, None, False
     if stage == "agent":

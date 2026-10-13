@@ -62,7 +62,11 @@ def remember(t: Tenant, row: dict) -> None:
         log.exception("could not remember customer")
 
 
+BN_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+
 def by_text(t: Tenant, api: ISPDigital, text: str, allow_bare_id: bool = True) -> dict | None:
+    text = (text or "").translate(BN_DIGITS)  # "৩২৬৯" is ID 3269
     hit = local_by_text(t, text, allow_bare_id)
     if hit:
         return hit
