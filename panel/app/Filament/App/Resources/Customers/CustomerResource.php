@@ -118,15 +118,15 @@ class CustomerResource extends Resource
                 TextColumn::make('mobile')->label('Mobile')->copyable()->placeholder('—'),
                 TextColumn::make('zone')->label('Zone')->sortable()->placeholder('—')
                     ->description(fn (BillingCustomer $r) => trim($r->subzone.($r->box ? ' · '.$r->box : '')) ?: null),
-                TextColumn::make('customer_type')->label('Cus.Type')->placeholder('—')->toggleable(),
-                TextColumn::make('connection_type')->label('Conn.Type')->placeholder('—')->toggleable(),
+                TextColumn::make('customer_type')->label('Cus.Type')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('connection_type')->label('Conn.Type')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('package')->label('Package')->placeholder('—'),
-                TextColumn::make('speed')->label('Speed')->placeholder('—')->toggleable(),
+                TextColumn::make('speed')->label('Speed')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('bill_day')->label('Ex.Date')->sortable()->placeholder('—')->alignCenter(),
                 TextColumn::make('monthly_bill')->label('M.Bill')->numeric(0)->sortable()->alignEnd(),
                 TextColumn::make('paid')->label('Received')->numeric(0)->alignEnd()
                     ->formatStateUsing(fn ($state) => $state > 0 ? number_format((float) $state) : '—'),
-                TextColumn::make('vat')->label('VAT')->alignEnd()->toggleable()
+                TextColumn::make('vat')->label('VAT')->alignEnd()->toggleable(isToggledHiddenByDefault: true)
                     ->state(fn (BillingCustomer $r) => number_format((float) (static::vat($r) ?? 0))),
                 TextColumn::make('due')->label('BalanceDue')->sortable()->alignEnd()
                     ->formatStateUsing(fn ($state) => $state > 0 ? number_format((float) $state) : '—')
