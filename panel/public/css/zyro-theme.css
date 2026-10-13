@@ -309,3 +309,46 @@ html[data-z-info="open"] .fi-body .fi-header-subheading { display: block; margin
         padding-inline: 0.75rem 1.25rem;
     }
 }
+
+/* topbar shortcuts (resources/views/filament/header-shortcuts.blade.php) */
+.z-shortcuts {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-inline-end: 0.6rem;
+}
+
+.z-shortcut {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    height: 2.25rem;
+    padding-inline: 0.75rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background-color 0.15s ease;
+}
+
+.z-shortcut:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.z-shortcut svg {
+    width: 1.15rem;
+    height: 1.15rem;
+}
+
+/* narrow screens: icons only */
+@media (max-width: 64rem) {
+    .z-shortcut {
+        padding-inline: 0.55rem;
+    }
+
+    .z-shortcut span {
+        display: none;
+    }
+}

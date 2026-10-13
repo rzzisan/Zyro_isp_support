@@ -52,6 +52,7 @@ class AppPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::BODY_END, fn () => new HtmlString('<script src="'.asset('js/zyro-page-info.js').'?v='.filemtime(public_path('js/zyro-page-info.js')).'"></script>'))
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn () => view('filament.notify-bell'))
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, fn () => view('filament.sidebar-accordion'))
+            ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn () => view('filament.header-shortcuts'))
             ->tenant(Company::class, slugAttribute: 'slug')
             ->colors(['primary' => Color::hex('#0f7c7b')])
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\Filament\App\Resources')
