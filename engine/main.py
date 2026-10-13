@@ -374,8 +374,8 @@ def ack_already_answered(t: Tenant, contact_id: int) -> bool:
         """SELECT direction, sender, body FROM wa_messages WHERE company_id = %s AND contact_id = %s
            ORDER BY id DESC LIMIT 6""", (t.company_id, contact_id))
     last_out = next((i for i, r in enumerate(rows) if r["direction"] == "out"), None)
-    if last_out is None or rows[last_out]["sender"] != "bot":
-        return False
+    if last_out is None or rows[last_out]["sender"] != "bot" or "?" in (rows[last_out]["body"] or ""):
+        return False  # our last message asked something (e.g. "সমাধান হয়েছে?"): an "ok" answers it
     before = next((r for r in rows[last_out + 1:] if r["direction"] == "in"), None)
     return bool(before and before["body"] is not None and _is_ack(before["body"]))
 
@@ -532,6 +532,9 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = 
         api = tenants.billing(t)
         context = customer_view(customers.add_online(t, diagnose(api, customers.fresh(api, customer)), customer), verified,
                                 "\n".join(x for x in (pending, text) if x))
+        from engine.ticket_actions import open_tickets, solve_for_customer
+        context["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
+                                   for x in open_tickets(t, customer.get("CustomerId"))]
         history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": text})
@@ -547,6 +550,14 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = 
             no = re.search(r"\d{4,}", extra or "")
             if extra and not (no and said_recently(t, contact["id"], no.group(0))):  # the ticket number once, not every reply
                 draft += "\n" + extra
+        if draft and "[[SOLVED]]" in draft:
+            # the customer says the problem is fixed: close their open ticket(s) (only while the line is online)
+            draft = draft.replace("[[SOLVED]]", "").strip()
+            if may_send(t, contact["wa_number"]):
+                ok, result = solve_for_customer(t, customer, "[WhatsApp বট] কাস্টমার জানিয়েছেন সমস্যা সমাধান হয়েছে")
+                ticket_note = "\n".join(x for x in (ticket_note, f"সমাধান: {result}") if x)
+                if ok:
+                    draft += "\nআপনার অভিযোগটা সমাধান হিসেবে বন্ধ করা হলো।"
         if draft and newer_inbound(t, contact["id"], message_id):
             # the customer wrote again while we were answering: that message's turn answers all of them
             # (otherwise two replies go out for one question)

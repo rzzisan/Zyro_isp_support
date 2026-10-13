@@ -44,6 +44,8 @@ TECH_PROMPT = """তুমি {company}-এর অফিস সাপোর্�
   দরকারি তথ্য না থাকলে [[NOTIFY]] না দিয়ে টেকনিশিয়ানকে সেটা জিজ্ঞেস করো। উত্তরে শুধু লেখো "কাস্টমারকে জানানো হচ্ছে"; ফল সিস্টেম যোগ করবে।
   লিংক, নম্বর বা তথ্য পাঠাতে বলা হলে সেটা [[NOTIFY]]-এর লেখার ভেতরেই হুবহু দেবে; "পাঠানো হয়েছে" লিখে আসল জিনিসটা বাদ দেবে না।
   টেকনিশিয়ান স্পষ্ট করে কাস্টমারকে জানাতে/পাঠাতে না বললে (যেমন শুধু "Hi", "ok", প্রশ্ন) কখনো [[NOTIFY]] লিখবে না।
+- টেকনিশিয়ান কোনো কাস্টমারের টিকিট/অভিযোগ সমাধান (solve/বন্ধ/ক্লোজ) করে দিতে বললে (এবং live_data-তে সেই কাস্টমার আছে) উত্তরের একদম শেষে আলাদা লাইনে লেখো [[SOLVE]]।
+  উত্তরে শুধু লেখো "টিকিট সমাধান করা হচ্ছে"; ফল সিস্টেম যোগ করবে। স্পষ্ট করে না বললে কখনো [[SOLVE]] লিখবে না।
 - কোম্পানির তথ্য (প্যাকেজ, অফার, FTP/লিংক, পেমেন্ট) শুধু নিচের কোম্পানির নির্দেশনা থেকে বলবে; সেখানে না থাকলে টেকনিশিয়ানকে জিজ্ঞেস করো, বানাবে না।{knowledge}"""
 
 TECH_CUSTOMER_MINUTES = 30  # "ওর বিল কত?" follows the customer talked about last, only this long
@@ -147,6 +149,13 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
                 # the system line states the real outcome; drop the model's "...করা হচ্ছে" placeholder
                 draft = "\n".join(l for l in draft.splitlines() if not re.search(r"লাইন\s*(চালু|বন্ধ)\s*করা\s*হচ্ছে", l)).strip()
                 draft = (draft + "\n" if draft else "") + switch_line(t, tech, customer, text, action)
+    if "[[SOLVE]]" in draft:
+        draft = draft.replace("[[SOLVE]]", "").strip()
+        draft = "\n".join(l for l in draft.splitlines() if not re.search(r"সমাধান\s*করা\s*হচ্ছে", l)).strip()
+        if customer:
+            from engine.ticket_actions import solve_for_customer
+            _, result = solve_for_customer(t, customer, f"[WhatsApp: টেকনিশিয়ান {tech['name']}] {text}")
+            draft = (draft + "\n" if draft else "") + result
     mm = re.search(r"\[\[NOTIFY:\s*(.*?)\]\]", draft, re.S)
     if mm:
         body = mm.group(1).strip()
