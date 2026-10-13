@@ -33,7 +33,9 @@ class ViewConversation extends Page
 
     public string $reply = '';
 
-    public int $pauseHours = 2;
+    public const MANUAL_PAUSE_HOURS = 12;
+
+    public int $pauseMinutes = 30;
 
     /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
     public $attachment = null;
@@ -114,10 +116,11 @@ class ViewConversation extends Page
             Action::make('pause')->label('বট থামান')->icon(Heroicon::OutlinedPause)->color('warning')
                 ->visible(fn () => ! $this->contact()->isBotPaused())
                 ->requiresConfirmation()
-                ->modalDescription('এই নম্বরে বট আর উত্তর দেবে না, যতক্ষণ না আবার চালু করেন।')
+                ->modalDescription('এই নম্বরে বট ১২ ঘণ্টা উত্তর দেবে না, তারপর নিজে থেকে আবার চালু হবে। আগেই চালু করতে চাইলে "বট চালু করুন" চাপুন।')
                 ->action(function () {
-                    $this->contact()->forceFill(['bot_paused' => true])->save();
-                    Notification::make()->success()->title('এই নম্বরে বট থামানো হয়েছে')->send();
+                    // a manual pause lasts MANUAL_PAUSE_HOURS, then the bot answers this number again on its own
+                    $this->contact()->forceFill(['bot_paused' => false, 'bot_paused_until' => now()->addHours(self::MANUAL_PAUSE_HOURS)])->save();
+                    Notification::make()->success()->title('এই নম্বরে বট ১২ ঘণ্টার জন্য থামানো হয়েছে')->send();
                 }),
             Action::make('resume')->label('বট চালু করুন')->icon(Heroicon::OutlinedPlay)->color('success')
                 ->visible(fn () => $this->contact()->isBotPaused())
@@ -182,7 +185,7 @@ class ViewConversation extends Page
     {
         $this->validate([
             'reply' => [$this->attachment ? 'nullable' : 'required', 'string', 'max:4000'],
-            'pauseHours' => ['integer', 'min:0', 'max:72'],
+            'pauseMinutes' => ['integer', 'min:0', 'max:4320'],
             'attachment' => ['nullable', 'file', 'max:12288',
                 'mimetypes:'.implode(',', array_keys(WhatsApp::MEDIA_TYPES))],
         ], [
@@ -193,8 +196,8 @@ class ViewConversation extends Page
         try {
             $m = $this->attachment
                 ? WhatsApp::sendMedia($this->contact(), $this->attachment->getRealPath(), $this->attachment->getMimeType(),
-                    $this->attachment->getClientOriginalName(), $this->reply, auth()->user(), $this->pauseHours)
-                : WhatsApp::sendText($this->contact(), $this->reply, auth()->user(), $this->pauseHours);
+                    $this->attachment->getClientOriginalName(), $this->reply, auth()->user(), $this->pauseMinutes)
+                : WhatsApp::sendText($this->contact(), $this->reply, auth()->user(), $this->pauseMinutes);
         } catch (RuntimeException $e) {
             Notification::make()->danger()->title($e->getMessage())->send();
 
@@ -205,7 +208,7 @@ class ViewConversation extends Page
         $this->contact()->refresh();
         Notification::make()->success()
             ->title($m->status === 'test' ? 'টেস্ট মোড: সেভ হয়েছে, কাস্টমারের কাছে যায়নি' : 'পাঠানো হয়েছে')
-            ->body($this->pauseHours > 0 ? "এই নম্বরে বট {$this->pauseHours} ঘণ্টা চুপ থাকবে।" : null)
+            ->body($this->pauseMinutes > 0 ? 'এই নম্বরে বট '.self::pauseLabel($this->pauseMinutes).' চুপ থাকবে।' : null)
             ->send();
     }
 
@@ -240,5 +243,11 @@ class ViewConversation extends Page
                     ->orderByRaw("state IN ('pending', 'processing') DESC")->latest('opened_at')->limit(5)->get()
                 : collect(),
         ];
+    }
+
+    public static function pauseLabel(int $minutes): string
+    {
+        return $minutes % 60 === 0 ? strtr((string) ($minutes / 60), ['0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪', '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯']).' ঘণ্টা'
+            : strtr((string) $minutes, ['0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪', '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯']).' মিনিট';
     }
 }

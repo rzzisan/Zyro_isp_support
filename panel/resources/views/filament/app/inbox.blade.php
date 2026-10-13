@@ -75,7 +75,7 @@
                     </div>
                     <span class="zi-pill {{ $current->isBotPaused() ? 'warn' : 'ok' }}">
                         @if ($current->bot_paused) বট থামানো
-                        @elseif ($current->isBotPaused()) বট চুপ {{ $current->bot_paused_until->timezone('Asia/Dhaka')->format('g:i A') }} পর্যন্ত
+                        @elseif ($current->isBotPaused()) বট চুপ {{ $current->bot_paused_until->timezone('Asia/Dhaka')->format($current->bot_paused_until->timezone('Asia/Dhaka')->isToday() ? 'g:i A' : 'j M, g:i A') }} পর্যন্ত
                         @else বট চালু @endif
                     </span>
                 </header>
@@ -199,12 +199,13 @@
                     @error('reply')<div class="zi-err">{{ $message }}</div>@enderror
                     <label class="zi-pause">
                         পাঠানোর পর এই নম্বরে বট চুপ থাকবে
-                        <select wire:model="pauseHours">
+                        <select wire:model="pauseMinutes">
                             <option value="0">চুপ থাকবে না</option>
-                            <option value="1">১ ঘণ্টা</option>
-                            <option value="2">২ ঘণ্টা</option>
-                            <option value="6">৬ ঘণ্টা</option>
-                            <option value="24">২৪ ঘণ্টা</option>
+                            <option value="30">৩০ মিনিট</option>
+                            <option value="60">১ ঘণ্টা</option>
+                            <option value="120">২ ঘণ্টা</option>
+                            <option value="360">৬ ঘণ্টা</option>
+                            <option value="1440">২৪ ঘণ্টা</option>
                         </select>
                     </label>
                 </form>

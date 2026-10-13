@@ -91,7 +91,7 @@ class InboxTest extends TestCase
         $this->as($agent);
         Livewire::test(ViewConversation::class, ['record' => $this->contact->id])
             ->set('reply', 'ভাই, রাউটার রিস্টার্ট দিন')
-            ->set('pauseHours', 2)
+            ->set('pauseMinutes', 30)
             ->call('send')
             ->assertHasNoErrors()
             ->assertSet('reply', '');
@@ -102,6 +102,7 @@ class InboxTest extends TestCase
         $this->assertSame("ভাই, রাউটার রিস্টার্ট দিন\n\n- ".$agent->name, $m->body);
         $this->contact->refresh();
         $this->assertTrue($this->contact->isBotPaused());
+        $this->assertEqualsWithDelta(now()->addMinutes(30)->timestamp, $this->contact->bot_paused_until->timestamp, 60);
         $this->assertSame($agent->id, $this->contact->assigned_user_id);
     }
 
@@ -111,7 +112,7 @@ class InboxTest extends TestCase
         Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.OUT1']]])]);
         $this->as($this->owner);
         Livewire::test(ViewConversation::class, ['record' => $this->contact->id])
-            ->set('reply', 'ঠিক আছে')->set('pauseHours', 0)->call('send')->assertHasNoErrors();
+            ->set('reply', 'ঠিক আছে')->set('pauseMinutes', 0)->call('send')->assertHasNoErrors();
         Http::assertSent(fn ($r) => str_contains($r->url(), "/PN{$this->company->id}/messages")
             && $r->hasHeader('Authorization', "Bearer token-{$this->company->id}")
             && $r['to'] === '8801711000001' && $r['text']['body'] === "ঠিক আছে\n\n- ".$this->owner->name);
@@ -141,7 +142,9 @@ class InboxTest extends TestCase
             ->callAction('pause')
             ->callAction('assign', ['user_id' => $agent->id]);
         $this->contact->refresh();
-        $this->assertTrue($this->contact->bot_paused);
+        $this->assertTrue($this->contact->isBotPaused());
+        $this->assertFalse($this->contact->bot_paused);
+        $this->assertEqualsWithDelta(now()->addHours(12)->timestamp, $this->contact->bot_paused_until->timestamp, 60);
         $this->assertSame($agent->id, $this->contact->assigned_user_id);
 
         Livewire::test(ViewConversation::class, ['record' => $this->contact->id])->callAction('resume');
@@ -209,7 +212,7 @@ class InboxTest extends TestCase
         $this->as($this->owner);
         Livewire::test(ViewConversation::class, ['record' => $this->contact->id])
             ->set('attachment', \Illuminate\Http\UploadedFile::fake()->image('router.jpg', 40, 40))
-            ->set('reply', 'এই রাউটারের লাইট দেখুন')->set('pauseHours', 0)
+            ->set('reply', 'এই রাউটারের লাইট দেখুন')->set('pauseMinutes', 0)
             ->call('send')->assertHasNoErrors()->assertSet('attachment', null)->assertSet('reply', '');
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/media') && $r->hasHeader('Authorization', "Bearer token-{$this->company->id}"));
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/messages') && $r['type'] === 'image'

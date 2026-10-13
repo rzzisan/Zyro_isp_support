@@ -40,9 +40,9 @@ class WhatsApp
 
     /**
      * A staff reply. With sending disabled (test mode) the message is stored with status "test" and not sent.
-     * The bot stays quiet on this number for $pauseHours (0 = no pause).
+     * The bot stays quiet on this number for $pauseMinutes (0 = no pause).
      */
-    public static function sendText(WaContact $contact, string $body, User $user, int $pauseHours = 0): WaMessage
+    public static function sendText(WaContact $contact, string $body, User $user, int $pauseMinutes = 0): WaMessage
     {
         $body = trim($body);
         if ($body === '') {
@@ -82,7 +82,7 @@ class WhatsApp
         ]);
         $contact->forceFill([
             'last_message_at' => now(),
-            'bot_paused_until' => $pauseHours > 0 ? now()->addHours($pauseHours) : $contact->bot_paused_until,
+            'bot_paused_until' => $pauseMinutes > 0 ? now()->addMinutes($pauseMinutes) : $contact->bot_paused_until,
             'assigned_user_id' => $contact->assigned_user_id ?? $user->id,
         ])->save();
 
@@ -108,7 +108,7 @@ class WhatsApp
      * the company's token, then sent. The file is also kept on disk so the inbox shows it without downloading.
      */
     public static function sendMedia(WaContact $contact, string $path, string $mime, string $fileName, ?string $caption,
-        User $user, int $pauseHours = 0): WaMessage
+        User $user, int $pauseMinutes = 0): WaMessage
     {
         $type = static::MEDIA_TYPES[$mime] ?? throw new RuntimeException('এই ধরনের ফাইল পাঠানো যায় না (ছবি, PDF, MP4, MP3 চলবে)।');
         if (! $contact->windowOpen()) {
@@ -147,7 +147,7 @@ class WhatsApp
         Storage::disk('local')->put("media/{$contact->company_id}/{$message->id}", file_get_contents($path));
         $contact->forceFill([
             'last_message_at' => now(),
-            'bot_paused_until' => $pauseHours > 0 ? now()->addHours($pauseHours) : $contact->bot_paused_until,
+            'bot_paused_until' => $pauseMinutes > 0 ? now()->addMinutes($pauseMinutes) : $contact->bot_paused_until,
             'assigned_user_id' => $contact->assigned_user_id ?? $user->id,
         ])->save();
 
