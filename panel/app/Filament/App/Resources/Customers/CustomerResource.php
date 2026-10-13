@@ -117,7 +117,8 @@ class CustomerResource extends Resource
                 ->where('seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))->limit(1)]))
             ->striped()
             // same columns, in the same order, as billing's customer list, so staff find things where they expect them
-            ->columns([
+            // compact rows (public/css/zyro-theme.css .z-cc) so the whole list fits without scrolling sideways
+            ->columns(array_map(fn ($c) => $c->extraCellAttributes(['class' => 'z-cc'])->extraHeaderAttributes(['class' => 'z-cc']), [
                 TextColumn::make('customer_id')->label('C.Code')->sortable()->searchable(query: fn (Builder $query, string $search) => $query
                     ->where(fn ($w) => $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$search])
                         ->orWhere('name', 'ilike', "%{$search}%")->orWhere('username', 'ilike', "%{$search}%")
@@ -125,8 +126,7 @@ class CustomerResource extends Resource
                 TextColumn::make('username')->label('ID/IP')->copyable()->placeholder('—')
                     ->icon(Heroicon::Signal)->iconColor(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'success' : 'gray')
                     ->tooltip(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'অনলাইন · '.$r->online_uptime : 'অফলাইন'),
-                TextColumn::make('name')->label('Cus.Name')->wrap(),
-                TextColumn::make('mobile')->label('Mobile')->copyable()->placeholder('—'),
+                TextColumn::make('name')->label('Cus.Name / Mobile')->wrap()->description(fn (BillingCustomer $r) => $r->mobile),
                 TextColumn::make('zone')->label('Zone')->sortable()->placeholder('—')
                     ->description(fn (BillingCustomer $r) => trim($r->subzone.($r->box ? ' · '.$r->box : '')) ?: null),
                 TextColumn::make('customer_type')->label('Cus.Type')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
@@ -139,12 +139,12 @@ class CustomerResource extends Resource
                     ->formatStateUsing(fn ($state) => $state > 0 ? number_format((float) $state) : '—'),
                 TextColumn::make('vat')->label('VAT')->alignEnd()->toggleable(isToggledHiddenByDefault: true)
                     ->state(fn (BillingCustomer $r) => number_format((float) (static::vat($r) ?? 0))),
-                TextColumn::make('due')->label('BalanceDue')->sortable()->alignEnd()
+                TextColumn::make('due')->label('Due')->sortable()->alignEnd()
                     ->formatStateUsing(fn ($state) => $state > 0 ? number_format((float) $state) : '—')
                     ->color(fn ($state) => $state > 0 ? 'danger' : null),
                 TextColumn::make('advance')->label('Advance')->alignEnd()->toggleable()
                     ->formatStateUsing(fn ($state) => $state > 0 ? number_format((float) $state) : '—'),
-                TextColumn::make('last_payment_date')->label('PaymentDate')->date('d M Y')->sortable()->placeholder('—'),
+                TextColumn::make('last_payment_date')->label('Pay Date')->date('d M y')->sortable()->placeholder('—'),
                 TextColumn::make('server')->label('Server')->placeholder('—')->toggleable(),
                 ViewColumn::make('line')->label('M.Status')->view('filament.app.customers.line-switch')
                     ->disabledClick(fn (BillingCustomer $r) => ! static::canSwitch($r))
@@ -174,7 +174,7 @@ class CustomerResource extends Resource
                     ->state(fn (BillingCustomer $r) => $r->due > 0 ? 'Due' : 'Paid')
                     ->color(fn (string $state) => $state === 'Due' ? 'danger' : 'success'),
                 TextColumn::make('joined_on')->label('যোগ দিয়েছেন')->date('d M Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
-            ])
+            ]))
             ->filters([
                 SelectFilter::make('zone')->label('Zone')->options(fn () => static::listOptions('zones', 'zone'))->searchable(),
                 SelectFilter::make('subzone')->label('Subzone')->options(fn () => static::listOptions('subzones', 'subzone'))->searchable(),
@@ -204,7 +204,7 @@ class CustomerResource extends Resource
             ->recordActions([
                 BillActions::receive(forRecord: true)->label('Pay')->button()->size('sm')->color('gray')
                     ->visible(fn (BillingCustomer $record) => $record->due > 0 && ! $record->gone_at && Menu::can('bills')),
-                ViewAction::make()->label('দেখুন'),
+                ViewAction::make()->label('দেখুন')->iconButton(),
             ]);
     }
 

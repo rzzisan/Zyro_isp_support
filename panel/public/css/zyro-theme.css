@@ -294,3 +294,11 @@ html[data-z-info="open"] .fi-body .fi-header-subheading { display: block; margin
     vertical-align: middle; border: 0; padding: 0; background: transparent; border-radius: 9999px; color: var(--z-muted); transition: background .15s, color .15s; cursor: pointer; }
 .z-info-btn svg { width: 1.15rem; height: 1.15rem; }
 .z-info-btn:hover, .z-info-btn[aria-expanded="true"] { color: var(--z-accent); background: rgba(15, 124, 123, .1); }
+
+/* compact customer list (CustomerResource columns carry .z-cc): smaller text and padding so it fits without side scroll */
+.fi-body .z-cc { font-size: .8125rem; }
+.fi-body td.z-cc > *, .fi-body td.z-cc .fi-ta-col, .fi-body td.z-cc .fi-ta-text { padding-top: .3rem !important; padding-bottom: .3rem !important; }
+.fi-body td.z-cc .fi-ta-text, .fi-body td.z-cc > div { padding-left: .45rem !important; padding-right: .45rem !important; }
+.fi-body td.z-cc .fi-ta-text-item, .fi-body td.z-cc .fi-ta-text-description { font-size: .8125rem; line-height: 1.15rem; }
+.fi-body th.z-cc { padding: .45rem .45rem !important; font-size: .78rem; }
+.fi-body td.z-cc .fi-badge { font-size: .72rem; padding: .05rem .4rem; }
