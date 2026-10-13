@@ -73,7 +73,8 @@
                 <td>{{ collect([$t->zone, $t->subzone, $t->box])->filter()->join(' / ') }}</td>
                 <td>{{ $t->category }}</td>
                 <td>{{ $t->opened_at?->timezone('Asia/Dhaka')->format('d M, g:i A') }}<br><span class="muted">{{ $t->created_by }}</span></td>
-                <td class="desc">{{ collect([$t->description, $t->note])->filter()->join("\n") }}</td>
+                <td class="desc">{{ collect([$t->description, $t->note,
+                    isset($rx[$t->username]) ? 'ONU পাওয়ার: '.number_format((float) $rx[$t->username], 1).' dBm' : null])->filter()->join("\n") }}</td>
                 <td class="done"></td>
             </tr>
         @endforeach

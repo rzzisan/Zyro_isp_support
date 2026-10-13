@@ -33,8 +33,14 @@ Route::get('/print/{company:slug}/tickets', function (\App\Models\Company $compa
     $tickets = \App\Models\BillingTicket::where('company_id', $company->id)->where('state', 'processing')
         ->forEmployee($employee, assignedOnly: true)
         ->orderByRaw('lower(subzone) asc nulls last')->orderBy('opened_at')->get();
+    // ONU Rx power per PPPoE username: router MAC (last PPP session) -> ONU behind it (from the OLT sync)
+    $rx = \Illuminate\Support\Facades\DB::table('ppp_sessions as s')
+        ->join('customer_onus as m', fn ($j) => $j->on('m.company_id', '=', 's.company_id')->whereRaw('m.client_mac = upper(s.caller_id)'))
+        ->join('onus as u', 'u.id', '=', 'm.onu_id')
+        ->where('s.company_id', $company->id)->whereIn('s.username', $tickets->pluck('username')->filter()->all())
+        ->whereNotNull('u.rx_dbm')->pluck('u.rx_dbm', 's.username');
 
-    return view('print.tickets', ['company' => $company, 'employee' => $employee, 'tickets' => $tickets,
+    return view('print.tickets', ['company' => $company, 'employee' => $employee, 'tickets' => $tickets, 'rx' => $rx,
         'now' => now('Asia/Dhaka')]);
 })->middleware('web')->name('tickets.print');
 

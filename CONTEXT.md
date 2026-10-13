@@ -276,3 +276,4 @@
 ## হেডারে শর্টকাট (2026-10-13)
 - সার্চ বক্সের বাঁয়ে তিনটা বাটন: ইনবক্স (`/inbox`), বিল নিন (`/daily-bills?action=receiveBill`, পেজ খুলেই বিল নেওয়ার ফর্ম), নতুন টিকিট (`/tickets?action=newTicket`)। `resources/views/filament/header-shortcuts.blade.php`, হুক `GLOBAL_SEARCH_BEFORE`; প্রতিটা বাটন শুধু তাদের দেখায় যাদের ওই মেনুর অনুমতি আছে (Resource::canAccess)। ছোট স্ক্রিনে শুধু আইকন। স্টাইল zyro-theme.css "topbar shortcuts"। টেস্ট `tests/Feature/HeaderShortcutsTest.php`।
 - গোটচা: Resource::getUrl()-এ query দিতে হলে প্রথম আর্গুমেন্ট পেজের নাম (`getUrl('index', ['action' => ...])`); শুধু অ্যারে দিলে TypeError, পুরো প্যানেল 500 (2026-10-13 এক-দুই মিনিট হয়েছিল)।
+- 2026-10-13: টেকনিশিয়ান প্রিন্টের মন্তব্য ঘরে "ONU পাওয়ার: -18.1 dBm" (শুধু প্রিন্টে, বিলিংয়ে যায় না)। ticket.username → ppp_sessions.caller_id → customer_onus → onus.rx_dbm; না পেলে (ONU অফলাইন/ম্যাপ নেই) ফাঁকা। প্রিন্ট Subzone নাম অনুযায়ী সাজানো।
