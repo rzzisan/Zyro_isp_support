@@ -197,6 +197,12 @@ class Engine
         return static::call('get', "/internal/{$companyId}/customers/{$headerId}/bill-form", ['user_id' => auth()->id()]) ?? [];
     }
 
+    /** বিল কালেকশন page open: the engine syncs today's bills (throttled) and returns a version that changes with them. */
+    public static function liveDailyBills(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/daily-bills/live") ?? [];
+    }
+
     /** Copy the last 3 days of billing's Daily Bill Collection now. */
     public static function syncDailyBills(int $companyId): array
     {

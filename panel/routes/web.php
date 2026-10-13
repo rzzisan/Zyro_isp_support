@@ -93,6 +93,18 @@ Route::get('/print/{company:slug}/bill/{dailyBill}', function (\App\Models\Compa
         'autoPrint' => $request->query('print') !== '0']);
 })->middleware('web')->name('bills.receipt');
 
+// বিল কালেকশন page, every 5 s while open and visible: has anything changed? (tiny JSON; the page refreshes only then)
+Route::get('/live/{company:slug}/daily-bills', function (\App\Models\Company $company) {
+    abort_unless(\App\Support\Menu::allows(Auth::user(), $company, 'bills'), 403);
+    try {
+        $version = \App\Services\Engine::liveDailyBills($company->id)['version'] ?? null;
+    } catch (\Throwable $e) {
+        $version = null; // engine or billing down: the page just keeps what it shows
+    }
+
+    return response()->json(['version' => $version])->header('Cache-Control', 'no-store');
+})->middleware('web')->name('daily-bills.live');
+
 // all billing customers as CSV (no passwords); owner/admin of that company only
 Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company $company) {
     abort_unless(Auth::user()?->managesCompany($company), 403);

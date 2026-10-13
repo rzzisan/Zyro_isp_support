@@ -745,6 +745,14 @@ def daily_bill_receipt_no(request: Request, company_id: int, daily_bill_id: int)
     return {"receipt_no": billing_call(lambda: bills.daily_receipt_no(company_id, tenants.billing(t), daily_bill_id))}
 
 
+@app.post("/internal/{company_id}/daily-bills/live")
+def daily_bills_live(request: Request, company_id: int):
+    """বিল কালেকশন page open: today's new bills now (at most once per 5 s per company), plus a version string."""
+    t = internal_tenant(request, company_id)
+    from engine import daily_bill_sync
+    return daily_bill_sync.live(t)
+
+
 @app.post("/internal/{company_id}/daily-bills/sync")
 def daily_bills_sync_now(request: Request, company_id: int):
     """বিল কালেকশন page's "এখনই Sync": the last 3 days of billing's Daily Bill Collection."""

@@ -114,6 +114,28 @@ class DailyBillTest extends TestCase
             ->assertCanSeeTableRecords([$this->b['jobbar'], $this->b['minto']])->assertCanNotSeeTableRecords([$this->b['zisan']]);
     }
 
+    public function test_live_check_returns_the_engine_version(): void
+    {
+        config(['services.engine.url' => 'http://engine.test', 'services.engine.key' => 'k']);
+        \Illuminate\Support\Facades\Http::fake(["engine.test/internal/{$this->company->id}/daily-bills/live" => \Illuminate\Support\Facades\Http::sequence()
+            ->push(['ran' => true, 'version' => '170300:5:4:1'])->push(['detail' => 'down'], 500)]);
+        $url = "/live/{$this->company->slug}/daily-bills";
+        $this->actingAs($this->owner)->getJson($url)->assertOk()->assertExactJson(['version' => '170300:5:4:1']);
+        // engine down: no version, no error
+        $this->actingAs($this->owner)->getJson($url)->assertOk()->assertExactJson(['version' => null]);
+        // only members with the bills menu
+        Membership::where('user_id', $this->agent->id)->update(['permissions' => json_encode(['inbox'])]);
+        $this->actingAs($this->agent)->getJson($url)->assertForbidden();
+    }
+
+    public function test_page_and_cards_refresh_on_the_live_event(): void
+    {
+        $this->panel($this->owner);
+        Livewire::test(ListDailyBills::class)->dispatch('daily-bills-changed')->assertOk()
+            ->assertSee('daily-bills', false)->assertCanSeeTableRecords([$this->b['zisan']]);
+        Livewire::test(DailyBillStats::class, ['tableClass' => ListDailyBills::class])->dispatch('daily-bills-changed')->assertOk();
+    }
+
     public function test_agent_without_bills_menu_is_refused(): void
     {
         Membership::where('user_id', $this->agent->id)->update(['permissions' => json_encode(['inbox'])]);

@@ -8,6 +8,7 @@ use Filament\Widgets\Concerns\InteractsWithPageTable;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\On;
 
 /** Totals of the বিল কালেকশন table as it is filtered right now. */
 class DailyBillStats extends StatsOverviewWidget
@@ -15,6 +16,9 @@ class DailyBillStats extends StatsOverviewWidget
     use InteractsWithPageTable;
 
     protected static bool $isDiscovered = false;
+
+    #[On('daily-bills-changed')]
+    public function refreshFromLive(): void {}
 
     protected function getTablePage(): string
     {

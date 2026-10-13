@@ -7,6 +7,8 @@ for the last --days days; --month 2026-10 (or --from/--to dd-mm-yyyy) for a back
 """
 import argparse
 import logging
+import threading
+import time
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -83,10 +85,10 @@ def row_values(company_id: int, r: dict, deleted: bool) -> tuple:
             (r.get("PaymentMethod") or "").strip() or None, deleted or bool(r.get("IsDeleted")))
 
 
-def sync_company(t, frm: date, to: date) -> dict:
+def sync_company(t, frm: date, to: date, with_deleted: bool = True) -> dict:
     api = tenants.billing(t)
     live = fetch(api, "", frm, to)
-    deleted = fetch(api, "deleted", frm, to)
+    deleted = fetch(api, "deleted", frm, to) if with_deleted else []
     rows = [row_values(t.company_id, r, False) for r in live] + [row_values(t.company_id, r, True) for r in deleted]
     rows = [r for r in rows if r[11] is not None]  # without a time the row can't be filtered; billing always sends one
     with db.conn() as c, c.cursor() as cur:
@@ -107,9 +109,10 @@ def sync_company(t, frm: date, to: date) -> dict:
                    payment_method = EXCLUDED.payment_method, is_deleted = EXCLUDED.is_deleted, synced_at = now()""", rows)
     # rows of the range that billing no longer lists at all (hard-removed) are marked deleted;
     # an empty answer is not trusted for that (a billing hiccup must not wipe a month)
-    receipts = refresh_receipts(t, api)
-    if not live:
-        return {"from": str(frm), "to": str(to), "rows": 0, "deleted": len(deleted), "gone": 0, "receipts": receipts}
+    # the quick live pass (today, every 5 s) skips the slower receipt refresh and the gone check
+    receipts = refresh_receipts(t, api) if with_deleted else 0
+    if not live or not with_deleted:  # without the deleted list a missing row may just be deleted, not gone
+        return {"from": str(frm), "to": str(to), "rows": len(live), "deleted": len(deleted), "gone": 0, "receipts": receipts}
     seen = [r[1] for r in rows]
     gone = db.execute(
         """WITH u AS (UPDATE billing_daily_bills SET is_deleted = true, is_approved = false, synced_at = now()
@@ -139,6 +142,42 @@ def refresh_receipts(t, api, limit: int = 30) -> int:
         except Exception:
             log.warning("receipts of customer %s", r["h"], exc_info=True)
     return len(rows)
+
+
+# --- live mode: the বিল কালেকশন page asks every 5 s while it is open and visible -----------------------------
+# However many people have the page open, billing is asked at most once per 5 s per company: today's list
+# (one small request), and once a minute the last 3 days with the deleted list (approvals and deletions).
+_live: dict[int, dict] = {}
+_live_guard = threading.Lock()
+
+
+def version(company_id: int) -> str:
+    """Changes whenever a recent bill is added, approved or deleted; the page refreshes only then."""
+    r = db.one("""SELECT max(daily_bill_id) AS m, count(*) AS n, count(*) FILTER (WHERE is_approved) AS a,
+                         count(*) FILTER (WHERE is_deleted) AS d
+                  FROM billing_daily_bills WHERE company_id = %s AND collected_at > now() - interval '3 days'""", (company_id,))
+    return f"{r['m'] or 0}:{r['n']}:{r['a']}:{r['d']}"
+
+
+def live(t) -> dict:
+    with _live_guard:
+        st = _live.setdefault(t.company_id, {"at": 0.0, "full_at": 0.0, "lock": threading.Lock()})
+    ran = False
+    if time.monotonic() - st["at"] >= 5 and st["lock"].acquire(blocking=False):
+        try:
+            st["at"] = time.monotonic()
+            today = datetime.now(DHAKA).date()
+            if time.monotonic() - st["full_at"] >= 60:
+                st["full_at"] = time.monotonic()
+                sync_company(t, today - timedelta(days=2), today)
+            else:
+                sync_company(t, today, today, with_deleted=False)
+            ran = True
+        except Exception:
+            log.exception("live daily bill sync failed for company %s", t.company_id)
+        finally:
+            st["lock"].release()
+    return {"ran": ran, "version": version(t.company_id)}
 
 
 def date_range(days: int | None, month: str | None, frm: str | None, to: str | None) -> tuple[date, date]:

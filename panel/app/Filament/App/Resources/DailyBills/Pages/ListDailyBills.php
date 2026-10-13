@@ -14,6 +14,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Concerns\ExposesTableToWidgets;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Support\Icons\Heroicon;
+use Livewire\Attributes\On;
 use RuntimeException;
 
 class ListDailyBills extends ListRecords
@@ -28,9 +29,18 @@ class ListDailyBills extends ListRecords
     {
         $last = BillingDailyBill::where('company_id', Filament::getTenant()->getKey())->max('synced_at');
 
-        return 'বিলিং সফটওয়্যারের Daily Bill Collection-এর সব বিল, প্রতি ১০ মিনিটে আপডেট হয়'
+        return 'বিলিং সফটওয়্যারের Daily Bill Collection-এর সব বিল। এই পেজ খোলা থাকলে নতুন বিল ৫ সেকেন্ডে আসে'
             .($last ? ' · শেষ আপডেট '.\Illuminate\Support\Carbon::parse($last)->timezone('Asia/Dhaka')->format('d M, g:i A') : '')
             .'। approve বিলিং-এ হাতে করতে হয়।';
+    }
+
+    /** New/changed bills seen by the live check (footer script): re-render the table with fresh rows. */
+    #[On('daily-bills-changed')]
+    public function refreshFromLive(): void {}
+
+    public function getFooter(): ?\Illuminate\Contracts\View\View
+    {
+        return view('filament.app.daily-bills.live', ['url' => route('daily-bills.live', ['company' => Filament::getTenant()->slug])]);
     }
 
     protected function getHeaderWidgets(): array
