@@ -77,6 +77,18 @@ class CustomerResource extends Resource
         return BillingOption::names(Filament::getTenant()?->getKey() ?? 0, $kind, static::options($column));
     }
 
+    /** This month's VAT from the billing row, when billing sends one. */
+    public static function vat(BillingCustomer $r): ?float
+    {
+        foreach (['VAT', 'Vat', 'VatAmount', 'VATAmount'] as $k) {
+            if (is_numeric($v = str_replace(',', '', (string) ($r->extra[$k] ?? '')))) {
+                return (float) $v;
+            }
+        }
+
+        return null;
+    }
+
     /** Subquery: a PPPoE session for this customer seen in the last few minutes. */
     public static function freshSession(): \Closure
     {
@@ -93,29 +105,45 @@ class CustomerResource extends Resource
                 ->whereColumn('ppp_sessions.username', 'billing_customers.username')
                 ->where('seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))->limit(1)]))
             ->striped()
+            // same columns, in the same order, as billing's customer list, so staff find things where they expect them
             ->columns([
-                TextColumn::make('customer_id')->label('ID')->sortable()->searchable(query: fn (Builder $query, string $search) => $query
+                TextColumn::make('customer_id')->label('C.Code')->sortable()->searchable(query: fn (Builder $query, string $search) => $query
                     ->where(fn ($w) => $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$search])
                         ->orWhere('name', 'ilike', "%{$search}%")->orWhere('username', 'ilike', "%{$search}%")
                         ->orWhere('mobile', 'like', '%'.preg_replace('/\D/', '', $search).'%'))),
-                TextColumn::make('name')->label('কাস্টমার')->description(fn (BillingCustomer $r) => $r->mobile)->wrap(),
-                TextColumn::make('username')->label('PPPoE ID')->copyable()->toggleable(),
-                TextColumn::make('zone')->label('Zone')->description(fn (BillingCustomer $r) => trim($r->subzone.($r->box ? ' · '.$r->box : '')))->toggleable(),
-                TextColumn::make('package')->label('প্যাকেজ')->toggleable(),
-                TextColumn::make('monthly_bill')->label('মাসিক বিল')->numeric(0)->sortable(),
-                TextColumn::make('due')->label('বকেয়া')->numeric(0)->sortable()->placeholder('—')
+                TextColumn::make('username')->label('ID/IP')->copyable()->placeholder('—')
+                    ->icon(Heroicon::Signal)->iconColor(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'success' : 'gray')
+                    ->tooltip(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'অনলাইন · '.$r->online_uptime : 'অফলাইন'),
+                TextColumn::make('name')->label('Cus.Name')->wrap(),
+                TextColumn::make('mobile')->label('Mobile')->copyable()->placeholder('—'),
+                TextColumn::make('zone')->label('Zone')->sortable()->placeholder('—')
+                    ->description(fn (BillingCustomer $r) => trim($r->subzone.($r->box ? ' · '.$r->box : '')) ?: null),
+                TextColumn::make('customer_type')->label('Cus.Type')->placeholder('—')->toggleable(),
+                TextColumn::make('connection_type')->label('Conn.Type')->placeholder('—')->toggleable(),
+                TextColumn::make('package')->label('Package')->placeholder('—'),
+                TextColumn::make('speed')->label('Speed')->placeholder('—')->toggleable(),
+                TextColumn::make('bill_day')->label('Ex.Date')->sortable()->placeholder('—')->alignCenter(),
+                TextColumn::make('monthly_bill')->label('M.Bill')->numeric(0)->sortable()->alignEnd(),
+                TextColumn::make('paid')->label('Received')->numeric(0)->alignEnd()
+                    ->formatStateUsing(fn ($state) => $state > 0 ? number_format((float) $state) : '—'),
+                TextColumn::make('vat')->label('VAT')->alignEnd()->toggleable()
+                    ->state(fn (BillingCustomer $r) => number_format((float) (static::vat($r) ?? 0))),
+                TextColumn::make('due')->label('BalanceDue')->sortable()->alignEnd()
+                    ->formatStateUsing(fn ($state) => $state > 0 ? number_format((float) $state) : '—')
                     ->color(fn ($state) => $state > 0 ? 'danger' : null),
-                TextColumn::make('online')->label('এখন')->badge()
-                    ->state(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'অনলাইন' : 'অফলাইন')
-                    ->description(fn (BillingCustomer $r) => $r->online_uptime)
-                    ->color(fn (string $state) => $state === 'অনলাইন' ? 'success' : 'gray'),
-                TextColumn::make('status')->label('অবস্থা')->badge()
-                    ->state(fn (BillingCustomer $r) => $r->gone_at ? 'বিলিংয়ে নেই' : ($r->is_left ? 'Left' : ($r->disabled ? 'বন্ধ' : ($r->status ?: '—'))))
+                TextColumn::make('advance')->label('Advance')->alignEnd()->toggleable()
+                    ->formatStateUsing(fn ($state) => $state > 0 ? number_format((float) $state) : '—'),
+                TextColumn::make('last_payment_date')->label('PaymentDate')->date('d M Y')->sortable()->placeholder('—'),
+                TextColumn::make('server')->label('Server')->placeholder('—')->toggleable(),
+                TextColumn::make('status')->label('M.Status')->badge()
+                    ->state(fn (BillingCustomer $r) => $r->gone_at ? 'বিলিংয়ে নেই' : ($r->is_left ? 'Left' : ($r->disabled ? 'বন্ধ' : 'চালু')))
                     ->description(fn (BillingCustomer $r) => $r->is_left && $r->left_on ? $r->left_on->format('d M Y') : null)
                     ->color(fn (string $state) => match ($state) {
-                        'Active' => 'success', 'বন্ধ' => 'danger', 'Left' => 'warning', default => 'gray'
+                        'চালু' => 'success', 'বন্ধ' => 'danger', 'Left' => 'warning', default => 'gray'
                     }),
-                TextColumn::make('bill_day')->label('বিলের তারিখ')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('bill_status')->label('B.Status')->badge()
+                    ->state(fn (BillingCustomer $r) => $r->due > 0 ? 'Due' : 'Paid')
+                    ->color(fn (string $state) => $state === 'Due' ? 'danger' : 'success'),
                 TextColumn::make('joined_on')->label('যোগ দিয়েছেন')->date('d M Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
