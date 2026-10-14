@@ -268,6 +268,42 @@ class TicketActions
             });
     }
 
+    /** [previous key, next key] of a ticket in the list as it is shown now (tab, filters, search, sort). */
+    private static function neighbours(BillingTicket $record, $livewire): array
+    {
+        static $memo = [];
+        $id = $record->getKey();
+        if (! array_key_exists($id, $memo)) {
+            try {
+                $keys = $livewire->getFilteredSortedTableQuery()->toBase()->pluck('billing_tickets.id')->map(fn ($k) => (string) $k)->all();
+            } catch (\Throwable) {
+                $keys = [];
+            }
+            $i = array_search((string) $id, $keys, true);
+            $memo[$id] = $i === false ? [null, null] : [$keys[$i - 1] ?? null, $keys[$i + 1] ?? null];
+        }
+
+        return $memo[$id];
+    }
+
+    /** "← আগের" / "পরের →" in the ticket details: open the neighbouring ticket's details; the arrow keys do the same. */
+    public static function step(int $dir): Action
+    {
+        $key = fn (BillingTicket $record, $livewire) => static::neighbours($record, $livewire)[$dir < 0 ? 0 : 1];
+        $arrow = $dir < 0 ? 'arrow-left' : 'arrow-right';
+
+        return Action::make($dir < 0 ? 'previousTicket' : 'nextTicket')
+            ->label($dir < 0 ? 'আগের' : 'পরের')->color('gray')->button()
+            ->icon($dir < 0 ? Heroicon::OutlinedChevronLeft : Heroicon::OutlinedChevronRight)
+            ->iconPosition($dir < 0 ? \Filament\Support\Enums\IconPosition::Before : \Filament\Support\Enums\IconPosition::After)
+            ->tooltip($dir < 0 ? 'আগের টিকিট (← কী)' : 'পরের টিকিট (→ কী)')
+            ->disabled(fn (BillingTicket $record, $livewire) => $key($record, $livewire) === null)
+            ->alpineClickHandler(fn (BillingTicket $record, $livewire) => ($k = $key($record, $livewire)) === null ? 'void 0'
+                : '$wire.replaceMountedAction('.\Illuminate\Support\Js::from('view').', {}, '.\Illuminate\Support\Js::from(['table' => true, 'recordKey' => $k]).')')
+            // arrow keys, unless typing or another (nested) modal is on top of the details
+            ->extraAttributes(["x-on:keydown.{$arrow}.window" => "if (! \$event.target.closest('input, textarea, select, [contenteditable]') && ! \$el.disabled && document.querySelectorAll('.fi-modal-open').length === 1) \$el.click()"]);
+    }
+
     /** "Edit": category, priority, complaint mobile, description and staff of an open ticket, saved in billing. */
     public static function edit(): Action
     {

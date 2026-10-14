@@ -163,7 +163,7 @@ class TicketResource extends Resource
             ->deferFilters(false)
             ->filtersFormColumns(4)
             ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')->modalWidth('4xl')->modalHeading(fn (BillingTicket $record) => 'টিকিট #'.$record->complain_id)
-                ->extraModalFooterActions(fn () => [TicketActions::solve(), TicketActions::edit()->button(), TicketActions::assign()->label('কর্মী যোগ / বাদ')->button()])])
+                ->extraModalFooterActions(fn () => [TicketActions::step(-1), TicketActions::solve(), TicketActions::edit()->button(), TicketActions::assign()->label('কর্মী যোগ / বাদ')->button(), TicketActions::step(1)])])
             ->recordAction('view');
     }
 
