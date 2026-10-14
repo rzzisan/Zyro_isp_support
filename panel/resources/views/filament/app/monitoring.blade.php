@@ -12,9 +12,14 @@
         .zm-off strong { color: #dc2626 !important; }
         .zm-bar { height: 5px; border-radius: 999px; background: color-mix(in srgb, #dc2626 25%, transparent); margin-top: 8px; overflow: hidden; }
         .zm-bar i { display: block; height: 100%; background: #10b981; }
+        .zm-note { font-size: .8rem; color: var(--z-muted); margin-bottom: -4px; }
+        .zm-off-for { color: #dc2626; font-variant-numeric: tabular-nums; white-space: nowrap; }
     </style>
     @if ($this->refreshing)
         <div wire:poll.5s="checkRefresh" style="display:none"></div>
+    @endif
+    @if ($this->cardsFiltered())
+        <div class="zm-note">ফিল্টার অনুযায়ী গণনা দেখানো হচ্ছে</div>
     @endif
     <div class="zm-tabs" wire:poll.60s>
         @foreach ($counts as $server => $c)
@@ -31,4 +36,18 @@
     </div>
 
     {{ $this->table }}
+
+    <script>
+        // offline-for counters: tick every second from data-off-since (unix time of last seen online)
+        if (! window.zmOffTimer) {
+            window.zmOffTimer = setInterval(() => {
+                const now = Math.floor(Date.now() / 1000);
+                document.querySelectorAll('.zm-off-for[data-off-since]').forEach((el) => {
+                    const t = Math.max(0, now - Number(el.dataset.offSince)), d = Math.floor(t / 86400);
+                    const p = (n) => String(n).padStart(2, '0');
+                    el.textContent = (d ? d + ' দিন ' : '') + p(Math.floor(t % 86400 / 3600)) + ':' + p(Math.floor(t % 3600 / 60)) + ':' + p(t % 60);
+                });
+            }, 1000);
+        }
+    </script>
 </x-filament-panels::page>

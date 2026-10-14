@@ -23,6 +23,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 use RuntimeException;
 
@@ -124,15 +125,16 @@ class Monitoring extends Page implements HasTable
             ->selectRaw('(s.seen_at IS NOT NULL AND s.seen_at > ?) AS s_online', [$fresh]);
     }
 
-    /** [server => [total, online]] plus '' for all servers. */
+    /** [server => [total, online]] plus '' for all servers, counting only customers that match the table's filters and search. */
     public function counts(): array
     {
         $fresh = now()->subMinutes(PppSession::FRESH_MINUTES);
-        $rows = BillingCustomer::query()->where('billing_customers.company_id', Filament::getTenant()->getKey())
+        $q = BillingCustomer::query()->where('billing_customers.company_id', Filament::getTenant()->getKey())
             ->whereNull('gone_at')->where('is_left', false)->where('billing_customers.disabled', false)
             ->leftJoin('ppp_sessions as s', fn ($j) => $j->on('s.company_id', '=', 'billing_customers.company_id')
-                ->on('s.username', '=', 'billing_customers.username'))
-            ->selectRaw('server, count(*) AS total, count(*) FILTER (WHERE s.seen_at > ?) AS online', [$fresh])
+                ->on('s.username', '=', 'billing_customers.username'));
+        $this->applyCardFilters($q);
+        $rows = $q->selectRaw('server, count(*) AS total, count(*) FILTER (WHERE s.seen_at > ?) AS online', [$fresh])
             ->groupBy('server')->orderByDesc('total')->get();
         $out = ['' => ['total' => (int) $rows->sum('total'), 'online' => (int) $rows->sum('online')]];
         foreach ($rows as $r) {
@@ -140,8 +142,50 @@ class Monitoring extends Page implements HasTable
                 $out[$r->server] = ['total' => (int) $r->total, 'online' => (int) $r->online];
             }
         }
+        // keep the chosen server's card even when the filters leave it empty
+        if ($this->server !== '' && ! isset($out[$this->server])) {
+            $out[$this->server] = ['total' => 0, 'online' => 0];
+        }
 
         return $out;
+    }
+
+    /** The table's filters and search (everything except the server tab) applied to the server-card counts. */
+    private function applyCardFilters(Builder $q): void
+    {
+        $f = $this->tableFilters ?? [];
+        $online = $f['online']['value'] ?? null;
+        if ($online !== null && $online !== '') {
+            $fresh = now()->subMinutes(PppSession::FRESH_MINUTES);
+            filter_var($online, FILTER_VALIDATE_BOOLEAN)
+                ? $q->where('s.seen_at', '>', $fresh)
+                : $q->where(fn ($w) => $w->whereNull('s.seen_at')->orWhere('s.seen_at', '<=', $fresh));
+        }
+        foreach (['zone', 'subzone', 'box', 'connection_type'] as $col) {
+            if (($v = $f[$col]['value'] ?? null) !== null && $v !== '') {
+                $q->where("billing_customers.{$col}", $v);
+            }
+        }
+        $search = trim((string) ($this->tableSearch ?? ''));
+        if ($search !== '') {
+            $q->where(fn ($w) => $w
+                ->whereRaw("ltrim(billing_customers.customer_id, '0') = ltrim(?, '0')", [$search])
+                ->orWhere('billing_customers.name', 'ilike', "%{$search}%")
+                ->orWhere('billing_customers.username', 'ilike', "%{$search}%")
+                ->orWhere('billing_customers.mobile', 'like', '%'.preg_replace('/\D/', '', $search).'%'));
+        }
+    }
+
+    /** True when any table filter or search is set (the cards then show filtered counts). */
+    public function cardsFiltered(): bool
+    {
+        foreach ($this->tableFilters ?? [] as $data) {
+            if (($data['value'] ?? null) !== null && ($data['value'] ?? null) !== '') {
+                return true;
+            }
+        }
+
+        return trim((string) ($this->tableSearch ?? '')) !== '';
     }
 
     private static function options(string $column): array
@@ -174,6 +218,15 @@ class Monitoring extends Page implements HasTable
     private static function listOptions(string $kind, string $column): array
     {
         return BillingOption::names(Filament::getTenant()?->getKey() ?? 0, $kind, static::options($column));
+    }
+
+    /** "2 দিন 04:12:09" since the unix time $since; the page's script keeps it ticking every second. */
+    private static function offlineFor(int $since): string
+    {
+        $t = max(0, time() - $since);
+        $d = intdiv($t, 86400);
+
+        return ($d ? $d.' দিন ' : '').sprintf('%02d:%02d:%02d', intdiv($t % 86400, 3600), intdiv($t % 3600, 60), $t % 60);
     }
 
     private static function speed(int $bps): string
@@ -211,6 +264,10 @@ class Monitoring extends Page implements HasTable
                 TextColumn::make('s_seen')->label('শেষ অনলাইন')
                     ->state(fn ($record) => ! $record->s_online && $record->s_seen ? Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : null)
                     ->placeholder(fn ($record) => $record->s_online ? 'এখন' : 'জানা নেই'),
+                TextColumn::make('s_offline_for')->label('অফলাইন কতক্ষণ')
+                    ->state(fn ($record) => ! $record->s_online && $record->s_seen ? Carbon::parse($record->s_seen, 'UTC')->getTimestamp() : null)
+                    ->formatStateUsing(fn ($state) => new HtmlString('<span class="zm-off-for" data-off-since="'.(int) $state.'">'.static::offlineFor((int) $state).'</span>'))
+                    ->placeholder('—'),
             ])
             ->filters([
                 TernaryFilter::make('online')->label('অবস্থা')->trueLabel('অনলাইন')->falseLabel('অফলাইন')
