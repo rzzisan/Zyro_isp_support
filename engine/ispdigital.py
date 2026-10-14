@@ -217,8 +217,11 @@ class ISPDigital:
 
 
     # --- write: support tickets -----------------------------------------------------
-    def ticket_form(self) -> tuple[str, dict[str, str]]:
-        """Anti-forgery token of the New Ticket form + {category name: id}."""
+    def ticket_form(self, fresh: bool = False) -> tuple[str, dict[str, str]]:
+        """Anti-forgery token of the New Ticket form + {category name: id}; kept until the session changes."""
+        cached = getattr(self, "_form", None)
+        if not fresh and cached and cached[0] == self._session_mtime and self._logged_in:
+            return cached[1], cached[2]
         # the shared session may have been logged out (someone signed in with the same billing user elsewhere):
         # the page then comes without the form, so log in again once before giving up
         for attempt in (1, 2):
@@ -234,6 +237,7 @@ class ISPDigital:
         sel = re.search(r'<select[^>]*id="ProblemCategoryId".*?</select>', h, re.S)
         cats = {html.unescape(name).strip(): cid for cid, name in
                 re.findall(r'<option value="(\d+)"[^>]*>([^<]+)</option>', sel.group(0))} if sel else {}
+        self._form = (self._session_mtime, m.group(1), cats)
         return m.group(1), cats
 
     def create_ticket(self, header_id: int, category_id: str, priority_id: int, mobile: str,
@@ -245,8 +249,10 @@ class ISPDigital:
                       comment: str) -> str:
         """Edits an open ticket like the support page's Edit button: same form, with the ticket number and the id of
         its first staff-to-staff conversation (that entry holds the description)."""
-        info = self._get("/ClientSupport/GetCustomerOtherData", {"id": int(header_id), "ticketId": int(complain_id)})
-        conv = int((info or {}).get("TicketConversationIdOfEmployeeToEmployee") or 0)
+        rows = self._get("/ComplainDiscussion/GetConversationInfoByTicketId",
+                         {"id": int(complain_id), "forWhom": "EmployeeToEmployee"}) or []
+        firsts = sorted(int(r.get("ConversationId") or 0) for r in rows if not r.get("ParentConversationId"))
+        conv = firsts[0] if firsts else 0
         if not conv:
             raise RuntimeError("বিলিংয়ে এই টিকিটের বিবরণ পাওয়া যায়নি, তাই এডিট করা গেল না")
         body = "".join(f"<p>{html.escape(line)}</p>" for line in comment.splitlines() if line.strip()) or html.escape(comment)
@@ -254,7 +260,20 @@ class ISPDigital:
 
     def _submit_ticket(self, complain_id: int, conversation_id: int, header_id: int, category_id: str,
                        priority_id: int, mobile: str, comment: str, send_sms: bool) -> str:
-        token, _ = self.ticket_form()
+        for attempt in (1, 2):
+            res = self._post_ticket_form(self.ticket_form(fresh=attempt == 2)[0], complain_id, conversation_id, header_id,
+                                         category_id, priority_id, mobile, comment, send_sms)
+            if res is not None:
+                break
+            log.warning("ticket form post refused (attempt %s), fetching a fresh form", attempt)
+        else:
+            raise RuntimeError("বিলিং টিকিটটা নেয়নি, একটু পরে আবার চেষ্টা করুন")
+        if res.get("errMSG"):
+            raise RuntimeError(res["errMSG"])
+        return res.get("sucMSG") or "ok"
+
+    def _post_ticket_form(self, token: str, complain_id: int, conversation_id: int, header_id: int, category_id: str,
+                          priority_id: int, mobile: str, comment: str, send_sms: bool) -> dict | None:
         data = {
             "__RequestVerificationToken": token,
             "TicketNumber": str(int(complain_id)), "TicketConversationId": str(int(conversation_id)),
@@ -269,11 +288,14 @@ class ISPDigital:
             r = self._client.post("/ClientSupport/DailyComplainList", data=data,
                                   files={"Attachments": ("", b"", "application/octet-stream")},
                                   headers={"X-Requested-With": "XMLHttpRequest"})
-        r.raise_for_status()
-        res = r.json()
-        if res.get("errMSG"):
-            raise RuntimeError(res["errMSG"])
-        return res.get("sucMSG") or "ok"
+        if r.status_code in (301, 302):
+            self._logged_in = False
+            return None
+        try:
+            res = r.json() if r.status_code == 200 else None
+        except ValueError:
+            res = None
+        return res if isinstance(res, dict) else None
 
     def _post(self, path: str, data, timeout: float | None = None) -> httpx.Response:
         with self._lock:

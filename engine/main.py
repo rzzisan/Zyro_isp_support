@@ -15,7 +15,8 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 
 from engine import customers, db, tenant as tenants, webpush
@@ -584,10 +585,14 @@ def internal_tenant(request: Request, company_id: int) -> Tenant:
     return t
 
 
+_refresh_lock = threading.Lock()
+
+
 def refresh_tickets(t: Tenant) -> None:
     from engine.ticket_sync import sync_company
     try:
-        sync_company(t, 1)
+        with _refresh_lock:  # back-to-back desk actions: one sync at a time
+            sync_company(t, 1)
     except Exception:
         log.exception("ticket refresh failed")
 
@@ -653,7 +658,7 @@ def customer_search(request: Request, company_id: int, q: str = ""):
 
 
 @app.post("/internal/{company_id}/tickets")
-async def new_ticket(request: Request, company_id: int):
+async def new_ticket(request: Request, company_id: int, background: BackgroundTasks):
     t = internal_tenant(request, company_id)
     b = await request.json()
     api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
@@ -668,26 +673,26 @@ async def new_ticket(request: Request, company_id: int):
             api.assign_ticket(int(complain_id), [int(e) for e in b["employees"]], b.get("dept_id"), bool(b.get("sms_employees")))
         return {"message": msg, "complain_id": complain_id}
 
-    res = billing_call(run)
-    refresh_tickets(t)
+    res = await run_in_threadpool(billing_call, run)
+    background.add_task(refresh_tickets, t)
     return res
 
 
 @app.post("/internal/{company_id}/tickets/{complain_id}/assign")
-async def assign(request: Request, company_id: int, complain_id: int):
+async def assign(request: Request, company_id: int, complain_id: int, background: BackgroundTasks):
     t = internal_tenant(request, company_id)
     b = await request.json()
     if not b.get("employees"):
         raise HTTPException(status_code=400, detail="অন্তত একজন কর্মী বাছাই করুন")
     api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
-    billing_call(lambda: api.assign_ticket(complain_id, [int(e) for e in b["employees"]],
-                                                          b.get("dept_id"), bool(b.get("sms_employees"))))
-    refresh_tickets(t)
+    await run_in_threadpool(billing_call, lambda: api.assign_ticket(complain_id, [int(e) for e in b["employees"]],
+                                                                    b.get("dept_id"), bool(b.get("sms_employees"))))
+    background.add_task(refresh_tickets, t)  # also messages the newly assigned technicians
     return {"ok": True}
 
 
 @app.post("/internal/{company_id}/tickets/{complain_id}/edit")
-async def edit_ticket(request: Request, company_id: int, complain_id: int):
+async def edit_ticket(request: Request, company_id: int, complain_id: int, background: BackgroundTasks):
     """Desk "Edit": category, priority, complaint mobile, description (and staff, when given) of an open ticket."""
     t = internal_tenant(request, company_id)
     b = await request.json()
@@ -709,13 +714,23 @@ async def edit_ticket(request: Request, company_id: int, complain_id: int):
             api.assign_ticket(complain_id, [int(e) for e in b["employees"]], b.get("dept_id"), bool(b.get("sms_employees")))
         return msg
 
-    msg = billing_call(run)
-    refresh_tickets(t)
+    msg = await run_in_threadpool(billing_call, run)
+    cat = db.one("SELECT name FROM billing_options WHERE company_id = %s AND kind = 'categories' AND option_id = %s",
+                 (company_id, str(b["category_id"])))
+    prio = int(b.get("priority") or 2)
+    db.execute("""UPDATE billing_tickets SET category = COALESCE(%s, category), priority = %s, description = %s,
+                    raw = COALESCE(raw, '{}'::jsonb) || %s::jsonb, updated_at = now()
+                  WHERE company_id = %s AND complain_id = %s""",
+               (cat["name"] if cat else None, {1: "low", 2: "medium", 3: "high"}.get(prio), b["comment"].strip()[:1900],
+                json.dumps({"ProblemCategoryId": int(b["category_id"]), "ProblemPriorityId": prio,
+                            "ComplainNumber": normalize_bd_mobile(b["mobile"]) or b["mobile"]}),
+                company_id, str(complain_id)))
+    background.add_task(refresh_tickets, t)
     return {"ok": True, "message": msg}
 
 
 @app.post("/internal/{company_id}/tickets/{complain_id}/solve")
-async def solve(request: Request, company_id: int, complain_id: int):
+async def solve(request: Request, company_id: int, complain_id: int, background: BackgroundTasks):
     """Desk "Solve": only when the customer's PPPoE is online on our MikroTik right now."""
     t = internal_tenant(request, company_id)
     b = await request.json()
@@ -727,14 +742,16 @@ async def solve(request: Request, company_id: int, complain_id: int):
     if row["state"] not in ("pending", "processing"):
         raise HTTPException(status_code=400, detail="টিকিটটা আগেই সমাধান হয়েছে")
     from engine.ppp_sync import online_now
-    mk = online_now(company_id, row["username"] or "", row["server"])
+    mk = await run_in_threadpool(online_now, company_id, row["username"] or "", row["server"])
     if mk is None:
         raise HTTPException(status_code=400, detail="MikroTik থেকে উত্তর আসেনি, তাই অনলাইন কিনা যাচাই করা গেল না")
     if not mk.get("online"):
         raise HTTPException(status_code=400, detail="কাস্টমার MikroTik-এ অফলাইন, লাইন চালু হলে Solve করুন")
     api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
-    billing_call(lambda: api.solve_ticket(complain_id, (b.get("remark") or "")[:500]))
-    refresh_tickets(t)
+    await run_in_threadpool(billing_call, lambda: api.solve_ticket(complain_id, (b.get("remark") or "")[:500]))
+    db.execute("""UPDATE billing_tickets SET state = 'solved', solved_at = now(), solved_by = COALESCE(solved_by, assigned_to),
+                    updated_at = now() WHERE company_id = %s AND complain_id = %s""", (company_id, str(complain_id)))
+    background.add_task(refresh_tickets, t)
     return {"ok": True, "uptime": mk.get("uptime")}
 
 
