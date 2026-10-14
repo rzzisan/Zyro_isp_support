@@ -219,15 +219,18 @@ class ISPDigital:
     # --- write: support tickets -----------------------------------------------------
     def ticket_form(self) -> tuple[str, dict[str, str]]:
         """Anti-forgery token of the New Ticket form + {category name: id}."""
-        with self._lock:
-            if not self._logged_in:
-                self.login()
-            h = self._client.get("/ClientSupport/DailyComplainList").text
-        i = h.find('id="frmAdminSupportTicket"')
-        m = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"', h[i:i + 5000]) if i >= 0 else None
-        if not m:
+        # the shared session may have been logged out (someone signed in with the same billing user elsewhere):
+        # the page then comes without the form, so log in again once before giving up
+        for attempt in (1, 2):
+            h = self.page("/ClientSupport/DailyComplainList")
+            i = h.find('id="frmAdminSupportTicket"')
+            m = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"', h[i:i + 5000]) if i >= 0 else None
+            if m:
+                break
             self._logged_in = False
-            raise LoginError("ticket form not available")
+            log.warning("ticket form missing (attempt %s), logging in again", attempt)
+        else:
+            raise LoginError("বিলিংয়ের টিকিট ফর্ম পাওয়া যায়নি (বিলিং লগইন বাতিল হয়েছে)। একটু পরে আবার চেষ্টা করুন।")
         sel = re.search(r'<select[^>]*id="ProblemCategoryId".*?</select>', h, re.S)
         cats = {html.unescape(name).strip(): cid for cid, name in
                 re.findall(r'<option value="(\d+)"[^>]*>([^<]+)</option>', sel.group(0))} if sel else {}
