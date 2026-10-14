@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\App\Resources\DailyBills\Pages\ListDailyBills;
 use App\Filament\App\Resources\Tickets\Pages\ListTickets;
 use App\Models\Company;
+use App\Models\MikrotikRouter;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,6 +35,15 @@ class HeaderShortcutsTest extends TestCase
         foreach (['/inbox"', '/daily-bills?action=receiveBill"', '/tickets?action=newTicket"'] as $path) {
             $this->assertMatchesRegularExpression('#href="[^"]*'.preg_quote($path, '#').'#', $html);
         }
+    }
+
+    public function test_monitoring_shortcut_only_with_a_mikrotik(): void
+    {
+        $owner = $this->member('owner');
+        $this->assertStringNotContainsString('/monitoring"', $this->actingAs($owner)->get('/app/'.$this->company->slug)->getContent());
+        MikrotikRouter::create(['company_id' => $this->company->id, 'host' => 'h', 'api_port' => 8728, 'username' => 'u', 'password' => 'p']);
+        $html = $this->actingAs($owner)->get('/app/'.$this->company->slug)->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('#href="[^"]*/monitoring" class="z-shortcut"#', $html);
     }
 
     public function test_shortcut_follows_menu_permission(): void
