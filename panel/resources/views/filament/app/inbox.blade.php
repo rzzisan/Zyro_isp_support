@@ -114,7 +114,7 @@
                                         @if ($m->type === 'audio')
                                             <audio controls preload="none" src="{{ $src }}"></audio>
                                         @elseif (in_array($m->type, ['image', 'sticker'], true))
-                                            <a href="{{ $src }}" target="_blank"><img src="{{ $src }}" loading="lazy" alt="ছবি"></a>
+                                            <a href="{{ $src }}" target="_blank" x-on:click.prevent="$dispatch('zi-photo', { src: @js($src) })"><img src="{{ $src }}" loading="lazy" alt="ছবি"></a>
                                         @elseif ($m->type === 'video')
                                             <video controls preload="none" src="{{ $src }}"></video>
                                         @else
@@ -252,5 +252,15 @@
                 @endforelse
             </aside>
         @endif
+    </div>
+    {{-- photo viewer: images open here on top of the chat instead of a new tab --}}
+    <div x-data="{ src: null }" x-on:zi-photo.window="src = $event.detail.src" x-on:keydown.escape.window="src = null"
+         x-show="src" x-cloak x-transition.opacity class="zi-photo" x-on:click.self="src = null">
+        <img x-bind:src="src" alt="ছবি">
+        <div class="zi-photo-bar">
+            <a x-bind:href="src" target="_blank" title="নতুন ট্যাবে খুলুন">↗</a>
+            <a x-bind:href="src" download title="ডাউনলোড">⤓</a>
+            <button type="button" x-on:click="src = null" title="বন্ধ করুন">✕</button>
+        </div>
     </div>
 </x-filament-panels::page>

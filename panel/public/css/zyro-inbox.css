@@ -156,3 +156,11 @@
 .zi-row.in.technician .zi-b { background: #ede9fe; }
 .dark .zi-row.in.technician .zi-b { background: #312e81; }
 .zi-row.in.technician .zi-who { color: #6d28d9; }
+
+/* photo viewer */
+.zi-photo { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .85); display: flex; align-items: center; justify-content: center; padding: 48px 16px 16px; }
+.zi-photo img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+.zi-photo-bar { position: absolute; top: 10px; right: 14px; display: flex; gap: 8px; }
+.zi-photo-bar a, .zi-photo-bar button { width: 36px; height: 36px; border-radius: 999px; background: rgba(255, 255, 255, .15); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; text-decoration: none; border: 0; cursor: pointer; }
+.zi-photo-bar a:hover, .zi-photo-bar button:hover { background: rgba(255, 255, 255, .3); }
+[x-cloak] { display: none !important; }
