@@ -3,6 +3,7 @@
 namespace App\Filament\App\Pages;
 
 use App\Filament\App\Resources\Customers\CustomerResource;
+use App\Filament\App\TicketActions;
 use App\Models\BillingCustomer;
 use App\Models\BillingOption;
 use App\Models\MikrotikRouter;
@@ -286,6 +287,11 @@ class Monitoring extends Page implements HasTable
             ->deferFilters(false) // apply as soon as a value is picked (no "Apply filters" click)
             ->filtersFormColumns(5)
             ->recordActions([
+                // one click: the new-ticket form with this customer (and, when offline, the problem) already filled in
+                TicketActions::newTicket(fn ($record) => [$record?->customer_id, $record && ! $record->s_online
+                    ? 'লাইন অফলাইন'.($record->s_seen ? ', শেষ অনলাইন '.Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : '')
+                    : null])
+                    ->label('টিকিট')->icon(Heroicon::OutlinedTicket)->color('warning'),
                 Action::make('recheck')->label('রি-চেক')->icon(Heroicon::OutlinedArrowPath)->color('gray')
                     ->action(function ($record) {
                         $this->runOn($record, 'recheck', fn ($r) => ($r['online'] ?? null) === null

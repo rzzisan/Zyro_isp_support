@@ -101,17 +101,29 @@ class TicketActions
         return \App\Models\BillingCustomer::searchLabel($c);
     }
 
-    /** @param  string|null  $customerId  prefill (e.g. from a chat) */
-    public static function newTicket(?string $customerId = null): Action
+    /**
+     * @param  string|\Closure|null  $customerId  prefill (e.g. from a chat); a closure gets the table row and returns
+     *                                             [customer id, problem description or null]
+     */
+    public static function newTicket(string|\Closure|null $customerId = null): Action
     {
+        $prefill = fn (Action $action) => $customerId instanceof \Closure ? array_pad((array) $customerId($action->getRecord()), 2, null) : [$customerId, null];
+
         return Action::make('newTicket')->label('নতুন টিকিট')->icon(Heroicon::OutlinedPlusCircle)
             ->modalHeading('বিলিং সফটওয়্যারে নতুন টিকিট')
-            ->modalDescription('কাস্টমার বাছলে তার লাইনের এখনকার অবস্থা দেখাবে')
+            ->modalDescription(function (Action $action) use ($prefill) {
+                [$id] = $prefill($action);
+                $open = $id ? BillingTicket::where('company_id', static::company())->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$id])
+                    ->whereIn('state', ['pending', 'processing'])->orderByDesc('id')->value('complain_id') : null;
+
+                return $open ? "এই কাস্টমারের টিকিট #{$open} এখনও খোলা আছে" : 'কাস্টমার বাছলে তার লাইনের এখনকার অবস্থা দেখাবে';
+            })
             ->modalIcon(Heroicon::OutlinedTicket)
             ->modalWidth('4xl')
             ->modalSubmitActionLabel('টিকিট খুলুন')
-            ->fillForm(function () use ($customerId) {
-                $data = ['priority' => '2', 'sms_client' => false, 'sms_employees' => false];
+            ->fillForm(function (Action $action) use ($prefill) {
+                [$customerId, $comment] = $prefill($action);
+                $data = ['priority' => '2', 'sms_client' => false, 'sms_employees' => false, 'comment' => $comment];
                 if ($customerId) {
                     try {
                         $c = collect(static::searchCustomers($customerId))->firstWhere('customer_id', $customerId);
