@@ -86,7 +86,7 @@ def collect(company_id: int, user_id: int, api: ISPDigital, header_id: int, b: d
                   (company_id, header_id)) or {}
     log = {"company_id": company_id, "user_id": user_id or None, "customer_header_id": header_id,
            "customer_id": cust.get("customer_id"), "customer_name": cust.get("name"), "paid": paid, "discount": discount,
-           "trx_no": trx_no or None, "remarks": remarks or None, "send_sms": bool(b.get("sms", True)),
+           "trx_no": trx_no or None, "remarks": remarks or None, "send_sms": False,  # the customer's SMS goes from the Desk (App\Support\Sms::billPaid), never billing's
            "next_billing_date": bool(b.get("next_billing_date"))}
     lock = _lock(company_id, header_id)
     if not lock.acquire(blocking=False):

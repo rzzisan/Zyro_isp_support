@@ -412,7 +412,7 @@ class ISPDigital:
         return [r for r in (data or {}).get("data", []) if not r.get("IsApproved") and not r.get("IsDeleted")]
 
     def receive_bill(self, form: dict, paid: float, discount: float, method_id: str, received_by_id: str,
-                     remarks: str = "", trx_no: str = "", send_sms: bool = True, next_billing_date: bool = False,
+                     remarks: str = "", trx_no: str = "", send_sms: bool = False, next_billing_date: bool = False,
                      received_from: str | None = None, bill_month: str | None = None) -> str:
         """Submit a filled Receive Bill form (from bill_form) like the modal's Submit. Returns the panel's message.
         The collection stays pending until a staff member approves it in the billing software."""
@@ -436,7 +436,7 @@ class ISPDigital:
 
 
 def receive_payload(form: dict, paid: float, discount: float, method_id: str, received_by_id: str, remarks: str = "",
-                    trx_no: str = "", send_sms: bool = True, next_billing_date: bool = False,
+                    trx_no: str = "", send_sms: bool = False, next_billing_date: bool = False,
                     received_from: str | None = None, bill_month: str | None = None) -> list[tuple[str, str]]:
     """Form fields of a filled Receive Bill form, as the modal's Submit posts them."""
     payable = form["payable"]

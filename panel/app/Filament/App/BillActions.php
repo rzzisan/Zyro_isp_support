@@ -64,10 +64,10 @@ class BillActions
         return ['paid' => (float) ($f['payable'] ?? 0) ?: null, 'discount' => 0,
             'method_id' => $f['method_default'] ?? null, 'received_by_id' => $f['received_by_default'] ?? null,
             'bill_month' => $f['bill_month'] ?? null, 'expected_payable' => $f['payable'] ?? null,
-            'sms' => false, 'desk_sms' => static::deskSmsDefault(), 'next_billing_date' => true, 'print' => true];
+            'desk_sms' => static::deskSmsDefault(), 'next_billing_date' => true, 'print' => true];
     }
 
-    /** "কাস্টমারকে SMS (Desk)": the gateway settings' "বিল নিলে কাস্টমারকে SMS", when a bill-payment template is set. */
+    /** "কাস্টমারকে SMS": the gateway settings' "বিল নিলে কাস্টমারকে SMS", when a bill-payment template is set. */
     private static function deskSmsDefault(): bool
     {
         $s = SmsSetting::forCompany(static::company());
@@ -137,7 +137,7 @@ class BillActions
             ->modalSubmitActionLabel('বিল জমা দিন')
             ->fillForm(function (?BillingCustomer $record = null) use ($customer, $forRecord) {
                 $c = $customer ?? ($forRecord ? $record : null);
-                $plain = ['sms' => false, 'desk_sms' => static::deskSmsDefault(), 'next_billing_date' => true, 'print' => true];
+                $plain = ['desk_sms' => static::deskSmsDefault(), 'next_billing_date' => true, 'print' => true];
                 if (! $c) {
                     return $plain;
                 }
@@ -206,13 +206,14 @@ class BillActions
                         ->required(fn ($get) => (float) $get('discount') > 0
                             || abs((float) $get('paid') + (float) $get('discount') - (float) $get('expected_payable')) > 0.001)
                         ->placeholder('আংশিক টাকা বা ডিসকাউন্ট হলে লিখতে হবে'),
-                    Grid::make(4)->schema([
+                    Grid::make(3)->schema([
                         Toggle::make('print')->label('জমার পর রিসিট প্রিন্ট')->default(true),
-                        Toggle::make('desk_sms')->label('কাস্টমারকে SMS (Desk)')
-                            ->visible(fn () => SmsSetting::forCompany(static::company())->billSmsReady())
-                            ->hintIcon('heroicon-o-information-circle', 'জমা হলে Desk-এর SMS গেটওয়ে দিয়ে "বিল পরিশোধ" টেমপ্লেটের SMS যায় (জমা দেরি হয় না)'),
-                        Toggle::make('sms')->label('বিলিং থেকে SMS')
-                            ->hintIcon('heroicon-o-information-circle', 'বিলিং সফটওয়্যারের নিজের SMS; চালু করলে বিলিং SMS পাঠিয়ে তবে উত্তর দেয়, জমা হতে ২০-৬০ সেকেন্ড লাগে'),
+                        // the customer's SMS goes only from the Desk's gateway; billing is always told not to send one
+                        Toggle::make('desk_sms')->label('কাস্টমারকে SMS')
+                            ->disabled(fn () => ! SmsSetting::forCompany(static::company())->billSmsReady())
+                            ->hintIcon('heroicon-o-information-circle', fn () => SmsSetting::forCompany(static::company())->billSmsReady()
+                                ? 'জমা হলে Desk-এর SMS গেটওয়ে দিয়ে "বিল পরিশোধ" টেমপ্লেটের SMS যায় (জমা দেরি হয় না)'
+                                : 'চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "বিল পরিশোধের টেমপ্লেট" সেট করুন'),
                         Toggle::make('next_billing_date')->label('পরের বিলিং তারিখ সেট')
                             ->hintIcon('heroicon-o-information-circle', 'বিলিং-এর "Is it next billing date?"'),
                     ]),
@@ -226,7 +227,7 @@ class BillActions
                         'paid' => (float) $data['paid'], 'discount' => (float) ($data['discount'] ?? 0),
                         'method_id' => (string) $data['method_id'], 'received_by_id' => (string) $data['received_by_id'],
                         'trx_no' => $data['trx_no'] ?? '', 'remarks' => $data['remarks'] ?? '',
-                        'bill_month' => $data['bill_month'] ?? null, 'sms' => (bool) ($data['sms'] ?? true),
+                        'bill_month' => $data['bill_month'] ?? null, 'sms' => false,  // never billing's SMS
                         'next_billing_date' => (bool) ($data['next_billing_date'] ?? true),
                         'expected_payable' => isset($data['expected_payable']) ? (float) $data['expected_payable'] : null,
                     ]);

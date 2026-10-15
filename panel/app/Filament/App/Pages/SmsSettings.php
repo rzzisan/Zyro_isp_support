@@ -85,7 +85,7 @@ class SmsSettings extends CompanySettingsPage
                 ->helperText('গেটওয়ে নেওয়া প্রতিটা SMS-এর অবস্থা (পৌঁছেছে / ব্যর্থ) ১০ মিনিট পরপর ৪৮ ঘণ্টা পর্যন্ত জিজ্ঞেস করা হয়'),
             Grid::make(2)->schema([
                 Toggle::make('bill_sms')->label('বিল নিলে কাস্টমারকে SMS')
-                    ->helperText('"বিল নিন" ফর্মে "কাস্টমারকে SMS (Desk)" ডিফল্টে চালু থাকবে; প্রতিবার ফর্মে বন্ধ করা যায়। SMS যায় এই গেটওয়ে দিয়ে, বিলিং দিয়ে নয়।'),
+                    ->helperText('"বিল নিন" ফর্মে "কাস্টমারকে SMS" ডিফল্টে চালু থাকবে; প্রতিবার ফর্মে বন্ধ করা যায়। SMS যায় শুধু এই গেটওয়ে দিয়ে, বিলিং থেকে কখনো নয়।'),
                 Select::make('bill_template_id')->label('বিল পরিশোধের টেমপ্লেট')
                     ->options(fn () => SmsTemplate::billPaidOptions((int) Filament::getTenant()->getKey()))
                     ->required(fn ($get) => (bool) $get('bill_sms'))

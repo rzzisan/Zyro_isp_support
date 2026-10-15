@@ -72,7 +72,7 @@ class BillCollectionTest extends TestCase
         Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])
             ->assertActionVisible('receiveBill')
             ->mountAction('receiveBill')
-            ->assertSchemaStateSet(['paid' => 525.0, 'method_id' => '71', 'received_by_id' => '1', 'bill_month' => 'October', 'sms' => false], 'mountedActionSchema0')
+            ->assertSchemaStateSet(['paid' => 525.0, 'method_id' => '71', 'received_by_id' => '1', 'bill_month' => 'October'], 'mountedActionSchema0')
             ->callMountedAction()->assertHasNoActionErrors();
         Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/customers/3/bill"
             && $r->hasHeader('x-internal-key', 'k') && $r['paid'] == 525 && $r['discount'] == 0 && $r['method_id'] === '71'
@@ -91,7 +91,7 @@ class BillCollectionTest extends TestCase
         $this->as($this->owner);
         Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])
             ->mountAction('receiveBill')
-            ->assertSchemaStateSet(['desk_sms' => true, 'sms' => false], 'mountedActionSchema0')
+            ->assertSchemaStateSet(['desk_sms' => true], 'mountedActionSchema0')
             ->fillForm(['paid' => 400, 'discount' => 25, 'remarks' => 'partial'])
             ->callMountedAction()->assertHasNoActionErrors();
         // billing's own SMS stays off; the Desk queues its own
@@ -152,7 +152,7 @@ class BillCollectionTest extends TestCase
         // বিল কালেকশন page: picking a customer fills the form and re-renders just its body
         Livewire::test(ListDailyBills::class)
             ->mountAction('receiveBill')->fillForm(['header_id' => '3'])
-            ->assertSchemaStateSet(['paid' => 525.0, 'method_id' => '71', 'received_by_id' => '1', 'sms' => false], 'mountedActionSchema0')
+            ->assertSchemaStateSet(['paid' => 525.0, 'method_id' => '71', 'received_by_id' => '1'], 'mountedActionSchema0')
             ->fillForm(['paid' => 500, 'discount' => 25]);
     }
 
