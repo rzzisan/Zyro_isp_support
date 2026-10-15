@@ -55,6 +55,12 @@ class Sms
         'time' => 'সময়',
     ];
 
+    /** Only in a bill reminder (filled by sms:bill-reminders). */
+    public const REMINDER_PLACEHOLDERS = [
+        'expire_date' => 'মেয়াদ শেষের তারিখ',
+        'days_left' => 'আর কত দিন',
+    ];
+
     /** [placeholder => label] a template of this type may use. */
     public static function placeholders(string $type = 'general'): array
     {
@@ -63,17 +69,23 @@ class Sms
         return match ($type) {
             'bill_paid' => self::BILL_PLACEHOLDERS + $out,
             'ticket_open', 'ticket_solved' => self::TICKET_PLACEHOLDERS + $out,
+            'bill_reminder' => self::REMINDER_PLACEHOLDERS + $out,
             default => $out,
         };
     }
 
-    /** Bill / ticket placeholders used in a text that is not such an SMS (they stay empty there). */
+    /** Placeholders of the automatic SMS (bill / ticket / reminder) used in a normal SMS (they stay empty there). */
     public static function billOnly(string $body): array
     {
         preg_match_all('/\{(\w+)\}/', $body, $m);
 
-        return array_values(array_unique(array_diff(array_intersect($m[1],
-            array_keys(self::BILL_PLACEHOLDERS + self::TICKET_PLACEHOLDERS)), array_keys(self::PLACEHOLDERS))));
+        return array_values(array_unique(array_diff(array_intersect($m[1], array_keys(static::eventOnly())),
+            array_keys(self::PLACEHOLDERS))));
+    }
+
+    private static function eventOnly(): array
+    {
+        return self::BILL_PLACEHOLDERS + self::TICKET_PLACEHOLDERS + self::REMINDER_PLACEHOLDERS;
     }
 
     private static array $companyNames = [];
@@ -165,7 +177,7 @@ class Sms
             }
             $col = self::PLACEHOLDERS[$m[1]][1] ?? null;
             if (! $col) {
-                return isset(self::BILL_PLACEHOLDERS[$m[1]]) || isset(self::TICKET_PLACEHOLDERS[$m[1]]) || $m[1] === 'company' ? '' : $m[0];
+                return isset(static::eventOnly()[$m[1]]) || $m[1] === 'company' ? '' : $m[0];
             }
             $v = is_array($c) ? ($c[$col] ?? null) : $c?->{$col};
             if (in_array($col, ['due', 'monthly_bill'], true)) {

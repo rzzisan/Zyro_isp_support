@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Desk bill reminder SMS every hour (each company sends at its own hour, once per reminder)
+
+[Timer]
+OnCalendar=*-*-* *:05:00
+Persistent=true
+Unit=zyro-sms-reminder.service
+
+[Install]
+WantedBy=timers.target

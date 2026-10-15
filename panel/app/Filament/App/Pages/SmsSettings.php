@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\SmsSetting;
 use App\Models\SmsTemplate;
 use App\Services\Engine;
+use App\Support\BillReminders;
 use App\Support\Sms;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -20,6 +21,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use RuntimeException;
 
 /** The company's SMS gateway (Khudebarta). Keys are stored encrypted and never shown again. Owner/Admin only. */
@@ -50,7 +52,9 @@ class SmsSettings extends CompanySettingsPage
         /** @var SmsSetting $record */
         return ['endpoint_url' => $record->endpoint_url, 'status_url' => $record->status_url, 'caller_id' => $record->caller_id,
             'verify_tls' => $record->verify_tls, 'enabled' => $record->enabled, 'rate' => $record->rate,
-            'api_key' => null, 'secret_key' => null] + static::eventData($record);
+            'api_key' => null, 'secret_key' => null, 'reminder_days' => $record->reminder_days ?? '3',
+            'reminder_hour' => $record->reminder_hour ?? 10, 'reminder_due_only' => $record->reminder_due_only ?? true]
+            + static::eventData($record);
     }
 
     /** Events that send the customer an SMS from the Desk: template type => toggle label. */
@@ -58,6 +62,7 @@ class SmsSettings extends CompanySettingsPage
         'bill_paid' => 'বিল নিলে ("বিল নিন")',
         'ticket_open' => 'টিকিট খুললে',
         'ticket_solved' => 'টিকিট সমাধান হলে',
+        'bill_reminder' => 'বিল রিমাইন্ডার (মেয়াদ শেষের আগে)',
     ];
 
     /** On/off and template of every event; a missing template defaults to the company's first one of that type. */
@@ -110,6 +115,26 @@ class SmsSettings extends CompanySettingsPage
                         ->options(fn () => SmsTemplate::optionsFor((int) Filament::getTenant()->getKey(), $type))
                         ->required(fn ($get) => (bool) $get(SmsTemplate::SETTINGS[$type][0])),
                 ])->all()),
+            Section::make('বিল রিমাইন্ডার')->columns(3)->collapsible()
+                ->description('কাস্টমারের মেয়াদ শেষের তারিখ = বিলিংয়ের Billing Last Date (মাসের ওই দিন)। চালু থাকলে নিচের সময়ে প্রতিদিন যাদের মেয়াদ ঠিক অত দিন পরে শেষ, তারা "বিল রিমাইন্ডার" টেমপ্লেটের SMS পান; একই মেয়াদের একই দিনের রিমাইন্ডার কাউকে দুইবার যায় না। Left কাস্টমার আর বন্ধ লাইন বাদ।')
+                ->schema([
+                    TextInput::make('reminder_days')->label('কত দিন আগে')->required()->maxLength(30)
+                        ->placeholder('যেমন 3 বা 3,1')->helperText('কমা দিয়ে কয়েকটা দিন; 0 = মেয়াদের দিনেই')
+                        ->rule('regex:/^\s*\d{1,2}(\s*,\s*\d{1,2})*\s*$/'),
+                    Select::make('reminder_hour')->label('কখন পাঠাবে')->required()->selectablePlaceholder(false)
+                        ->options(collect(range(6, 22))->mapWithKeys(fn ($h) => [$h => Carbon::createFromTime($h)->format('g:00 A')])->all()),
+                    Toggle::make('reminder_due_only')->label('শুধু বকেয়া থাকলে')->inline(false)
+                        ->helperText('বন্ধ করলে বিল দেওয়া কাস্টমারও পাবেন'),
+                    Placeholder::make('reminder_preview')->label('আগামীকাল কতজন পাবেন')->columnSpanFull()
+                        ->content(function () {
+                            $s = SmsSetting::forCompany(Filament::getTenant());
+                            $counts = BillReminders::preview((int) Filament::getTenant()->getKey(), $s,
+                                now(BillReminders::TZ)->addDay());
+
+                            return $counts ? collect($counts)->map(fn ($n, $d) => ($d === 0 ? 'মেয়াদের দিনে' : "$d দিন আগে").': '.number_format($n).' জন')->implode(' · ')
+                                .($s->eventOn('bill_reminder') ? '' : ' (রিমাইন্ডার এখন বন্ধ)') : '—';
+                        }),
+                ]),
             Toggle::make('verify_tls')->label('SSL সার্টিফিকেট যাচাই')->default(true)
                 ->helperText('গেটওয়ের সার্টিফিকেটের মেয়াদ শেষ হলে সংযোগ হবে না; তখন সাময়িকভাবে বন্ধ করা যায়'),
             Toggle::make('enabled')->label('SMS পাঠানো চালু')
@@ -135,6 +160,7 @@ class SmsSettings extends CompanySettingsPage
             $data[$k] = filled($data[$k] ?? null) ? trim($data[$k]) : null;
         }
         $data['caller_id'] = trim($data['caller_id']);
+        $data['reminder_days'] = implode(',', BillReminders::days($data['reminder_days'] ?? '3')) ?: '3';
         $data['company_id'] = Filament::getTenant()->id;
 
         return $data;

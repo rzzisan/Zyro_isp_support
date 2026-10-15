@@ -56,6 +56,7 @@ class SmsTemplateResource extends Resource
                     'bill_paid' => '"বিল নিন" দিয়ে বিল নেওয়ার পর কাস্টমারকে এই লেখা যায় (সেটিংস → SMS গেটওয়ে-তে বাছা টেমপ্লেট); {paid} {discount} {due} ওই বিল থেকে বসে',
                     'ticket_open' => 'Desk থেকে টিকিট খোলার পর কাস্টমারকে যায়; {ticket_no} {problem} {technician} ওই টিকিট থেকে বসে',
                     'ticket_solved' => 'Desk থেকে টিকিট Solve করার পর কাস্টমারকে যায়; {ticket_no} {problem} ওই টিকিট থেকে বসে',
+                    'bill_reminder' => 'মেয়াদ শেষের কয়েক দিন আগে নিজে থেকে যায় (সেটিংস → SMS গেটওয়ে → বিল রিমাইন্ডার); {expire_date} {days_left} বসে',
                     default => 'হাতে SMS পাঠানোর সময় বাছা যায়',
                 }),
             View::make('filament.app.sms.placeholders')->columnSpanFull()

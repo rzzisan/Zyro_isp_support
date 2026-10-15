@@ -24,7 +24,8 @@ class SmsSetting extends Model
     {
         return ['api_key' => 'encrypted', 'secret_key' => 'encrypted', 'portal_password' => 'encrypted',
             'portal_token' => 'encrypted', 'portal_refresh_token' => 'encrypted', 'portal_token_expires_at' => 'datetime',
-            'portal_login_failed_at' => 'datetime', 'verify_tls' => 'boolean', 'enabled' => 'boolean', 'bill_sms' => 'boolean', 'ticket_open_sms' => 'boolean', 'ticket_solved_sms' => 'boolean',
+            'portal_login_failed_at' => 'datetime', 'verify_tls' => 'boolean', 'enabled' => 'boolean', 'bill_sms' => 'boolean', 'ticket_open_sms' => 'boolean', 'ticket_solved_sms' => 'boolean', 'reminder_sms' => 'boolean',
+            'reminder_due_only' => 'boolean', 'reminder_hour' => 'integer',
             'rate' => 'decimal:4', 'balance' => 'decimal:2', 'balance_checked_at' => 'datetime', 'last_check_ok' => 'boolean'];
     }
 
