@@ -1087,3 +1087,39 @@ def olt_test(request: Request, company_id: int, olt_id: int):
     db.execute("UPDATE olts SET sys_name = %s, sys_descr = %s, updated_at = now() WHERE id = %s",
                (info["sys_name"], info["sys_descr"], olt_id))
     return {**info, "supported": o["brand"] in olt_sync.DRIVERS}
+
+
+# --- Desk SMS (engine/sms.py): no billing involved, so only the key is checked ------------------------------------
+def internal_key(request: Request) -> None:
+    key = request.headers.get("x-internal-key", "")
+    if not INTERNAL_KEY or not hmac.compare_digest(key, INTERNAL_KEY):
+        raise HTTPException(status_code=403)
+
+
+@app.post("/internal/{company_id}/sms/kick")
+def sms_kick(request: Request, company_id: int):
+    """New SMS queued from the panel: send them now in a background thread (the minute timer is the fallback)."""
+    internal_key(request)
+    from engine import sms
+    return {"started": sms.kick(company_id)}
+
+
+@app.post("/internal/{company_id}/sms/messages/{message_id}/send")
+def sms_send_now(request: Request, company_id: int, message_id: int):
+    """Test SMS from the gateway settings page: send this one now and answer with the gateway's reply."""
+    internal_key(request)
+    from engine import sms
+    try:
+        return sms.send_now(company_id, message_id)
+    except sms.GatewayError as e:
+        raise HTTPException(status_code=400, detail=str(e)[:300])
+
+
+@app.post("/internal/{company_id}/sms/balance")
+def sms_balance(request: Request, company_id: int):
+    internal_key(request)
+    from engine import sms
+    try:
+        return sms.check_balance(company_id)
+    except sms.GatewayError as e:
+        raise HTTPException(status_code=400, detail=str(e)[:300])

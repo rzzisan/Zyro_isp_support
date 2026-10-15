@@ -227,6 +227,28 @@ class Engine
         return static::call('post', "/internal/{$companyId}/customers/{$headerId}/bill", $data + ['user_id' => auth()->id()]) ?? [];
     }
 
+    /** New SMS in the queue: the engine starts sending now (otherwise its once-a-minute timer picks them up). */
+    public static function kickSms(int $companyId): void
+    {
+        try {
+            static::http()->timeout(3)->post("/internal/{$companyId}/sms/kick")->throw();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /** Test SMS: the engine sends this queued message now, even while sending is off; returns ok/status/text/error. */
+    public static function sendSmsNow(int $companyId, int $messageId): array
+    {
+        return static::call('post', "/internal/{$companyId}/sms/messages/{$messageId}/send") ?? [];
+    }
+
+    /** Ask the SMS gateway for the balance (saved in sms_settings); throws with the gateway's error. */
+    public static function smsBalance(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/sms/balance") ?? [];
+    }
+
     /** Turn a customer's line on/off in billing with the member's own login (customer list M.Status). */
     public static function switchLine(int $companyId, int $headerId, bool $on): array
     {

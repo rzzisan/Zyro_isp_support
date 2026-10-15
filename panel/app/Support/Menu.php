@@ -21,6 +21,7 @@ class Menu
         'monitoring' => ['অনলাইন মনিটরিং', true, false],
         'tickets' => ['টিকিট', true, false],
         'bills' => ['বিল কালেকশন', false, false],
+        'sms' => ['SMS (পাঠানো, লগ, টেমপ্লেট)', false, false],
         'line_enables' => ['লাইন চালু/বন্ধের রেকর্ড', true, false],
         'line_switch' => ['কাস্টমার লিস্টে লাইন চালু/বন্ধ', false, false],
         'onus' => ['ONU মনিটরিং', true, false],

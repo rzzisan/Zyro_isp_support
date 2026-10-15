@@ -43,6 +43,7 @@ class AppPanelProvider extends PanelProvider
             ->navigationGroups([
                 NavigationGroup::make('সাপোর্ট'),
                 NavigationGroup::make('কাস্টমার ও বিল'),
+                NavigationGroup::make('SMS'),
                 NavigationGroup::make('নেটওয়ার্ক'),
                 NavigationGroup::make('বিলিং কনফিগারেশন'),
                 NavigationGroup::make('WhatsApp ও AI'),
