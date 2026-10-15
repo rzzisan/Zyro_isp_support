@@ -6,18 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * The company's SMS gateway (Khudebarta, the same way BSOL sends): send URL, keys (encrypted), sender ID, on/off,
- * rate for the cost estimate; optional balance / delivery-report URLs. One row per company.
+ * The company's SMS gateway (Khudebarta "SMS HTTP API Published" v5.4.0): send URL, keys (encrypted), sender ID,
+ * on/off, rate for the cost estimate, optional delivery-report URL. Balance and validation use the same host.
+ * One row per company. (The portal_* / balance_url / provider_id columns of the first version are no longer used:
+ * the web portal refuses non-browser logins.)
  */
 class SmsSetting extends Model
 {
-    /** Khudebarta's HTTP send API (the old http://118.67.213.114:3775 refuses connections since 2026-10). */
+    /** Khudebarta's HTTP API (the old http://118.67.213.114:3775 refuses connections since 2026-10). */
     public const KHUDEBARTA_SEND_URL = 'http://portal.khudebarta.com:3775/sendtext';
-
-    /** Khudebarta web portal API (its Technical Details page and login script, 2026-10-15). */
-    public const KHUDEBARTA_BALANCE_URL = 'https://portal.khudebarta.com:9494/api/util/get-current-balance?providerID={provider_id}';
-
-    public const KHUDEBARTA_LOGIN_URL = 'https://portal.khudebarta.com:9494/api/auth/login';
 
     protected $guarded = [];
 
@@ -41,8 +38,7 @@ class SmsSetting extends Model
         $id = $company instanceof Company ? $company->id : $company;
 
         return static::firstOrNew(['company_id' => $id], ['provider' => 'khudebarta', 'verify_tls' => true, 'enabled' => false,
-            'endpoint_url' => self::KHUDEBARTA_SEND_URL, 'balance_url' => self::KHUDEBARTA_BALANCE_URL,
-            'portal_login_url' => self::KHUDEBARTA_LOGIN_URL]);
+            'endpoint_url' => self::KHUDEBARTA_SEND_URL]);
     }
 
     public function configured(): bool

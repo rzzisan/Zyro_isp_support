@@ -1,25 +1,23 @@
 """Desk SMS: sends the queue (sms_messages) through each company's SMS gateway (Khudebarta), reads the balance and
 delivery reports. The panel only writes the queue (App\\Support\\Sms::queue) and wakes us (/internal/{c}/sms/kick).
 
-Gateway call, the same way BSOL sends: form POST to the send URL with apikey, secretkey, callerID, toUser
-(8801XXXXXXXXX), messageContent; one number per request. Answer {"Status":"0","Text":"ACCEPTD","Message_ID":"..."}
-= accepted; other Status = refused. Non-JSON answers: 2xx without error/failed/invalid/unauthorized = accepted (BSOL).
+Khudebarta "SMS HTTP API Published" v5.4.0 (docs/billing-sms-service.md):
+- send: POST http://<host>:3775/sendtext, Content-Type application/json, {apikey, secretkey, callerID,
+  toUser (880XXXXXXXXXX, several comma separated = bulk), messageContent} -> {"Status":"0","StatusDescription":"",
+  "Text":"ACCEPTD","Message_ID":"31771702[,31771704]"}; any other Status = refused (table ACCOUNT_ERRORS / NUMBER_ERRORS).
+  The same text to many numbers goes in one request (BULK numbers); a text with the customer's own details goes alone.
+- delivery: GET /getstatus?apikey&secretkey&messageid -> Status 0 DELIVRD, 4 SENT, 2 PENDING, 1 REJECTD.
+- balance: POST /api/v3/balance {apikey, secretkey} -> {"statusInfo": {"statusCode": "0", "availablebalance": "797.88"}}.
 
 Safety: nothing goes out while the company's "SMS পাঠানো চালু" (sms_settings.enabled) is off. A message caught in
-'sending' when a run dies becomes 'unknown' and is never sent again (no double SMS). 10 failures in a row with the
-same kind of error (wrong keys, no balance) switch sending off and keep the rest in the queue.
-Keys are never logged; logs carry message ids only.
-
-Balance: the gateway's web portal API (https://portal.khudebarta.com:9494/api): POST /auth/login {username, password}
--> idToken (JWT, ~1.5 h), refreshToken, userID (= providerID); GET /util/get-current-balance?providerID= with
-"Authorization: Bearer idToken"; on expiry GET /auth/refresh-access-token?oldToken&refreshToken -> {left, right}.
-Tokens are kept encrypted in sms_settings; a failed login pauses new logins for 10 minutes.
+'sending' when a run dies becomes 'unknown' and is never sent again (no double SMS). An account error (wrong keys,
+no balance, IP not allowed, sender ID blocked ...) switches sending off at once and keeps the rest in the queue;
+10 other failures of the same kind in a row do the same. Keys are never logged; logs carry message ids only.
 
 Run every minute by zyro-sms-send.timer (send + balance every 5 min + delivery reports):
   set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.sms [--company ID] [--status-only]
 """
 import argparse
-import base64
 import fcntl
 import json
 import logging
@@ -28,6 +26,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -35,13 +34,28 @@ from engine import db
 
 log = logging.getLogger("zyro-sms")
 LOCK_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-BATCH = 20               # claimed at a time
+BATCH = 100              # claimed at a time
+BULK = 50                # numbers per request when they get the same text
 WORKERS = 4              # parallel requests to the gateway
 MAX_FAIL_STREAK = 10
 BALANCE_EVERY = 300      # seconds
 ERROR_WORDS = re.compile(r"error|failed|invalid|unauthori[sz]ed|rejectd|rejected", re.I)
 DELIVERED = {"DELIVRD", "DELIVERED"}
 UNDELIVERED = {"UNDELIV", "UNDELIVERED", "REJECTD", "REJECTED", "EXPIRED", "FAILED", "DELETED"}
+
+# submit Status codes (API doc "Code descriptions"); account-level ones stop the whole queue
+ACCOUNT_ERRORS = {
+    "-1": "Org Client Not Found", "-4": "Insufficient Balance", "-5": "Org Rate Not Found", "-6": "Org Blocked",
+    "-7": "Invalid Sender ID", "-36": "Invalid Request Type", "-42": "Authorization Failed",
+    "-52": "License Limit Exceeded", "-54": "Sender ID Empty", "-59": "IP Not Allowed", "-60": "Invalid Hash value",
+    "-61": "Invalid parameter", "-64": "Sender ID Block", "-66": "Invalid API Key", "-67": "Invalid Secret Key",
+}
+NUMBER_ERRORS = {
+    "-3": "Invalid Dest No.", "-44": "ContactNo Blocked", "-45": "ContactNo Blocked by Admin", "-46": "Dipping Failed",
+    "-47": "Content not Whitelisted", "-48": "URL Blocked", "-49": "Content is Blocked", "-55": "Destination ID Empty",
+    "-56": "Message Content Empty", "-58": "HLR Request Failed", "-62": "Internal Server Error",
+    "-63": "Invalid Transaction ID", "-65": "Bulk Limit Exceeded", "-68": "Duplicate Transaction ID",
+}
 
 
 class GatewayError(RuntimeError):
@@ -65,7 +79,13 @@ def configured(s: dict | None) -> bool:
 
 
 def _client(s: dict) -> httpx.Client:
-    return httpx.Client(timeout=20, verify=bool(s.get("verify_tls", True)), follow_redirects=True)
+    return httpx.Client(timeout=30, verify=bool(s.get("verify_tls", True)), follow_redirects=True)
+
+
+def same_host(s: dict, path: str) -> str:
+    """http://host:3775/<path> from the send URL (balance and delivery live next to /sendtext)."""
+    u = urlsplit(s["endpoint_url"])
+    return urlunsplit((u.scheme, u.netloc, path, "", ""))
 
 
 def _short(text: str, keys: tuple = ()) -> str:
@@ -84,223 +104,103 @@ def _json(text: str):
 
 
 def parse_send(status_code: int, body: str) -> dict:
-    """Gateway answer -> {ok, status, text, message_id}."""
+    """Gateway answer -> {ok, status, text, description, message_ids (one per number, in order)}."""
     j = _json(body)
     if isinstance(j, list) and j:
         j = j[0]
     if isinstance(j, dict):
-        st = str(j.get("Status", j.get("status", "")))
-        txt = str(j.get("Text") or j.get("StatusDescription") or j.get("message") or "")
-        mid = str(j.get("Message_ID") or j.get("message_id") or j.get("MessageId") or "").split(",")[0] or None
+        st = str(j.get("Status", j.get("status", ""))).strip()
+        desc = str(j.get("StatusDescription") or "").strip() or ACCOUNT_ERRORS.get(st) or NUMBER_ERRORS.get(st) or ""
+        txt = str(j.get("Text") or "").strip()
+        ids = [i.strip() for i in str(j.get("Message_ID") or "").split(",") if i.strip() and i.strip() != "-1"]
         ok = 200 <= status_code < 300 and st == "0"
-        return {"ok": ok, "status": st or None, "text": txt or None, "message_id": mid}
+        return {"ok": ok, "status": st or None, "text": txt or None, "description": desc or None, "message_ids": ids}
     ok = 200 <= status_code < 300 and not ERROR_WORDS.search(body or "")
-    return {"ok": ok, "status": str(status_code), "text": (body or "")[:200] or None, "message_id": None}
+    return {"ok": ok, "status": str(status_code), "text": (body or "")[:200] or None, "description": None,
+            "message_ids": []}
 
 
-def send_one(s: dict, mobile: str, text: str, client: httpx.Client | None = None) -> dict:
-    data = {"apikey": s["api_key"], "secretkey": s["secret_key"], "callerID": s["caller_id"], "toUser": mobile,
-            "messageContent": text}
+def send_request(s: dict, mobiles: list[str], text: str, client: httpx.Client | None = None) -> dict:
+    """One /sendtext call (JSON POST) for one or several numbers getting the same text."""
+    body = {"apikey": s["api_key"], "secretkey": s["secret_key"], "callerID": s["caller_id"],
+            "toUser": ",".join(mobiles), "messageContent": text}
     c = client or _client(s)
     try:
-        r = c.post(s["endpoint_url"], data=data)
+        r = c.post(s["endpoint_url"], json=body)
     except httpx.HTTPError as e:
-        return {"ok": False, "status": None, "text": None, "message_id": None,
+        return {"ok": False, "status": None, "text": None, "description": None, "message_ids": [],
                 "error": _short(f"{type(e).__name__}: {e}", (s["api_key"], s["secret_key"]))}
     finally:
         if client is None:
             c.close()
     res = parse_send(r.status_code, r.text)
     if not res["ok"]:
-        res["error"] = _short(f"HTTP {r.status_code}: {r.text}", (s["api_key"], s["secret_key"]))
+        res["error"] = _short(f"{res['status']} {res['description'] or res['text'] or ''}".strip()
+                              if res["status"] and res["status"] != str(r.status_code) else f"HTTP {r.status_code}: {r.text}",
+                              (s["api_key"], s["secret_key"]))
     return res
 
 
-# --- balance -------------------------------------------------------------------------------------------------------
-LOGIN_PAUSE = 600        # seconds without a new portal login after a failed one (don't lock the account)
+def send_one(s: dict, mobile: str, text: str, client: httpx.Client | None = None) -> dict:
+    res = send_request(s, [mobile], text, client)
+    res["message_id"] = res["message_ids"][0] if res["message_ids"] else None
+    return res
 
 
-def portal_base(s: dict) -> str:
-    """https://portal.khudebarta.com:9494/api from .../api/auth/login."""
-    return re.sub(r"/auth/[^/]*$", "", s["portal_login_url"].rstrip("/"))
-
-
-def portal_balance_url(s: dict, provider_id: str | None) -> str | None:
-    url = s.get("balance_url")
-    if not url or ("{provider_id}" in url and not provider_id):
-        return None
-    return url.replace("{provider_id}", str(provider_id or ""))
-
-
+# --- balance / validate --------------------------------------------------------------------------------------------
 def _number(v) -> float | None:
-    if isinstance(v, bool):
-        return None
-    if isinstance(v, (int, float)):
-        return float(v)
-    if isinstance(v, str) and re.fullmatch(r"\s*-?[\d,]+(?:\.\d+)?\s*(?:BDT|TK|৳)?\s*", v, re.I):
-        return float(re.sub(r"[^\d.\-]", "", v))
-    return None
-
-
-def _find_balance(j):
-    """balance / credit / amount field anywhere in a JSON answer."""
-    if isinstance(j, dict):
-        for k, v in j.items():
-            if re.search(r"balance|credit|amount", str(k), re.I) and _number(v) is not None:
-                return _number(v)
-        for v in j.values():
-            found = _find_balance(v)
-            if found is not None:
-                return found
-    elif isinstance(j, list):
-        for v in j:
-            found = _find_balance(v)
-            if found is not None:
-                return found
-    return None
-
-
-def parse_balance(body: str) -> float | None:
-    j = _json(body)
-    if j is not None:
-        if _number(j) is not None:
-            return _number(j)
-        found = _find_balance(j)
-        if found is not None or isinstance(j, (dict, list)):
-            return found
-    if body and not ERROR_WORDS.search(body):
-        m = re.search(r"-?\d[\d,]*(?:\.\d+)?", body)
-        if m:
-            return float(m.group(0).replace(",", ""))
-    return None
-
-
-def _jwt_exp(token: str) -> float:
-    """Unix time a minute before the token runs out (30 minutes when it can't be read)."""
     try:
-        part = token.split(".")[1]
-        exp = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))).get("exp")
-        return float(exp) - 60 if exp else time.time() + 1800
-    except (ValueError, IndexError, AttributeError):
-        return time.time() + 1800
-
-
-def _save_tokens(company_id: int, token: str | None, refresh: str | None, provider_id: str | None = None) -> None:
-    db.execute(
-        """UPDATE sms_settings SET portal_token = %s, portal_refresh_token = %s,
-               portal_token_expires_at = CASE WHEN %s::text IS NULL THEN NULL ELSE to_timestamp(%s) AT TIME ZONE 'UTC' END,
-               portal_login_failed_at = CASE WHEN %s::text IS NULL THEN now() ELSE NULL END,
-               provider_id = coalesce(provider_id, %s), updated_at = now() WHERE company_id = %s""",
-        (db.encrypt(token) if token else None, db.encrypt(refresh) if refresh else None, token,
-         _jwt_exp(token) if token else 0, token, provider_id, company_id))
-
-
-def portal_login(company_id: int, s: dict, c: httpx.Client) -> tuple[str, str | None]:
-    """POST {base}/auth/login {"username", "password"} -> idToken, refreshToken, userID (= providerID).
-    A failed login pauses new logins for 10 minutes; tokens are kept encrypted in sms_settings, never logged."""
-    if not (s.get("portal_login_url") and s.get("portal_username") and s.get("portal_password")):
-        raise GatewayError("পোর্টাল লগইন (ইউজারনেম/পাসওয়ার্ড) দেওয়া নেই")
-    paused = db.one("""SELECT 1 FROM sms_settings WHERE company_id = %s
-                       AND portal_login_failed_at > now() - make_interval(secs => %s)""", (company_id, LOGIN_PAUSE))
-    if paused:
-        raise GatewayError("পোর্টাল লগইন একটু আগে ব্যর্থ হয়েছে; ১০ মিনিট পরে আবার চেষ্টা হবে (বা লগইন তথ্য বদলে সেভ করুন)")
-    try:
-        r = c.post(s["portal_login_url"], json={"username": s["portal_username"], "password": s["portal_password"]})
-    except httpx.HTTPError as e:
-        raise GatewayError(f"পোর্টালে সংযোগ হয়নি ({type(e).__name__})")
-    j = _json(r.text) if 200 <= r.status_code < 300 else None
-    j = j if isinstance(j, dict) else {}
-    if j.get("otpGenerationType") or j.get("passwordExpiredAt"):
-        _save_tokens(company_id, None, None)
-        raise GatewayError("পোর্টাল লগইনে OTP/পাসওয়ার্ড আপডেট লাগছে; portal.khudebarta.com-এ একবার হাতে লগইন করে ঠিক করুন")
-    token = j.get("idToken")
-    if not token:
-        _save_tokens(company_id, None, None)
-        raise GatewayError(f"পোর্টালে লগইন হয়নি (HTTP {r.status_code}); ইউজারনেম/পাসওয়ার্ড দেখুন")
-    provider = str(j.get("userID") or "") or None
-    _save_tokens(company_id, token, j.get("refreshToken"), provider)
-    return token, provider
-
-
-def portal_refresh(company_id: int, s: dict, c: httpx.Client) -> str | None:
-    """GET {base}/auth/refresh-access-token?oldToken&refreshToken -> {left: idToken, right: refreshToken}."""
-    if not (s.get("portal_token") and s.get("portal_refresh_token")):
+        return float(str(v).replace(",", "").strip())
+    except (TypeError, ValueError):
         return None
-    try:
-        r = c.get(portal_base(s) + "/auth/refresh-access-token",
-                  params={"oldToken": s["portal_token"], "refreshToken": s["portal_refresh_token"]})
-    except httpx.HTTPError:
-        return None
-    j = _json(r.text) if 200 <= r.status_code < 300 else None
-    if isinstance(j, dict) and j.get("left"):
-        _save_tokens(company_id, j["left"], j.get("right") or s["portal_refresh_token"])
-        return j["left"]
-    return None
-
-
-def billing_balance(company_id: int) -> float | None:
-    """Fallback: the billing software's SMS Gateway page shows the same Khudebarta account's balance
-    (`var smsBalance = 1496.25;`). Only that number is read; the page also holds the gateway login and is never kept.
-    The portal's own login refuses every non-browser client ("Forbidden from Charset Filter", 2026-10-15)."""
-    try:
-        from engine import tenant as tenants
-        from engine.ticket_sync import companies
-        ts = companies(company_id)
-        if not ts:
-            return None
-        page = tenants.billing(ts[0]).page("/companysettings/smsgateway")
-    except Exception as e:
-        log.info("company %s: billing sms balance not read (%s)", company_id, type(e).__name__)
-        return None
-    m = re.search(r"var\s+smsBalance\s*=\s*(-?[\d.]+)\s*;", page)
-    return float(m.group(1)) if m else None
 
 
 def check_balance(company_id: int) -> dict:
-    """Balance from the Khudebarta web portal: GET {balance_url} with Bearer idToken (portal login, refreshed or
-    logged in again on 401). The result is saved in sms_settings (balance, checked time, error)."""
+    """POST /api/v3/balance {apikey, secretkey} -> statusInfo.availablebalance; saved in sms_settings."""
     s = settings(company_id)
     if not configured(s):
         raise GatewayError("SMS গেটওয়ে সেট করা হয়নি")
-    secrets = (s["api_key"], s["secret_key"], s.get("portal_password"), s.get("portal_token"), s.get("portal_refresh_token"))
-    value, last = None, "no answer"
-    with _client(s) as c:
-        try:
-            token, provider = s.get("portal_token"), s.get("provider_id")
-            fresh = bool(token) and s.get("portal_token_expires_at") is not None and db.one(
-                "SELECT 1 FROM sms_settings WHERE company_id = %s AND portal_token_expires_at > now()", (company_id,))
-            if not fresh:
-                token = portal_refresh(company_id, s, c) if token else None
-                if not token:
-                    token, login_provider = portal_login(company_id, s, c)
-                    provider = provider or login_provider
-            url = portal_balance_url(s, provider)
-            if not url:
-                raise GatewayError("ব্যালান্স URL বা Provider ID নেই")
-            for attempt in (1, 2, 3):
-                r = c.get(url, headers={"Authorization": f"Bearer {token}"})
-                if r.status_code != 401 or attempt == 3:
-                    break
-                # expired: renew once, then a fresh login once
-                s = settings(company_id)
-                token = (portal_refresh(company_id, s, c) if attempt == 1 else None) or portal_login(company_id, s, c)[0]
-            if 200 <= r.status_code < 300:
-                value = parse_balance(r.text)
-            last = f"পোর্টাল HTTP {r.status_code}: {r.text}"
-        except GatewayError as e:
-            last = str(e)
-        except httpx.HTTPError as e:
-            last = f"পোর্টালে সংযোগ হয়নি ({type(e).__name__})"
+    value, err = None, None
+    try:
+        with _client(s) as c:
+            r = c.post(same_host(s, "/api/v3/balance"), json={"apikey": s["api_key"], "secretkey": s["secret_key"],
+                                                               "clienttransid": f"desk-{int(time.time())}"})
+        info = (_json(r.text) or {}).get("statusInfo") if isinstance(_json(r.text), dict) else None
+        if isinstance(info, dict) and str(info.get("statusCode")) == "0":
+            value = _number(info.get("availablebalance"))
+        if value is None:
+            code = str((info or {}).get("statusCode") or "")
+            err = f"statusCode {code} {(info or {}).get('errordescription') or ''}".strip() if code else f"HTTP {r.status_code}: {r.text}"
+    except httpx.HTTPError as e:
+        err = f"{type(e).__name__}: {e}"
     if value is None:
-        value = billing_balance(company_id)
-    if value is None:
-        err = _short(last, secrets)
+        err = _short(err or "no answer", (s["api_key"], s["secret_key"]))
         db.execute("""UPDATE sms_settings SET balance_checked_at = now(), last_check_ok = false, last_error = %s,
                       updated_at = now() WHERE company_id = %s""", (err, company_id))
         raise GatewayError(f"ব্যালান্স পাওয়া যায়নি: {err}")
     db.execute("""UPDATE sms_settings SET balance = %s, balance_checked_at = now(), last_check_ok = true, last_error = NULL,
                   updated_at = now() WHERE company_id = %s""", (value, company_id))
     return {"balance": value}
+
+
+def validate_client(company_id: int) -> dict:
+    """POST /validateclient {apikey, secretkey} -> {clientName, clientBalance, status SUCCESS}; no SMS is sent."""
+    s = settings(company_id)
+    if not configured(s):
+        raise GatewayError("SMS গেটওয়ে সেট করা হয়নি")
+    try:
+        with _client(s) as c:
+            r = c.post(same_host(s, "/validateclient"), json={"apikey": s["api_key"], "secretkey": s["secret_key"]})
+    except httpx.HTTPError as e:
+        raise GatewayError(_short(f"গেটওয়েতে সংযোগ হয়নি: {type(e).__name__}: {e}", (s["api_key"], s["secret_key"])))
+    j = _json(r.text)
+    if not (isinstance(j, dict) and str(j.get("status")).upper() == "SUCCESS"):
+        raise GatewayError(_short(f"গেটওয়ে key গ্রহণ করেনি (HTTP {r.status_code}: {r.text})", (s["api_key"], s["secret_key"])))
+    balance = _number(j.get("clientBalance"))
+    if balance is not None:
+        db.execute("""UPDATE sms_settings SET balance = %s, balance_checked_at = now(), last_check_ok = true,
+                      last_error = NULL, updated_at = now() WHERE company_id = %s""", (balance, company_id))
+    return {"client": j.get("clientName"), "balance": balance}
 
 
 # --- sending -------------------------------------------------------------------------------------------------------
@@ -325,12 +225,19 @@ def _claim(company_id: int) -> list[dict]:
            RETURNING id, campaign_id, mobile, text""", (company_id, BATCH))
 
 
-def _save(msg_id: int, res: dict) -> None:
+def _save(msg_id: int, res: dict, message_id: str | None = None) -> None:
+    text = res.get("text") or ""
+    if res.get("description") and res["description"] not in text:
+        text = f"{text} {res['description']}".strip()
     db.execute(
         """UPDATE sms_messages SET status = %s, gateway_status = %s, gateway_text = %s, message_id = %s, error = %s,
                sent_at = CASE WHEN %s THEN now() ELSE sent_at END, updated_at = now() WHERE id = %s""",
-        ("sent" if res["ok"] else "failed", res.get("status"), (res.get("text") or "")[:250] or None,
-         res.get("message_id"), None if res["ok"] else res.get("error"), res["ok"], msg_id))
+        ("sent" if res["ok"] else "failed", res.get("status"), text[:250] or None, message_id,
+         None if res["ok"] else res.get("error"), res["ok"], msg_id))
+
+
+def _requeue(ids: list[int]) -> None:
+    db.execute("UPDATE sms_messages SET status = 'queued', updated_at = now() WHERE id = ANY(%s) AND status = 'sending'", (ids,))
 
 
 def refresh_campaigns(company_id: int) -> None:
@@ -351,8 +258,18 @@ def refresh_campaigns(company_id: int) -> None:
         (company_id, company_id))
 
 
-def _error_kind(res: dict) -> str:
-    return str(res.get("status")) + ":" + re.sub(r"\d+", "#", (res.get("error") or "")[:60])
+def _jobs(batch: list[dict], bulk: int) -> list[list[dict]]:
+    """Messages with the same text go together (up to `bulk` numbers per request); the rest one by one."""
+    groups: dict[str, list[dict]] = {}
+    for m in batch:
+        groups.setdefault(m["text"], []).append(m)
+    return [g[i:i + bulk] for g in groups.values() for i in range(0, len(g), bulk)]
+
+
+def _switch_off(company_id: int, reason: str) -> None:
+    db.execute("UPDATE sms_settings SET enabled = false, last_error = %s, updated_at = now() WHERE company_id = %s",
+               (reason[:500], company_id))
+    log.error("company %s: sms sending switched off", company_id)
 
 
 def send_queue(company_id: int) -> dict:
@@ -360,14 +277,15 @@ def send_queue(company_id: int) -> dict:
     lock = _lock(company_id)
     if not lock:
         return {"running": True}
-    stats = {"sent": 0, "failed": 0, "stopped": None}
+    stats = {"sent": 0, "failed": 0, "requests": 0, "stopped": None}
+    bulk = BULK
     try:
         # cut off by a restart: never resend, the gateway may have taken it
         db.execute("""UPDATE sms_messages SET status = 'unknown', error = 'পাঠানোর সময় থেমে গিয়েছিল; আবার পাঠানো হয়নি',
                       updated_at = now() WHERE company_id = %s AND status = 'sending' AND updated_at < now() - interval '10 minutes'""",
                    (company_id,))
         streak, kind = 0, None
-        while True:
+        while not stats["stopped"]:
             s = settings(company_id)
             if not (configured(s) and s["enabled"]):
                 stats["stopped"] = "disabled"
@@ -375,27 +293,39 @@ def send_queue(company_id: int) -> dict:
             batch = _claim(company_id)
             if not batch:
                 break
+            jobs = _jobs(batch, bulk)
             with _client(s) as client, ThreadPoolExecutor(WORKERS) as pool:
-                results = list(pool.map(lambda m: (m, send_one(s, m["mobile"], m["text"], client)), batch))
-            for m, res in results:
-                _save(m["id"], res)
+                results = list(pool.map(lambda job: (job, send_request(s, [m["mobile"] for m in job], job[0]["text"], client)), jobs))
+            stats["requests"] += len(results)
+            back: list[int] = []
+            for job, res in results:
+                st = res.get("status")
                 if res["ok"]:
-                    stats["sent"] += 1
+                    ids = res["message_ids"] if len(res["message_ids"]) == len(job) else [None] * len(job)
+                    for m, mid in zip(job, ids):
+                        _save(m["id"], res, mid)
+                    stats["sent"] += len(job)
                     streak, kind = 0, None
+                elif st == "-65" and len(job) > 1:          # Bulk Limit Exceeded: smaller groups next time
+                    back += [m["id"] for m in job]
+                    bulk = max(1, len(job) // 2)
+                elif st in ACCOUNT_ERRORS:                    # nothing went out; keep them queued, stop sending
+                    back += [m["id"] for m in job]
+                    stats["stopped"] = f"account {st}"
+                    _switch_off(company_id, f"গেটওয়ে: {st} {ACCOUNT_ERRORS[st]} — পাঠানো বন্ধ করা হয়েছে, বাকি SMS অপেক্ষায় আছে")
                 else:
-                    stats["failed"] += 1
-                    k = _error_kind(res)
-                    streak = streak + 1 if k == kind else 1
-                    kind = k
-                    log.warning("sms %s failed: %s", m["id"], res.get("status"))
+                    for m in job:
+                        _save(m["id"], res)
+                    stats["failed"] += len(job)
+                    k = f"{st}:{re.sub(r'[0-9]+', '#', (res.get('error') or '')[:60])}"
+                    streak, kind = (streak + 1 if k == kind else 1), k
+                    log.warning("sms %s failed: %s", [m["id"] for m in job], st)
+            if back:
+                _requeue(back)
             refresh_campaigns(company_id)
-            if streak >= MAX_FAIL_STREAK:
-                err = f"পরপর {streak}টি SMS ব্যর্থ, পাঠানো বন্ধ করা হয়েছে: {(results[-1][1].get('error') or '')[:200]}"
-                db.execute("UPDATE sms_settings SET enabled = false, last_error = %s, updated_at = now() WHERE company_id = %s",
-                           (err, company_id))
+            if streak >= MAX_FAIL_STREAK and not stats["stopped"]:
                 stats["stopped"] = "failures"
-                log.error("company %s: sms sending switched off after %s failures in a row", company_id, streak)
-                break
+                _switch_off(company_id, f"পরপর {streak} বার ব্যর্থ, পাঠানো বন্ধ করা হয়েছে: {(results[-1][1].get('error') or '')[:200]}")
         refresh_campaigns(company_id)
     finally:
         fcntl.flock(lock, fcntl.LOCK_UN)
@@ -415,9 +345,10 @@ def send_now(company_id: int, message_id: int) -> dict:
     if not m:
         raise GatewayError("SMS-টা আর অপেক্ষায় নেই")
     res = send_one(s, m["mobile"], m["text"])
-    _save(m["id"], res)
+    _save(m["id"], res, res.get("message_id"))
     refresh_campaigns(company_id)
-    return {"ok": res["ok"], "status": res.get("status"), "text": res.get("text"), "error": res.get("error")}
+    return {"ok": res["ok"], "status": res.get("status"), "text": res.get("text"),
+            "description": res.get("description"), "error": res.get("error"), "message_id": res.get("message_id")}
 
 
 _running: set[int] = set()
@@ -445,34 +376,47 @@ def kick(company_id: int) -> bool:
 
 
 # --- delivery reports ----------------------------------------------------------------------------------------------
-def check_status(company_id: int, limit: int = 200) -> dict:
-    """Delivery state of SMS the gateway took in the last 2 days (only when a delivery report URL is set)."""
+def status_url(s: dict) -> str:
+    return s.get("status_url") or same_host(s, "/getstatus")
+
+
+def check_status(company_id: int, limit: int = 300) -> dict:
+    """GET /getstatus?apikey&secretkey&messageid for SMS the gateway took in the last 48 hours:
+    0 DELIVRD -> delivered, 1 REJECTD -> failed, 4 SENT / 2 PENDING -> asked again later (every 10 minutes)."""
     s = settings(company_id)
-    if not configured(s) or not s.get("status_url"):
+    if not configured(s):
         return {"checked": 0}
     rows = db.all_rows(
         """SELECT id, message_id FROM sms_messages WHERE company_id = %s AND status = 'sent' AND message_id IS NOT NULL
-               AND sent_at > now() - interval '2 days' AND sent_at < now() - interval '1 minute'
+               AND sent_at > now() - interval '48 hours' AND sent_at < now() - interval '1 minute'
                AND (status_checked_at IS NULL OR status_checked_at < now() - interval '10 minutes')
            ORDER BY sent_at LIMIT %s""", (company_id, limit))
     done = 0
+    url = status_url(s)
     with _client(s) as c:
         for r in rows:
             try:
-                resp = c.get(s["status_url"], params={"apikey": s["api_key"], "secretkey": s["secret_key"],
-                                                      "messageid": r["message_id"]})
-                j = _json(resp.text)
-                j = j[0] if isinstance(j, list) and j else j
-                text = str((j or {}).get("Text") or "").upper() if isinstance(j, dict) else ""
+                resp = c.get(url, params={"apikey": s["api_key"], "secretkey": s["secret_key"], "messageid": r["message_id"]})
             except httpx.HTTPError:
                 continue
-            state = "delivered" if text in DELIVERED else "failed" if text in UNDELIVERED else None
+            j = _json(resp.text)
+            j = j[0] if isinstance(j, list) and j else j
+            if not isinstance(j, dict):
+                continue
+            code, text = str(j.get("Status", "")).strip(), str(j.get("Text") or "").upper().strip()
+            if code in ("101", "108", "109", "114"):      # the query itself was refused (doc: delivery query codes)
+                log.info("company %s: delivery query refused (%s %s)", company_id, code, text)
+                break
+            state = "delivered" if code == "0" or text in DELIVERED else "failed" if code == "1" or text in UNDELIVERED else None
+            ms = _number(j.get("Delivery Time"))
+            at = ms / 1000 if ms and ms > 0 else None
             db.execute(
                 """UPDATE sms_messages SET status = coalesce(%s, status), gateway_text = coalesce(nullif(%s, ''), gateway_text),
-                       delivered_at = CASE WHEN %s = 'delivered' THEN now() ELSE delivered_at END,
+                       delivered_at = CASE WHEN %s = 'delivered'
+                           THEN coalesce(to_timestamp(%s) AT TIME ZONE 'UTC', now()) ELSE delivered_at END,
                        error = CASE WHEN %s = 'failed' THEN 'গেটওয়ে: পৌঁছায়নি (' || %s || ')' ELSE error END,
                        status_checked_at = now(), updated_at = now() WHERE id = %s""",
-                (state, text, state, state, text, r["id"]))
+                (state, text, state, at, state, text or code, r["id"]))
             done += 1
     if done:
         refresh_campaigns(company_id)

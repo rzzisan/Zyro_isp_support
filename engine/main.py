@@ -1115,6 +1115,17 @@ def sms_send_now(request: Request, company_id: int, message_id: int):
         raise HTTPException(status_code=400, detail=str(e)[:300])
 
 
+@app.post("/internal/{company_id}/sms/validate")
+def sms_validate(request: Request, company_id: int):
+    """Settings page "কানেকশন যাচাই": the gateway's /validateclient (client name + balance), no SMS is sent."""
+    internal_key(request)
+    from engine import sms
+    try:
+        return sms.validate_client(company_id)
+    except sms.GatewayError as e:
+        raise HTTPException(status_code=400, detail=str(e)[:300])
+
+
 @app.post("/internal/{company_id}/sms/balance")
 def sms_balance(request: Request, company_id: int):
     internal_key(request)

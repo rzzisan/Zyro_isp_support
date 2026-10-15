@@ -243,6 +243,12 @@ class Engine
         return static::call('post', "/internal/{$companyId}/sms/messages/{$messageId}/send") ?? [];
     }
 
+    /** The gateway's /validateclient: ['client' => name, 'balance' => ...]; throws when the keys are refused. No SMS. */
+    public static function validateSms(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/sms/validate") ?? [];
+    }
+
     /** Ask the SMS gateway for the balance (saved in sms_settings); throws with the gateway's error. */
     public static function smsBalance(int $companyId): array
     {

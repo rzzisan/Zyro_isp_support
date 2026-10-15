@@ -27,26 +27,19 @@
 
 ## ২. Desk-এর SMS (2026-10-15)
 
-### গেটওয়ে (Khudebarta, BSOL-এর মতো)
-BSOL (`backend/app/Http/Controllers/AdminSmsGatewayController.php`, `SmsAutomationService.php`) যেভাবে পাঠায়:
-form POST `endpoint_url` (BSOL-এর অ্যাডমিন → SMS → Gateways-এ রাখা, কোডে নেই) — `apikey`, `secretkey`, `callerID` (sender ID),
-`toUser` (8801XXXXXXXXX), `messageContent`; প্রতি নম্বরে আলাদা request, timeout 20 সে.।
-একই প্ল্যাটফর্মের পাবলিক ডক অনুযায়ী উত্তর `{"Status":"0","Text":"ACCEPTD","Message_ID":"..."}`; অন্য Status (108 ভুল key,
-109 ইউজার নেই, 114 লেখা নেই, 101 সার্ভার, 137 TPS, -42 auth) = refused। JSON না হলে BSOL-এর নিয়ম: 2xx আর
-error/failed/invalid/unauthorized না থাকলে সফল। ডেলিভারি `getstatus?apikey&secretkey&messageid` → Text `DELIVRD` ইত্যাদি।
-Century Link-এর send URL: `http://portal.khudebarta.com:3775/sendtext` (সেটিংসের ডিফল্ট)। পুরনো `http://118.67.213.114:3775` (BSOL-এও এটাই ছিল, শেষ সফল SMS 2026-09-25) এখন connection refused দেয়, সার্ভার আর অফিস PC দুই জায়গা থেকেই (2026-10-15)। key ছাড়া নতুন ঠিকানা `{"Status":"-1","StatusDescription":"Org Client Not Found","Text":"REJECTD"}` দেয়। প্রোফাইল "centurylinknetwork HTTP", TPS 1000।
-
-ব্যালান্স, বাস্তবে (2026-10-15): পোর্টালের `/auth/login` ব্রাউজার ছাড়া অন্য সব client-কে `403 "Forbidden from Charset Filter"` দেয়, নকল ক্রেডেনশিয়ালেও (সার্ভার ও PC, httpx/curl HTTP/2/PowerShell, axios-এর হুবহু হেডার ও body দিয়ে চেষ্টা করা)। তাই পোর্টাল ব্যর্থ হলে engine বিলিংয়ের `/companysettings/smsgateway` পেজের `var smsBalance = …;` থেকে শুধু সংখ্যাটা নেয় (শেয়ার্ড বিলিং সেশন; একই Khudebarta অ্যাকাউন্ট; পেজের বাকি অংশ, যাতে গেটওয়ের পাসওয়ার্ড আছে, রাখা হয় না)।
-
-ব্যালান্স: API-key দিয়ে কোনো ব্যালান্স call নেই (BSOL-এও নেই)। Khudebarta-র ওয়েব পোর্টালের API
-(`https://portal.khudebarta.com:9494/api`, পোর্টালের JS আর Technical Details পেজ থেকে):
-- লগইন `POST /auth/login` JSON `{"username","password"}` → `idToken` (JWT, ~১.৫ ঘণ্টা), `refreshToken`, `userID` (= providerID, Century Link 23688)। উত্তরে `otpGenerationType` বা `passwordExpiredAt` থাকলে হাতে পোর্টালে লগইন করে ঠিক করতে হবে।
-- রিনিউ `GET /auth/refresh-access-token?oldToken=&refreshToken=` → `{left: নতুন idToken, right: নতুন refreshToken}`।
-- ব্যালান্স `GET /util/get-current-balance?providerID=` হেডার `Authorization: Bearer idToken` → JSON (পোর্টালে 1495.55 BDT দেখাচ্ছিল)।
-- Desk: পোর্টাল ইউজারনেম/পাসওয়ার্ড সেটিংসে (পাসওয়ার্ড এনক্রিপ্টেড), টোকেন `sms_settings`-এ এনক্রিপ্টেড; মেয়াদ থাকলে একই টোকেন, 401 হলে আগে রিনিউ তারপর একবার নতুন লগইন; লগইন ব্যর্থ হলে ১০ মিনিট নতুন লগইন হয় না (অ্যাকাউন্ট লক না হয়)। timer ৫ মিনিট পরপর, আর "ব্যালান্স রিফ্রেশ" বাটন।
+### গেটওয়ে: Khudebarta "SMS HTTP API Published" v5.4.0 (Zisan-এর দেওয়া PDF, 2026-10-15)
+Base `http://portal.khudebarta.com:3775` (পুরনো `http://118.67.213.114:3775` এখন connection refused, সার্ভার আর অফিস PC দুই জায়গা থেকেই; BSOL-এও এটাই ছিল, শেষ সফল SMS 2026-09-25)। প্রোফাইল "centurylinknetwork HTTP", TPS 1000।
+- **পাঠানো** `POST /sendtext`, `Content-Type: application/json`, body `{apikey, secretkey, callerID, toUser: "8801XXXXXXXXX", messageContent}` (ASCII + Unicode)। উত্তর `{"Status":"0","StatusDescription":"","Text":"ACCEPTD","Message_ID":"31771702"}`; `Status` 0 ছাড়া সব ব্যর্থ। GET-এও একই query দিয়ে চলে।
+- **বাল্ক**: একই endpoint, `toUser` কমা দিয়ে কয়েকটা নম্বর, `Message_ID` একই ক্রমে কমা দিয়ে। Desk একই লেখার SMS ৫০টা করে এক request-এ পাঠায়; `-65 Bulk Limit Exceeded` এলে ভাগ অর্ধেক করে আবার। কাস্টমারের তথ্য বসানো (আলাদা আলাদা) লেখা একটা করে (`/send` dynamic API ডকে deprecated, ব্যবহার করা হয় না)।
+- **Status কোড** (submit): 0 ACCEPTD; অ্যাকাউন্টের সমস্যা, যাতে সাথে সাথে পাঠানো বন্ধ হয় আর বাকি SMS অপেক্ষায় থাকে: -1 Org Client Not Found, -4 Insufficient Balance, -5 Org Rate Not Found, -6 Org Blocked, -7 Invalid Sender ID, -36 Invalid Request Type, -42 Authorization Failed, -52 License Limit Exceeded, -54 Sender ID Empty, -59 IP Not Allowed, -60 Invalid Hash value, -61 Invalid parameter, -64 Sender ID Block, -66 Invalid API Key, -67 Invalid Secret Key। শুধু ওই নম্বর/লেখার সমস্যা: -3 Invalid Dest No., -44/-45 ContactNo Blocked, -46 Dipping Failed, -47 Content not Whitelisted, -48 URL Blocked, -49 Content is Blocked, -55/-56 খালি, -58 HLR, -62 Internal Server Error, -63/-68 Transaction ID, -65 Bulk Limit। লগে কোড + বিবরণ দেখায়।
+- **ডেলিভারি** `GET /getstatus?apikey&secretkey&messageid` → `{Status, Text, Message_ID, "Delivery Time" (ms)}`: 0 DELIVRD (পৌঁছেছে), 4 SENT / 2 PENDING (পরে আবার), 1 REJECTD (পৌঁছায়নি); 101/108/109/114 = প্রশ্নটাই বাতিল। সেটিংসে আলাদা URL না দিলে একই host-এর `/getstatus`, ১০ মিনিট পরপর ৪৮ ঘণ্টা।
+- **ব্যালান্স** `POST /api/v3/balance` `{apikey, secretkey, clienttransid}` → `{"statusInfo":{"statusCode":"0","errordescription":"ACCEPTD","availablebalance":"797.88"}}`। timer-এ ৫ মিনিট পরপর, আর "ব্যালান্স রিফ্রেশ"।
+- **কানেকশন যাচাই** `POST /validateclient` `{apikey, secretkey}` → `{"clientBalance":..,"clientName":"..","status":"SUCCESS"}` বা `{"status":"ERROR"}`; কোনো SMS যায় না।
+- ডকের DLR push (`/submitstatus`), MO, recharge আর billing-balance API (provider x-api-key লাগে) Desk-এর কাজে লাগে না।
+- আগের সংস্করণের পোর্টাল লগইন (`portal.khudebarta.com:9494`, Bearer JWT) বাদ: পোর্টাল ব্রাউজার ছাড়া সবাইকে `403 Forbidden from Charset Filter` দেয়। বিলিং পেজ থেকে ব্যালান্স পড়াও বাদ (Zisan: বিলিংয়ের সাথে কোনো যোগ নয়)। `sms_settings`-এর portal_*/balance_url/provider_id কলাম এখন অব্যবহৃত।
 
 ### ডেটা (migration 2026_10_15_000001)
-- `sms_settings` (কোম্পানি-প্রতি ১টা): endpoint_url, balance_url (`{provider_id}` বসে), provider_id, portal_login_url, portal_username, portal_password/portal_token/portal_refresh_token (encrypted), portal_token_expires_at, portal_login_failed_at, status_url, api_key + secret_key (Laravel encrypted, ফর্মে আর দেখানো হয় না), caller_id, verify_tls, **enabled** (বন্ধ = কিছুই যায় না), rate (টাকা/SMS ভাগ, শুধু হিসাব), balance, balance_checked_at, last_check_ok, last_error।
+- `sms_settings` (কোম্পানি-প্রতি ১টা): endpoint_url (send URL; ব্যালান্স/যাচাই/ডেলিভারি একই host-এ), status_url (ঐচ্ছিক), api_key + secret_key (Laravel encrypted, ফর্মে আর দেখানো হয় না), caller_id, verify_tls, **enabled** (বন্ধ = কিছুই যায় না), rate (টাকা/SMS ভাগ, শুধু হিসাব), balance, balance_checked_at, last_check_ok, last_error। (portal_*, balance_url, provider_id অব্যবহৃত)
 - `sms_templates`: name, body, sort।
 - `sms_campaigns`: একবার "পাঠান" = একটা সারি (kind single/bulk, body, filters, total, sent, failed, parts, cost, status queued/sending/done/cancelled)।
 - `sms_messages` = SMS লগ: প্রতি নম্বরে একটা (customer_header_id, mobile 8801..., placeholder ভরা text, parts, unicode, status queued → sending → sent → delivered | failed; cancelled; unknown, gateway_status/text, message_id, error, sent_at, delivered_at)।
@@ -61,20 +54,20 @@ Century Link-এর send URL: `http://portal.khudebarta.com:3775/sendtext` (স�
 - **SMS লগ** (`/sms-log`): প্রতিটা SMS, অবস্থা/কে পাঠালেন/কোন পাঠানো/তারিখ ফিল্টার, কাস্টমারে লিংক।
 - **SMS টেমপ্লেট** (`/sms-templates`): যোগ/এডিট/মুছুন/ক্রম, দৈর্ঘ্য দেখায়।
 - কাস্টমার পেজে "SMS" বাটন (ওই কাস্টমারকে)।
-- সেটিংস → **SMS গেটওয়ে** (`/sms-gateway`, Owner/Admin): send URL, API Key, Secret Key, Sender ID, রেট, পোর্টাল ইউজারনেম/পাসওয়ার্ড/লগইন URL, ব্যালান্স URL, Provider ID, ডেলিভারি রিপোর্ট URL, SSL যাচাই, "SMS পাঠানো চালু"; "টেস্ট SMS পাঠান" (এখনই যায়, "চালু" বন্ধ থাকলেও; গেটওয়ের উত্তর দেখায়), "ব্যালান্স দেখুন"।
+- সেটিংস → **SMS গেটওয়ে** (`/sms-gateway`, Owner/Admin): send URL, API Key, Secret Key, Sender ID, রেট, ডেলিভারি রিপোর্ট URL (ঐচ্ছিক), SSL যাচাই, "SMS পাঠানো চালু"; বাটন "কানেকশন যাচাই" (`/validateclient`, ক্লায়েন্টের নাম + ব্যালান্স, SMS যায় না), "টেস্ট SMS পাঠান" (এখনই যায়, "চালু" বন্ধ থাকলেও; Status, বিবরণ, Message ID দেখায়), "ব্যালান্স দেখুন"।
 
 ### engine (`engine/sms.py`)
-- `send_queue(company)`: কোম্পানি-প্রতি একটাই রানার (`data/sms-send-{c}.lock`), ২০টা করে claim (`FOR UPDATE SKIP LOCKED`), ৪টা সমান্তরাল request, প্রতিটার ফল সাথে সাথে লেখা, তারপর campaign-এর হিসাব। প্রতি ব্যাচের আগে `enabled` দেখে — বন্ধ করলে সাথে সাথে থামে।
+- `send_queue(company)`: কোম্পানি-প্রতি একটাই রানার (`data/sms-send-{c}.lock`), ১০০টা করে claim (`FOR UPDATE SKIP LOCKED`), একই লেখা ৫০টা নম্বর করে এক request-এ (বাল্ক), ৪টা সমান্তরাল request, প্রতিটার ফল সাথে সাথে লেখা, তারপর campaign-এর হিসাব। প্রতি ব্যাচের আগে `enabled` দেখে — বন্ধ করলে সাথে সাথে থামে। অ্যাকাউন্ট error হলে ওই SMS-গুলো আবার queued, পাঠানো বন্ধ।
 - ১০ মিনিটের বেশি `sending`-এ আটকে থাকা = `unknown`, আবার পাঠানো হয় না (ডাবল SMS নয়)।
 - একই ধরনের ১০টা পরপর ব্যর্থ (ভুল key, ব্যালান্স নেই) → `enabled = false`, কারণ `last_error`-এ, বাকিগুলো কিউতে থাকে।
 - `check_balance` (প্যানেলের বাটন + timer-এ ৫ মিনিট পরপর), `check_status` (status URL থাকলে, গত ২ দিনের sent, ১০ মিনিট পরপর)।
 - `send_now` = সেটিংসের টেস্ট SMS (শুধু ওই একটা, `enabled` না দেখে)।
 - key/টোকেন কখনো লগে নয়; গেটওয়ের উত্তর সংরক্ষণের আগে key/টোকেন মুছে ৩০০ অক্ষরে কাটা।
 - endpoint: `POST /internal/{c}/sms/kick`, `POST /internal/{c}/sms/balance`, `POST /internal/{c}/sms/messages/{id}/send` (শুধু internal key দেখে, বিলিং লাগে না)।
-- যাচাই (2026-10-15): panel `tests/Feature/SmsTest.php` (১৩টা); engine-এর পুরো লুপ test DB + 127.0.0.1-এ নকল গেটওয়ে/পোর্টাল দিয়ে (বন্ধ থাকলে কিছু যায় না, ২৫টা → ২৩ sent + ২ failed, campaign done, পোর্টাল লগইন + টোকেন এনক্রিপ্টেড + রিনিউ + ভুল পাসওয়ার্ডে বিরতি, ডেলিভারি রিপোর্ট, ভুল key-তে ১০টা পরপর ব্যর্থ হলে বন্ধ, আটকে থাকা sending → unknown, আবার পাঠানো হয়নি)। কোনো আসল SMS পাঠানো হয়নি।
+- যাচাই (2026-10-15, v5.4.0 অনুযায়ী): panel `tests/Feature/SmsTest.php` (১৬টা); engine-এর পুরো লুপ test DB + 127.0.0.1-এ ডকের মতো নকল গেটওয়ে দিয়ে: JSON POST, validate + ব্যালান্স, বন্ধ থাকলে কিছু যায় না, ১২০টা একই লেখা বাল্কে (৫০ → -65 → ২৫), ৫টা আলাদা লেখা একটা করে, -3 শুধু ওই নম্বর ব্যর্থ, Message_ID প্রতিটায়, ডেলিভারি (DELIVRD/REJECTD/SENT), -66-এ সাথে সাথে বন্ধ আর SMS queued থাকে, ঠিক key-তে ৩০টা এক request-এ, আটকে থাকা sending → unknown, ভুল key-র error-এ secret নেই। কোনো আসল SMS পাঠানো হয়নি।
 - systemd `zyro-sms-send.timer` প্রতি মিনিটে `python -m engine.sms` (kick-এর ব্যাকআপ, ব্যালান্স, ডেলিভারি)।
 
 ### চালু করার ধাপ (deploy-এর পর)
 1. `php artisan migrate --force` (panel), engine restart, `deploy/zyro-sms-send.{service,timer}` → `/etc/systemd/system`, `systemctl enable --now zyro-sms-send.timer`।
-2. Zisan: সেটিংস → SMS গেটওয়ে-তে API Key, Secret Key, Sender ID, রেট, পোর্টাল ইউজারনেম/পাসওয়ার্ড দিন (send URL আর পোর্টালের URL আগে থেকে ভরা); "ব্যালান্স দেখুন"; "টেস্ট SMS পাঠান" নিজের নম্বরে; গেটওয়ে নিলে "SMS পাঠানো চালু"।
+2. Zisan: সেটিংস → SMS গেটওয়ে-তে API Key, Secret Key, Sender ID, রেট দিন (send URL আগে থেকে ভরা); "কানেকশন যাচাই"; "টেস্ট SMS পাঠান" নিজের নম্বরে; গেটওয়ে নিলে "SMS পাঠানো চালু"।
 3. Agent-দের টিম পেজে "SMS" মেনু টিক।

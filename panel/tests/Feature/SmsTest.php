@@ -39,6 +39,7 @@ class SmsTest extends TestCase
         config(['services.engine.url' => 'http://engine.test', 'services.engine.key' => 'k']);
         Http::fake([
             'engine.test/internal/*/sms/messages/*/send' => Http::response(['ok' => true, 'status' => '0', 'text' => 'ACCEPTD', 'error' => null]),
+            'engine.test/internal/*/sms/validate' => Http::response(['client' => 'centurylinknetwork', 'balance' => 797.88]),
             'engine.test/*' => Http::response(['started' => true]),
         ]);
         $this->company = Company::create(['name' => 'Century Link Network']);
@@ -214,6 +215,16 @@ class SmsTest extends TestCase
         $m = SmsMessage::sole();
         $this->assertSame(['8801711000001', 'test'], [$m->mobile, $m->text]);
         Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/sms/messages/{$m->id}/send");
+    }
+
+    public function test_validate_shows_client_and_balance_without_sending(): void
+    {
+        SmsSetting::forCompany($this->company)->fill(['api_key' => 'a', 'secret_key' => 'b', 'caller_id' => 'CLN'])->save();
+        $this->as($this->owner);
+        Livewire::test(SmsSettings::class)->callAction('validate')->assertNotified('কানেকশন ঠিক আছে');
+        Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/sms/validate");
+        $this->assertSame(0, SmsMessage::count());
+        $this->assertSame(SmsSetting::KHUDEBARTA_SEND_URL, SmsSetting::forCompany($this->company)->endpoint_url);
     }
 
     public function test_sms_pages_need_the_sms_permission(): void
