@@ -44,21 +44,36 @@ class Sms
         'date' => 'তারিখ',
     ];
 
+    /** Only in a ticket SMS (filled from the ticket just opened / solved). */
+    public const TICKET_PLACEHOLDERS = [
+        'ticket_no' => 'টিকিট নং',
+        'problem' => 'সমস্যা',
+        'status' => 'অবস্থা',
+        'technician' => 'টেকনিশিয়ান',
+        'technician_phone' => 'টেকনিশিয়ানের নম্বর',
+        'date' => 'তারিখ',
+        'time' => 'সময়',
+    ];
+
     /** [placeholder => label] a template of this type may use. */
     public static function placeholders(string $type = 'general'): array
     {
         $out = collect(self::PLACEHOLDERS)->map(fn ($p) => $p[0])->all();
 
-        return $type === 'bill_paid' ? self::BILL_PLACEHOLDERS + $out : $out;
+        return match ($type) {
+            'bill_paid' => self::BILL_PLACEHOLDERS + $out,
+            'ticket_open', 'ticket_solved' => self::TICKET_PLACEHOLDERS + $out,
+            default => $out,
+        };
     }
 
-    /** Bill-payment placeholders used in a text that is not a bill-payment SMS (they stay empty there). */
+    /** Bill / ticket placeholders used in a text that is not such an SMS (they stay empty there). */
     public static function billOnly(string $body): array
     {
         preg_match_all('/\{(\w+)\}/', $body, $m);
 
-        return array_values(array_unique(array_diff(array_intersect($m[1], array_keys(self::BILL_PLACEHOLDERS)),
-            array_keys(self::PLACEHOLDERS))));
+        return array_values(array_unique(array_diff(array_intersect($m[1],
+            array_keys(self::BILL_PLACEHOLDERS + self::TICKET_PLACEHOLDERS)), array_keys(self::PLACEHOLDERS))));
     }
 
     private static array $companyNames = [];
@@ -150,7 +165,7 @@ class Sms
             }
             $col = self::PLACEHOLDERS[$m[1]][1] ?? null;
             if (! $col) {
-                return isset(self::BILL_PLACEHOLDERS[$m[1]]) || $m[1] === 'company' ? '' : $m[0];
+                return isset(self::BILL_PLACEHOLDERS[$m[1]]) || isset(self::TICKET_PLACEHOLDERS[$m[1]]) || $m[1] === 'company' ? '' : $m[0];
             }
             $v = is_array($c) ? ($c[$col] ?? null) : $c?->{$col};
             if (in_array($col, ['due', 'monthly_bill'], true)) {
@@ -266,6 +281,29 @@ class Sms
             'date' => now('Asia/Dhaka')->format('d/m/Y')];
 
         return static::queue($companyId, $userId, 'bill', $body, [$mobile => $c], [], [], $extra);
+    }
+
+    /**
+     * After a ticket is opened (ticket_open) or solved (ticket_solved) from the Desk: queue that template's SMS to the
+     * ticket's contact mobile (else the customer's). $ticket: ticket_no, problem, status, technician, technician_phone.
+     * Null when it can't go (settings not ready, no valid mobile).
+     */
+    public static function ticket(int $companyId, ?int $userId, string $type, ?BillingCustomer $c, ?string $mobile, array $ticket): ?SmsCampaign
+    {
+        $s = SmsSetting::forCompany($companyId);
+        $to = static::mobile($mobile) ?? ($c ? static::mobile($c->mobile_normalized ?: $c->mobile) : null);
+        if (! $s->eventReady($type) || ! $to) {
+            return null;
+        }
+        $body = (string) SmsTemplate::whereKey($s->{SmsTemplate::SETTINGS[$type][1]})->value('body');
+        $now = now('Asia/Dhaka');
+        $extra = ['ticket_no' => (string) ($ticket['ticket_no'] ?? ''), 'problem' => (string) ($ticket['problem'] ?? ''),
+            'status' => (string) ($ticket['status'] ?? ''), 'technician' => (string) ($ticket['technician'] ?? ''),
+            'technician_phone' => (string) ($ticket['technician_phone'] ?? ''),
+            'date' => $now->format('d/m/Y'), 'time' => $now->format('g:i A')];
+
+        return $c ? static::queue($companyId, $userId, 'ticket', $body, [$to => $c], [], [], $extra)
+            : static::queue($companyId, $userId, 'ticket', $body, [], [$to], [], $extra);
     }
 
     /**

@@ -26,7 +26,7 @@
         <div style="color:#b91c1c">ভুল নম্বর বাদ: {{ implode(', ', array_slice($bad, 0, 5)) }}{{ count($bad) > 5 ? ' …' : '' }}</div>
     @endif
     @if (! empty($billOnly))
-        <div style="color:#b45309">{{ collect($billOnly)->map(fn ($k) => '{'.$k.'}')->implode(' ') }} শুধু বিল পরিশোধের SMS-এ বসে; এখানে খালি থাকবে।</div>
+        <div style="color:#b45309">{{ collect($billOnly)->map(fn ($k) => '{'.$k.'}')->implode(' ') }} শুধু বিল পরিশোধ / টিকিটের SMS-এ বসে; এখানে খালি থাকবে।</div>
     @endif
     @if (! $ready)
         <div style="color:#b45309">SMS গেটওয়ে এখনো চালু নয় (সেটিংস → SMS গেটওয়ে)। এখন পাঠালে তালিকায় অপেক্ষা করবে, চালু হলে যাবে।</div>

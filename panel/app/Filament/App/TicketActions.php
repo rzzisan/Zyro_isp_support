@@ -2,10 +2,15 @@
 
 namespace App\Filament\App;
 
+use App\Models\BillingCustomer;
 use App\Models\BillingTicket;
+use App\Models\SmsSetting;
+use App\Models\Technician;
 use App\Services\Engine;
+use App\Support\Sms;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -13,7 +18,10 @@ use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Support\Enums\IconPosition;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Js;
 use RuntimeException;
 
 /** "New ticket" and "Assign" actions that write to the billing software (through the engine). */
@@ -39,7 +47,7 @@ class TicketActions
         $search = trim($search);
         $digits = preg_replace('/\D/', '', $search);
 
-        return \App\Models\BillingCustomer::where('company_id', static::company())->whereNull('gone_at')
+        return BillingCustomer::where('company_id', static::company())->whereNull('gone_at')
             ->where(fn ($w) => $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$search])
                 ->orWhere('username', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%")
                 ->when(strlen($digits) >= 5, fn ($x) => $x->orWhere('mobile', 'like', "%{$digits}%")))
@@ -62,10 +70,10 @@ class TicketActions
         }
         $key = 'ticket-info:'.static::company().':'.$headerId;
         if ($fresh) {
-            \Illuminate\Support\Facades\Cache::forget($key);
+            Cache::forget($key);
         }
         try {
-            return [\Illuminate\Support\Facades\Cache::remember($key, 60, fn () => Engine::ticketInfo(static::company(), $headerId)), null];
+            return [Cache::remember($key, 60, fn () => Engine::ticketInfo(static::company(), $headerId)), null];
         } catch (RuntimeException $e) {
             return [null, $e->getMessage()];
         }
@@ -98,12 +106,12 @@ class TicketActions
 
     private static function customerLabel(array $c): string
     {
-        return \App\Models\BillingCustomer::searchLabel($c);
+        return BillingCustomer::searchLabel($c);
     }
 
     /**
      * @param  string|\Closure|null  $customerId  prefill (e.g. from a chat); a closure gets the table row and returns
-     *                                             [customer id, problem description or null]
+     *                                            [customer id, problem description or null]
      */
     public static function newTicket(string|\Closure|null $customerId = null): Action
     {
@@ -123,7 +131,8 @@ class TicketActions
             ->modalSubmitActionLabel('টিকিট খুলুন')
             ->fillForm(function (Action $action) use ($prefill) {
                 [$customerId, $comment] = $prefill($action);
-                $data = ['priority' => '2', 'sms_client' => false, 'sms_employees' => false, 'comment' => $comment];
+                $data = ['priority' => '2', 'sms_client' => SmsSetting::forCompany(static::company())->eventOn('ticket_open'),
+                    'sms_employees' => false, 'comment' => $comment];
                 if ($customerId) {
                     try {
                         $c = collect(static::searchCustomers($customerId))->firstWhere('customer_id', $customerId);
@@ -143,14 +152,14 @@ class TicketActions
                     ->getSearchResultsUsing(fn (string $search) => collect(static::searchCustomers($search))
                         ->mapWithKeys(fn ($c) => [static::customerKey($c) => static::customerLabel($c)])->all())
                     ->getOptionLabelUsing(function ($value) {
-                        $c = \App\Models\BillingCustomer::where('company_id', static::company())->where('header_id', (int) explode('|', (string) $value)[0])->first();
+                        $c = BillingCustomer::where('company_id', static::company())->where('header_id', (int) explode('|', (string) $value)[0])->first();
 
-                        return $c ? \App\Models\BillingCustomer::searchLabel($c)
+                        return $c ? BillingCustomer::searchLabel($c)
                             : 'ID '.(explode('|', (string) $value)[1] ?? '').' · '.(explode('|', (string) $value)[2] ?? '');
                     })
                     ->live()
                     ->afterStateUpdated(fn ($state, callable $set) => $set('mobile', explode('|', (string) $state)[3] ?? null)),
-                \Filament\Forms\Components\Placeholder::make('info')->hiddenLabel()->columnSpanFull()
+                Placeholder::make('info')->hiddenLabel()->columnSpanFull()
                     ->visible(fn ($get) => filled($get('customer')))
                     ->content(fn ($get) => static::infoView($get('customer'))),
                 Section::make('টিকিটের তথ্য')->icon(Heroicon::OutlinedPencilSquare)->schema([
@@ -168,7 +177,12 @@ class TicketActions
                             ->options(fn () => static::options('employees')),
                     ]),
                     Grid::make(2)->schema([
-                        Toggle::make('sms_client')->label('কাস্টমারকে SMS'),
+                        // the customer's SMS goes from the Desk gateway (template "টিকিট খোলা"), never billing's
+                        Toggle::make('sms_client')->label('কাস্টমারকে SMS')
+                            ->disabled(fn () => ! SmsSetting::forCompany(static::company())->eventReady('ticket_open'))
+                            ->hintIcon('heroicon-o-information-circle', fn () => SmsSetting::forCompany(static::company())->eventReady('ticket_open')
+                                ? 'টিকিট খোলা হলে Desk-এর SMS গেটওয়ে দিয়ে "টিকিট খোলা" টেমপ্লেটের SMS যায় (যোগাযোগের মোবাইলে)'
+                                : 'চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "টিকিট খোলা" টেমপ্লেট সেট করুন'),
                         Toggle::make('sms_employees')->label('কর্মীকে SMS'),
                     ]),
                 ]),
@@ -180,7 +194,7 @@ class TicketActions
                         'header_id' => (int) $headerId, 'username' => $username,
                         'category_id' => $data['category_id'], 'priority' => (int) $data['priority'],
                         'mobile' => $data['mobile'], 'comment' => $data['comment'],
-                        'sms_client' => (bool) $data['sms_client'],
+                        'sms_client' => false,  // never billing's SMS
                         'employees' => array_values($data['employees'] ?? []), 'dept_id' => $data['dept_id'] ?? null,
                         'sms_employees' => (bool) $data['sms_employees'],
                     ]);
@@ -190,8 +204,13 @@ class TicketActions
 
                     return;
                 }
+                $smsNote = ($data['sms_client'] ?? false) ? static::queueTicketSms('ticket_open', (int) $headerId, $data['mobile'] ?? null, [
+                    'ticket_no' => (string) ($res['complain_id'] ?? ''),
+                    'problem' => static::options('categories')[$data['category_id']] ?? '',
+                    'status' => 'খোলা', 'employees' => array_values($data['employees'] ?? []),
+                ]) : null;
                 Notification::make()->success()
-                    ->title($res['complain_id'] ? "টিকিট #{$res['complain_id']} খোলা হয়েছে" : 'টিকিট খোলা হয়েছে')
+                    ->title(($res['complain_id'] ? "টিকিট #{$res['complain_id']} খোলা হয়েছে" : 'টিকিট খোলা হয়েছে').($smsNote ? ' · '.$smsNote : ''))
                     ->body($res['message'] ?? null)->send();
             });
     }
@@ -307,11 +326,11 @@ class TicketActions
         return Action::make($dir < 0 ? 'previousTicket' : 'nextTicket')
             ->label($dir < 0 ? 'আগের' : 'পরের')->color('gray')->button()
             ->icon($dir < 0 ? Heroicon::OutlinedChevronLeft : Heroicon::OutlinedChevronRight)
-            ->iconPosition($dir < 0 ? \Filament\Support\Enums\IconPosition::Before : \Filament\Support\Enums\IconPosition::After)
+            ->iconPosition($dir < 0 ? IconPosition::Before : IconPosition::After)
             ->tooltip($dir < 0 ? 'আগের টিকিট (← কী)' : 'পরের টিকিট (→ কী)')
             ->disabled(fn (BillingTicket $record, $livewire) => $key($record, $livewire) === null)
             ->alpineClickHandler(fn (BillingTicket $record, $livewire) => ($k = $key($record, $livewire)) === null ? 'void 0'
-                : '$wire.replaceMountedAction('.\Illuminate\Support\Js::from('view').', {}, '.\Illuminate\Support\Js::from(['table' => true, 'recordKey' => $k]).')')
+                : '$wire.replaceMountedAction('.Js::from('view').', {}, '.Js::from(['table' => true, 'recordKey' => $k]).')')
             // arrow keys, unless typing or another (nested) modal is on top of the details
             ->extraAttributes(["x-on:keydown.{$arrow}.window" => "if (! \$event.target.closest('input, textarea, select, [contenteditable]') && ! \$el.disabled && document.querySelectorAll('.fi-modal-open').length === 1) \$el.click()"]);
     }
@@ -409,22 +428,60 @@ class TicketActions
                 default => null,
             })
             ->modalHeading(fn (BillingTicket $record) => "টিকিট #{$record->complain_id} সমাধান")
-            ->modalDescription('কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে বিলিংয়ে Solved করা হবে। কাস্টমারকে SMS যাবে না।')
+            ->modalDescription('কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে বিলিংয়ে Solved করা হবে। বিলিং থেকে কোনো SMS যায় না।')
             ->modalSubmitActionLabel('Solve করুন')
+            ->fillForm(fn () => ['sms' => SmsSetting::forCompany(static::company())->eventOn('ticket_solved')])
             ->schema([
                 Textarea::make('remark')->label('মন্তব্য (ঐচ্ছিক)')->rows(2)->maxLength(500),
+                Toggle::make('sms')->label('কাস্টমারকে SMS')
+                    ->disabled(fn () => ! SmsSetting::forCompany(static::company())->eventReady('ticket_solved'))
+                    ->hintIcon('heroicon-o-information-circle', fn () => SmsSetting::forCompany(static::company())->eventReady('ticket_solved')
+                        ? 'সমাধান হলে Desk-এর SMS গেটওয়ে দিয়ে "টিকিট সমাধান" টেমপ্লেটের SMS যায়'
+                        : 'চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "টিকিট সমাধান" টেমপ্লেট সেট করুন'),
             ])
             ->action(function (array $data, BillingTicket $record, Action $action) {
                 try {
                     Engine::solve(static::company(), $record->complain_id, $data['remark'] ?? null);
                 } catch (RuntimeException $e) {
-                    \Illuminate\Support\Facades\Cache::forget('ticket-info:'.static::company().':'.(int) $record->customer_header_id);
+                    Cache::forget('ticket-info:'.static::company().':'.(int) $record->customer_header_id);
                     Notification::make()->danger()->title('Solve হয়নি')->body($e->getMessage())->send();
                     $action->halt();
 
                     return;
                 }
-                Notification::make()->success()->title("টিকিট #{$record->complain_id} সমাধান হয়েছে")->send();
+                $smsNote = ($data['sms'] ?? false) ? static::queueTicketSms('ticket_solved', (int) $record->customer_header_id,
+                    $record->mobile, ['ticket_no' => (string) $record->complain_id, 'problem' => (string) $record->category,
+                        'status' => 'সমাধান', 'technician' => (string) ($record->solved_by ?: $record->assigned_to)]) : null;
+                Notification::make()->success()->title("টিকিট #{$record->complain_id} সমাধান হয়েছে".($smsNote ? ' · '.$smsNote : ''))->send();
             });
+    }
+
+    /**
+     * The ticket SMS (template of $type chosen in the gateway settings) through the Desk's gateway, in the background;
+     * a short note for the toast. $ticket['employees'] (billing employee ids) fill {technician} / {technician_phone}.
+     */
+    private static function queueTicketSms(string $type, int $headerId, ?string $mobile, array $ticket): ?string
+    {
+        $c = $headerId ? BillingCustomer::where('company_id', static::company())->where('header_id', $headerId)->first() : null;
+        if ($ids = array_map('strval', $ticket['employees'] ?? [])) {
+            $names = static::options('employees');
+            $ticket['technician'] = collect($ids)->map(fn ($id) => $names[$id] ?? null)->filter()->implode(', ');
+            $phone = Technician::where('company_id', static::company())->whereIn('billing_employee_id', $ids)
+                ->whereNotNull('wa_number')->value('wa_number');
+            $ticket['technician_phone'] = $phone ? preg_replace('/^88(?=01)/', '', (string) $phone) : '';
+        }
+        try {
+            $campaign = Sms::ticket(static::company(), auth()->id(), $type, $c, $mobile, $ticket);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return 'SMS তালিকায় তোলা যায়নি';
+        }
+        if (! $campaign) {
+            return 'SMS যায়নি (মোবাইল নম্বর ঠিক নেই)';
+        }
+        Engine::kickSms(static::company());
+
+        return 'কাস্টমারকে SMS যাচ্ছে';
     }
 }

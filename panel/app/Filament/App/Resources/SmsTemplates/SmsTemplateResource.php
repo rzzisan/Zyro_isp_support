@@ -52,9 +52,12 @@ class SmsTemplateResource extends Resource
             TextInput::make('name')->label('নাম')->required()->maxLength(100)->placeholder('যেমন: বকেয়া মনে করানো'),
             Select::make('type')->label('ধরন')->options(SmsTemplate::TYPES)->default('general')->required()
                 ->selectablePlaceholder(false)->live()
-                ->helperText(fn ($get) => $get('type') === 'bill_paid'
-                    ? '"বিল নিন" দিয়ে বিল নেওয়ার পর কাস্টমারকে এই লেখা যায় (সেটিংস → SMS গেটওয়ে-তে বাছা টেমপ্লেট); {paid} {discount} {due} ওই বিল থেকে বসে'
-                    : 'হাতে SMS পাঠানোর সময় বাছা যায়'),
+                ->helperText(fn ($get) => match ($get('type')) {
+                    'bill_paid' => '"বিল নিন" দিয়ে বিল নেওয়ার পর কাস্টমারকে এই লেখা যায় (সেটিংস → SMS গেটওয়ে-তে বাছা টেমপ্লেট); {paid} {discount} {due} ওই বিল থেকে বসে',
+                    'ticket_open' => 'Desk থেকে টিকিট খোলার পর কাস্টমারকে যায়; {ticket_no} {problem} {technician} ওই টিকিট থেকে বসে',
+                    'ticket_solved' => 'Desk থেকে টিকিট Solve করার পর কাস্টমারকে যায়; {ticket_no} {problem} ওই টিকিট থেকে বসে',
+                    default => 'হাতে SMS পাঠানোর সময় বাছা যায়',
+                }),
             View::make('filament.app.sms.placeholders')->columnSpanFull()
                 ->viewData(fn ($get) => ['items' => Sms::placeholders((string) ($get('type') ?: 'general'))]),
             Textarea::make('body')->label('লেখা')->required()->rows(5)->maxLength(1000)->columnSpanFull()
@@ -79,7 +82,7 @@ class SmsTemplateResource extends Resource
                 TextColumn::make('name')->label('নাম')->searchable(),
                 TextColumn::make('type')->label('ধরন')->badge()
                     ->formatStateUsing(fn (string $state) => SmsTemplate::TYPES[$state] ?? $state)
-                    ->color(fn (string $state) => $state === 'bill_paid' ? 'success' : 'gray'),
+                    ->color(fn (string $state) => $state === 'general' ? 'gray' : 'success'),
                 TextColumn::make('body')->label('লেখা')->wrap()->limit(200)->searchable(),
                 TextColumn::make('length')->label('দৈর্ঘ্য')
                     ->state(fn (SmsTemplate $r) => ($p = Sms::parts($r->body))['chars'].' অক্ষর · '.$p['parts'].' SMS'

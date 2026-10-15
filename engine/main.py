@@ -666,7 +666,7 @@ async def new_ticket(request: Request, company_id: int, background: BackgroundTa
     def run():
         msg = api.create_ticket(int(b["header_id"]), str(b["category_id"]), int(b.get("priority") or 2),
                                 normalize_bd_mobile(b.get("mobile") or "") or (b.get("mobile") or ""),
-                                b.get("comment") or "", send_sms=bool(b.get("sms_client")))
+                                b.get("comment") or "", send_sms=False)  # the customer's SMS goes from the Desk
         created = api.open_tickets_for(b.get("username") or "") if b.get("username") else []
         complain_id = created[0].get("ComplainId") if created else None
         if complain_id and b.get("employees"):

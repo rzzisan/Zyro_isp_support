@@ -5,12 +5,19 @@ namespace Tests\Feature;
 use App\Filament\App\Pages\Dashboard;
 use App\Filament\App\Resources\Tickets\Pages\ListTickets;
 use App\Filament\App\Resources\Tickets\TicketResource;
+use App\Filament\App\TicketActions;
+use App\Models\BillingCustomer;
 use App\Models\BillingTicket;
 use App\Models\Company;
+use App\Models\SmsMessage;
+use App\Models\SmsSetting;
+use App\Models\SmsTemplate;
+use App\Models\Technician;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -57,6 +64,58 @@ class TicketActionsTest extends TestCase
         Livewire::test(Dashboard::class)->callAction('newTicket', $data)->assertHasNoFormErrors();
     }
 
+    /** Gateway set up, both ticket SMS on with the default templates; a customer and a technician to fill them. */
+    private function ticketSmsReady(): void
+    {
+        $cid = $this->company->id;
+        $s = SmsSetting::forCompany($this->company);
+        $s->fill(['api_key' => 'a', 'secret_key' => 'b', 'caller_id' => 'CLN', 'ticket_open_sms' => true, 'ticket_solved_sms' => true,
+            'ticket_open_template_id' => array_key_first(SmsTemplate::optionsFor($cid, 'ticket_open')),
+            'ticket_solved_template_id' => array_key_first(SmsTemplate::optionsFor($cid, 'ticket_solved'))])->save();
+        BillingCustomer::create(['company_id' => $cid, 'header_id' => 15630, 'customer_id' => '5629', 'name' => 'Rezaul',
+            'mobile' => '01838216754', 'username' => 'rz5629']);
+        Technician::create(['company_id' => $cid, 'name' => 'Rifat', 'wa_number' => '8801711000009', 'active' => true,
+            'billing_employee_id' => 9]);
+        Http::fake(["engine.test/internal/{$cid}/sms/kick" => Http::response(['started' => true]),
+            "engine.test/internal/{$cid}/tickets/*/solve" => Http::response(['ok' => true])]);
+    }
+
+    public function test_new_ticket_sms_goes_from_the_desk_not_billing(): void
+    {
+        $this->ticketSmsReady();
+        SmsTemplate::where('type', 'ticket_open')->update(['body' => '{name}: টিকিট {ticket_no}, {problem}, {technician} {technician_phone}, {status}']);
+        Livewire::test(ListTickets::class)
+            ->mountAction('newTicket')->assertSchemaStateSet(['sms_client' => true], 'mountedActionSchema0')
+            ->fillForm(['customer' => '15630|5629|rz5629|01838216754', 'category_id' => '3804', 'priority' => '2',
+                'mobile' => '01911000123', 'comment' => 'লাইন বন্ধ', 'employees' => ['9']])
+            ->callMountedAction()->assertHasNoFormErrors();
+        Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/tickets" && $r['sms_client'] === false);
+        $m = SmsMessage::sole();
+        $this->assertSame('8801911000123', $m->mobile);            // the ticket's contact mobile
+        $this->assertSame('Rezaul: টিকিট 57400, Line Off, Rifat 01711000009, খোলা', $m->text);
+        $this->assertSame('ticket', $m->campaign->kind);
+    }
+
+    public function test_solve_can_send_the_solved_sms(): void
+    {
+        $this->ticketSmsReady();
+        $t = BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => '57231', 'state' => 'processing',
+            'customer_header_id' => 15630, 'customer_id' => '5629', 'mobile' => '01838216754', 'category' => 'Line Off', 'opened_at' => now()]);
+        Livewire::test(ListTickets::class)->callAction([TestAction::make('view')->table($t), TestAction::make('solve')], ['remark' => 'ok'])->assertHasNoFormErrors();
+        $this->assertStringContainsString('প্রিয় Rezaul, আপনার টিকিট 57231 এর সমস্যার সমাধান হয়েছে', SmsMessage::sole()->text);
+        $this->assertStringContainsString('Century Link Network', SmsMessage::sole()->text);
+    }
+
+    public function test_no_ticket_sms_when_not_set_up(): void
+    {
+        Livewire::test(ListTickets::class)
+            ->mountAction('newTicket')->assertSchemaStateSet(['sms_client' => false], 'mountedActionSchema0');
+        $t = BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => '57232', 'state' => 'processing', 'opened_at' => now()]);
+        Http::fake(["engine.test/internal/{$this->company->id}/tickets/*/solve" => Http::response(['ok' => true])]);
+        Livewire::test(ListTickets::class)->callAction([TestAction::make('view')->table($t), TestAction::make('solve')], ['remark' => 'ok', 'sms' => true])->assertHasNoFormErrors();
+        $this->assertSame(0, SmsMessage::count());
+    }
+
     public function test_assign_open_ticket(): void
     {
         $t = BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => '57231', 'state' => 'pending', 'opened_at' => now()]);
@@ -70,7 +129,7 @@ class TicketActionsTest extends TestCase
     public function test_engine_error_is_shown_not_thrown(): void
     {
         config(['services.engine.url' => 'http://broken.test']);
-        \Illuminate\Support\Facades\Cache::flush();
+        Cache::flush();
         Http::fake([
             'broken.test/*/ticket-options' => Http::response(['categories' => [], 'priorities' => [], 'departments' => [], 'employees' => ['3' => 'Arif']]),
             'broken.test/*' => Http::response(['detail' => 'login failed'], 400),
@@ -130,27 +189,27 @@ class TicketActionsTest extends TestCase
     public function test_new_ticket_searches_our_customers_and_shows_their_state(): void
     {
         $cid = $this->company->id;
-        \App\Models\BillingCustomer::create(['company_id' => $cid, 'header_id' => 1977, 'customer_id' => '0976', 'name' => 'Mitu akter',
+        BillingCustomer::create(['company_id' => $cid, 'header_id' => 1977, 'customer_id' => '0976', 'name' => 'Mitu akter',
             'username' => 'kp.mitu', 'mobile' => '01400016191', 'zone' => 'Minto Vhai']);
-        \App\Models\BillingCustomer::create(['company_id' => Company::create(['name' => 'Other'])->id, 'header_id' => 1, 'customer_id' => '0976', 'name' => 'Not ours']);
-        $found = (fn () => static::searchCustomers('976'))->call(new \App\Filament\App\TicketActions);
+        BillingCustomer::create(['company_id' => Company::create(['name' => 'Other'])->id, 'header_id' => 1, 'customer_id' => '0976', 'name' => 'Not ours']);
+        $found = (fn () => static::searchCustomers('976'))->call(new TicketActions);
         $this->assertSame(['0976'], array_column($found, 'customer_id'));
         $this->assertSame('Mitu akter', $found[0]['name']);
-        $this->assertCount(1, (fn () => static::searchCustomers('01400016191'))->call(new \App\Filament\App\TicketActions));
+        $this->assertCount(1, (fn () => static::searchCustomers('01400016191'))->call(new TicketActions));
         // left customers are found too, after the current ones, marked LEFT
-        \App\Models\BillingCustomer::create(['company_id' => $cid, 'header_id' => 15619, 'customer_id' => '5618', 'name' => 'Saddam',
+        BillingCustomer::create(['company_id' => $cid, 'header_id' => 15619, 'customer_id' => '5618', 'name' => 'Saddam',
             'username' => 'kpt.saddam', 'mobile' => '01933635909', 'status' => 'Left', 'disabled' => true, 'is_left' => true, 'left_on' => '2026-10-04']);
-        $left = (fn () => static::searchCustomers('kpt.saddam'))->call(new \App\Filament\App\TicketActions);
+        $left = (fn () => static::searchCustomers('kpt.saddam'))->call(new TicketActions);
         $this->assertSame(['5618'], array_column($left, 'customer_id'));
-        $this->assertStringContainsString('LEFT (04 Oct 2026)', (fn () => static::customerLabel($left[0]))->call(new \App\Filament\App\TicketActions));
-        $this->assertStringNotContainsString('LEFT', (fn () => static::customerLabel($found[0]))->call(new \App\Filament\App\TicketActions));
+        $this->assertStringContainsString('LEFT (04 Oct 2026)', (fn () => static::customerLabel($left[0]))->call(new TicketActions));
+        $this->assertStringNotContainsString('LEFT', (fn () => static::customerLabel($found[0]))->call(new TicketActions));
 
         config(['services.engine.url' => 'http://engine3.test']);
         Http::fake(["engine3.test/internal/{$cid}/customers/1977/ticket-info" => Http::response([
             'customer' => ['customer_id' => '0976', 'name' => 'Mitu akter', 'due' => '1000.00', 'status' => 'Active', 'disabled' => true],
             'mikrotik' => ['online' => false, 'router' => 'CLNBD'], 'last_seen' => [], 'mac' => 'E8:65:D4:53:32:E0',
             'onu' => ['OLTName' => 'CLN_VSOL_3', 'OLTPort' => 'EPON0/8:63', 'OnuStatus' => 'offline', 'OpticalPower' => '-21.5']])]);
-        $html = (fn () => static::infoView('1977|0976|kp.mitu|01400016191'))->call(new \App\Filament\App\TicketActions)->render();
+        $html = (fn () => static::infoView('1977|0976|kp.mitu|01400016191'))->call(new TicketActions)->render();
         foreach (['Mitu akter', 'অফলাইন', 'CLN_VSOL_3', 'EPON0/8:63', '-21.5 dBm', 'লাইন বন্ধ', '1000.00 টাকা', '(বিলিং থেকে)'] as $needle) {
             $this->assertStringContainsString($needle, $html);
         }
