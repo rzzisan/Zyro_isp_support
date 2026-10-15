@@ -35,6 +35,9 @@ class SmsSettings extends CompanySettingsPage
 
     protected static ?int $navigationSort = 6;
 
+    /** "new-password" is the value Chrome respects; "off" alone is ignored for password fields. */
+    private const NO_AUTOFILL = ['autocomplete' => 'new-password', 'data-lpignore' => 'true', 'data-1p-ignore' => 'true'];
+
     protected function record(Company $company): Model
     {
         return SmsSetting::forCompany($company);
@@ -63,10 +66,11 @@ class SmsSettings extends CompanySettingsPage
             TextInput::make('endpoint_url')->label('SMS পাঠানোর URL')->required()->url()->maxLength(250)
                 ->helperText('Khudebarta-র send URL (পোর্ট সহ, যেমন …/sendtext); BSOL-এর অ্যাডমিন → SMS → Gateways-এ যেটা আছে'),
             Grid::make(2)->schema([
-                TextInput::make('api_key')->label('API Key')->password()->revealable()->maxLength(200)
+                // the browser would autofill the Desk login here; these are the gateway's own keys
+                TextInput::make('api_key')->label('API Key')->password()->revealable()->maxLength(200)->extraInputAttributes(self::NO_AUTOFILL)
                     ->required(! filled($s->api_key))
                     ->helperText(filled($s->api_key) ? 'এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন' : 'এনক্রিপ্ট করে রাখা হবে, পরে আর দেখা যাবে না'),
-                TextInput::make('secret_key')->label('Secret Key')->password()->revealable()->maxLength(200)
+                TextInput::make('secret_key')->label('Secret Key')->password()->revealable()->maxLength(200)->extraInputAttributes(self::NO_AUTOFILL)
                     ->required(! filled($s->secret_key))
                     ->helperText(filled($s->secret_key) ? 'এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন' : 'এনক্রিপ্ট করে রাখা হবে, পরে আর দেখা যাবে না'),
                 TextInput::make('caller_id')->label('Sender ID / Caller ID')->required()->maxLength(50)
@@ -75,9 +79,9 @@ class SmsSettings extends CompanySettingsPage
                     ->helperText('শুধু খরচের হিসাব দেখাতে (বাংলা SMS ৭০ অক্ষরে ১টা, ইংরেজি ১৬০-এ)'),
             ]),
             Section::make('ব্যালান্স (Khudebarta পোর্টাল লগইন) ও ডেলিভারি রিপোর্ট')->collapsible()->columns(2)->schema([
-                TextInput::make('portal_username')->label('পোর্টাল ইউজারনেম')->maxLength(100)->placeholder('যেমন centurylinknetwork')
+                TextInput::make('portal_username')->label('পোর্টাল ইউজারনেম')->maxLength(100)->extraInputAttributes(['autocomplete' => 'off'])->placeholder('যেমন centurylinknetwork')
                     ->helperText('portal.khudebarta.com-এ যে ইউজারে লগইন করেন; ব্যালান্স দেখতে Desk এভাবে লগইন করে (৫ মিনিট পরপর ব্যালান্স)'),
-                TextInput::make('portal_password')->label('পোর্টাল পাসওয়ার্ড')->password()->revealable()->maxLength(200)
+                TextInput::make('portal_password')->label('পোর্টাল পাসওয়ার্ড')->password()->revealable()->maxLength(200)->extraInputAttributes(self::NO_AUTOFILL)
                     ->helperText(filled($s->portal_password) ? 'এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন' : 'এনক্রিপ্ট করে রাখা হবে'),
                 TextInput::make('portal_login_url')->label('পোর্টাল লগইন URL')->url()->maxLength(250),
                 TextInput::make('balance_url')->label('পোর্টালের ব্যালান্স URL')->maxLength(250)
