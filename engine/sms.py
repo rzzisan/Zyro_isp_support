@@ -238,6 +238,24 @@ def portal_refresh(company_id: int, s: dict, c: httpx.Client) -> str | None:
     return None
 
 
+def billing_balance(company_id: int) -> float | None:
+    """Fallback: the billing software's SMS Gateway page shows the same Khudebarta account's balance
+    (`var smsBalance = 1496.25;`). Only that number is read; the page also holds the gateway login and is never kept.
+    The portal's own login refuses every non-browser client ("Forbidden from Charset Filter", 2026-10-15)."""
+    try:
+        from engine import tenant as tenants
+        from engine.ticket_sync import companies
+        ts = companies(company_id)
+        if not ts:
+            return None
+        page = tenants.billing(ts[0]).page("/companysettings/smsgateway")
+    except Exception as e:
+        log.info("company %s: billing sms balance not read (%s)", company_id, type(e).__name__)
+        return None
+    m = re.search(r"var\s+smsBalance\s*=\s*(-?[\d.]+)\s*;", page)
+    return float(m.group(1)) if m else None
+
+
 def check_balance(company_id: int) -> dict:
     """Balance from the Khudebarta web portal: GET {balance_url} with Bearer idToken (portal login, refreshed or
     logged in again on 401). The result is saved in sms_settings (balance, checked time, error)."""
@@ -273,6 +291,8 @@ def check_balance(company_id: int) -> dict:
             last = str(e)
         except httpx.HTTPError as e:
             last = f"পোর্টালে সংযোগ হয়নি ({type(e).__name__})"
+    if value is None:
+        value = billing_balance(company_id)
     if value is None:
         err = _short(last, secrets)
         db.execute("""UPDATE sms_settings SET balance_checked_at = now(), last_check_ok = false, last_error = %s,

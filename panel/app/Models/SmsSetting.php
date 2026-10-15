@@ -11,8 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class SmsSetting extends Model
 {
-    /** Khudebarta's HTTP send API (Zisan, 2026-10-15). */
-    public const KHUDEBARTA_SEND_URL = 'http://118.67.213.114:3775/sendtext';
+    /** Khudebarta's HTTP send API (the old http://118.67.213.114:3775 refuses connections since 2026-10). */
+    public const KHUDEBARTA_SEND_URL = 'http://portal.khudebarta.com:3775/sendtext';
 
     /** Khudebarta web portal API (its Technical Details page and login script, 2026-10-15). */
     public const KHUDEBARTA_BALANCE_URL = 'https://portal.khudebarta.com:9494/api/util/get-current-balance?providerID={provider_id}';

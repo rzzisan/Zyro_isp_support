@@ -34,7 +34,9 @@ form POST `endpoint_url` (BSOL-এর অ্যাডমিন → SMS → Gatew
 একই প্ল্যাটফর্মের পাবলিক ডক অনুযায়ী উত্তর `{"Status":"0","Text":"ACCEPTD","Message_ID":"..."}`; অন্য Status (108 ভুল key,
 109 ইউজার নেই, 114 লেখা নেই, 101 সার্ভার, 137 TPS, -42 auth) = refused। JSON না হলে BSOL-এর নিয়ম: 2xx আর
 error/failed/invalid/unauthorized না থাকলে সফল। ডেলিভারি `getstatus?apikey&secretkey&messageid` → Text `DELIVRD` ইত্যাদি।
-Century Link-এর send URL: `http://118.67.213.114:3775/sendtext` (Zisan, সেটিংসের ডিফল্ট)। প্রোফাইল "centurylinknetwork HTTP", TPS 1000।
+Century Link-এর send URL: `http://portal.khudebarta.com:3775/sendtext` (সেটিংসের ডিফল্ট)। পুরনো `http://118.67.213.114:3775` (BSOL-এও এটাই ছিল, শেষ সফল SMS 2026-09-25) এখন connection refused দেয়, সার্ভার আর অফিস PC দুই জায়গা থেকেই (2026-10-15)। key ছাড়া নতুন ঠিকানা `{"Status":"-1","StatusDescription":"Org Client Not Found","Text":"REJECTD"}` দেয়। প্রোফাইল "centurylinknetwork HTTP", TPS 1000।
+
+ব্যালান্স, বাস্তবে (2026-10-15): পোর্টালের `/auth/login` ব্রাউজার ছাড়া অন্য সব client-কে `403 "Forbidden from Charset Filter"` দেয়, নকল ক্রেডেনশিয়ালেও (সার্ভার ও PC, httpx/curl HTTP/2/PowerShell, axios-এর হুবহু হেডার ও body দিয়ে চেষ্টা করা)। তাই পোর্টাল ব্যর্থ হলে engine বিলিংয়ের `/companysettings/smsgateway` পেজের `var smsBalance = …;` থেকে শুধু সংখ্যাটা নেয় (শেয়ার্ড বিলিং সেশন; একই Khudebarta অ্যাকাউন্ট; পেজের বাকি অংশ, যাতে গেটওয়ের পাসওয়ার্ড আছে, রাখা হয় না)।
 
 ব্যালান্স: API-key দিয়ে কোনো ব্যালান্স call নেই (BSOL-এও নেই)। Khudebarta-র ওয়েব পোর্টালের API
 (`https://portal.khudebarta.com:9494/api`, পোর্টালের JS আর Technical Details পেজ থেকে):
