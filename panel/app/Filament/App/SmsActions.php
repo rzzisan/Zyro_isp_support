@@ -21,6 +21,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\View;
 use Filament\Support\Icons\Heroicon;
 
 /**
@@ -152,16 +153,18 @@ class SmsActions
                             ->options(['online' => 'অনলাইন', 'offline' => 'অফলাইন']),
                     ]),
                     Select::make('template')->label('টেমপ্লেট')->placeholder('টেমপ্লেট বাছুন (ঐচ্ছিক)')->live()
-                        ->options(fn () => SmsTemplate::where('company_id', static::company())->orderBy('sort')->orderBy('name')->pluck('name', 'id'))
+                        ->options(fn () => SmsTemplate::where('company_id', static::company())->where('type', 'general')
+                            ->orderBy('sort')->orderBy('name')->pluck('name', 'id'))
                         ->afterStateUpdated(function ($state, callable $set) {
                             $t = $state ? SmsTemplate::where('company_id', static::company())->find($state) : null;
                             if ($t) {
                                 $set('body', $t->body);
                             }
                         }),
+                    View::make('filament.app.sms.placeholders')->viewData(['items' => Sms::placeholders()]),
                     Textarea::make('body')->label('লেখা')->required()->rows(5)->maxLength(1000)->live(debounce: 500)
-                        ->partiallyRenderComponentsAfterStateUpdated(['summary'])
-                        ->helperText('কাস্টমারের তথ্য বসাতে: '.collect(Sms::PLACEHOLDERS)->map(fn ($p, $k) => '{'.$k.'} '.$p[0])->implode(', ')),
+                        ->extraInputAttributes(['data-sms-body' => 'true'])
+                        ->partiallyRenderComponentsAfterStateUpdated(['summary']),
                     Placeholder::make('summary')->hiddenLabel()->key('summary')
                         ->content(fn ($get) => view('filament.app.sms.summary', static::summary($get))),
                     Checkbox::make('confirm')->label(fn ($get) => 'হ্যাঁ, এই সবাইকে SMS পাঠাতে চাই')
@@ -207,14 +210,16 @@ class SmsActions
         $r = static::resolve($data);
         $est = Sms::estimate(static::company(), $body, $r['customers'], $r['numbers']);
         $preview = [];
+        $extra = ['company' => Sms::companyName(static::company())];
         foreach (array_slice($r['customers'], 0, 3, true) as $mobile => $c) {
-            $preview[] = ['to' => trim("{$c->name} · {$mobile}"), 'text' => Sms::render($body, $c)];
+            $preview[] = ['to' => trim("{$c->name} · {$mobile}"), 'text' => Sms::render($body, $c, $extra)];
         }
         foreach (array_slice($r['numbers'], 0, max(0, 3 - count($preview))) as $mobile) {
-            $preview[] = ['to' => $mobile, 'text' => Sms::render($body, null)];
+            $preview[] = ['to' => $mobile, 'text' => Sms::render($body, null, $extra)];
         }
 
         return ['est' => $est, 'skipped' => $r['skipped'], 'bad' => $r['bad'], 'length' => Sms::parts($body),
+            'billOnly' => Sms::billOnly($body),
             'preview' => $body !== '' ? $preview : [], 'settings' => SmsSetting::forCompany(static::company())];
     }
 }

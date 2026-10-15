@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\App\Pages\SmsSettings;
 use App\Filament\App\Resources\Customers\Pages\ViewCustomer;
 use App\Filament\App\Resources\SmsCampaigns\Pages\ListSmsCampaigns;
+use App\Filament\App\Resources\SmsTemplates\Pages\ManageSmsTemplates;
 use App\Models\BillingCustomer;
 use App\Models\Company;
 use App\Models\Membership;
@@ -96,6 +97,14 @@ class SmsTest extends TestCase
         $c = BillingCustomer::where('header_id', 1)->first();
         $this->assertSame('প্রিয় Alif (0001), বকেয়া 525 টাকা {x}', Sms::render('প্রিয় {name} ({id}), বকেয়া {due} টাকা {x}', $c));
         $this->assertSame('বকেয়া 0', Sms::render('বকেয়া {due}', null));
+        // bill payment: its own values win ({due} = left after the payment); outside one they stay empty
+        $this->assertSame('Alif 400 ছাড় 25 বাকি 100 CLN', Sms::render('{name} {paid} ছাড় {discount} বাকি {due} {company}', $c,
+            ['paid' => '400', 'discount' => '25', 'due' => '100', 'company' => 'CLN']));
+        $this->assertSame('জমা  টাকা', Sms::render('জমা {paid} টাকা', $c));
+        $this->assertSame(['paid', 'discount'], Sms::billOnly('{name} {paid} {discount} {due}'));
+        $this->assertArrayHasKey('paid', Sms::placeholders('bill_paid'));
+        $this->assertArrayNotHasKey('paid', Sms::placeholders());
+        $this->assertSame('Century Link Network', Sms::companyName($this->company->id));
     }
 
     public function test_bulk_filters_pick_recipients_from_the_desk_copy(): void
@@ -162,6 +171,23 @@ class SmsTest extends TestCase
             ->mountAction('sendSms')
             ->fillForm(['template' => $t->id])
             ->assertSchemaStateSet(['body' => 'বকেয়া {due}'], 'mountedActionSchema0');
+    }
+
+    public function test_template_editor_shows_placeholder_chips_per_type(): void
+    {
+        $this->as($this->owner);
+        $html = $this->get('/app/'.$this->company->slug.'/sms-templates')->assertOk()->getContent();
+        $this->assertStringContainsString('SMS টেমপ্লেট', $html);
+        $chips = view('filament.app.sms.placeholders', ['items' => Sms::placeholders('bill_paid')])->render();
+        foreach (['{paid}', '{discount}', '{due}', '{name}', 'textarea[data-sms-body]', 'setSelectionRange', "new Event('input'"] as $needle) {
+            $this->assertStringContainsString($needle, $chips);
+        }
+        $this->assertStringNotContainsString('{paid}', view('filament.app.sms.placeholders', ['items' => Sms::placeholders()])->render());
+        Livewire::test(ManageSmsTemplates::class)
+            ->callAction(TestAction::make('create')->table(),
+                ['type' => 'bill_paid', 'name' => 'Paid', 'body' => 'প্রিয় {name}, {paid} টাকা পেয়েছি'])
+            ->assertHasNoActionErrors();
+        $this->assertSame('bill_paid', SmsTemplate::where('name', 'Paid')->value('type'));
     }
 
     public function test_customer_page_sends_to_that_customer(): void

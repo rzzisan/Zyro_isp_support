@@ -4,9 +4,12 @@ namespace App\Support;
 
 use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Models\BillingCustomer;
+use App\Models\Company;
+use App\Models\ReceiptSetting;
 use App\Models\SmsCampaign;
 use App\Models\SmsMessage;
 use App\Models\SmsSetting;
+use App\Models\SmsTemplate;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -26,7 +29,45 @@ class Sms
         'monthly' => ['মাসিক বিল', 'monthly_bill'],
         'due' => ['বকেয়া', 'due'],
         'zone' => ['Zone', 'zone'],
+        'company' => ['কোম্পানির নাম', null],
     ];
+
+    /** Only in a bill-payment SMS (filled from the collection just made); {due} there = due left after this payment. */
+    public const BILL_PLACEHOLDERS = [
+        'paid' => 'জমা',
+        'discount' => 'ছাড়',
+        'due' => 'বাকি বকেয়া',
+        'payable' => 'মোট বকেয়া (জমার আগে)',
+        'months' => 'বিলের মাস',
+        'method' => 'মাধ্যম',
+        'receipt_no' => 'রিসিট নং',
+        'date' => 'তারিখ',
+    ];
+
+    /** [placeholder => label] a template of this type may use. */
+    public static function placeholders(string $type = 'general'): array
+    {
+        $out = collect(self::PLACEHOLDERS)->map(fn ($p) => $p[0])->all();
+
+        return $type === 'bill_paid' ? self::BILL_PLACEHOLDERS + $out : $out;
+    }
+
+    /** Bill-payment placeholders used in a text that is not a bill-payment SMS (they stay empty there). */
+    public static function billOnly(string $body): array
+    {
+        preg_match_all('/\{(\w+)\}/', $body, $m);
+
+        return array_values(array_unique(array_diff(array_intersect($m[1], array_keys(self::BILL_PLACEHOLDERS)),
+            array_keys(self::PLACEHOLDERS))));
+    }
+
+    private static array $companyNames = [];
+
+    public static function companyName(int $companyId): string
+    {
+        return self::$companyNames[$companyId] ??= (string) (ReceiptSetting::where('company_id', $companyId)->value('company_name')
+            ?: Company::whereKey($companyId)->value('name'));
+    }
 
     /** GSM 03.38 basic set (one unit each) and the extension table (two units each). */
     private const GSM = "@£\$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
@@ -96,13 +137,20 @@ class Sms
         return rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
     }
 
-    /** The text for one customer, placeholders filled ({due} as a plain number; unknown placeholders stay as they are). */
-    public static function render(string $body, BillingCustomer|array|null $c): string
+    /**
+     * The text for one customer, placeholders filled ({due} as a plain number). $extra fills placeholders first
+     * (company name, a bill payment's paid/discount/due ...); bill-payment placeholders without a value become empty;
+     * unknown placeholders stay as they are.
+     */
+    public static function render(string $body, BillingCustomer|array|null $c, array $extra = []): string
     {
-        return preg_replace_callback('/\{(\w+)\}/', function ($m) use ($c) {
+        return preg_replace_callback('/\{(\w+)\}/', function ($m) use ($c, $extra) {
+            if (array_key_exists($m[1], $extra)) {
+                return (string) $extra[$m[1]];
+            }
             $col = self::PLACEHOLDERS[$m[1]][1] ?? null;
             if (! $col) {
-                return $m[0];
+                return isset(self::BILL_PLACEHOLDERS[$m[1]]) || $m[1] === 'company' ? '' : $m[0];
             }
             $v = is_array($c) ? ($c[$col] ?? null) : $c?->{$col};
             if (in_array($col, ['due', 'monthly_bill'], true)) {
@@ -179,15 +227,16 @@ class Sms
     }
 
     /** Count, parts and cost of a send: with placeholders every text is measured, otherwise one text times the count. */
-    public static function estimate(int $companyId, string $body, array $customers, array $numbers = []): array
+    public static function estimate(int $companyId, string $body, array $customers, array $numbers = [], array $extra = []): array
     {
+        $extra += ['company' => static::companyName($companyId)];
         $n = count($customers) + count($numbers);
         if (static::usesPlaceholders($body)) {
             $parts = 0;
             foreach ($customers as $c) {
-                $parts += static::parts(static::render($body, $c))['parts'];
+                $parts += static::parts(static::render($body, $c, $extra))['parts'];
             }
-            $parts += count($numbers) * static::parts(static::render($body, null))['parts'];
+            $parts += count($numbers) * static::parts(static::render($body, null, $extra))['parts'];
         } else {
             $parts = $n * static::parts($body)['parts'];
         }
@@ -198,25 +247,49 @@ class Sms
     }
 
     /**
+     * After "বিল নিন": queue the bill-payment SMS (the template chosen in the gateway settings) to the customer.
+     * $bill: paid, discount, payable (before), due (after), months, method, receipt_no. Null when it can't go
+     * (settings not ready, no valid mobile).
+     */
+    public static function billPaid(int $companyId, ?int $userId, BillingCustomer $c, array $bill): ?SmsCampaign
+    {
+        $s = SmsSetting::forCompany($companyId);
+        $mobile = static::mobile($c->mobile_normalized ?: $c->mobile);
+        if (! $s->billSmsReady() || ! $mobile) {
+            return null;
+        }
+        $body = (string) SmsTemplate::whereKey($s->bill_template_id)->value('body');
+        $extra = ['paid' => static::money($bill['paid'] ?? 0), 'discount' => static::money($bill['discount'] ?? 0),
+            'due' => static::money(max(0, (float) ($bill['due'] ?? 0))), 'payable' => static::money($bill['payable'] ?? 0),
+            'months' => (string) ($bill['months'] ?? ''), 'method' => (string) ($bill['method'] ?? ''),
+            'receipt_no' => (string) ($bill['receipt_no'] ?? ''),
+            'date' => now('Asia/Dhaka')->format('d/m/Y')];
+
+        return static::queue($companyId, $userId, 'bill', $body, [$mobile => $c], [], [], $extra);
+    }
+
+    /**
      * Puts a send in the queue: one campaign, one sms_messages row per number (customers first, then bare numbers;
      * a number appears once). Returns the campaign; the engine is woken up by the caller.
      *
      * @param  array<string, BillingCustomer>  $customers  mobile => customer
      * @param  string[]  $numbers  normalized numbers without a customer
+     * @param  array  $extra  placeholder values for every message (a bill payment's paid/discount/due ...)
      */
-    public static function queue(int $companyId, ?int $userId, string $kind, string $body, array $customers, array $numbers = [], array $filters = []): SmsCampaign
+    public static function queue(int $companyId, ?int $userId, string $kind, string $body, array $customers, array $numbers = [], array $filters = [], array $extra = []): SmsCampaign
     {
         $numbers = array_values(array_diff($numbers, array_keys($customers)));
-        $est = static::estimate($companyId, $body, $customers, $numbers);
+        $extra += ['company' => static::companyName($companyId)];
+        $est = static::estimate($companyId, $body, $customers, $numbers, $extra);
 
-        return DB::transaction(function () use ($companyId, $userId, $kind, $body, $customers, $numbers, $filters, $est) {
+        return DB::transaction(function () use ($companyId, $userId, $kind, $body, $customers, $numbers, $filters, $est, $extra) {
             $campaign = SmsCampaign::create(['company_id' => $companyId, 'user_id' => $userId, 'kind' => $kind, 'body' => $body,
                 'filters' => $filters ?: null, 'total' => $est['count'], 'parts' => $est['parts'], 'cost' => $est['cost'],
                 'status' => 'queued']);
             $now = now();
             $rows = [];
-            $row = function (string $mobile, ?BillingCustomer $c) use ($campaign, $companyId, $userId, $body, $now) {
-                $text = static::render($body, $c);
+            $row = function (string $mobile, ?BillingCustomer $c) use ($campaign, $companyId, $userId, $body, $now, $extra) {
+                $text = static::render($body, $c, $extra);
                 $p = static::parts($text);
 
                 return ['company_id' => $companyId, 'campaign_id' => $campaign->id, 'user_id' => $userId,

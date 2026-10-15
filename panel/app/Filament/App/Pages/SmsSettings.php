@@ -4,12 +4,14 @@ namespace App\Filament\App\Pages;
 
 use App\Models\Company;
 use App\Models\SmsSetting;
+use App\Models\SmsTemplate;
 use App\Services\Engine;
 use App\Support\Sms;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
@@ -47,6 +49,8 @@ class SmsSettings extends CompanySettingsPage
         /** @var SmsSetting $record */
         return ['endpoint_url' => $record->endpoint_url, 'status_url' => $record->status_url, 'caller_id' => $record->caller_id,
             'verify_tls' => $record->verify_tls, 'enabled' => $record->enabled, 'rate' => $record->rate,
+            'bill_sms' => $record->bill_sms, 'bill_template_id' => $record->bill_template_id
+                ?? array_key_first(SmsTemplate::billPaidOptions((int) $record->company_id)),
             'api_key' => null, 'secret_key' => null];
     }
 
@@ -79,6 +83,14 @@ class SmsSettings extends CompanySettingsPage
             TextInput::make('status_url')->label('ডেলিভারি রিপোর্ট URL (ঐচ্ছিক)')->url()->maxLength(250)
                 ->placeholder('খালি = send URL-এর ঠিকানায় /getstatus')
                 ->helperText('গেটওয়ে নেওয়া প্রতিটা SMS-এর অবস্থা (পৌঁছেছে / ব্যর্থ) ১০ মিনিট পরপর ৪৮ ঘণ্টা পর্যন্ত জিজ্ঞেস করা হয়'),
+            Grid::make(2)->schema([
+                Toggle::make('bill_sms')->label('বিল নিলে কাস্টমারকে SMS')
+                    ->helperText('"বিল নিন" ফর্মে "কাস্টমারকে SMS (Desk)" ডিফল্টে চালু থাকবে; প্রতিবার ফর্মে বন্ধ করা যায়। SMS যায় এই গেটওয়ে দিয়ে, বিলিং দিয়ে নয়।'),
+                Select::make('bill_template_id')->label('বিল পরিশোধের টেমপ্লেট')
+                    ->options(fn () => SmsTemplate::billPaidOptions((int) Filament::getTenant()->getKey()))
+                    ->required(fn ($get) => (bool) $get('bill_sms'))
+                    ->helperText('SMS → SMS টেমপ্লেট-এ "বিল পরিশোধ" ধরনের টেমপ্লেট; {paid} {discount} {due} বিল থেকে বসে'),
+            ]),
             Toggle::make('verify_tls')->label('SSL সার্টিফিকেট যাচাই')->default(true)
                 ->helperText('গেটওয়ের সার্টিফিকেটের মেয়াদ শেষ হলে সংযোগ হবে না; তখন সাময়িকভাবে বন্ধ করা যায়'),
             Toggle::make('enabled')->label('SMS পাঠানো চালু')

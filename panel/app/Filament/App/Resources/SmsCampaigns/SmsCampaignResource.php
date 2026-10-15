@@ -56,7 +56,7 @@ class SmsCampaignResource extends Resource
                 TextColumn::make('created_at')->label('সময়')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
                 TextColumn::make('user.name')->label('কে')->placeholder('—'),
                 TextColumn::make('kind')->label('ধরন')->badge()->color('gray')
-                    ->formatStateUsing(fn (string $state) => $state === 'bulk' ? 'ফিল্টার' : 'নির্দিষ্ট'),
+                    ->formatStateUsing(fn (string $state) => ['bulk' => 'ফিল্টার', 'bill' => 'বিল পরিশোধ'][$state] ?? 'নির্দিষ্ট'),
                 TextColumn::make('body')->label('লেখা')->limit(80)->wrap()->searchable(),
                 TextColumn::make('total')->label('জন')->numeric(),
                 TextColumn::make('sent')->label('গেছে')

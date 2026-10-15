@@ -24,7 +24,7 @@ class SmsSetting extends Model
     {
         return ['api_key' => 'encrypted', 'secret_key' => 'encrypted', 'portal_password' => 'encrypted',
             'portal_token' => 'encrypted', 'portal_refresh_token' => 'encrypted', 'portal_token_expires_at' => 'datetime',
-            'portal_login_failed_at' => 'datetime', 'verify_tls' => 'boolean', 'enabled' => 'boolean',
+            'portal_login_failed_at' => 'datetime', 'verify_tls' => 'boolean', 'enabled' => 'boolean', 'bill_sms' => 'boolean',
             'rate' => 'decimal:4', 'balance' => 'decimal:2', 'balance_checked_at' => 'datetime', 'last_check_ok' => 'boolean'];
     }
 
@@ -39,6 +39,13 @@ class SmsSetting extends Model
 
         return static::firstOrNew(['company_id' => $id], ['provider' => 'khudebarta', 'verify_tls' => true, 'enabled' => false,
             'endpoint_url' => self::KHUDEBARTA_SEND_URL]);
+    }
+
+    /** "বিল নিন" can send the bill-payment SMS: gateway set up and a bill-payment template chosen. */
+    public function billSmsReady(): bool
+    {
+        return $this->configured() && $this->bill_template_id
+            && SmsTemplate::whereKey($this->bill_template_id)->where('company_id', $this->company_id)->exists();
     }
 
     public function configured(): bool

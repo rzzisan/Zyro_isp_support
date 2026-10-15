@@ -2,11 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Filament\App\BillActions;
 use App\Filament\App\Resources\BillCollections\Pages\ListBillCollections;
 use App\Filament\App\Resources\Customers\Pages\ViewCustomer;
+use App\Filament\App\Resources\DailyBills\Pages\ListDailyBills;
 use App\Models\BillCollection;
 use App\Models\BillingCustomer;
 use App\Models\Company;
+use App\Models\SmsMessage;
+use App\Models\SmsSetting;
+use App\Models\SmsTemplate;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -75,6 +80,40 @@ class BillCollectionTest extends TestCase
             && $r['expected_payable'] == 525 && $r['user_id'] === $this->owner->id);
     }
 
+    public function test_collected_bill_queues_the_bill_payment_sms_through_the_desk_gateway(): void
+    {
+        $this->fakeEngine(bill: ['message' => 'Succeeded...!!!', 'collection_id' => null, 'balance' => 100]);
+        Http::fake(['engine.test/internal/*/sms/kick' => Http::response(['started' => true])]);
+        $template = SmsTemplate::create(['company_id' => $this->company->id, 'type' => 'bill_paid', 'name' => 'Paid',
+            'body' => 'প্রিয় {name}, {months} মাসের {paid} টাকা পেয়েছি ({method}), ছাড় {discount}, বকেয়া {due} (মোট ছিল {payable})। {company}']);
+        SmsSetting::forCompany($this->company)->fill(['api_key' => 'a', 'secret_key' => 'b', 'caller_id' => 'CLN',
+            'bill_sms' => true, 'bill_template_id' => $template->id])->save();
+        $this->as($this->owner);
+        Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])
+            ->mountAction('receiveBill')
+            ->assertSchemaStateSet(['desk_sms' => true, 'sms' => false], 'mountedActionSchema0')
+            ->fillForm(['paid' => 400, 'discount' => 25, 'remarks' => 'partial'])
+            ->callMountedAction()->assertHasNoActionErrors();
+        // billing's own SMS stays off; the Desk queues its own
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/customers/3/bill') && $r['sms'] === false);
+        $m = SmsMessage::sole();
+        $this->assertSame('8801714080210', $m->mobile);
+        $this->assertSame('প্রিয় Bulbul, October মাসের 400 টাকা পেয়েছি (Cash), ছাড় 25, বকেয়া 100 (মোট ছিল 525)। Century Link Network', $m->text);
+        $this->assertSame('bill', $m->campaign->kind);
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), "/internal/{$this->company->id}/sms/kick"));
+    }
+
+    public function test_no_desk_sms_when_unticked_or_not_set_up(): void
+    {
+        $this->fakeEngine();
+        $this->as($this->owner);
+        Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])
+            ->mountAction('receiveBill')
+            ->assertSchemaStateSet(['desk_sms' => false], 'mountedActionSchema0')
+            ->callMountedAction()->assertHasNoActionErrors();
+        $this->assertSame(0, SmsMessage::count());
+    }
+
     public function test_form_shows_live_balance(): void
     {
         $html = view('filament.app.bills.summary', ['payable' => 525, 'discount' => 25, 'paid' => 300])->render();
@@ -98,7 +137,7 @@ class BillCollectionTest extends TestCase
             ['customer_id' => '0007', 'name' => 'Rana', 'username' => '', 'mobile' => '01700000000', 'zone' => 'Zisan',
                 'subzone' => null, 'box' => ' ', 'is_left' => true, 'left_on' => '2026-10-04']));
         $this->as($this->owner);
-        $results = (fn () => static::searchCustomers('en.enamul'))->call(new \App\Filament\App\BillActions);
+        $results = (fn () => static::searchCustomers('en.enamul'))->call(new BillActions);
         $this->assertSame(['3' => 'ID 0003 · Bulbul · en.enamul · 01714080210 · Zisan / এনায়েতনগর / Sudipta'], $results);
     }
 
@@ -111,7 +150,7 @@ class BillCollectionTest extends TestCase
             ->mountAction('receiveBill')->fillForm(['paid' => 300, 'discount' => 25])
             ->assertSchemaStateSet(['paid' => 300, 'discount' => 25], 'mountedActionSchema0');
         // বিল কালেকশন page: picking a customer fills the form and re-renders just its body
-        Livewire::test(\App\Filament\App\Resources\DailyBills\Pages\ListDailyBills::class)
+        Livewire::test(ListDailyBills::class)
             ->mountAction('receiveBill')->fillForm(['header_id' => '3'])
             ->assertSchemaStateSet(['paid' => 525.0, 'method_id' => '71', 'received_by_id' => '1', 'sms' => false], 'mountedActionSchema0')
             ->fillForm(['paid' => 500, 'discount' => 25]);
