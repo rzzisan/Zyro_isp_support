@@ -150,7 +150,7 @@ def send_one(s: dict, mobile: str, text: str, client: httpx.Client | None = None
 # --- balance / validate --------------------------------------------------------------------------------------------
 def _number(v) -> float | None:
     try:
-        return float(str(v).replace(",", "").strip())
+        return round(float(str(v).replace(",", "").strip()), 2)   # the gateway sends e.g. 1490.6500000000033
     except (TypeError, ValueError):
         return None
 
