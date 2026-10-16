@@ -122,9 +122,9 @@
 .fi-header > div:has(.zi-line-head) { flex: 1 1 0; min-width: 0; }
 .zi-line-head { flex-direction: row; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
 .zi-line-head .zi-st { background: var(--z-surface); min-width: 0; flex: 0 1 auto; padding: 5px 9px; }
-.zi-line-head .zi-st-body small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.zi-line-tools { flex: none; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; padding: 2px 0; }
-.zi-line-tools .zi-line-link { align-self: auto; }
+.zi-line-head .zi-st-body b, .zi-line-head .zi-st-body small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zi-line-tools { flex: none; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 2px 0; }
+.zi-line-tools .zi-line-link { align-self: auto; padding: 2px; }
 .zi-line-loading { padding: 10px 0; }
 .zi-line-btn { border: 0; background: none; padding: 2px; color: var(--z-muted); cursor: pointer; }
 .zi-line-btn:hover { color: var(--z-fg); }

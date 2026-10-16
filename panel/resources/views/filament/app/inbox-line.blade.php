@@ -74,7 +74,9 @@
                 <button type="button" wire:click="refresh" wire:loading.attr="disabled" class="zi-line-btn" title="{{ __('আবার দেখুন') }}">
                     <x-filament::icon icon="heroicon-o-arrow-path" class="zi-line-ico" wire:loading.class="zi-spin" wire:target="refresh" />
                 </button>
-                <a class="zi-line-link" href="{{ \App\Filament\App\Resources\Customers\CustomerResource::getUrl('view', ['record' => $customer]) }}" wire:navigate>{{ __('কাস্টমারের পুরো তথ্য') }} →</a>
+                <a class="zi-line-link" href="{{ \App\Filament\App\Resources\Customers\CustomerResource::getUrl('view', ['record' => $customer]) }}" wire:navigate title="{{ __('কাস্টমারের পুরো তথ্য') }}">
+                    <x-filament::icon icon="heroicon-o-arrow-top-right-on-square" class="zi-line-ico" />
+                </a>
             </div>
         @endif
     @else
