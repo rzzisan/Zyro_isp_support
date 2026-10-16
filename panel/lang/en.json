@@ -1191,5 +1191,9 @@
     "লাইন ব্লক (কবে থেকে বিলিংয়ের লগে পাওয়া যায়নি)": "Line blocked (since when is not in billing's log)",
     "লাইনের অবস্থা": "Line status",
     "কাস্টমারের পুরো তথ্য": "Full customer details",
-    "এই সেশনে": "This session"
+    "এই সেশনে": "This session",
+    "নেটওয়ার্ক সেটিংস": "Network settings",
+    "কাস্টমারের রাউটারের রিমোট পোর্ট": "Customer router remote port",
+    "কাস্টমারের রাউটার খুলুন": "Open the customer's router",
+    "টিকিট ও ইনবক্সে কাস্টমারের IP-তে ক্লিক করলে নতুন ট্যাবে তার রাউটার খুলবে (যেমন http://IP:7863)। খালি রাখলে শুধু http://IP খুলবে।": "Clicking a customer's IP in tickets and the inbox opens their router in a new tab (like http://IP:7863). Leave empty to open just http://IP."
 }

@@ -79,7 +79,7 @@
                 <div class="ztd-rows">
                     @if ($online || $blocked)
                         @if ($blocked)<div class="ztd-row"><span>{{ __('প্রোফাইল') }}</span><span>{{ $val($mk['profile'] ?? null) }} ({{ __('ব্লক, ইন্টারনেট নেই') }})</span></div>@endif
-                        <div class="ztd-row"><span>IP</span><span class="ztd-mono">{{ $val($mk['address'] ?? null) }}</span></div>
+                        <div class="ztd-row"><span>IP</span><span class="ztd-mono"><x-router-ip :ip="$mk['address'] ?? null" /></span></div>
                         <div class="ztd-row"><span>Uptime</span><span>{{ $val($mk['uptime'] ?? null) }}</span></div>
                     @elseif (! empty($last['seen_at']))
                         <div class="ztd-row"><span>{{ __('শেষ অনলাইন') }}</span><span>{{ $dt(\Illuminate\Support\Carbon::parse($last['seen_at'], 'UTC')) }}</span></div>

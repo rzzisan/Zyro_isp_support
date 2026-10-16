@@ -37,7 +37,7 @@
                 <div class="zi-st-body">
                     <b>MikroTik · {{ $mk === null ? __('অজানা') : ($online ? __('অনলাইন') : ($blocked ? __('ব্লক') : __('অফলাইন'))) }}</b>
                     <small>
-                        @if ($online) Uptime {{ $mk['uptime'] ?? '—' }}@if (! empty($mk['address'])) · {{ $mk['address'] }}@endif
+                        @if ($online) Uptime {{ $mk['uptime'] ?? '—' }}@if (! empty($mk['address'])) · <x-router-ip :ip="$mk['address']" />@endif
                             @if (($mk['download_bytes'] ?? null) !== null || ($mk['upload_bytes'] ?? null) !== null)
                                 <span class="zi-st-traffic">{{ __('এই সেশনে') }} ↓ {{ $bytes($mk['download_bytes'] ?? null) }} · ↑ {{ $bytes($mk['upload_bytes'] ?? null) }}</span>
                             @endif

@@ -336,3 +336,7 @@
 - ডান কলামে বিলিংয়ের টিকিট (৫টা), খোলা টিকিটে টিকিট ডিটেইলসের একই `TicketActions::solve()` (অনলাইন যাচাই, ব্লক/অফলাইনে disabled, "টিকিট সমাধান" SMS টগল)। record শুধু এই কাস্টমারের টিকিট থেকে।
 - একটাই lazy widget `Conversations/Widgets/CustomerLine` (view `inbox-line.blade.php`), দুই জায়গায়: `part=head` প্যানেলের `PAGE_HEADER_HEADING_AFTER` hook থেকে (`ViewConversation::headerLine()`, `app('livewire')->current()` দিয়ে চ্যাট পায়), `part=side` ডান কলামে। poll করে না, তাই রাউটার ধীর হলেও চ্যাটের ৫ সেকেন্ডের poll আটকায় না। হেডারের "টিকিট খুলুন" বা ↻-এর পর `inbox-tickets-changed` ইভেন্টে টিকিট লিস্ট নতুন হয়। key-তে customer_id।
 - টেস্ট: `InboxTest` (hook পেতে `Filament::getPanel('app')->boot()`), `TicketTest`।
+
+## 2026-10-16: কাস্টমারের রাউটার IP লিংক
+- কোম্পানি সেটিং `companies.router_port` (nullable), পেজ নেটওয়ার্ক → নেটওয়ার্ক সেটিংস (`NetworkSettings`, MikroTik অনুমতি লাগে)। Century Link = 7863।
+- `<x-router-ip :ip="..."/>` (`Company::routerUrl`, শুধু IPv4) IP-কে `http://IP:port` লিংক বানায়, নতুন ট্যাবে। ব্যবহার: টিকিটের MikroTik কার্ড (`tickets/partials/line`) আর ইনবক্স হেডারের MikroTik বক্স (`inbox-line`)। অফলাইনের "শেষ IP" লিংক নয়।
