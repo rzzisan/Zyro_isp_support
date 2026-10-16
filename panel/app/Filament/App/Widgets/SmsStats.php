@@ -35,25 +35,25 @@ class SmsStats extends StatsOverviewWidget
                 coalesce(sum(parts) FILTER (WHERE status IN ('sent','delivered')), 0) AS month,
                 count(*) FILTER (WHERE status = 'failed') AS failed,
                 count(*) FILTER (WHERE status IN ('queued','sending')) AS waiting", [$today])->first();
-        $state = ! $s->configured() ? 'গেটওয়ে সেট করা হয়নি' : ($s->enabled ? 'পাঠানো চালু' : 'পাঠানো বন্ধ');
+        $state = ! $s->configured() ? __('গেটওয়ে সেট করা হয়নি') : ($s->enabled ? __('পাঠানো চালু') : __('পাঠানো বন্ধ'));
         $balance = match (true) {
             $s->balance !== null && $s->last_check_ok !== false => number_format((float) $s->balance, 2),
-            $s->balance_checked_at !== null => 'পাওয়া যায়নি',
+            $s->balance_checked_at !== null => __('পাওয়া যায়নি'),
             default => '—',
         };
         $checked = $s->balance_checked_at
-            ? ($s->last_check_ok === false ? mb_substr((string) $s->last_error, 0, 80).' · ' : 'দেখা হয়েছে ')
+            ? ($s->last_check_ok === false ? mb_substr((string) $s->last_error, 0, 80).' · ' : __('দেখা হয়েছে '))
                 .$s->balance_checked_at->diffForHumans().' · '
             : '';
 
         return [
-            Stat::make('গেটওয়ে ব্যালান্স', $balance)->icon(Heroicon::OutlinedWallet)
+            Stat::make(__('গেটওয়ে ব্যালান্স'), $balance)->icon(Heroicon::OutlinedWallet)
                 ->color($s->configured() && $s->enabled ? 'success' : 'warning')->description($checked.$state),
-            Stat::make('আজ গেছে', number_format((int) $row->today))->icon(Heroicon::OutlinedPaperAirplane),
-            Stat::make('এই মাসে (SMS ভাগ)', number_format((int) $row->month))->icon(Heroicon::OutlinedCalendar)
-                ->description($s->rate !== null ? 'আনুমানিক '.number_format((int) $row->month * (float) $s->rate, 2).' টাকা' : null),
-            Stat::make('এই মাসে ব্যর্থ', number_format((int) $row->failed))->icon(Heroicon::OutlinedExclamationTriangle)->color('danger')
-                ->description($row->waiting ? number_format((int) $row->waiting).'টি এখনো অপেক্ষায়' : null),
+            Stat::make(__('আজ গেছে'), number_format((int) $row->today))->icon(Heroicon::OutlinedPaperAirplane),
+            Stat::make(__('এই মাসে (SMS ভাগ)'), number_format((int) $row->month))->icon(Heroicon::OutlinedCalendar)
+                ->description($s->rate !== null ? __('আনুমানিক :amount টাকা', ['amount' => number_format((int) $row->month * (float) $s->rate, 2)]) : null),
+            Stat::make(__('এই মাসে ব্যর্থ'), number_format((int) $row->failed))->icon(Heroicon::OutlinedExclamationTriangle)->color('danger')
+                ->description($row->waiting ? __(':nটি এখনো অপেক্ষায়', ['n' => number_format((int) $row->waiting)]) : null),
         ];
     }
 }

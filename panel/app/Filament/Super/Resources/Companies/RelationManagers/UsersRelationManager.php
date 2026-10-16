@@ -31,12 +31,12 @@ class UsersRelationManager extends RelationManager
     public function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->label('নাম')->required()->maxLength(255),
+            TextInput::make('name')->label(__('নাম'))->required()->maxLength(255),
             TextInput::make('email')->email()->required()->unique('users', 'email', ignoreRecord: true),
-            TextInput::make('password')->label('পাসওয়ার্ড')->password()->revealable()
+            TextInput::make('password')->label(__('পাসওয়ার্ড'))->password()->revealable()
                 ->required(fn (string $operation) => $operation === 'create')
                 ->dehydrated(fn ($state) => filled($state))->minLength(10),
-            Select::make('role')->label('রোল')->options(self::roles())->required()->default('agent'),
+            Select::make('role')->label(__('রোল'))->options(self::roles())->required()->default('agent'),
         ]);
     }
 
@@ -45,22 +45,22 @@ class UsersRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('name')
             ->columns([
-                TextColumn::make('name')->label('নাম')->searchable(),
+                TextColumn::make('name')->label(__('নাম'))->searchable(),
                 TextColumn::make('email')->searchable(),
-                TextColumn::make('role')->label('রোল')->badge()
+                TextColumn::make('role')->label(__('রোল'))->badge()
                     ->formatStateUsing(fn ($state) => self::roles()[$state] ?? $state),
             ])
             ->headerActions([
-                CreateAction::make()->label('নতুন ইউজার')->before(fn () => $this->ensureSeat()),
-                AttachAction::make()->label('বিদ্যমান ইউজার যোগ')->preloadRecordSelect()->before(fn () => $this->ensureSeat())
+                CreateAction::make()->label(__('নতুন ইউজার'))->before(fn () => $this->ensureSeat()),
+                AttachAction::make()->label(__('বিদ্যমান ইউজার যোগ'))->preloadRecordSelect()->before(fn () => $this->ensureSeat())
                     ->schema(fn (AttachAction $action): array => [
                         $action->getRecordSelect(),
-                        Select::make('role')->label('রোল')->options(self::roles())->required()->default('agent'),
+                        Select::make('role')->label(__('রোল'))->options(self::roles())->required()->default('agent'),
                     ]),
             ])
             ->recordActions([
                 EditAction::make(),
-                DetachAction::make()->label('কোম্পানি থেকে সরান'),
+                DetachAction::make()->label(__('কোম্পানি থেকে সরান')),
             ]);
     }
 
@@ -70,8 +70,8 @@ class UsersRelationManager extends RelationManager
         $left = $this->getOwnerRecord()->seatsLeft();
         if ($left !== null && $left <= 0) {
             \Filament\Notifications\Notification::make()->danger()
-                ->title('প্যাকেজের ইউজার সীমা শেষ')
-                ->body('এই কোম্পানির প্যাকেজে আর ইউজার যোগ করা যাবে না। প্যাকেজ বদলান।')->send();
+                ->title(__('প্যাকেজের ইউজার সীমা শেষ'))
+                ->body(__('এই কোম্পানির প্যাকেজে আর ইউজার যোগ করা যাবে না। প্যাকেজ বদলান।'))->send();
             throw new \Filament\Support\Exceptions\Halt();
         }
     }

@@ -13,16 +13,16 @@ class PlanForm
     {
         return $schema
             ->components([
-                TextInput::make('name')->label('প্যাকেজের নাম')->required(),
-                TextInput::make('price_monthly')->label('মাসিক দাম (টাকা)')->numeric()->minValue(0)->required()->default(0),
-                TextInput::make('max_agents')->label('সর্বোচ্চ ইউজার/এজেন্ট')->numeric()->minValue(1)->required()->default(3),
-                TextInput::make('max_whatsapp_numbers')->label('সর্বোচ্চ WhatsApp নম্বর')->numeric()->minValue(1)->required()->default(1),
-                TextInput::make('max_bot_replies')->label('মাসে সর্বোচ্চ বট উত্তর')->numeric()->minValue(1)
-                    ->helperText('খালি রাখলে সীমাহীন'),
-                TextInput::make('trial_days')->label('ফ্রি ট্রায়াল (দিন)')->numeric()->minValue(0)->required()->default(0),
-                TextInput::make('sort')->label('ক্রম')->numeric()->default(0),
-                Toggle::make('is_active')->label('চালু (নতুন কোম্পানিকে দেওয়া যাবে)')->default(true),
-                Textarea::make('description')->label('বিবরণ')->columnSpanFull(),
+                TextInput::make('name')->label(__('প্যাকেজের নাম'))->required(),
+                TextInput::make('price_monthly')->label(__('মাসিক দাম (টাকা)'))->numeric()->minValue(0)->required()->default(0),
+                TextInput::make('max_agents')->label(__('সর্বোচ্চ ইউজার/এজেন্ট'))->numeric()->minValue(1)->required()->default(3),
+                TextInput::make('max_whatsapp_numbers')->label(__('সর্বোচ্চ WhatsApp নম্বর'))->numeric()->minValue(1)->required()->default(1),
+                TextInput::make('max_bot_replies')->label(__('মাসে সর্বোচ্চ বট উত্তর'))->numeric()->minValue(1)
+                    ->helperText(__('খালি রাখলে সীমাহীন')),
+                TextInput::make('trial_days')->label(__('ফ্রি ট্রায়াল (দিন)'))->numeric()->minValue(0)->required()->default(0),
+                TextInput::make('sort')->label(__('ক্রম'))->numeric()->default(0),
+                Toggle::make('is_active')->label(__('চালু (নতুন কোম্পানিকে দেওয়া যাবে)'))->default(true),
+                Textarea::make('description')->label(__('বিবরণ'))->columnSpanFull(),
             ]);
     }
 }

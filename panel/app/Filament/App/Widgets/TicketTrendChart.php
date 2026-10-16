@@ -26,7 +26,7 @@ class TicketTrendChart extends ChartWidget
 
     protected function getFilters(): ?array
     {
-        return ['7' => 'শেষ ৭ দিন', '30' => 'শেষ ৩০ দিন', '90' => 'শেষ ৯০ দিন'];
+        return ['7' => __('শেষ ৭ দিন'), '30' => __('শেষ ৩০ দিন'), '90' => __('শেষ ৯০ দিন')];
     }
 
     protected function getData(): array
@@ -36,8 +36,8 @@ class TicketTrendChart extends ChartWidget
         return [
             'labels' => $d['labels'],
             'datasets' => [
-                ['label' => 'খোলা হয়েছে', 'data' => $d['opened'], 'backgroundColor' => '#f59e0b', 'borderRadius' => 4],
-                ['label' => 'সমাধান হয়েছে', 'data' => $d['solved'], 'backgroundColor' => '#0f7c7b', 'borderRadius' => 4],
+                ['label' => __('খোলা হয়েছে'), 'data' => $d['opened'], 'backgroundColor' => '#f59e0b', 'borderRadius' => 4],
+                ['label' => __('সমাধান হয়েছে'), 'data' => $d['solved'], 'backgroundColor' => '#0f7c7b', 'borderRadius' => 4],
             ],
         ];
     }

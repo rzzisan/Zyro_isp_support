@@ -59,6 +59,32 @@ class LocaleTest extends TestCase
         $this->get('/app/'.$company->slug.'/inbox')->assertOk()->assertSee('বাম পাশ থেকে একটা কনভারসেশন বাছুন');
     }
 
+    public function test_every_company_page_opens_in_english_as_in_bangla(): void
+    {
+        [$company, $user] = $this->member();
+        $company->forceFill(['modules' => ['onu']])->save();
+        $panel = \Filament\Facades\Filament::getPanel('app');
+        $urls = [];
+        foreach ($panel->getResources() as $resource) {
+            if ($resource::hasPage('index')) {
+                $urls[] = $resource::getUrl('index', panel: 'app', tenant: $company);
+            }
+        }
+        foreach ($panel->getPages() as $page) {
+            $urls[] = $page::getUrl(panel: 'app', tenant: $company);
+        }
+        $this->actingAs($user);
+        foreach (array_unique($urls) as $url) {
+            $user->forceFill(['locale' => 'bn'])->save();
+            $bn = $this->get($url)->getStatusCode();
+            $user->forceFill(['locale' => 'en'])->save();
+            $en = $this->get($url)->getStatusCode();
+            $this->assertSame($bn, $en, $url);
+            $this->assertLessThan(500, $en, $url);
+        }
+        $this->assertGreaterThan(20, count($urls));
+    }
+
     public function test_unknown_language_is_refused(): void
     {
         [, $user] = $this->member();

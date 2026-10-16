@@ -22,7 +22,7 @@ class ProtocolTypeResource extends BillingConfigResource
 
     protected static function columns(): array
     {
-        return [TextColumn::make('short_value')->label('সংক্ষেপ')->placeholder('—')];
+        return [TextColumn::make('short_value')->label(__('সংক্ষেপ'))->placeholder('—')];
     }
 
     public static function getPages(): array

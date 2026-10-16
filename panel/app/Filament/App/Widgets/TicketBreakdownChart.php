@@ -28,10 +28,10 @@ class TicketBreakdownChart extends ChartWidget
     protected function getFilters(): ?array
     {
         return [
-            'open_zone' => 'খোলা টিকিট: Zone অনুযায়ী',
-            'zone' => '৩০ দিন: Zone অনুযায়ী',
-            'category' => '৩০ দিন: সমস্যার ধরন',
-            'solved_by' => '৩০ দিন: কে বেশি সমাধান করেছে',
+            'open_zone' => __('খোলা টিকিট: Zone অনুযায়ী'),
+            'zone' => __('৩০ দিন: Zone অনুযায়ী'),
+            'category' => __('৩০ দিন: সমস্যার ধরন'),
+            'solved_by' => __('৩০ দিন: কে বেশি সমাধান করেছে'),
         ];
     }
 
@@ -49,7 +49,7 @@ class TicketBreakdownChart extends ChartWidget
         return [
             'labels' => array_keys($rows),
             'datasets' => [[
-                'label' => 'টিকিট',
+                'label' => __('টিকিট'),
                 'data' => array_values($rows),
                 'backgroundColor' => $this->filter === 'open_zone' ? '#f59e0b' : '#0f7c7b',
                 'borderRadius' => 6,

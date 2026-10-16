@@ -27,7 +27,7 @@ class ReplyShareChart extends ChartWidget
             ->messageCounts(CarbonImmutable::now(Insights::TZ)->startOfDay()->subDays(6)->utc());
 
         return [
-            'labels' => ['বট', 'এজেন্ট', 'ক্যাম্পেইন'],
+            'labels' => [__('বট'), __('এজেন্ট'), __('ক্যাম্পেইন')],
             'datasets' => [[
                 'data' => [$c['bot'], $c['staff'], $c['campaign']],
                 'backgroundColor' => ['#f59e0b', '#6366f1', '#0f7c7b'],

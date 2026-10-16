@@ -37,7 +37,7 @@ class DailyBillStats extends StatsOverviewWidget
 
     public static function tk(float $v): string
     {
-        return number_format($v, $v == floor($v) ? 0 : 2).' ৳';
+        return number_format($v, $v == floor($v) ? 0 : 2).__(' ৳');
     }
 
     protected function getStats(): array
@@ -45,10 +45,10 @@ class DailyBillStats extends StatsOverviewWidget
         $t = static::totals($this->getPageTableQuery());
 
         return [
-            Stat::make('বিল', number_format($t['count']).'টি')->icon(Heroicon::OutlinedDocumentText),
-            Stat::make('জমা', static::tk($t['paid']))->icon(Heroicon::OutlinedBanknotes)->color('success'),
-            Stat::make('ডিসকাউন্ট', static::tk($t['discount']))->icon(Heroicon::OutlinedReceiptPercent)->color('warning'),
-            Stat::make('বকেয়া', static::tk($t['due']))->icon(Heroicon::OutlinedExclamationCircle)->color('danger'),
+            Stat::make(__('বিল'), __(':nটি', ['n' => number_format($t['count'])]))->icon(Heroicon::OutlinedDocumentText),
+            Stat::make(__('জমা'), static::tk($t['paid']))->icon(Heroicon::OutlinedBanknotes)->color('success'),
+            Stat::make(__('ডিসকাউন্ট'), static::tk($t['discount']))->icon(Heroicon::OutlinedReceiptPercent)->color('warning'),
+            Stat::make(__('বকেয়া'), static::tk($t['due']))->icon(Heroicon::OutlinedExclamationCircle)->color('danger'),
         ];
     }
 }

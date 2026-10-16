@@ -29,7 +29,7 @@ class TicketCategoryChart extends ChartWidget
         return [
             'labels' => array_keys($cats),
             'datasets' => [[
-                'label' => 'টিকিট',
+                'label' => __('টিকিট'),
                 'data' => array_values($cats),
                 'backgroundColor' => '#0f7c7b',
                 'borderRadius' => 6,

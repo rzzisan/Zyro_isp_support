@@ -27,7 +27,7 @@ Route::get('/media/{message}', function (\App\Models\WaMessage $message) {
         [$path, $mime] = \App\Services\WhatsApp::media($message);
     } catch (\Throwable $e) {
         report($e);
-        abort(404, 'মিডিয়া পাওয়া যায়নি (Meta থেকে মুছে গেছে বা মেয়াদ শেষ)');
+        abort(404, __('মিডিয়া পাওয়া যায়নি (Meta থেকে মুছে গেছে বা মেয়াদ শেষ)'));
     }
 
     return response()->file($path, ['Content-Type' => $mime, 'Cache-Control' => 'private, max-age=86400']);
@@ -178,8 +178,8 @@ Route::get('/notify/{company:slug}/poll', function (\App\Models\Company $company
         $body = trim((string) $m->body);
         if ($body === '') {
             $body = match ($m->type) {
-                'image' => '📷 ছবি', 'audio' => '🎤 ভয়েস', 'video' => '🎬 ভিডিও', 'document' => '📄 ফাইল',
-                'sticker' => 'স্টিকার', 'location' => '📍 লোকেশন', default => 'নতুন মেসেজ',
+                'image' => __('📷 ছবি'), 'audio' => __('🎤 ভয়েস'), 'video' => __('🎬 ভিডিও'), 'document' => __('📄 ফাইল'),
+                'sticker' => __('স্টিকার'), 'location' => __('📍 লোকেশন'), default => __('নতুন মেসেজ'),
             };
         }
 

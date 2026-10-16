@@ -12,6 +12,7 @@
     const LAST_KEY = 'zyroNotify:last:' + cfg.slug;   // shared by tabs, so only one tab alerts per message
     const canDesktop = 'Notification' in window;
     const on = () => store.get(MODE_KEY) !== 'off';
+    const T = (s) => (window.zyroT ? window.zyroT(s) : s);   // panel language (App\Support\Locale::JS)
 
     // ---- sound (Web Audio, no file to load); browsers allow it only after a click on the page
     let ctx = null;
@@ -90,10 +91,10 @@
         const denied = canDesktop && Notification.permission === 'denied';
         const ready = on() && (!canDesktop || Notification.permission === 'granted');
         bell.dataset.state = !on() ? 'off' : denied ? 'denied' : ready ? 'on' : 'ask';
-        bell.title = !on() ? 'মেসেজ নোটিফিকেশন বন্ধ — চালু করতে ক্লিক করুন'
+        bell.title = T(!on() ? 'মেসেজ নোটিফিকেশন বন্ধ — চালু করতে ক্লিক করুন'
             : denied ? 'ব্রাউজারে নোটিফিকেশন ব্লক করা — ঠিকানার পাশের 🔒 আইকন থেকে Notifications: Allow করুন'
             : ready ? 'মেসেজ নোটিফিকেশন চালু — বন্ধ করতে ক্লিক করুন'
-            : 'ডেস্কটপ নোটিফিকেশন চালু করতে ক্লিক করুন';
+            : 'ডেস্কটপ নোটিফিকেশন চালু করতে ক্লিক করুন');
     }
     function toast(title, body, status) {
         if (window.FilamentNotification) {
@@ -104,13 +105,13 @@
         unlockAudio();
         if (on() && (!canDesktop || Notification.permission !== 'default')) {
             if (canDesktop && Notification.permission === 'denied') {
-                toast('নোটিফিকেশন ব্লক করা', 'ঠিকানার বারের 🔒 আইকনে ক্লিক করে Notifications → Allow দিন, তারপর পেজ রিলোড করুন।', 'warning');
+                toast(T('নোটিফিকেশন ব্লক করা'), T('ঠিকানার বারের 🔒 আইকনে ক্লিক করে Notifications → Allow দিন, তারপর পেজ রিলোড করুন।'), 'warning');
                 return;
             }
             store.set(MODE_KEY, 'off');
             unsubscribePush();
             paintBell();
-            toast('মেসেজ নোটিফিকেশন বন্ধ', 'আবার চালু করতে বেল আইকনে ক্লিক করুন।', 'gray');
+            toast(T('মেসেজ নোটিফিকেশন বন্ধ'), T('আবার চালু করতে বেল আইকনে ক্লিক করুন।'), 'gray');
             return;
         }
         store.set(MODE_KEY, 'on');
@@ -119,10 +120,10 @@
         ding();
         await subscribePush();
         if (canDesktop && Notification.permission === 'granted') {
-            new Notification('নোটিফিকেশন চালু হয়েছে', {body: 'নতুন WhatsApp মেসেজ এলে এভাবে জানানো হবে।', icon: cfg.icon});
+            new Notification(T('নোটিফিকেশন চালু হয়েছে'), {body: T('নতুন WhatsApp মেসেজ এলে এভাবে জানানো হবে।'), icon: cfg.icon});
         }
-        toast('মেসেজ নোটিফিকেশন চালু', pushOn ? 'নতুন মেসেজ এলে নোটিফিকেশন আসবে, প্যানেলের ট্যাব বন্ধ থাকলেও (ব্রাউজার চালু থাকলে)।'
-            : 'নতুন মেসেজ এলে শব্দ ও নোটিফিকেশন আসবে। এই ট্যাবটা খোলা রাখুন (ছোট করে রাখলেও চলবে)।', 'success');
+        toast(T('মেসেজ নোটিফিকেশন চালু'), T(pushOn ? 'নতুন মেসেজ এলে নোটিফিকেশন আসবে, প্যানেলের ট্যাব বন্ধ থাকলেও (ব্রাউজার চালু থাকলে)।'
+            : 'নতুন মেসেজ এলে শব্দ ও নোটিফিকেশন আসবে। এই ট্যাবটা খোলা রাখুন (ছোট করে রাখলেও চলবে)।'), 'success');
     });
     paintBell();
     if (on()) subscribePush();
@@ -141,7 +142,7 @@
         const here = location.pathname;
         let sounded = false;
         byChat.forEach(i => {
-            const title = (i.staff ? '[স্টাফ] ' : '') + i.name + (i.human ? ' · উত্তর দিন' : '');
+            const title = (i.staff ? '[' + T('স্টাফ') + '] ' : '') + i.name + (i.human ? ' · ' + T('উত্তর দিন') : '');
             const viewing = !document.hidden && new URL(i.url, location.href).pathname === here;
             if (viewing) return;   // the open chat refreshes by itself
             if (document.hidden && pushOn) return;   // the push notification covers it
@@ -152,7 +153,7 @@
             } else if (window.FilamentNotification) {
                 const t = new window.FilamentNotification().title('💬 ' + title).body(i.body).info();
                 if (window.FilamentNotificationAction) {
-                    t.actions([new window.FilamentNotificationAction('open').label('খুলুন').url(i.url).button()]);
+                    t.actions([new window.FilamentNotificationAction('open').label(T('খুলুন')).url(i.url).button()]);
                 }
                 t.send();
             }

@@ -47,7 +47,7 @@ abstract class CompanySettingsPage extends Page
         $record = $this->record(Filament::getTenant());
         $data = $this->beforeSaving($this->form->getState(), $record);
         $record->fill($data)->save();
-        Notification::make()->success()->title('সেভ হয়েছে')->send();
+        Notification::make()->success()->title(__('সেভ হয়েছে'))->send();
         $this->afterSaved($record);
     }
 
@@ -65,7 +65,7 @@ abstract class CompanySettingsPage extends Page
                 ->id('form')
                 ->livewireSubmitHandler('save')
                 ->footer([
-                    Actions::make([Action::make('save')->label('সেভ করুন')->submit('save')]),
+                    Actions::make([Action::make('save')->label(__('সেভ করুন'))->submit('save')]),
                 ]),
         ]);
     }

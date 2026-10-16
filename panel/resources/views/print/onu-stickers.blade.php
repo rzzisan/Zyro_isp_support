@@ -6,7 +6,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ONU স্টিকার</title>
+    <title>{{ __('ONU স্টিকার') }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -37,7 +37,7 @@
     </style>
 </head>
 <body>
-<div class="bar"><button onclick="window.print()">🖨️ প্রিন্ট করুন</button><button onclick="window.close()">বন্ধ করুন</button></div>
+<div class="bar"><button onclick="window.print()">🖨️ {{ __('প্রিন্ট করুন') }}</button><button onclick="window.close()">{{ __('বন্ধ করুন') }}</button></div>
 @foreach ($rows as $r)
     <div class="s">
         <div class="top">

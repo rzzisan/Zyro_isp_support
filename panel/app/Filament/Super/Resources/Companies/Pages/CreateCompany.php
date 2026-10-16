@@ -26,7 +26,7 @@ class CreateCompany extends CreateRecord
         if ($this->owner['email'] && ! User::where('email', $this->owner['email'])->exists()
             && (blank($this->owner['password']) || blank($this->owner['name']))) {
             throw ValidationException::withMessages([
-                'data.owner_password' => 'নতুন Owner-এর জন্য নাম আর পাসওয়ার্ড দিন।',
+                'data.owner_password' => __('নতুন Owner-এর জন্য নাম আর পাসওয়ার্ড দিন।'),
             ]);
         }
 

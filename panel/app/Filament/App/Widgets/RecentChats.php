@@ -31,21 +31,21 @@ class RecentChats extends TableWidget
             ->paginated([8])
             ->defaultPaginationPageOption(8)
             ->columns([
-                TextColumn::make('name')->label('কাস্টমার')->placeholder('নাম নেই')
+                TextColumn::make('name')->label(__('কাস্টমার'))->placeholder(__('নাম নেই'))
                     ->description(fn (WaContact $r) => $r->displayNumber()),
-                TextColumn::make('last')->label('শেষ মেসেজ')->state(function (WaContact $r) {
+                TextColumn::make('last')->label(__('শেষ মেসেজ'))->state(function (WaContact $r) {
                     $m = $r->lastMessage;
                     if (! $m) {
                         return '—';
                     }
-                    $who = $m->direction === 'in' ? '' : ($m->sender === 'bot' ? 'বট: ' : 'আমরা: ');
+                    $who = $m->direction === 'in' ? '' : ($m->sender === 'bot' ? __('বট: ') : __('আমরা: '));
 
                     return $who.Str::limit($m->body ?: "[{$m->type}]", 70);
                 }),
-                TextColumn::make('waiting')->label('অবস্থা')->badge()
-                    ->state(fn (WaContact $r) => $r->lastMessage?->direction === 'in' ? 'উত্তরের অপেক্ষায়' : 'উত্তর গেছে')
-                    ->color(fn (string $state) => $state === 'উত্তর গেছে' ? 'success' : 'warning'),
-                TextColumn::make('last_message_at')->label('সময়')->since(),
+                TextColumn::make('waiting')->label(__('অবস্থা'))->badge()
+                    ->state(fn (WaContact $r) => $r->lastMessage?->direction === 'in' ? __('উত্তরের অপেক্ষায়') : __('উত্তর গেছে'))
+                    ->color(fn (string $state) => $state === __('উত্তর গেছে') ? 'success' : 'warning'),
+                TextColumn::make('last_message_at')->label(__('সময়'))->since(),
             ])
             ->recordUrl(fn (WaContact $r) => ConversationResource::getUrl('view', ['record' => $r]));
     }

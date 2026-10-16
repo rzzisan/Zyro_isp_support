@@ -21,12 +21,12 @@ class PackageResource extends BillingConfigResource
     protected static function columns(): array
     {
         return [
-            TextColumn::make('extra.mbps')->label('স্পিড (Mbps)')->placeholder('—'),
-            TextColumn::make('extra.price')->label('দাম')->numeric(0)->placeholder('—'),
-            TextColumn::make('short_value')->label('ধরন')->badge()
+            TextColumn::make('extra.mbps')->label(__('স্পিড (Mbps)'))->placeholder('—'),
+            TextColumn::make('extra.price')->label(__('দাম'))->numeric(0)->placeholder('—'),
+            TextColumn::make('short_value')->label(__('ধরন'))->badge()
                 ->state(fn ($record) => $record->short_value === 'foreveryonepurpose' ? 'Business' : 'Personal'),
             TextColumn::make('extra.vas')->label('VAS')->placeholder('—')->toggleable(),
-            TextColumn::make('extra.description')->label('বিবরণ')->placeholder('—')->wrap()->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('extra.description')->label(__('বিবরণ'))->placeholder('—')->wrap()->toggleable(isToggledHiddenByDefault: true),
         ];
     }
 

@@ -26,7 +26,7 @@ class MessagesChart extends ChartWidget
 
     protected function getFilters(): ?array
     {
-        return ['24h' => 'শেষ ২৪ ঘণ্টা', '7d' => 'শেষ ৭ দিন', '30d' => 'শেষ ৩০ দিন'];
+        return ['24h' => __('শেষ ২৪ ঘণ্টা'), '7d' => __('শেষ ৭ দিন'), '30d' => __('শেষ ৩০ দিন')];
     }
 
     protected function getData(): array
@@ -45,9 +45,9 @@ class MessagesChart extends ChartWidget
         return [
             'labels' => $s['labels'],
             'datasets' => [
-                $line('কাস্টমার', $s['customer'], '#0f7c7b'),
-                $line('বট', $s['bot'], '#f59e0b'),
-                $line('এজেন্ট', $s['staff'], '#6366f1'),
+                $line(__('কাস্টমার'), $s['customer'], '#0f7c7b'),
+                $line(__('বট'), $s['bot'], '#f59e0b'),
+                $line(__('এজেন্ট'), $s['staff'], '#6366f1'),
             ],
         ];
     }

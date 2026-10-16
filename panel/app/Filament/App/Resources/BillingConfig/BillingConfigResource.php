@@ -42,17 +42,17 @@ abstract class BillingConfigResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return BillingOption::KINDS[static::$kind];
+        return __(BillingOption::KINDS[static::$kind]);
     }
 
     public static function getModelLabel(): string
     {
-        return BillingOption::KINDS[static::$kind];
+        return __(BillingOption::KINDS[static::$kind]);
     }
 
     public static function getPluralModelLabel(): string
     {
-        return BillingOption::KINDS[static::$kind];
+        return __(BillingOption::KINDS[static::$kind]);
     }
 
     public static function getSlug(?\Filament\Panel $panel = null): string
@@ -100,20 +100,20 @@ abstract class BillingConfigResource extends Resource
             ->defaultSort('name')
             ->paginated([25, 50, 100, 'all'])->defaultPaginationPageOption(50)
             ->columns([
-                TextColumn::make('option_id')->label('বিলিং ID')->sortable()->searchable(),
-                TextColumn::make('name')->label(BillingOption::KINDS[static::$kind])->sortable()->searchable()->weight('medium')->wrap(),
+                TextColumn::make('option_id')->label(__('বিলিং ID'))->sortable()->searchable(),
+                TextColumn::make('name')->label(__(BillingOption::KINDS[static::$kind]))->sortable()->searchable()->weight('medium')->wrap(),
                 ...static::columns(),
-                ...($match ? [TextColumn::make('customers')->label('কাস্টমার')->numeric()->sortable()
-                    ->tooltip('বর্তমান কাস্টমার (Left আর বিলিংয়ে নেই বাদে), ডেস্কের কাস্টমার কপি থেকে')] : []),
-                ...(in_array(static::$kind, self::SWITCH_KINDS, true) ? [IconColumn::make('billing_enabled')->label('বিলিংয়ে চালু')->boolean()->placeholder('—')] : []),
-                TextColumn::make('active')->label('বিলিংয়ে')->badge()
-                    ->state(fn (BillingOption $r) => $r->active ? 'আছে' : 'নেই')
-                    ->color(fn (string $state) => $state === 'আছে' ? 'success' : 'gray')
-                    ->tooltip(fn (BillingOption $r) => $r->active ? null : 'শেষ Sync-এ বিলিংয়ে পাওয়া যায়নি'),
-                TextColumn::make('synced_at')->label('শেষ Sync')->since()->dateTimeTooltip('d M Y, g:i A', 'Asia/Dhaka')->toggleable(),
+                ...($match ? [TextColumn::make('customers')->label(__('কাস্টমার'))->numeric()->sortable()
+                    ->tooltip(__('বর্তমান কাস্টমার (Left আর বিলিংয়ে নেই বাদে), ডেস্কের কাস্টমার কপি থেকে'))] : []),
+                ...(in_array(static::$kind, self::SWITCH_KINDS, true) ? [IconColumn::make('billing_enabled')->label(__('বিলিংয়ে চালু'))->boolean()->placeholder('—')] : []),
+                TextColumn::make('active')->label(__('বিলিংয়ে'))->badge()
+                    ->state(fn (BillingOption $r) => $r->active ? __('আছে') : __('নেই'))
+                    ->color(fn (string $state) => $state === __('আছে') ? 'success' : 'gray')
+                    ->tooltip(fn (BillingOption $r) => $r->active ? null : __('শেষ Sync-এ বিলিংয়ে পাওয়া যায়নি')),
+                TextColumn::make('synced_at')->label(__('শেষ Sync'))->since()->dateTimeTooltip('d M Y, g:i A', 'Asia/Dhaka')->toggleable(),
             ])
             ->filters([
-                TernaryFilter::make('active')->label('বিলিংয়ে')->trueLabel('আছে')->falseLabel('নেই')->default(true),
+                TernaryFilter::make('active')->label(__('বিলিংয়ে'))->trueLabel(__('আছে'))->falseLabel(__('নেই'))->default(true),
             ]);
     }
 }

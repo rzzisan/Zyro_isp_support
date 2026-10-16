@@ -52,7 +52,8 @@ class Locale
     {
         $keys = [];
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(app_path()));
-        $files = [...iterator_to_array($files), ...iterator_to_array(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(resource_path('views'))))];
+        $files = [...iterator_to_array($files), ...iterator_to_array(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(resource_path('views')))),
+            new \SplFileInfo(base_path('routes/web.php'))];
         foreach ($files as $file) {
             if (! str_ends_with($file->getFilename(), '.php')) {
                 continue;
@@ -72,11 +73,42 @@ class Locale
             ...array_values(\App\Filament\App\Pages\AiUsage::PURPOSES),
             ...Onu::PURPOSES, ...Onu::CONNECTION_TYPES, ...Onu::MATERIALS,
             ...array_values(\App\Models\LineEnable::RESULTS), ...array_values(\App\Models\LineEnable::ACTIONS),
-            ...array_values(\App\Models\StockMovement::TYPES), ...array_values(\App\Models\BillCollection::RESULTS));
+            ...array_values(\App\Models\StockMovement::TYPES), ...array_values(\App\Models\BillCollection::RESULTS),
+            ...array_values(\App\Models\BillingOption::KINDS), ...array_values(\App\Models\Company::MODULES), ...self::JS);
         $keys = array_values(array_unique(array_filter($keys, fn ($k) => preg_match('/[\x{0980}-\x{09FF}]/u', $k))));
         sort($keys);
 
         return $keys;
+    }
+
+    /** Texts used by public/js/*.js; the scripts call window.zyroT('বাংলা'), which looks them up in the map below. */
+    public const JS = [
+        'মেসেজ নোটিফিকেশন বন্ধ — চালু করতে ক্লিক করুন',
+        'ব্রাউজারে নোটিফিকেশন ব্লক করা — ঠিকানার পাশের 🔒 আইকন থেকে Notifications: Allow করুন',
+        'মেসেজ নোটিফিকেশন চালু — বন্ধ করতে ক্লিক করুন',
+        'ডেস্কটপ নোটিফিকেশন চালু করতে ক্লিক করুন',
+        'নোটিফিকেশন ব্লক করা',
+        'ঠিকানার বারের 🔒 আইকনে ক্লিক করে Notifications → Allow দিন, তারপর পেজ রিলোড করুন।',
+        'মেসেজ নোটিফিকেশন বন্ধ',
+        'আবার চালু করতে বেল আইকনে ক্লিক করুন।',
+        'নোটিফিকেশন চালু হয়েছে',
+        'নতুন WhatsApp মেসেজ এলে এভাবে জানানো হবে।',
+        'মেসেজ নোটিফিকেশন চালু',
+        'নতুন মেসেজ এলে নোটিফিকেশন আসবে, প্যানেলের ট্যাব বন্ধ থাকলেও (ব্রাউজার চালু থাকলে)।',
+        'নতুন মেসেজ এলে শব্দ ও নোটিফিকেশন আসবে। এই ট্যাবটা খোলা রাখুন (ছোট করে রাখলেও চলবে)।',
+        'স্টাফ',
+        'উত্তর দিন',
+        'খুলুন',
+        'তথ্য দেখুন',
+    ];
+
+    /** <script> for the panels' <head>: window.zyroT(text) in the user's language (Bangla needs no map). */
+    public static function jsScript(): string
+    {
+        $map = app()->getLocale() === 'bn' ? [] : collect(self::JS)->mapWithKeys(fn ($s) => [$s => __($s)])->all();
+
+        return '<script>window.zyroL='.json_encode((object) $map, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG)
+            .';window.zyroT=function(s){return window.zyroL[s]||s};</script>';
     }
 
     /** User-menu item of both panels: shows the other language ("English" / "বাংলা") and switches to it. */

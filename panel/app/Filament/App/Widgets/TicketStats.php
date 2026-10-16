@@ -22,7 +22,10 @@ class TicketStats extends StatsOverviewWidget
         return __('বিলিংয়ের টিকিট');
     }
 
-    protected ?string $description = 'বিলিং সফটওয়্যার থেকে প্রতি ৫ মিনিটে আপডেট হয়';
+    protected function getDescription(): ?string
+    {
+        return __('বিলিং সফটওয়্যার থেকে প্রতি ৫ মিনিটে আপডেট হয়');
+    }
 
     public static function minutes(?int $m): string
     {
@@ -30,7 +33,7 @@ class TicketStats extends StatsOverviewWidget
             return '—';
         }
 
-        return $m >= 60 ? intdiv($m, 60).' ঘণ্টা '.($m % 60).' মি.' : "{$m} মিনিট";
+        return $m >= 60 ? __(':h ঘণ্টা :m মি.', ['h' => intdiv($m, 60), 'm' => $m % 60]) : __(':n মিনিট', ['n' => $m]);
     }
 
     protected function getStats(): array
@@ -42,24 +45,24 @@ class TicketStats extends StatsOverviewWidget
         $overdue = $t->overdue(24);
 
         return [
-            Stat::make('এখন খোলা', $t->openCount())
-                ->description($t->openCount('pending').'টা অপেক্ষমাণ, '.$t->openCount('processing').'টায় কাজ চলছে')
+            Stat::make(__('এখন খোলা'), $t->openCount())
+                ->description(__(':pendingটা অপেক্ষমাণ, :workingটায় কাজ চলছে', ['pending' => $t->openCount('pending'), 'working' => $t->openCount('processing')]))
                 ->icon(Heroicon::OutlinedTicket)->url(TicketResource::getUrl('index')),
-            Stat::make('২৪ ঘণ্টার বেশি খোলা', $overdue)
-                ->description($overdue ? 'দ্রুত দেখা দরকার' : 'কোনোটা পুরনো না')
+            Stat::make(__('২৪ ঘণ্টার বেশি খোলা'), $overdue)
+                ->description($overdue ? __('দ্রুত দেখা দরকার') : __('কোনোটা পুরনো না'))
                 ->descriptionColor($overdue ? 'danger' : 'success')
                 ->icon(Heroicon::OutlinedExclamationTriangle),
-            Stat::make('আজ খোলা হয়েছে', $t->openedSince($today))
+            Stat::make(__('আজ খোলা হয়েছে'), $t->openedSince($today))
                 ->chart($daily['opened'])->chartColor('warning')
                 ->icon(Heroicon::OutlinedPlusCircle),
-            Stat::make('আজ সমাধান', $t->solvedSince($today))
+            Stat::make(__('আজ সমাধান'), $t->solvedSince($today))
                 ->chart($daily['solved'])->chartColor('success')
                 ->icon(Heroicon::OutlinedCheckCircle),
-            Stat::make('গড় সমাধানের সময়', static::minutes($t->avgSolveMinutes($week)))
-                ->description('গত ৭ দিনে সমাধান হওয়া টিকিট')
+            Stat::make(__('গড় সমাধানের সময়'), static::minutes($t->avgSolveMinutes($week)))
+                ->description(__('গত ৭ দিনে সমাধান হওয়া টিকিট'))
                 ->icon(Heroicon::OutlinedClock),
-            Stat::make('৭ দিনে সমাধান', $t->solvedSince($week))
-                ->description('খোলা হয়েছে '.$t->openedSince($week).'টা')
+            Stat::make(__('৭ দিনে সমাধান'), $t->solvedSince($week))
+                ->description(__('খোলা হয়েছে :nটা', ['n' => $t->openedSince($week)]))
                 ->icon(Heroicon::OutlinedWrenchScrewdriver),
         ];
     }
