@@ -127,6 +127,7 @@
 .zi-st-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; background: #9ca3af; }
 .zi-st-body { display: flex; flex-direction: column; min-width: 0; }
 .zi-st-body small { color: var(--z-muted); font-size: .7rem; overflow-wrap: anywhere; }
+.zi-st-traffic { display: block; }
 .zi-st.tone-good .zi-st-dot { background: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, .18); }
 .zi-st.tone-warn .zi-st-dot { background: #f59e0b; }
 .zi-st.tone-bad .zi-st-dot { background: #ef4444; }

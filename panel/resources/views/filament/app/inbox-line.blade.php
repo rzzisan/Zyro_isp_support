@@ -12,6 +12,18 @@
     $rx = isset($onu['OpticalPower']) && $onu['OpticalPower'] !== '' && $onu['OpticalPower'] !== null ? (float) $onu['OpticalPower'] : null;
     $onuTone = ! $onu ? 'mute' : (! $onuOnline ? 'bad' : ($rx === null ? 'good' : ($rx < -27 ? 'bad' : ($rx < -24 ? 'warn' : 'good'))));
     $due = (float) ($c['due'] ?? 0);
+    $bytes = function ($b) {
+        if ($b === null) {
+            return '—';
+        }
+        foreach (['GB' => 1073741824, 'MB' => 1048576, 'KB' => 1024] as $u => $n) {
+            if ($b >= $n) {
+                return round($b / $n, $b >= 10 * $n ? 1 : 2).' '.$u;
+            }
+        }
+
+        return $b.' B';
+    };
 @endphp
 <div class="zi-line">
     @if ($customer)
@@ -30,6 +42,9 @@
                     <b>MikroTik · {{ $mk === null ? __('অজানা') : ($online ? __('অনলাইন') : ($blocked ? __('ব্লক') : __('অফলাইন'))) }}</b>
                     <small>
                         @if ($online) Uptime {{ $mk['uptime'] ?? '—' }}@if (! empty($mk['address'])) · {{ $mk['address'] }}@endif
+                            @if (($mk['download_bytes'] ?? null) !== null || ($mk['upload_bytes'] ?? null) !== null)
+                                <span class="zi-st-traffic">{{ __('এই সেশনে') }} ↓ {{ $bytes($mk['download_bytes'] ?? null) }} · ↑ {{ $bytes($mk['upload_bytes'] ?? null) }}</span>
+                            @endif
                         @elseif ($blocked) {{ __('ইন্টারনেট নেই') }} · {{ $mk['profile'] ?? '' }}
                         @elseif (! empty($last['seen_at'])) {{ __('শেষ দেখা') }} {{ \Illuminate\Support\Carbon::parse($last['seen_at'], 'UTC')->locale(app()->getLocale())->diffForHumans() }}
                         @else {{ $mk === null ? __('রাউটার উত্তর দেয়নি') : ($mk['router'] ?? '') }}

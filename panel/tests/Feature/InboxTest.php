@@ -286,10 +286,10 @@ class InboxTest extends TestCase
 
     public function test_details_show_line_now_and_solve_an_open_ticket(): void
     {
-        $t = $this->lineFor(['online' => true, 'uptime' => '2h5m', 'address' => '10.20.0.9', 'router' => 'CCR']);
+        $t = $this->lineFor(['online' => true, 'uptime' => '2h5m', 'address' => '10.20.0.9', 'router' => 'CCR', 'download_bytes' => 3221225472, 'upload_bytes' => 52428800]);
         $this->as($this->agent());
         $w = Livewire::test(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class, ['customerId' => '5629'])
-            ->assertSee('MikroTik · অনলাইন')->assertSee('2h5m')->assertSee('-19.5 dBm')->assertSee('#57231')
+            ->assertSee('MikroTik · অনলাইন')->assertSee('2h5m')->assertSee('3 GB')->assertSee('50 MB')->assertSee('-19.5 dBm')->assertSee('#57231')
             ->assertActionVisible(\Filament\Actions\Testing\TestAction::make('solve')->arguments(['ticket' => $t->id]))
             ->callAction(\Filament\Actions\Testing\TestAction::make('solve')->arguments(['ticket' => $t->id]), ['remark' => 'ok'])
             ->assertHasNoErrors()->assertNotified('টিকিট #57231 সমাধান হয়েছে');
