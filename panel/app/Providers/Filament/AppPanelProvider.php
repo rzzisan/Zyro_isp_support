@@ -11,6 +11,7 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Navigation\NavigationGroup;
 use App\Filament\App\Pages\Dashboard;
+use App\Filament\App\Resources\Conversations\Pages\ViewConversation;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Enums\Width;
@@ -52,6 +53,8 @@ class AppPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn () => view('filament.notify-bell'))
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, fn () => view('filament.sidebar-accordion'))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn () => view('filament.header-shortcuts'))
+            // a chat's line status (MikroTik, ONU, due) sits in the page header where the heading would be
+            ->renderHook(PanelsRenderHook::PAGE_HEADER_HEADING_AFTER, fn () => ViewConversation::headerLine(), scopes: ViewConversation::class)
             ->tenant(Company::class, slugAttribute: 'slug')
             ->colors(['primary' => Color::hex('#0f7c7b')])
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\Filament\App\Resources')

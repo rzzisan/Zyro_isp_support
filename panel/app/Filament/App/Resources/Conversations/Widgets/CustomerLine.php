@@ -29,11 +29,21 @@ class CustomerLine extends Widget implements HasActions, HasSchemas
 
     public string $customerId = '';
 
+    /** 'head': line status in the page header; 'side': tickets in the details column. */
+    public string $part = 'side';
+
     public bool $fresh = false;
 
     public function refresh(): void
     {
         $this->fresh = true;
+        // the tickets' Solve follows the line just read
+        $this->dispatch('inbox-tickets-changed');
+    }
+
+    public function placeholder(): \Illuminate\Contracts\View\View
+    {
+        return view('filament.app.inbox-line-loading');
     }
 
     /** A ticket opened from the chat header shows here without a reload. */
@@ -62,7 +72,7 @@ class CustomerLine extends Widget implements HasActions, HasSchemas
 
     protected function getViewData(): array
     {
-        $customer = $this->customer();
+        $customer = $this->part === 'head' ? $this->customer() : null;
         [$info, $error] = $customer ? TicketActions::liveInfo((int) $customer->header_id, $this->fresh) : [null, null];
         $this->fresh = false;
 
@@ -70,7 +80,7 @@ class CustomerLine extends Widget implements HasActions, HasSchemas
             'customer' => $customer,
             'info' => $info,
             'error' => $error,
-            'tickets' => $this->customerId === '' ? collect()
+            'tickets' => $this->customerId === '' || $this->part === 'head' ? collect()
                 : BillingTicket::where('company_id', $this->company())->where('customer_id', $this->customerId)
                     ->orderByRaw("state IN ('pending', 'processing') DESC")->latest('opened_at')->limit(5)->get(),
         ];

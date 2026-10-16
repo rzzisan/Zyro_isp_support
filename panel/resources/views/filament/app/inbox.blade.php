@@ -239,7 +239,7 @@
                     <dt>{{ __('প্রথম মেসেজ') }}</dt><dd>{{ $current->created_at?->timezone('Asia/Dhaka')->format('d M Y') }}</dd>
                     <dt>{{ __('মোট মেসেজ') }}</dt><dd>{{ $messageCount }}</dd>
                 </dl>
-                {{-- line status and tickets load on their own, so a slow router never holds up the chat --}}
+                {{-- tickets load on their own (the line status is in the page header, ViewConversation::headerLine) --}}
                 @livewire(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class,
                     ['customerId' => (string) $current->customer_id, 'lazy' => true], key('line-'.$current->id.'-'.$current->customer_id))
             </aside>

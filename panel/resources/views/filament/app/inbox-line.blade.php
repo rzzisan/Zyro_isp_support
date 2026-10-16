@@ -25,15 +25,11 @@
         return $b.' B';
     };
 @endphp
-<div class="zi-line">
-    @if ($customer)
-        <div class="zi-info-head zi-line-head">
-            <span>{{ __('লাইনের অবস্থা') }}</span>
-            <button type="button" wire:click="refresh" wire:loading.attr="disabled" class="zi-line-btn" title="{{ __('আবার দেখুন') }}">
-                <x-filament::icon icon="heroicon-o-arrow-path" class="zi-line-ico" wire:loading.class="zi-spin" wire:target="refresh" />
-            </button>
-        </div>
-        @if ($error)
+<div class="zi-line zi-line-{{ $part }}">
+    @if ($part === 'head')
+        @if (! $customer)
+            <div class="zi-muted">{{ __('লাইনের তথ্য পাওয়া যায়নি') }}</div>
+        @elseif ($error)
             <div class="zi-err">{{ __('লাইনের তথ্য আনা যায়নি: :error', ['error' => $error]) }}</div>
         @elseif ($info)
             <div class="zi-st tone-{{ $conn }}">
@@ -73,9 +69,15 @@
         @else
             <div class="zi-muted">{{ __('লাইনের তথ্য পাওয়া যায়নি') }}</div>
         @endif
-        <a class="zi-line-link" href="{{ \App\Filament\App\Resources\Customers\CustomerResource::getUrl('view', ['record' => $customer]) }}" wire:navigate>{{ __('কাস্টমারের পুরো তথ্য') }} →</a>
-    @endif
-
+        @if ($customer)
+            <div class="zi-line-tools">
+                <button type="button" wire:click="refresh" wire:loading.attr="disabled" class="zi-line-btn" title="{{ __('আবার দেখুন') }}">
+                    <x-filament::icon icon="heroicon-o-arrow-path" class="zi-line-ico" wire:loading.class="zi-spin" wire:target="refresh" />
+                </button>
+                <a class="zi-line-link" href="{{ \App\Filament\App\Resources\Customers\CustomerResource::getUrl('view', ['record' => $customer]) }}" wire:navigate>{{ __('কাস্টমারের পুরো তথ্য') }} →</a>
+            </div>
+        @endif
+    @else
     <div class="zi-info-head">{{ __('বিলিংয়ের টিকিট') }}</div>
     @forelse ($tickets as $t)
         <div class="zi-ticket" wire:key="t{{ $t->id }}">
@@ -92,4 +94,5 @@
     @endforelse
 
     <x-filament-actions::modals />
+    @endif
 </div>

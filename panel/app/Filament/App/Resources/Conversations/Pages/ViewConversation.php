@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\Conversations\Pages;
 
 use App\Filament\App\Resources\Conversations\Concerns\InboxList;
 use App\Filament\App\Resources\Conversations\ConversationResource;
+use App\Filament\App\Resources\Conversations\Widgets\CustomerLine;
 use App\Models\BillingCustomer;
 use App\Models\WaContact;
 use App\Models\WaDraft;
@@ -62,10 +63,22 @@ class ViewConversation extends Page
         return ($c->name ?: __('নাম নেই')).' · '.$c->displayNumber();
     }
 
-    /** The chat header shows who it is; the page keeps only its action buttons. */
+    /** The chat header shows who it is; a known customer's line status takes the heading's place (headerLine). */
     public function getHeading(): string|Htmlable
     {
-        return __('ইনবক্স');
+        return $this->contact()->customer_id ? '' : __('ইনবক্স');
+    }
+
+    /** Page header hook: the line status of the chat being rendered, loaded on its own after the page. */
+    public static function headerLine(): ?Htmlable
+    {
+        $page = app('livewire')->current();
+        if (! $page instanceof self || ! ($id = (string) $page->contact()->customer_id)) {
+            return null;
+        }
+
+        return new \Illuminate\Support\HtmlString(\Livewire\Livewire::mount(CustomerLine::class,
+            ['customerId' => $id, 'part' => 'head', 'lazy' => true], 'head-'.$page->contact()->id.'-'.$id));
     }
 
     public function getBreadcrumbs(): array

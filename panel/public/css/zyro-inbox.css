@@ -117,7 +117,14 @@
 .zi-tstate.solved { background: #d1fae5; color: #065f46; }
 .zi-muted { font-size: .78rem; color: var(--z-muted); }
 .zi-line { display: flex; flex-direction: column; gap: 8px; }
-.zi-line-head { display: flex; align-items: center; justify-content: space-between; }
+/* line status in the page header, in the heading's place */
+.zi-line-head { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+.zi-line-head .zi-st { background: var(--z-surface); min-width: 170px; }
+.zi-line-head .zi-st-traffic { display: inline; }
+.zi-line-head .zi-st-traffic::before { content: " · "; }
+.zi-line-tools { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; padding: 2px 0; }
+.zi-line-tools .zi-line-link { align-self: auto; }
+.zi-line-loading { padding: 10px 0; }
 .zi-line-btn { border: 0; background: none; padding: 2px; color: var(--z-muted); cursor: pointer; }
 .zi-line-btn:hover { color: var(--z-fg); }
 .zi-line-ico { width: 15px; height: 15px; }

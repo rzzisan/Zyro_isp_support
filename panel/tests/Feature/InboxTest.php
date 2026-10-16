@@ -288,8 +288,15 @@ class InboxTest extends TestCase
     {
         $t = $this->lineFor(['online' => true, 'uptime' => '2h5m', 'address' => '10.20.0.9', 'router' => 'CCR', 'download_bytes' => 3221225472, 'upload_bytes' => 52428800]);
         $this->as($this->agent());
-        $w = Livewire::test(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class, ['customerId' => '5629'])
-            ->assertSee('MikroTik · অনলাইন')->assertSee('2h5m')->assertSee('3 GB')->assertSee('50 MB')->assertSee('-19.5 dBm')->assertSee('#57231')
+        Livewire::test(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class, ['customerId' => '5629', 'part' => 'head'])
+            ->assertSee('MikroTik · অনলাইন')->assertSee('2h5m')->assertSee('3 GB')->assertSee('50 MB')->assertSee('-19.5 dBm')
+            ->assertDontSee('#57231');
+        // the chat page puts it in the header, without the "Inbox" heading
+        Livewire::test(ViewConversation::class, ['record' => $this->contact->id])->assertSeeHtml('fi-header')->assertDontSeeHtml('fi-header-heading');
+        Filament::getPanel('app')->boot();     // registers the panel's render hooks, as a real request does
+        $this->assertSame(2, substr_count(Livewire::test(ViewConversation::class, ['record' => $this->contact->id])->html(), 'Widgets\CustomerLine'));
+        Livewire::test(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class, ['customerId' => '5629'])
+            ->assertDontSee('MikroTik')->assertSee('#57231')
             ->assertActionVisible(\Filament\Actions\Testing\TestAction::make('solve')->arguments(['ticket' => $t->id]))
             ->callAction(\Filament\Actions\Testing\TestAction::make('solve')->arguments(['ticket' => $t->id]), ['remark' => 'ok'])
             ->assertHasNoErrors()->assertNotified('টিকিট #57231 সমাধান হয়েছে');
@@ -300,8 +307,9 @@ class InboxTest extends TestCase
     {
         $t = $this->lineFor(['online' => false, 'blocked' => true, 'profile' => 'BLOCKED-PROFILE', 'router' => 'CCR']);
         $this->as($this->agent());
+        Livewire::test(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class, ['customerId' => '5629', 'part' => 'head'])
+            ->assertSee('MikroTik · ব্লক')->assertSee('BLOCKED-PROFILE');
         Livewire::test(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class, ['customerId' => '5629'])
-            ->assertSee('MikroTik · ব্লক')->assertSee('BLOCKED-PROFILE')
             ->assertActionDisabled(\Filament\Actions\Testing\TestAction::make('solve')->arguments(['ticket' => $t->id]));
     }
 
