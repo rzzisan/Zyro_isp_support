@@ -343,8 +343,11 @@ IMAGE_PROMPT = (
     "\"Connected without internet\", Wi-Fi-এর নাম, স্পিড কত Mbps।\n"
     "- পাসপোর্ট, NID, মেডিকেল কাগজের মতো ব্যক্তিগত ডকুমেন্ট: শুধু কী ধরনের ডকুমেন্ট; ভেতরের নাম, নম্বর বা অন্য তথ্য লিখবে না।\n"
     "- অন্য কিছু (খাবার, খেলা, ভিডিও, মানুষ): এক লাইনে কী ধরনের ছবি। মানুষের পরিচয় বলবে না।\n"
+    "উত্তরের শুরুতে লেখো NET: যদি ছবিটা ইন্টারনেট লাইন, অনু/রাউটার/তার, Wi-Fi, স্পিড, নেটের এরর, বিল বা পেমেন্টের "
+    "সাথে সম্পর্কিত; না হলে (খাবার, ব্যক্তিগত ডকুমেন্ট, গেম, সিনেমা, মানুষ, অন্য কিছু) লেখো OTHER:। তারপর বর্ণনা। "
     "শুধু বর্ণনা লেখো; কাস্টমারকে উত্তর, পরামর্শ বা কোনো শিরোনাম/বুলেট না।"
 )
+UNRELATED_PHOTO = "[অপ্রাসঙ্গিক ছবি]"  # body tag: staff see it, the bot neither answers nor reads it
 
 
 def _image_for_claude(data: bytes, mime: str) -> tuple[bytes, str]:
@@ -369,9 +372,11 @@ def _image_for_claude(data: bytes, mime: str) -> tuple[bytes, str]:
     return out.stdout, "image/jpeg"
 
 
-def see_image(t: Tenant, data: bytes, mime: str, caption: str | None = None, contact_id: int | None = None) -> str | None:
-    """What the customer's photo shows, in a few Bangla lines for the reply AI and the staff, read by Claude with the
-    company's Claude keys (AI খরচ: "image"). Raises when the company has no usable Claude key or every key fails."""
+def see_image(t: Tenant, data: bytes, mime: str, caption: str | None = None,
+              contact_id: int | None = None) -> tuple[bool, str] | None:
+    """(about our service?, what the customer's photo shows in a few Bangla lines) for the reply AI and the staff, read
+    by Claude with the company's Claude keys (AI খরচ: "image"). Zisan 2026-10-16: photos not about the line, bill or
+    payment (food, a passport) get no reply. Raises when the company has no usable Claude key or every key fails."""
     img, img_mime = _image_for_claude(data, mime)
     said = f"ছবির সাথে কাস্টমার লিখেছে: {caption}" if caption else "ছবির সাথে কাস্টমার কিছু লেখেনি।"
     messages = [{"role": "user", "content": [
@@ -380,7 +385,11 @@ def see_image(t: Tenant, data: bytes, mime: str, caption: str | None = None, con
     model = t.bot.get("ai_model") if t.bot.get("ai_provider") == "claude" and t.bot.get("ai_model") else IMAGE_MODEL
     text, _, _ = generate(t, IMAGE_PROMPT, messages, "claude", model, "image", contact_id)
     text = re.sub(r"\s*\n\s*", " ", re.sub(r"[*#`]", "", text or "")).strip()
-    return text or None
+    tag = re.match(r"(NET|OTHER)\s*:\s*", text)
+    text = text[tag.end():].strip() if tag else text
+    if not text:
+        return None
+    return (not tag or tag.group(1) == "NET"), text  # no tag: answer it, as before
 
 
 GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"

@@ -20,6 +20,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 
 from engine import customers, db, tenant as tenants, webpush
+from engine.agent import UNRELATED_PHOTO
 from engine.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
 from engine.tenant import Tenant
 
@@ -127,7 +128,10 @@ def history_for(t: Tenant, contact_id: int, limit: int = 6) -> list[dict]:
     for r in reversed(rows):
         role = "user" if r["direction"] == "in" else "assistant"
         # a person from the office wrote this one (panel or the Business app), not the bot
-        body = f"[স্টাফ] {r['body']}" if r["direction"] == "out" and r["sender"] in ("staff", "app") else r["body"]
+        body = f"[স্টাফ] {r['body']}" if r["direction"] == "out" and r["sender"] in ("staff", "app") \
+            else without_unrelated(r["body"])
+        if not body:
+            continue
         if merged and merged[-1]["role"] == role:
             merged[-1]["content"] += "\n" + body
         else:
@@ -369,7 +373,8 @@ def unanswered_text(t: Tenant, contact_id: int) -> str:
                                 AND direction = 'out'), 0)
            ORDER BY id DESC LIMIT 5""",
         (t.company_id, contact_id, t.company_id, contact_id))
-    return "\n".join(re.sub(r"^\[ভয়েস\]\s*", "", r["body"]) for r in reversed(rows) if r["body"].strip())
+    bodies = (without_unrelated(re.sub(r"^\[ভয়েস\]\s*", "", r["body"])) for r in reversed(rows))
+    return "\n".join(b for b in bodies if b)
 
 
 def ack_already_answered(t: Tenant, contact_id: int) -> bool:
@@ -485,9 +490,15 @@ def read_photo(t: Tenant, contact: dict, photo: dict, message_id: int) -> str | 
         reading.discard(message_id)
     if not seen:
         return None
-    body = "\n".join(x for x in (caption, f"[ছবি] {seen}") if x)
+    related, what = seen
+    body = "\n".join(x for x in (caption, f"[ছবি] {what}" if related else f"{UNRELATED_PHOTO} {what}") if x)
     db.execute("UPDATE wa_messages SET body = %s WHERE id = %s", (body, message_id))
-    return body
+    return without_unrelated(body)
+
+
+def without_unrelated(body: str | None) -> str:
+    """A message as the bot reads it: a photo not about our service (food, a passport) is left out."""
+    return "\n".join(x for x in (body or "").split("\n") if not x.startswith(UNRELATED_PHOTO)).strip()
 
 
 def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
@@ -505,6 +516,8 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
             # read: answer it like a text; not read but there is text to answer (its caption, or a message just
             # before that waited for this photo): answer the text
             m, mtype = {**m, "type": "text", "text": {"body": seen or photo.get("caption") or ""}}, "text"
+        elif seen is not None:
+            return  # read, but not about our service and nothing else to answer: no reply at all
     if mtype in ("image", "video", "document") and not ((m.get(mtype) or {}).get("caption")):
         deliver(t, contact, message_id, "জি, পেয়েছি। আমাদের টিম দেখে নেবে। সমস্যাটা একটু লিখে জানালে দ্রুত সাহায্য করতে পারব।",
                 f"কাস্টমার {mtype} পাঠিয়েছে, টিম দেখবে", provider="flow", model="fixed")
