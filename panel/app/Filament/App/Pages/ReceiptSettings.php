@@ -40,16 +40,16 @@ class ReceiptSettings extends CompanySettingsPage
     public function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('company_name')->label('কোম্পানির নাম')->required()->maxLength(120),
-            TextInput::make('address')->label('ঠিকানা')->maxLength(200),
-            TextInput::make('email')->label('ইমেইল')->email()->maxLength(120),
-            TextInput::make('mobile')->label('মোবাইল')->maxLength(120)->helperText('কয়েকটা হলে কমা দিয়ে লিখুন'),
-            TextInput::make('qr_link')->label('QR লিংক')->url()->maxLength(255)
-                ->helperText('যেমন বিকাশ মার্চেন্ট QR-এর লিংক (https://qr.bka.sh/...)। রিসিটের উপরে QR কোড হয়ে ছাপা হবে; খালি রাখলে QR ছাপা হবে না।'),
-            TextInput::make('qr_note')->label('QR-এর পাশের লেখা')->maxLength(150),
-            Textarea::make('footer')->label('নিচের লেখা')->rows(4)->maxLength(1000)
-                ->helperText('প্রতিটা লাইন আলাদা লাইনে ছাপা হবে (হেল্পলাইন, বিকাশ নম্বর ইত্যাদি)'),
-            Select::make('paper_width')->label('প্রিন্টারের কাগজ')->options([80 => '80 mm', 58 => '58 mm'])->required()->default(80),
+            TextInput::make('company_name')->label(__('কোম্পানির নাম'))->required()->maxLength(120),
+            TextInput::make('address')->label(__('ঠিকানা'))->maxLength(200),
+            TextInput::make('email')->label(__('ইমেইল'))->email()->maxLength(120),
+            TextInput::make('mobile')->label(__('মোবাইল'))->maxLength(120)->helperText(__('কয়েকটা হলে কমা দিয়ে লিখুন')),
+            TextInput::make('qr_link')->label(__('QR লিংক'))->url()->maxLength(255)
+                ->helperText(__('যেমন বিকাশ মার্চেন্ট QR-এর লিংক (https://qr.bka.sh/...)। রিসিটের উপরে QR কোড হয়ে ছাপা হবে; খালি রাখলে QR ছাপা হবে না।')),
+            TextInput::make('qr_note')->label(__('QR-এর পাশের লেখা'))->maxLength(150),
+            Textarea::make('footer')->label(__('নিচের লেখা'))->rows(4)->maxLength(1000)
+                ->helperText(__('প্রতিটা লাইন আলাদা লাইনে ছাপা হবে (হেল্পলাইন, বিকাশ নম্বর ইত্যাদি)')),
+            Select::make('paper_width')->label(__('প্রিন্টারের কাগজ'))->options([80 => '80 mm', 58 => '58 mm'])->required()->default(80),
         ]);
     }
 

@@ -3,7 +3,7 @@
         $totals = $this->totals();
         $money = fn ($v, $priced = true) => '$'.number_format($v, $v < 1 ? 4 : 2).($priced ? '' : '*');
         $n = fn ($v) => number_format((int) $v);
-        $periods = ['today' => 'আজ', '7' => '৭ দিন', '30' => '৩০ দিন'];
+        $periods = ['today' => __('আজ'), '7' => __('৭ দিন'), '30' => __('৩০ দিন')];
     @endphp
     <style>
         .za-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
@@ -31,14 +31,14 @@
                 <b>{{ $t['label'] }}</b>
                 <div class="za-cost">{{ $money($t['cost'], $t['priced']) }}</div>
                 <div class="za-sub">
-                    {{ $n($t['input'] + $t['output']) }} টোকেন (ইনপুট {{ $n($t['input']) }}@if ($t['cached']), এর মধ্যে cache থেকে {{ $n($t['cached']) }}@endif · আউটপুট {{ $n($t['output']) }})<br>
-                    {{ $n($t['calls']) }} বার AI ডাকা হয়েছে
-                    @if ($t['failed']) · <span class="za-bad">{{ $n($t['failed']) }} বার ব্যর্থ (লিমিট/এরর)</span> @endif
+                    {{ __(':total টোকেন (ইনপুট :in', ['total' => $n($t['input'] + $t['output']), 'in' => $n($t['input'])]) }}@if ($t['cached']), {{ __('এর মধ্যে cache থেকে :n', ['n' => $n($t['cached'])]) }}@endif · {{ __('আউটপুট :n', ['n' => $n($t['output'])]) }})<br>
+                    {{ __(':n বার AI ডাকা হয়েছে', ['n' => $n($t['calls'])]) }}
+                    @if ($t['failed']) · <span class="za-bad">{{ __(':n বার ব্যর্থ (লিমিট/এরর)', ['n' => $n($t['failed'])]) }}</span> @endif
                 </div>
             </div>
         @endforeach
     </div>
-    <p class="za-note">খরচ আনুমানিক: টোকেন × নিচের মডেলের দাম। ফ্রি টিয়ারের key-তে আসল বিল শূন্য, এটা পেইড হলে কত হতো সেই হিসাব। * মানে কোনো মডেলের দাম সেট নেই। হিসাব শুরু হয়েছে এই ফিচার চালুর পর থেকে।</p>
+    <p class="za-note">{{ __('খরচ আনুমানিক: টোকেন × নিচের মডেলের দাম। ফ্রি টিয়ারের key-তে আসল বিল শূন্য, এটা পেইড হলে কত হতো সেই হিসাব। * মানে কোনো মডেলের দাম সেট নেই। হিসাব শুরু হয়েছে এই ফিচার চালুর পর থেকে।') }}</p>
 
     <div class="za-tabs">
         @foreach ($periods as $p => $label)
@@ -47,72 +47,72 @@
     </div>
 
     <div class="za-box">
-        <h3>key অনুযায়ী</h3>
+        <h3>{{ __('key অনুযায়ী') }}</h3>
         <table class="za-t">
-            <tr><th>Key</th><th class="num">কল</th><th class="num">টোকেন</th><th class="num">খরচ</th><th>প্রোভাইডারের লিমিট (শেষ জানা)</th></tr>
+            <tr><th>Key</th><th class="num">{{ __('কল') }}</th><th class="num">{{ __('টোকেন') }}</th><th class="num">{{ __('খরচ') }}</th><th>{{ __('প্রোভাইডারের লিমিট (শেষ জানা)') }}</th></tr>
             @forelse ($this->byKey() as $k)
                 <tr>
-                    <td>{{ $k['name'] }}<div class="za-q">{{ $k['masked'] }} @if ($k['cooling']) · <span class="za-bad">এখন বিরতিতে</span> @endif</div></td>
-                    <td class="num">{{ $n($k['usage']['calls'] ?? 0) }}@if ($k['usage']['failed'] ?? 0)<div class="za-q za-bad">{{ $n($k['usage']['failed']) }} ব্যর্থ</div>@endif</td>
-                    <td class="num">{{ $n(($k['usage']['input'] ?? 0) + ($k['usage']['output'] ?? 0)) }}<div class="za-q">আজ {{ $n($k['today_tokens']) }}</div></td>
+                    <td>{{ $k['name'] }}<div class="za-q">{{ $k['masked'] }} @if ($k['cooling']) · <span class="za-bad">{{ __('এখন বিরতিতে') }}</span> @endif</div></td>
+                    <td class="num">{{ $n($k['usage']['calls'] ?? 0) }}@if ($k['usage']['failed'] ?? 0)<div class="za-q za-bad">{{ __(':n ব্যর্থ', ['n' => $n($k['usage']['failed'])]) }}</div>@endif</td>
+                    <td class="num">{{ $n(($k['usage']['input'] ?? 0) + ($k['usage']['output'] ?? 0)) }}<div class="za-q">{{ __('আজ :n', ['n' => $n($k['today_tokens'])]) }}</div></td>
                     <td class="num">{{ $k['usage'] ? $money($k['usage']['cost'], $k['usage']['priced']) : '—' }}</td>
                     <td>
                         @forelse ($k['quota'] as $line)
                             <div class="za-q">{{ $line }}</div>
                         @empty
-                            <div class="za-q">প্রোভাইডার জানায়নি (Gemini লিমিট জানায় না)</div>
+                            <div class="za-q">{{ __('প্রোভাইডার জানায়নি (Gemini লিমিট জানায় না)') }}</div>
                         @endforelse
-                        @if ($k['quota_at'] && $k['quota'])<div class="za-q">আপডেট {{ $k['quota_at'] }}</div>@endif
+                        @if ($k['quota_at'] && $k['quota'])<div class="za-q">{{ __('আপডেট :at', ['at' => $k['quota_at']]) }}</div>@endif
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="5" class="za-note">কোনো AI key নেই</td></tr>
+                <tr><td colspan="5" class="za-note">{{ __('কোনো AI key নেই') }}</td></tr>
             @endforelse
         </table>
     </div>
 
     <div class="za-box">
-        <h3>মডেল অনুযায়ী</h3>
+        <h3>{{ __('মডেল অনুযায়ী') }}</h3>
         <table class="za-t">
-            <tr><th>মডেল</th><th class="num">কল</th><th class="num">ইনপুট</th><th class="num">আউটপুট</th><th class="num">দাম (USD/1M)</th><th class="num">খরচ</th></tr>
+            <tr><th>{{ __('মডেল') }}</th><th class="num">{{ __('কল') }}</th><th class="num">{{ __('ইনপুট') }}</th><th class="num">{{ __('আউটপুট') }}</th><th class="num">{{ __('দাম (USD/1M)') }}</th><th class="num">{{ __('খরচ') }}</th></tr>
             @forelse ($this->byModel() as $m)
                 <tr>
                     <td>{{ $m['model'] }}<div class="za-q">{{ \App\Models\AiKey::PROVIDERS[$m['provider']][0] ?? $m['provider'] }}</div></td>
                     <td class="num">{{ $n($m['calls']) }}</td>
-                    <td class="num">{{ $n($m['input']) }}@if (str_contains($m['model'], 'whisper'))<div class="za-q">সেকেন্ড অডিও</div>@elseif ($m['cached'])<div class="za-q">cache থেকে {{ $n($m['cached']) }}</div>@endif</td>
+                    <td class="num">{{ $n($m['input']) }}@if (str_contains($m['model'], 'whisper'))<div class="za-q">{{ __('সেকেন্ড অডিও') }}</div>@elseif ($m['cached'])<div class="za-q">{{ __('cache থেকে :n', ['n' => $n($m['cached'])]) }}</div>@endif</td>
                     <td class="num">{{ $n($m['output']) }}</td>
                     <td class="num">
-                        {{ $m['price'] ? rtrim(rtrim(number_format($m['price'][0], 4), '0'), '.').' / '.rtrim(rtrim(number_format($m['price'][1], 4), '0'), '.') : 'সেট নেই' }}
-                        @if ($m['price'] && ! $m['price'][2])<div class="za-q">ডিফল্ট</div>@endif
+                        {{ $m['price'] ? rtrim(rtrim(number_format($m['price'][0], 4), '0'), '.').' / '.rtrim(rtrim(number_format($m['price'][1], 4), '0'), '.') : __('সেট নেই') }}
+                        @if ($m['price'] && ! $m['price'][2])<div class="za-q">{{ __('ডিফল্ট') }}</div>@endif
                         <div>{{ ($this->editPriceAction)(['provider' => $m['provider'], 'model' => $m['model']]) }}</div>
                     </td>
                     <td class="num">{{ $m['priced'] ? $money($m['cost']) : '—' }}</td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="za-note">এই সময়ে কোনো AI কল নেই</td></tr>
+                <tr><td colspan="6" class="za-note">{{ __('এই সময়ে কোনো AI কল নেই') }}</td></tr>
             @endforelse
         </table>
     </div>
 
     <div class="za-cards">
         <div class="za-box">
-            <h3>কোন কাজে</h3>
+            <h3>{{ __('কোন কাজে') }}</h3>
             <table class="za-t">
-                <tr><th>কাজ</th><th class="num">কল</th><th class="num">টোকেন</th><th class="num">খরচ</th></tr>
+                <tr><th>{{ __('কাজ') }}</th><th class="num">{{ __('কল') }}</th><th class="num">{{ __('টোকেন') }}</th><th class="num">{{ __('খরচ') }}</th></tr>
                 @foreach ($this->byPurpose() as $r)
                     <tr>
-                        <td>{{ $this::PURPOSES[$r['purpose']] ?? $r['purpose'] }}</td>
+                        <td>{{ __($this::PURPOSES[$r['purpose']] ?? $r['purpose']) }}</td>
                         <td class="num">{{ $n($r['calls']) }}</td>
-                        <td class="num">{{ $r['purpose'] === 'voice' ? $n($r['input']).' সে.' : $n($r['input'] + $r['output']) }}</td>
+                        <td class="num">{{ $r['purpose'] === 'voice' ? $n($r['input']).__(' সে.') : $n($r['input'] + $r['output']) }}</td>
                         <td class="num">{{ $money($r['cost'], $r['priced']) }}</td>
                     </tr>
                 @endforeach
             </table>
         </div>
         <div class="za-box">
-            <h3>গত ১৪ দিন</h3>
+            <h3>{{ __('গত ১৪ দিন') }}</h3>
             <table class="za-t">
-                <tr><th>দিন</th><th class="num">কল</th><th class="num">টোকেন</th><th class="num">খরচ</th></tr>
+                <tr><th>{{ __('দিন') }}</th><th class="num">{{ __('কল') }}</th><th class="num">{{ __('টোকেন') }}</th><th class="num">{{ __('খরচ') }}</th></tr>
                 @forelse ($this->daily() as $d)
                     <tr>
                         <td>{{ \Illuminate\Support\Carbon::parse($d['day'])->format('j M') }}</td>
@@ -121,7 +121,7 @@
                         <td class="num">{{ $money($d['cost']) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="4" class="za-note">এখনো কোনো হিসাব নেই</td></tr>
+                    <tr><td colspan="4" class="za-note">{{ __('এখনো কোনো হিসাব নেই') }}</td></tr>
                 @endforelse
             </table>
         </div>

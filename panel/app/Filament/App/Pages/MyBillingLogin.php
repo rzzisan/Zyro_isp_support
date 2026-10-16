@@ -58,7 +58,7 @@ class MyBillingLogin extends CompanySettingsPage
 
     public function getSubheading(): ?string
     {
-        return 'প্যানেল থেকে আপনি যে টিকিট খুলবেন বা assign করবেন, সেটা বিলিং সফটওয়্যারে আপনার নামেই হবে। বট আর টিকিট sync চলে কোম্পানির (owner-এর দেওয়া) লগইনে।';
+        return __('প্যানেল থেকে আপনি যে টিকিট খুলবেন বা assign করবেন, সেটা বিলিং সফটওয়্যারে আপনার নামেই হবে। বট আর টিকিট sync চলে কোম্পানির (owner-এর দেওয়া) লগইনে।');
     }
 
     public function form(Schema $schema): Schema
@@ -67,15 +67,15 @@ class MyBillingLogin extends CompanySettingsPage
         $m = $this->record(Filament::getTenant());
 
         return $schema->components([
-            TextInput::make('billing_username')->label('বিলিং সফটওয়্যারের ইউজারনেম')->required()
-                ->helperText('বিলিং সফটওয়্যারে আপনি যে ইউজারনেমে লগইন করেন'),
-            TextInput::make('billing_password')->label('পাসওয়ার্ড')->password()->revealable()
+            TextInput::make('billing_username')->label(__('বিলিং সফটওয়্যারের ইউজারনেম'))->required()
+                ->helperText(__('বিলিং সফটওয়্যারে আপনি যে ইউজারনেমে লগইন করেন')),
+            TextInput::make('billing_password')->label(__('পাসওয়ার্ড'))->password()->revealable()
                 ->required(! filled($m->billing_password))
-                ->helperText(filled($m->billing_password) ? 'এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন' : 'এনক্রিপ্ট করে রাখা হবে, কেউ দেখতে পাবে না'),
-            Placeholder::make('status')->label('শেষ পরীক্ষা')
+                ->helperText(filled($m->billing_password) ? __('এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে, কেউ দেখতে পাবে না')),
+            Placeholder::make('status')->label(__('শেষ পরীক্ষা'))
                 ->content(fn () => $m->billing_checked_at
-                    ? ($m->billing_check_ok ? '✅ লগইন ঠিক আছে' : '❌ লগইন হয়নি').' · '.$m->billing_checked_at->diffForHumans()
-                    : 'এখনো পরীক্ষা করা হয়নি'),
+                    ? ($m->billing_check_ok ? __('✅ লগইন ঠিক আছে') : __('❌ লগইন হয়নি')).' · '.$m->billing_checked_at->diffForHumans()
+                    : __('এখনো পরীক্ষা করা হয়নি')),
         ]);
     }
 
@@ -96,7 +96,7 @@ class MyBillingLogin extends CompanySettingsPage
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('test')->label('লগইন পরীক্ষা করুন')->icon(Heroicon::OutlinedSignal)
+            Action::make('test')->label(__('লগইন পরীক্ষা করুন'))->icon(Heroicon::OutlinedSignal)
                 ->action(fn () => $this->testLogin()),
         ];
     }
@@ -107,17 +107,17 @@ class MyBillingLogin extends CompanySettingsPage
         $m = $this->record(Filament::getTenant());
         $conn = Filament::getTenant()->billingConnection;
         if (! $m->hasBillingLogin() || ! $conn) {
-            Notification::make()->warning()->title($conn ? 'আগে ইউজারনেম আর পাসওয়ার্ড সেভ করুন' : 'কোম্পানির বিলিং সংযোগ এখনো সেট করা হয়নি')->send();
+            Notification::make()->warning()->title($conn ? __('আগে ইউজারনেম আর পাসওয়ার্ড সেভ করুন') : __('কোম্পানির বিলিং সংযোগ এখনো সেট করা হয়নি'))->send();
 
             return;
         }
         try {
             (new IspDigitalClient($conn->base_url, $m->billing_username, $m->billing_password))->login();
             $m->forceFill(['billing_checked_at' => now(), 'billing_check_ok' => true])->save();
-            Notification::make()->success()->title('লগইন ঠিক আছে')->send();
+            Notification::make()->success()->title(__('লগইন ঠিক আছে'))->send();
         } catch (Throwable $e) {
             $m->forceFill(['billing_checked_at' => now(), 'billing_check_ok' => false])->save();
-            Notification::make()->danger()->title('লগইন হয়নি')->body($e->getMessage())->send();
+            Notification::make()->danger()->title(__('লগইন হয়নি'))->body($e->getMessage())->send();
         }
         $this->redirect(static::getUrl());
     }

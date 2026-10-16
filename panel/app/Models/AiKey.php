@@ -50,24 +50,24 @@ class AiKey extends Model
             if ($limit === null && $remaining === null) {
                 return;
             }
-            $lines[] = $label.': '.($remaining !== null ? number_format((int) $remaining) : '?').' বাকি / '
-                .($limit !== null ? number_format((int) $limit) : '?').($reset ? " (রিসেট {$reset})" : '');
+            $lines[] = $label.': '.__(':left বাকি / :limit', ['left' => $remaining !== null ? number_format((int) $remaining) : '?',
+                'limit' => $limit !== null ? number_format((int) $limit) : '?']).($reset ? ' '.__('(রিসেট :at)', ['at' => $reset]) : '');
         };
         $groq = $this->provider === 'groq';
-        $pair($groq ? 'আজকের রিকোয়েস্ট' : 'রিকোয়েস্ট', $q['x-ratelimit-limit-requests'] ?? null,
+        $pair($groq ? __('আজকের রিকোয়েস্ট') : __('রিকোয়েস্ট'), $q['x-ratelimit-limit-requests'] ?? null,
             $q['x-ratelimit-remaining-requests'] ?? null, $q['x-ratelimit-reset-requests'] ?? null);
-        $pair('মিনিটে টোকেন', $q['x-ratelimit-limit-tokens'] ?? null,
+        $pair(__('মিনিটে টোকেন'), $q['x-ratelimit-limit-tokens'] ?? null,
             $q['x-ratelimit-remaining-tokens'] ?? null, $q['x-ratelimit-reset-tokens'] ?? null);
-        $pair('রিকোয়েস্ট', $q['anthropic-ratelimit-requests-limit'] ?? null,
+        $pair(__('রিকোয়েস্ট'), $q['anthropic-ratelimit-requests-limit'] ?? null,
             $q['anthropic-ratelimit-requests-remaining'] ?? null, null);
-        $pair('মিনিটে টোকেন', $q['anthropic-ratelimit-tokens-limit'] ?? null,
+        $pair(__('মিনিটে টোকেন'), $q['anthropic-ratelimit-tokens-limit'] ?? null,
             $q['anthropic-ratelimit-tokens-remaining'] ?? null, null);
-        $names = ['tpd' => 'দৈনিক টোকেন', 'rpd' => 'দৈনিক রিকোয়েস্ট', 'tpm' => 'মিনিটে টোকেন', 'rpm' => 'মিনিটে রিকোয়েস্ট'];
+        $names = ['tpd' => __('দৈনিক টোকেন'), 'rpd' => __('দৈনিক রিকোয়েস্ট'), 'tpm' => __('মিনিটে টোকেন'), 'rpm' => __('মিনিটে রিকোয়েস্ট')];
         foreach ($q as $k => $v) {
             $at = isset($v['at']) ? \Illuminate\Support\Carbon::parse($v['at']) : null;
             if (str_starts_with($k, 'limit:') && is_array($v) && $at && $at->gt(now()->subDay())) {
-                $lines[] = ($names[substr($k, 6)] ?? strtoupper(substr($k, 6))).' শেষ হয়েছিল: '.number_format((int) $v['used']).' / '
-                    .number_format((int) $v['limit']).' ('.$at->timezone('Asia/Dhaka')->format('j M g:i A').')';
+                $lines[] = __(':name শেষ হয়েছিল: :used / :limit (:at)', ['name' => $names[substr($k, 6)] ?? strtoupper(substr($k, 6)),
+                    'used' => number_format((int) $v['used']), 'limit' => number_format((int) $v['limit']), 'at' => $at->timezone('Asia/Dhaka')->format('j M g:i A')]);
             }
         }
 

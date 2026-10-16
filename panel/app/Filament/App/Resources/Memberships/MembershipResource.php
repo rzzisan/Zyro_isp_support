@@ -65,29 +65,29 @@ class MembershipResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->label('নাম')->required()->visibleOn('create'),
-            TextInput::make('email')->label('ইমেইল')->email()->required()->visibleOn('create')
-                ->helperText('এই ইমেইলে আগে থেকে অ্যাকাউন্ট থাকলে সেটাই যুক্ত হবে'),
-            TextInput::make('password')->label('পাসওয়ার্ড')->password()->revealable()->minLength(10)->visibleOn('create')
-                ->helperText('নতুন ইউজার হলে লাগবে'),
-            Select::make('role')->label('রোল')->options(fn () => self::roleOptions())->required()->default('agent'),
-            TextInput::make('billing_username')->label('বিলিং সফটওয়্যারের ইউজারনেম (ঐচ্ছিক)')->visibleOn('edit')
-                ->helperText('এই সদস্য প্যানেল থেকে টিকিট খুললে বা assign করলে এই লগইনে হবে। সদস্য নিজেও "আমার বিলিং লগইন" পেজে দিতে পারেন।'),
-            TextInput::make('billing_password')->label('বিলিং পাসওয়ার্ড')->password()->revealable()->visibleOn('edit')
+            TextInput::make('name')->label(__('নাম'))->required()->visibleOn('create'),
+            TextInput::make('email')->label(__('ইমেইল'))->email()->required()->visibleOn('create')
+                ->helperText(__('এই ইমেইলে আগে থেকে অ্যাকাউন্ট থাকলে সেটাই যুক্ত হবে')),
+            TextInput::make('password')->label(__('পাসওয়ার্ড'))->password()->revealable()->minLength(10)->visibleOn('create')
+                ->helperText(__('নতুন ইউজার হলে লাগবে')),
+            Select::make('role')->label(__('রোল'))->options(fn () => self::roleOptions())->required()->default('agent'),
+            TextInput::make('billing_username')->label(__('বিলিং সফটওয়্যারের ইউজারনেম (ঐচ্ছিক)'))->visibleOn('edit')
+                ->helperText(__('এই সদস্য প্যানেল থেকে টিকিট খুললে বা assign করলে এই লগইনে হবে। সদস্য নিজেও "আমার বিলিং লগইন" পেজে দিতে পারেন।')),
+            TextInput::make('billing_password')->label(__('বিলিং পাসওয়ার্ড'))->password()->revealable()->visibleOn('edit')
                 ->dehydrated(fn ($state) => filled($state))
-                ->helperText('বদলাতে না চাইলে খালি রাখুন'),
-            \Filament\Forms\Components\CheckboxList::make('permissions')->label('কোন কোন মেনু দেখবেন')->visibleOn('edit')
+                ->helperText(__('বদলাতে না চাইলে খালি রাখুন')),
+            \Filament\Forms\Components\CheckboxList::make('permissions')->label(__('কোন কোন মেনু দেখবেন'))->visibleOn('edit')
                 ->options(\App\Support\Menu::options())
                 ->columns(3)->bulkToggleable()
                 ->formatStateUsing(fn ($state, ?Membership $record) => $state ?? \App\Support\Menu::defaults($record?->role ?? 'agent'))
                 ->live()
-                ->helperText('ড্যাশবোর্ড আর "আমার বিলিং লগইন" সবাই দেখেন। সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin হলে কাজ করে, Agent-এর জন্য টিক দিলেও খুলবে না।'),
-            Select::make('bill_view_employees')->label('বিল কালেকশনে কার কার নেওয়া বিল দেখবেন')->visibleOn('edit')->multiple()
+                ->helperText(__('ড্যাশবোর্ড আর "আমার বিলিং লগইন" সবাই দেখেন। সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin হলে কাজ করে, Agent-এর জন্য টিক দিলেও খুলবে না।')),
+            Select::make('bill_view_employees')->label(__('বিল কালেকশনে কার কার নেওয়া বিল দেখবেন'))->visibleOn('edit')->multiple()
                 ->visible(fn ($get) => $get('role') === 'agent' && in_array('bills', (array) $get('permissions'), true))
                 ->options(fn () => \App\Models\BillingDailyBill::collectors(Filament::getTenant()->getKey()))
                 ->formatStateUsing(fn ($state) => array_map('strval', (array) ($state ?? [])))
                 ->dehydrateStateUsing(fn ($state) => array_values(array_map('intval', (array) ($state ?? []))) ?: null)
-                ->helperText('বিলিং-এর Received By (যিনি টাকা নিয়েছেন)। খালি রাখলে শুধু নিজের এন্ট্রি দেওয়া বিল দেখবেন (ওপরের বিলিং ইউজারনেম মিলিয়ে)। Owner/Admin সবার বিল দেখেন।'),
+                ->helperText(__('বিলিং-এর Received By (যিনি টাকা নিয়েছেন)। খালি রাখলে শুধু নিজের এন্ট্রি দেওয়া বিল দেখবেন (ওপরের বিলিং ইউজারনেম মিলিয়ে)। Owner/Admin সবার বিল দেখেন।')),
         ]);
     }
 
@@ -95,28 +95,28 @@ class MembershipResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('user.name')->label('নাম')->searchable(),
-                TextColumn::make('user.email')->label('ইমেইল')->searchable(),
-                TextColumn::make('role')->label('রোল')->badge()
+                TextColumn::make('user.name')->label(__('নাম'))->searchable(),
+                TextColumn::make('user.email')->label(__('ইমেইল'))->searchable(),
+                TextColumn::make('role')->label(__('রোল'))->badge()
                     ->formatStateUsing(fn ($state) => Membership::ROLES[$state] ?? $state),
-                TextColumn::make('menus')->label('মেনু')
-                    ->state(fn (Membership $r) => $r->role === 'owner' ? 'সব'
-                        : count($r->permissions ?? \App\Support\Menu::defaults($r->role)).'/'.count(\App\Support\Menu::ITEMS).($r->permissions === null ? ' (ডিফল্ট)' : ''))
+                TextColumn::make('menus')->label(__('মেনু'))
+                    ->state(fn (Membership $r) => $r->role === 'owner' ? __('সব')
+                        : count($r->permissions ?? \App\Support\Menu::defaults($r->role)).'/'.count(\App\Support\Menu::ITEMS).($r->permissions === null ? __(' (ডিফল্ট)') : ''))
                     ->tooltip(fn (Membership $r) => collect($r->role === 'owner' ? array_keys(\App\Support\Menu::ITEMS) : ($r->permissions ?? \App\Support\Menu::defaults($r->role)))
                         ->map(fn ($k) => \App\Support\Menu::ITEMS[$k][0] ?? $k)->join(', ')),
-                TextColumn::make('billing')->label('বিলিং লগইন')->badge()
-                    ->state(fn (Membership $r) => $r->hasBillingLogin() ? ($r->billing_check_ok === false ? 'ভুল' : $r->billing_username) : 'দেওয়া নেই')
+                TextColumn::make('billing')->label(__('বিলিং লগইন'))->badge()
+                    ->state(fn (Membership $r) => $r->hasBillingLogin() ? ($r->billing_check_ok === false ? __('ভুল') : $r->billing_username) : __('দেওয়া নেই'))
                     ->color(fn (Membership $r) => $r->hasBillingLogin() ? ($r->billing_check_ok === false ? 'danger' : 'success') : 'gray'),
-                TextColumn::make('created_at')->label('যোগ হয়েছে')->date(),
+                TextColumn::make('created_at')->label(__('যোগ হয়েছে'))->date(),
             ])
             ->headerActions([
-                CreateAction::make()->label('সদস্য যোগ করুন')
+                CreateAction::make()->label(__('সদস্য যোগ করুন'))
                     ->using(fn (array $data) => self::addMember($data)),
             ])
             ->recordActions([
                 EditAction::make()->visible(fn (Membership $record) => $record->role !== 'owner'
                     || auth()->user()->roleIn(Filament::getTenant()) === 'owner'),
-                DeleteAction::make()->label('সরান')
+                DeleteAction::make()->label(__('সরান'))
                     ->visible(fn (Membership $record) => $record->role !== 'owner' && $record->user_id !== auth()->id()),
             ]);
     }
@@ -126,8 +126,8 @@ class MembershipResource extends Resource
         $company = Filament::getTenant();
         $left = $company->seatsLeft();
         if ($left !== null && $left <= 0) {
-            Notification::make()->danger()->title('প্যাকেজের ইউজার সীমা শেষ')
-                ->body('আরও সদস্য যোগ করতে প্যাকেজ আপগ্রেড করুন।')->send();
+            Notification::make()->danger()->title(__('প্যাকেজের ইউজার সীমা শেষ'))
+                ->body(__('আরও সদস্য যোগ করতে প্যাকেজ আপগ্রেড করুন।'))->send();
             throw new Halt;
         }
         if (! array_key_exists($data['role'], self::roleOptions())) {
@@ -136,13 +136,13 @@ class MembershipResource extends Resource
         $user = User::where('email', $data['email'])->first();
         if (! $user) {
             if (blank($data['password'] ?? null)) {
-                Notification::make()->danger()->title('নতুন ইউজারের জন্য পাসওয়ার্ড দিন')->send();
+                Notification::make()->danger()->title(__('নতুন ইউজারের জন্য পাসওয়ার্ড দিন'))->send();
                 throw new Halt;
             }
             $user = User::create(['name' => $data['name'], 'email' => $data['email'], 'password' => $data['password']]);
         }
         if ($company->memberships()->where('user_id', $user->id)->exists()) {
-            Notification::make()->warning()->title('এই ইউজার আগেই টিমে আছে')->send();
+            Notification::make()->warning()->title(__('এই ইউজার আগেই টিমে আছে'))->send();
             throw new Halt;
         }
 

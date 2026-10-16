@@ -94,7 +94,7 @@ class WaContact extends Model
     public function displayNumber(): string
     {
         if ($this->hidesNumber()) {
-            return $this->wa_username ? '@'.ltrim($this->wa_username, '@') : 'নম্বর লুকানো';
+            return $this->wa_username ? '@'.ltrim($this->wa_username, '@') : __('নম্বর লুকানো');
         }
 
         return str_starts_with($this->wa_number, '880') ? '0'.substr($this->wa_number, 3) : $this->wa_number;

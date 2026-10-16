@@ -51,27 +51,27 @@ class BotFaqResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('question')->label('কাস্টমার যা জিজ্ঞেস করে')->required()->maxLength(500)
-                ->placeholder('যেমন: FTP সার্ভারের লিংক কী? / 550 টাকায় কোন প্যাকেজ?')->columnSpanFull(),
-            Textarea::make('answer')->label('উত্তর')->required()->rows(5)->columnSpanFull()
-                ->helperText('সঠিক তথ্য লিখুন (লিংক, দাম, সময়)। বট এই তথ্য না বদলে নিজের ভাষায় ছোট করে বলবে; প্রশ্নটা অন্যভাবে করলেও একই বিষয় হলে এটাই ধরবে।'),
-            TextInput::make('sort')->label('ক্রম')->numeric()->default(0),
-            Toggle::make('active')->label('চালু')->default(true),
+            TextInput::make('question')->label(__('কাস্টমার যা জিজ্ঞেস করে'))->required()->maxLength(500)
+                ->placeholder(__('যেমন: FTP সার্ভারের লিংক কী? / 550 টাকায় কোন প্যাকেজ?'))->columnSpanFull(),
+            Textarea::make('answer')->label(__('উত্তর'))->required()->rows(5)->columnSpanFull()
+                ->helperText(__('সঠিক তথ্য লিখুন (লিংক, দাম, সময়)। বট এই তথ্য না বদলে নিজের ভাষায় ছোট করে বলবে; প্রশ্নটা অন্যভাবে করলেও একই বিষয় হলে এটাই ধরবে।')),
+            TextInput::make('sort')->label(__('ক্রম'))->numeric()->default(0),
+            Toggle::make('active')->label(__('চালু'))->default(true),
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
-            ->description('এখানকার চালু প্রশ্ন-উত্তরগুলো বটের নির্দেশনায় যোগ হয় (কাস্টমার বট ও টেকনিশিয়ান দুই জায়গাতেই)। সেভ করার পরের মেসেজ থেকেই কাজ করে। পুরো নির্দেশনা দেখতে: বট সেটিংস → "বট এখন যা নির্দেশনা পায়"।')
+            ->description(__('এখানকার চালু প্রশ্ন-উত্তরগুলো বটের নির্দেশনায় যোগ হয় (কাস্টমার বট ও টেকনিশিয়ান দুই জায়গাতেই)। সেভ করার পরের মেসেজ থেকেই কাজ করে। পুরো নির্দেশনা দেখতে: বট সেটিংস → "বট এখন যা নির্দেশনা পায়"।'))
             ->reorderable('sort')
             ->defaultSort('sort')
             ->columns([
-                TextColumn::make('question')->label('প্রশ্ন')->searchable()->wrap(),
-                TextColumn::make('answer')->label('উত্তর')->searchable()->wrap()->limit(160),
-                ToggleColumn::make('active')->label('চালু'),
+                TextColumn::make('question')->label(__('প্রশ্ন'))->searchable()->wrap(),
+                TextColumn::make('answer')->label(__('উত্তর'))->searchable()->wrap()->limit(160),
+                ToggleColumn::make('active')->label(__('চালু')),
             ])
-            ->headerActions([CreateAction::make()->label('FAQ যোগ করুন')
+            ->headerActions([CreateAction::make()->label(__('FAQ যোগ করুন'))
                 ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => Filament::getTenant()->getKey()])])
             ->recordActions([EditAction::make(), DeleteAction::make()]);
     }

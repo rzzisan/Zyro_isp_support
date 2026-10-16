@@ -36,7 +36,7 @@ class IspDigitalClient
     {
         $page = $this->http()->get($this->baseUrl.'/Account/Login');
         if (! preg_match('/name="__RequestVerificationToken"[^>]*value="([^"]+)"/', $page->body(), $m)) {
-            throw new RuntimeException('লগইন পেজ পাওয়া যায়নি — URL ঠিক আছে কি না দেখুন।');
+            throw new RuntimeException(__('লগইন পেজ পাওয়া যায়নি — URL ঠিক আছে কি না দেখুন।'));
         }
         $form = ['__RequestVerificationToken' => $m[1], 'Username' => $this->username,
             'Password' => $this->password, 'RememberMe' => 'false'];
@@ -45,10 +45,10 @@ class IspDigitalClient
         }
         $r = $this->http()->asForm()->post($this->baseUrl.'/Account/LoginChecker', $form);
         if ($r->status() !== 302 || ! str_contains((string) $r->header('Location'), 'Dashboard')) {
-            throw new RuntimeException('ইউজারনেম বা পাসওয়ার্ড ভুল।');
+            throw new RuntimeException(__('ইউজারনেম বা পাসওয়ার্ড ভুল।'));
         }
         if ($this->http()->get($this->baseUrl.'/EmployeeDashboard/Index')->status() !== 200) {
-            throw new RuntimeException('লগইন হলো কিন্তু প্যানেল সেশন বাতিল করেছে।');
+            throw new RuntimeException(__('লগইন হলো কিন্তু প্যানেল সেশন বাতিল করেছে।'));
         }
     }
 
@@ -58,7 +58,7 @@ class IspDigitalClient
         $r = $this->http()->withHeaders(['X-Requested-With' => 'XMLHttpRequest'])
             ->get($this->baseUrl.'/Customer/AjaxCustomerList', ['draw' => 1, 'start' => 0, 'length' => 1]);
         if ($r->status() !== 200) {
-            throw new RuntimeException('কাস্টমার তালিকা পড়া যায়নি (এই ইউজারের অনুমতি দেখুন)।');
+            throw new RuntimeException(__('কাস্টমার তালিকা পড়া যায়নি (এই ইউজারের অনুমতি দেখুন)।'));
         }
 
         return (int) ($r->json('iTotalDisplayRecords') ?? $r->json('iTotalRecords') ?? 0);

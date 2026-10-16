@@ -32,7 +32,7 @@ class WhatsApp
             ->when($id, fn ($q) => $q->whereKey($id))->first()
             ?? WaAccount::where('company_id', $contact->company_id)->first();
         if (! $account) {
-            throw new RuntimeException('এই কোম্পানির কোনো WhatsApp নম্বর যুক্ত নেই।');
+            throw new RuntimeException(__('এই কোম্পানির কোনো WhatsApp নম্বর যুক্ত নেই।'));
         }
 
         return $account;
@@ -46,10 +46,10 @@ class WhatsApp
     {
         $body = trim($body);
         if ($body === '') {
-            throw new RuntimeException('মেসেজ খালি।');
+            throw new RuntimeException(__('মেসেজ খালি।'));
         }
         if (! $contact->windowOpen()) {
-            throw new RuntimeException('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই সাধারণ মেসেজ যাবে না; অনুমোদিত template লাগবে।');
+            throw new RuntimeException(__('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই সাধারণ মেসেজ যাবে না; অনুমোদিত template লাগবে।'));
         }
         $body = static::signed($body, $user);
         $account = static::accountFor($contact);
@@ -68,9 +68,9 @@ class WhatsApp
                 $msg = $e->response->json('error.message') ?? $e->getMessage();
                 $code = $e->response->json('error.code');
                 if ($code === 131047 || str_contains($msg, 're-engagement')) {
-                    $msg = 'কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে; অনুমোদিত template লাগবে।';
+                    $msg = __('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে; অনুমোদিত template লাগবে।');
                 }
-                throw new RuntimeException('পাঠানো যায়নি: '.mb_substr($msg, 0, 300));
+                throw new RuntimeException(__('পাঠানো যায়নি: ').mb_substr($msg, 0, 300));
             }
             $waId = $res['messages'][0]['id'] ?? null;
             $status = 'sent';
@@ -110,9 +110,9 @@ class WhatsApp
     public static function sendMedia(WaContact $contact, string $path, string $mime, string $fileName, ?string $caption,
         User $user, int $pauseMinutes = 0): WaMessage
     {
-        $type = static::MEDIA_TYPES[$mime] ?? throw new RuntimeException('এই ধরনের ফাইল পাঠানো যায় না (ছবি, PDF, MP4, MP3 চলবে)।');
+        $type = static::MEDIA_TYPES[$mime] ?? throw new RuntimeException(__('এই ধরনের ফাইল পাঠানো যায় না (ছবি, PDF, MP4, MP3 চলবে)।'));
         if (! $contact->windowOpen()) {
-            throw new RuntimeException('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই এখন কিছু পাঠানো যাবে না; অনুমোদিত template লাগবে।');
+            throw new RuntimeException(__('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই এখন কিছু পাঠানো যাবে না; অনুমোদিত template লাগবে।'));
         }
         $caption = $type === 'audio' ? null : static::signed((string) $caption, $user);
         $account = static::accountFor($contact);
@@ -133,7 +133,7 @@ class WhatsApp
                     ])->throw()->json();
             } catch (RequestException $e) {
                 $msg = $e->response->json('error.message') ?? $e->getMessage();
-                throw new RuntimeException('পাঠানো যায়নি: '.mb_substr($msg, 0, 300));
+                throw new RuntimeException(__('পাঠানো যায়নি: ').mb_substr($msg, 0, 300));
             }
             $waId = $res['messages'][0]['id'] ?? null;
             $status = 'sent';

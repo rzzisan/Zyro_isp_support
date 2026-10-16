@@ -33,7 +33,7 @@ class StockProduct extends Model
         return DB::transaction(function () use ($type, $quantity, $data) {
             $p = static::whereKey($this->id)->lockForUpdate()->first();
             if ($type === 'out' && $p->current_stock < $quantity) {
-                throw new \RuntimeException('স্টকে যথেষ্ট নেই, আছে '.$p->current_stock);
+                throw new \RuntimeException(__('স্টকে যথেষ্ট নেই, আছে ').$p->current_stock);
             }
             $m = $p->movements()->create([...$data, 'company_id' => $p->company_id, 'type' => $type, 'quantity' => $quantity,
                 'total_price' => $type === 'in' && isset($data['unit_price']) ? round($quantity * (float) $data['unit_price'], 2) : null]);

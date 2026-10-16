@@ -46,13 +46,13 @@ class AiKeyResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('provider')->label('প্রোভাইডার')->options(AiKey::providerOptions())->required(),
-            TextInput::make('label')->label('নাম (ঐচ্ছিক)')->placeholder('যেমন key-1'),
+            Select::make('provider')->label(__('প্রোভাইডার'))->options(AiKey::providerOptions())->required(),
+            TextInput::make('label')->label(__('নাম (ঐচ্ছিক)'))->placeholder(__('যেমন key-1')),
             TextInput::make('api_key')->label('API key')->password()->revealable()
                 ->required(fn (string $operation) => $operation === 'create')
                 ->dehydrated(fn ($state) => filled($state))
-                ->helperText(fn (string $operation) => $operation === 'edit' ? 'বদলাতে না চাইলে খালি রাখুন' : 'এনক্রিপ্ট করে রাখা হবে'),
-            TextInput::make('model')->label('এই key-এর মডেল (ঐচ্ছিক)'),
+                ->helperText(fn (string $operation) => $operation === 'edit' ? __('বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে')),
+            TextInput::make('model')->label(__('এই key-এর মডেল (ঐচ্ছিক)')),
         ]);
     }
 
@@ -60,26 +60,26 @@ class AiKeyResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('provider')->label('প্রোভাইডার')
+                TextColumn::make('provider')->label(__('প্রোভাইডার'))
                     ->formatStateUsing(fn ($state) => AiKey::PROVIDERS[$state][0] ?? $state),
-                TextColumn::make('label')->label('নাম')->placeholder('—'),
+                TextColumn::make('label')->label(__('নাম'))->placeholder('—'),
                 TextColumn::make('masked')->label('Key')->state(fn (AiKey $record) => $record->maskedKey()),
-                TextColumn::make('model')->label('মডেল')->placeholder('সাজেস্টেড'),
-                TextColumn::make('last_check_ok')->label('শেষ পরীক্ষা')
-                    ->state(fn (AiKey $record) => $record->last_checked_at === null ? '—' : ($record->last_check_ok ? '✅ ঠিক আছে' : '❌ ব্যর্থ')),
+                TextColumn::make('model')->label(__('মডেল'))->placeholder(__('সাজেস্টেড')),
+                TextColumn::make('last_check_ok')->label(__('শেষ পরীক্ষা'))
+                    ->state(fn (AiKey $record) => $record->last_checked_at === null ? '—' : ($record->last_check_ok ? __('✅ ঠিক আছে') : __('❌ ব্যর্থ'))),
             ])
-            ->headerActions([CreateAction::make()->label('key যোগ করুন')
+            ->headerActions([CreateAction::make()->label(__('key যোগ করুন'))
                 ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => Filament::getTenant()->getKey()])])
             ->recordActions([
-                Action::make('test')->label('পরীক্ষা')->icon(Heroicon::OutlinedSignal)
+                Action::make('test')->label(__('পরীক্ষা'))->icon(Heroicon::OutlinedSignal)
                     ->action(function (AiKey $record) {
                         try {
                             $n = AiKeyTester::check($record);
                             $record->forceFill(['last_checked_at' => now(), 'last_check_ok' => true])->save();
-                            Notification::make()->success()->title("key ঠিক আছে — {$n}টা মডেল পাওয়া গেছে")->send();
+                            Notification::make()->success()->title(__('key ঠিক আছে — :nটা মডেল পাওয়া গেছে', ['n' => $n]))->send();
                         } catch (Throwable $e) {
                             $record->forceFill(['last_checked_at' => now(), 'last_check_ok' => false])->save();
-                            Notification::make()->danger()->title('key কাজ করছে না')->body($e->getMessage())->send();
+                            Notification::make()->danger()->title(__('key কাজ করছে না'))->body($e->getMessage())->send();
                         }
                     }),
                 EditAction::make(),

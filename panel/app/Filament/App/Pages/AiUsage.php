@@ -120,7 +120,7 @@ class AiUsage extends Page
     public function totals(): array
     {
         $out = [];
-        foreach (['today' => 'আজ', '7' => 'গত ৭ দিন', '30' => 'গত ৩০ দিন'] as $p => $label) {
+        foreach (['today' => __('আজ'), '7' => __('গত ৭ দিন'), '30' => __('গত ৩০ দিন')] as $p => $label) {
             $t = ['label' => $label, 'calls' => 0, 'failed' => 0, 'input' => 0, 'output' => 0, 'cached' => 0, 'cost' => 0.0, 'priced' => true];
             foreach ($this->grouped($p, ['purpose']) as $r) {
                 $t['calls'] += $r['calls'];
@@ -194,23 +194,23 @@ class AiUsage extends Page
 
     public function editPriceAction(): Action
     {
-        return Action::make('editPrice')->label('দাম')->icon(Heroicon::OutlinedPencilSquare)->link()
-            ->modalHeading(fn (array $arguments) => 'দাম: '.($arguments['model'] ?? ''))
-            ->modalDescription('প্রতি ১০ লাখ (1M) টোকেনে কত USD, প্রোভাইডারের প্রাইসিং পেজ থেকে দিন। ফ্রি টিয়ারে আসল বিল শূন্য; ০ দিলে খরচ ০ দেখাবে।')
+        return Action::make('editPrice')->label(__('দাম'))->icon(Heroicon::OutlinedPencilSquare)->link()
+            ->modalHeading(fn (array $arguments) => __('দাম: ').($arguments['model'] ?? ''))
+            ->modalDescription(__('প্রতি ১০ লাখ (1M) টোকেনে কত USD, প্রোভাইডারের প্রাইসিং পেজ থেকে দিন। ফ্রি টিয়ারে আসল বিল শূন্য; ০ দিলে খরচ ০ দেখাবে।'))
             ->fillForm(function (array $arguments) {
                 $p = AiModelPrice::table($this->companyId())["{$arguments['provider']}|{$arguments['model']}"] ?? [null, null];
 
                 return ['input_per_million' => $p[0], 'output_per_million' => $p[1]];
             })
             ->schema([
-                TextInput::make('input_per_million')->label('ইনপুট (USD / 1M টোকেন)')->numeric()->minValue(0)->required(),
-                TextInput::make('output_per_million')->label('আউটপুট (USD / 1M টোকেন)')->numeric()->minValue(0)->required(),
+                TextInput::make('input_per_million')->label(__('ইনপুট (USD / 1M টোকেন)'))->numeric()->minValue(0)->required(),
+                TextInput::make('output_per_million')->label(__('আউটপুট (USD / 1M টোকেন)'))->numeric()->minValue(0)->required(),
             ])
             ->action(function (array $data, array $arguments) {
                 AiModelPrice::updateOrCreate(
                     ['company_id' => $this->companyId(), 'provider' => (string) $arguments['provider'], 'model' => (string) $arguments['model']],
                     ['input_per_million' => $data['input_per_million'], 'output_per_million' => $data['output_per_million']]);
-                Notification::make()->success()->title('দাম সেভ হয়েছে')->send();
+                Notification::make()->success()->title(__('দাম সেভ হয়েছে'))->send();
             });
     }
 }

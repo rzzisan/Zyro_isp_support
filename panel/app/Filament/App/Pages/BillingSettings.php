@@ -56,19 +56,19 @@ class BillingSettings extends CompanySettingsPage
         $record = $this->record(Filament::getTenant());
 
         return $schema->components([
-            Select::make('provider')->label('বিলিং সফটওয়্যার')->options(['ispdigital' => 'ISP Digital (SoftifyBD)'])
+            Select::make('provider')->label(__('বিলিং সফটওয়্যার'))->options(['ispdigital' => 'ISP Digital (SoftifyBD)'])
                 ->required()->default('ispdigital'),
-            TextInput::make('base_url')->label('প্যানেলের ঠিকানা')->url()->required()
+            TextInput::make('base_url')->label(__('প্যানেলের ঠিকানা'))->url()->required()
                 ->placeholder('https://yourisp.ispdigital.cloud'),
-            TextInput::make('username')->label('ইউজারনেম')->required()
-                ->helperText('বটের জন্য আলাদা স্টাফ ইউজার বানিয়ে দিন — টিকেট খোলার অনুমতিসহ'),
-            TextInput::make('password')->label('পাসওয়ার্ড')->password()->revealable()
+            TextInput::make('username')->label(__('ইউজারনেম'))->required()
+                ->helperText(__('বটের জন্য আলাদা স্টাফ ইউজার বানিয়ে দিন — টিকেট খোলার অনুমতিসহ')),
+            TextInput::make('password')->label(__('পাসওয়ার্ড'))->password()->revealable()
                 ->required(! $record->exists)
-                ->helperText($record->exists ? 'এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন' : 'এনক্রিপ্ট করে রাখা হবে'),
-            Placeholder::make('status')->label('শেষ পরীক্ষা')
+                ->helperText($record->exists ? __('এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে')),
+            Placeholder::make('status')->label(__('শেষ পরীক্ষা'))
                 ->content(fn () => $record->last_checked_at
                     ? ($record->last_check_ok ? '✅ ' : '❌ ').$record->last_check_message.' · '.$record->last_checked_at->diffForHumans()
-                    : 'এখনো পরীক্ষা করা হয়নি'),
+                    : __('এখনো পরীক্ষা করা হয়নি')),
         ]);
     }
 
@@ -86,7 +86,7 @@ class BillingSettings extends CompanySettingsPage
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('test')->label('সংযোগ পরীক্ষা করুন')->icon(Heroicon::OutlinedSignal)
+            Action::make('test')->label(__('সংযোগ পরীক্ষা করুন'))->icon(Heroicon::OutlinedSignal)
                 ->action(fn () => $this->testConnection()),
         ];
     }
@@ -95,7 +95,7 @@ class BillingSettings extends CompanySettingsPage
     {
         $record = $this->record(Filament::getTenant());
         if (! $record->exists) {
-            Notification::make()->warning()->title('আগে তথ্যগুলো সেভ করুন')->send();
+            Notification::make()->warning()->title(__('আগে তথ্যগুলো সেভ করুন'))->send();
 
             return;
         }
@@ -105,11 +105,11 @@ class BillingSettings extends CompanySettingsPage
             $count = $client->customerCount();
             $record->forceFill(['last_checked_at' => now(), 'last_check_ok' => true,
                 'last_check_message' => "সংযোগ ঠিক আছে — {$count} জন কাস্টমার পাওয়া গেছে"])->save();
-            Notification::make()->success()->title("সংযোগ ঠিক আছে — {$count} জন কাস্টমার")->send();
+            Notification::make()->success()->title(__('সংযোগ ঠিক আছে — :n জন কাস্টমার', ['n' => $count]))->send();
         } catch (Throwable $e) {
             $record->forceFill(['last_checked_at' => now(), 'last_check_ok' => false,
                 'last_check_message' => mb_substr($e->getMessage(), 0, 300)])->save();
-            Notification::make()->danger()->title('সংযোগ হয়নি')->body($e->getMessage())->send();
+            Notification::make()->danger()->title(__('সংযোগ হয়নি'))->body($e->getMessage())->send();
         }
         $this->redirect(static::getUrl());
     }

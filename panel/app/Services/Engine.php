@@ -23,7 +23,7 @@ class Engine
         try {
             return static::http()->{$method}($path, $data)->throw()->json();
         } catch (RequestException $e) {
-            throw new RuntimeException($e->response->json('detail') ?? 'বিলিং সফটওয়্যারে কাজটা হয়নি');
+            throw new RuntimeException($e->response->json('detail') ?? __('বিলিং সফটওয়্যারে কাজটা হয়নি'));
         }
     }
 

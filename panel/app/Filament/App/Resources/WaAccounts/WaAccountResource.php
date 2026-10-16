@@ -58,13 +58,13 @@ class WaAccountResource extends Resource
         return $schema->components([
             TextInput::make('phone_number_id')->label('Phone number ID')->required()
                 ->unique(ignoreRecord: true)
-                ->helperText('Meta WhatsApp Manager → Phone numbers থেকে'),
+                ->helperText(__('Meta WhatsApp Manager → Phone numbers থেকে')),
             TextInput::make('waba_id')->label('WhatsApp Business Account ID')->required(),
             TextInput::make('access_token')->label('Access token')->password()->revealable()
                 ->required(fn (string $operation) => $operation === 'create')
                 ->dehydrated(fn ($state) => filled($state))
-                ->helperText(fn (string $operation) => $operation === 'edit' ? 'বদলাতে না চাইলে খালি রাখুন' : 'এনক্রিপ্ট করে রাখা হবে'),
-            Toggle::make('bot_enabled')->label('এই নম্বরে বট চালু')->default(true),
+                ->helperText(fn (string $operation) => $operation === 'edit' ? __('বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে')),
+            Toggle::make('bot_enabled')->label(__('এই নম্বরে বট চালু'))->default(true),
         ]);
     }
 
@@ -72,30 +72,30 @@ class WaAccountResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('display_phone_number')->label('নম্বর')->placeholder('পরীক্ষা করলে দেখাবে')
+                TextColumn::make('display_phone_number')->label(__('নম্বর'))->placeholder(__('পরীক্ষা করলে দেখাবে'))
                     ->description(fn (WaAccount $r) => $r->verified_name),
                 TextColumn::make('phone_number_id')->label('Phone number ID')->copyable(),
                 TextColumn::make('waba_id')->label('WABA ID')->copyable(),
-                IconColumn::make('bot_enabled')->label('বট')->boolean(),
-                TextColumn::make('updated_at')->label('শেষ বদল')->since(),
+                IconColumn::make('bot_enabled')->label(__('বট'))->boolean(),
+                TextColumn::make('updated_at')->label(__('শেষ বদল'))->since(),
             ])
-            ->headerActions([CreateAction::make()->label('নম্বর যোগ করুন')
+            ->headerActions([CreateAction::make()->label(__('নম্বর যোগ করুন'))
                 ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => Filament::getTenant()->getKey()])])
             ->recordActions([
-                Action::make('test')->label('পরীক্ষা')->icon(Heroicon::OutlinedSignal)
+                Action::make('test')->label(__('পরীক্ষা'))->icon(Heroicon::OutlinedSignal)
                     ->action(function (WaAccount $record) {
                         try {
                             $info = WhatsApp::checkAccount($record);
-                            Notification::make()->success()->title('সংযোগ ঠিক আছে')
+                            Notification::make()->success()->title(__('সংযোগ ঠিক আছে'))
                                 ->body(trim(($info['display_phone_number'] ?? '').' · '.($info['verified_name'] ?? '')
                                     .(isset($info['quality_rating']) ? ' · Quality: '.$info['quality_rating'] : ''), ' ·'))
                                 ->send();
                         } catch (Throwable $e) {
-                            Notification::make()->danger()->title('সংযোগ কাজ করছে না')->body($e->getMessage())->send();
+                            Notification::make()->danger()->title(__('সংযোগ কাজ করছে না'))->body($e->getMessage())->send();
                         }
                     }),
                 EditAction::make(),
-                DeleteAction::make()->modalDescription('এই নম্বরের মেসেজ আর বট পাবে না। কনভারসেশন মুছবে না।'),
+                DeleteAction::make()->modalDescription(__('এই নম্বরের মেসেজ আর বট পাবে না। কনভারসেশন মুছবে না।')),
             ]);
     }
 

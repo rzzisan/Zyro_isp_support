@@ -54,47 +54,47 @@ class BotSettings extends CompanySettingsPage
     {
         return $schema->components([
             Section::make('AI')->columns(2)->schema([
-                Select::make('ai_provider')->label('ডিফল্ট AI প্রোভাইডার')->options(AiKey::providerOptions())->required()->live(),
-                TextInput::make('ai_model')->label('মডেল')
+                Select::make('ai_provider')->label(__('ডিফল্ট AI প্রোভাইডার'))->options(AiKey::providerOptions())->required()->live(),
+                TextInput::make('ai_model')->label(__('মডেল'))
                     ->placeholder(fn ($get) => AiKey::PROVIDERS[$get('ai_provider')][2] ?? '')
-                    ->helperText('খালি রাখলে প্রোভাইডারের সাজেস্টেড মডেল; key-গুলো "AI key" পেজে যোগ করুন'),
-                Select::make('voice_provider')->label('ভয়েস মেসেজ পড়বে')->required()->default('gemini')
-                    ->options(['gemini' => 'Google Gemini (আঞ্চলিক বাংলা ও মুখে বলা নম্বর ভালো বোঝে)', 'groq' => 'Groq Whisper'])
-                    ->helperText('আগে এই AI-এর সব key একে একে চেষ্টা করবে; সবগুলো ব্যর্থ বা লিমিটে আটকালে অন্য AI-তে যাবে।'),
-                Toggle::make('voice_reply')->label('কাস্টমার ভয়েস পাঠালে উত্তর ভয়েসেও দাও')->live()
-                    ->helperText('লেখা উত্তর আগের মতোই যাবে, তারপর একই উত্তর ভয়েস মেসেজে (Gemini key লাগবে)। ভয়েস বানানো না গেলে শুধু লেখা যায়।'),
-                Select::make('voice_reply_voice')->label('ভয়েস উত্তরের কণ্ঠ')->default('Kore')
-                    ->options(['Kore' => 'Kore (নারী)', 'Charon' => 'Charon (পুরুষ)'])
+                    ->helperText(__('খালি রাখলে প্রোভাইডারের সাজেস্টেড মডেল; key-গুলো "AI key" পেজে যোগ করুন')),
+                Select::make('voice_provider')->label(__('ভয়েস মেসেজ পড়বে'))->required()->default('gemini')
+                    ->options(['gemini' => __('Google Gemini (আঞ্চলিক বাংলা ও মুখে বলা নম্বর ভালো বোঝে)'), 'groq' => 'Groq Whisper'])
+                    ->helperText(__('আগে এই AI-এর সব key একে একে চেষ্টা করবে; সবগুলো ব্যর্থ বা লিমিটে আটকালে অন্য AI-তে যাবে।')),
+                Toggle::make('voice_reply')->label(__('কাস্টমার ভয়েস পাঠালে উত্তর ভয়েসেও দাও'))->live()
+                    ->helperText(__('লেখা উত্তর আগের মতোই যাবে, তারপর একই উত্তর ভয়েস মেসেজে (Gemini key লাগবে)। ভয়েস বানানো না গেলে শুধু লেখা যায়।')),
+                Select::make('voice_reply_voice')->label(__('ভয়েস উত্তরের কণ্ঠ'))->default('Kore')
+                    ->options(['Kore' => __('Kore (নারী)'), 'Charon' => __('Charon (পুরুষ)')])
                     ->visible(fn ($get) => (bool) $get('voice_reply')),
             ]),
-            Section::make('বট কীভাবে কাজ করবে')->schema([
-                Select::make('bot_mode')->label('বট মোড')->required()->options([
-                    'shadow' => 'চুপ মোড — শুধু খসড়া, কাস্টমারকে কিছু পাঠাবে না',
-                    'live' => 'চালু — কাস্টমারকে নিজে উত্তর দেবে',
-                    'off' => 'বন্ধ',
+            Section::make(__('বট কীভাবে কাজ করবে'))->schema([
+                Select::make('bot_mode')->label(__('বট মোড'))->required()->options([
+                    'shadow' => __('চুপ মোড — শুধু খসড়া, কাস্টমারকে কিছু পাঠাবে না'),
+                    'live' => __('চালু — কাস্টমারকে নিজে উত্তর দেবে'),
+                    'off' => __('বন্ধ'),
                 ]),
-                Textarea::make('live_allowlist')->label('চালু মোডে শুধু এই নম্বরগুলোকে উত্তর দেবে')
-                    ->helperText('কমা দিয়ে আলাদা; খালি রাখলে সবাইকে')->rows(2),
-                Toggle::make('auto_ticket')->label('দরকার হলে বিলিং সফটওয়্যারে নিজে টিকেট খুলবে (SMS ছাড়া)'),
-                TextInput::make('reply_signature')->label('প্রতিটা উত্তরের শেষে স্বাক্ষর'),
-                Textarea::make('extra_prompt')->label('অতিরিক্ত নির্দেশনা')
-                    ->helperText('পেমেন্টের নিয়ম (বিকাশ/নগদ নম্বর), অফিসের সময়, বিশেষ নোটিশ — বট এগুলো হুবহু মানবে')
+                Textarea::make('live_allowlist')->label(__('চালু মোডে শুধু এই নম্বরগুলোকে উত্তর দেবে'))
+                    ->helperText(__('কমা দিয়ে আলাদা; খালি রাখলে সবাইকে'))->rows(2),
+                Toggle::make('auto_ticket')->label(__('দরকার হলে বিলিং সফটওয়্যারে নিজে টিকেট খুলবে (SMS ছাড়া)')),
+                TextInput::make('reply_signature')->label(__('প্রতিটা উত্তরের শেষে স্বাক্ষর')),
+                Textarea::make('extra_prompt')->label(__('অতিরিক্ত নির্দেশনা'))
+                    ->helperText(__('পেমেন্টের নিয়ম (বিকাশ/নগদ নম্বর), অফিসের সময়, বিশেষ নোটিশ — বট এগুলো হুবহু মানবে'))
                     ->rows(8),
             ]),
-            Section::make('বটের মূল নির্দেশনা (এডিট করা যায়)')->collapsed()
-                ->description('বট কীভাবে কথা বলবে, কী করবে না, টিকিট কখন খুলবে: এই মূল নিয়মগুলো এখানে বদলানো যায়। সাবধানে বদলান: [[TICKET: ...]], [[NOTIFY: ...]], [[ENABLE]], [[DISABLE]] নিয়মগুলো মুছলে বট টিকিট খোলা, কাস্টমারকে জানানো বা লাইন চালু/বন্ধ করা বন্ধ করে দেবে। পুরো লেখা মুছে সেভ করলে ডিফল্ট নির্দেশনায় ফিরে যাবে। অতিরিক্ত নির্দেশনা আর FAQ নিজে থেকেই শেষে যোগ হয়।')
+            Section::make(__('বটের মূল নির্দেশনা (এডিট করা যায়)'))->collapsed()
+                ->description(__('বট কীভাবে কথা বলবে, কী করবে না, টিকিট কখন খুলবে: এই মূল নিয়মগুলো এখানে বদলানো যায়। সাবধানে বদলান: [[TICKET: ...]], [[NOTIFY: ...]], [[ENABLE]], [[DISABLE]] নিয়মগুলো মুছলে বট টিকিট খোলা, কাস্টমারকে জানানো বা লাইন চালু/বন্ধ করা বন্ধ করে দেবে। পুরো লেখা মুছে সেভ করলে ডিফল্ট নির্দেশনায় ফিরে যাবে। অতিরিক্ত নির্দেশনা আর FAQ নিজে থেকেই শেষে যোগ হয়।'))
                 ->schema([
-                    Textarea::make('customer_prompt')->label('কাস্টমার বট')->rows(18)
-                        ->helperText('খালি = ডিফল্ট নির্দেশনা'),
-                    Textarea::make('technician_prompt')->label('টেকনিশিয়ান বট')->rows(18)
-                        ->helperText('{company} = কোম্পানির নাম, {tech} = টেকনিশিয়ানের নাম, {knowledge} = অতিরিক্ত নির্দেশনা + FAQ যেখানে বসবে। খালি = ডিফল্ট।'),
+                    Textarea::make('customer_prompt')->label(__('কাস্টমার বট'))->rows(18)
+                        ->helperText(__('খালি = ডিফল্ট নির্দেশনা')),
+                    Textarea::make('technician_prompt')->label(__('টেকনিশিয়ান বট'))->rows(18)
+                        ->helperText(__('{company} = কোম্পানির নাম, {tech} = টেকনিশিয়ানের নাম, {knowledge} = অতিরিক্ত নির্দেশনা + FAQ যেখানে বসবে। খালি = ডিফল্ট।')),
                 ]),
-            Section::make('বট এখন যা নির্দেশনা পায়')->collapsed()
-                ->description('শুধু দেখার জন্য: মূল নির্দেশনা + অতিরিক্ত নির্দেশনা + "বটের FAQ" মিলে বট এখন হুবহু যা পায়। কিছু বদলালে সেভ করে পেজ রিলোড দিন।')
+            Section::make(__('বট এখন যা নির্দেশনা পায়'))->collapsed()
+                ->description(__('শুধু দেখার জন্য: মূল নির্দেশনা + অতিরিক্ত নির্দেশনা + "বটের FAQ" মিলে বট এখন হুবহু যা পায়। কিছু বদলালে সেভ করে পেজ রিলোড দিন।'))
                 ->schema([
-                    Placeholder::make('customer_prompt_view')->label('কাস্টমারের সাথে কথা বলার সময়')
+                    Placeholder::make('customer_prompt_view')->label(__('কাস্টমারের সাথে কথা বলার সময়'))
                         ->content(fn () => $this->promptBox('customer')),
-                    Placeholder::make('technician_prompt_view')->label('টেকনিশিয়ানের সাথে কথা বলার সময়')
+                    Placeholder::make('technician_prompt_view')->label(__('টেকনিশিয়ানের সাথে কথা বলার সময়'))
                         ->content(fn () => $this->promptBox('technician')),
                 ]),
         ]);
@@ -126,7 +126,7 @@ class BotSettings extends CompanySettingsPage
         try {
             $text = $this->prompts()[$which] ?? '';
         } catch (Throwable $e) {
-            $text = 'নির্দেশনা আনা যায়নি: '.$e->getMessage();
+            $text = __('নির্দেশনা আনা যায়নি: ').$e->getMessage();
         }
 
         return new HtmlString('<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;max-height:28rem;overflow:auto;'
