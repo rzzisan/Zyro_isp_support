@@ -26,7 +26,7 @@ class ListSmsCampaigns extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'কাস্টমার বাছাই হয় Desk-এর নিজের তালিকা থেকে; SMS যায় কোম্পানির SMS গেটওয়ে দিয়ে, পেছনে ছোট ছোট ভাগে। পেজ বন্ধ করলেও পাঠানো চলতে থাকে।';
+        return __('কাস্টমার বাছাই হয় Desk-এর নিজের তালিকা থেকে; SMS যায় কোম্পানির SMS গেটওয়ে দিয়ে, পেছনে ছোট ছোট ভাগে। পেজ বন্ধ করলেও পাঠানো চলতে থাকে।');
     }
 
     protected function getHeaderWidgets(): array
@@ -38,18 +38,18 @@ class ListSmsCampaigns extends ListRecords
     {
         return [
             SmsActions::send(),
-            Action::make('balance')->label('ব্যালান্স রিফ্রেশ')->icon(Heroicon::OutlinedArrowPath)->color('gray')
+            Action::make('balance')->label(__('ব্যালান্স রিফ্রেশ'))->icon(Heroicon::OutlinedArrowPath)->color('gray')
                 ->visible(fn () => SmsSetting::forCompany(Filament::getTenant())->configured())
                 ->action(function () {
                     try {
                         $r = Engine::smsBalance(Filament::getTenant()->getKey());
-                        Notification::make()->success()->title('ব্যালান্স: '.($r['balance'] ?? '—'))->send();
+                        Notification::make()->success()->title(__('ব্যালান্স: :amount', ['amount' => $r['balance'] ?? '—']))->send();
                     } catch (RuntimeException $e) {
-                        Notification::make()->danger()->title('ব্যালান্স পাওয়া যায়নি')->body($e->getMessage())->send();
+                        Notification::make()->danger()->title(__('ব্যালান্স পাওয়া যায়নি'))->body($e->getMessage())->send();
                     }
                     $this->dispatch('sms-balance-updated');
                 }),
-            Action::make('settings')->label('গেটওয়ে সেটিংস')->icon(Heroicon::OutlinedCog6Tooth)->color('gray')
+            Action::make('settings')->label(__('গেটওয়ে সেটিংস'))->icon(Heroicon::OutlinedCog6Tooth)->color('gray')
                 ->visible(fn () => SmsSettings::canAccess())
                 ->url(fn () => SmsSettings::getUrl()),
         ];

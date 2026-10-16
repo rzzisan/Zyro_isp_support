@@ -64,7 +64,11 @@ class Locale
             ...array_values(\App\Filament\App\Resources\Conversations\Pages\ListConversations::BOXES),
             ...array_column(Menu::ITEMS, 0), ...\App\Providers\Filament\AppPanelProvider::NAV_GROUPS,
             ...array_values(\App\Filament\App\Resources\Customers\History\ChangesTable::LABELS),
-            ...array_values(\App\Filament\App\Resources\DailyBills\DailyBillResource::STATUSES));
+            ...array_values(\App\Filament\App\Resources\DailyBills\DailyBillResource::STATUSES),
+            ...array_values(\App\Models\SmsCampaign::STATUSES), ...array_values(\App\Models\SmsMessage::STATUSES),
+            ...array_values(\App\Models\SmsTemplate::TYPES), ...array_values(\App\Filament\App\Pages\SmsSettings::EVENTS),
+            ...array_column(Sms::PLACEHOLDERS, 0), ...array_values(Sms::BILL_PLACEHOLDERS),
+            ...array_values(Sms::TICKET_PLACEHOLDERS), ...array_values(Sms::REMINDER_PLACEHOLDERS));
         $keys = array_values(array_unique(array_filter($keys, fn ($k) => preg_match('/[\x{0980}-\x{09FF}]/u', $k))));
         sort($keys);
 

@@ -17,7 +17,7 @@ class ListSmsMessages extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Desk থেকে পাঠানো প্রতিটা SMS। "গেটওয়েতে গেছে" মানে গেটওয়ে নিয়েছে; পৌঁছানোর খবর গেটওয়ে থেকে কয়েক মিনিট পরপর আনা হয়।';
+        return __('Desk থেকে পাঠানো প্রতিটা SMS। "গেটওয়েতে গেছে" মানে গেটওয়ে নিয়েছে; পৌঁছানোর খবর গেটওয়ে থেকে কয়েক মিনিট পরপর আনা হয়।');
     }
 
     protected function getHeaderActions(): array

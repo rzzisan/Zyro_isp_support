@@ -59,33 +59,33 @@ class SmsMessageResource extends Resource
     {
         return $table
             ->defaultSort('id', 'desc')
-            ->emptyStateHeading('কোনো SMS নেই')
+            ->emptyStateHeading(__('কোনো SMS নেই'))
             ->columns([
-                TextColumn::make('created_at')->label('সময়')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable()
-                    ->description(fn (SmsMessage $r) => $r->sent_at ? 'গেছে '.$r->sent_at->timezone('Asia/Dhaka')->format('g:i:s A') : null),
-                TextColumn::make('name')->label('কাকে')->placeholder('—')
+                TextColumn::make('created_at')->label(__('সময়'))->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable()
+                    ->description(fn (SmsMessage $r) => $r->sent_at ? __('গেছে :time', ['time' => $r->sent_at->timezone('Asia/Dhaka')->format('g:i:s A')]) : null),
+                TextColumn::make('name')->label(__('কাকে'))->placeholder('—')
                     ->description(fn (SmsMessage $r) => trim(($r->customer_id ? 'ID '.$r->customer_id.' · ' : '').$r->mobile))
                     ->url(fn (SmsMessage $r) => static::customerUrl($r))
                     ->searchable(['name', 'mobile', 'customer_id']),
-                TextColumn::make('text')->label('লেখা')->wrap()->limit(160)->searchable(),
-                TextColumn::make('parts')->label('ভাগ')->numeric()->toggleable(),
-                TextColumn::make('status')->label('অবস্থা')->badge()
-                    ->formatStateUsing(fn (string $state) => SmsMessage::STATUSES[$state] ?? $state)
+                TextColumn::make('text')->label(__('লেখা'))->wrap()->limit(160)->searchable(),
+                TextColumn::make('parts')->label(__('ভাগ'))->numeric()->toggleable(),
+                TextColumn::make('status')->label(__('অবস্থা'))->badge()
+                    ->formatStateUsing(fn (string $state) => __(SmsMessage::STATUSES[$state] ?? $state))
                     ->color(fn (string $state) => SmsMessage::COLORS[$state] ?? 'gray')
                     ->description(fn (SmsMessage $r) => $r->error ?: ($r->gateway_text && $r->status !== 'delivered' ? $r->gateway_text : null)),
-                TextColumn::make('user.name')->label('কে পাঠালেন')->placeholder('—')->toggleable(),
-                TextColumn::make('message_id')->label('গেটওয়ে ID')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('delivered_at')->label('পৌঁছানোর সময়')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->placeholder('—')
+                TextColumn::make('user.name')->label(__('কে পাঠালেন'))->placeholder('—')->toggleable(),
+                TextColumn::make('message_id')->label(__('গেটওয়ে ID'))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('delivered_at')->label(__('পৌঁছানোর সময়'))->dateTime('d M Y, g:i A', 'Asia/Dhaka')->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('status')->label('অবস্থা')->options(SmsMessage::STATUSES)->multiple(),
-                SelectFilter::make('user_id')->label('কে পাঠালেন')->relationship('user', 'name'),
-                SelectFilter::make('campaign_id')->label('পাঠানো (ক্রম)')
+                SelectFilter::make('status')->label(__('অবস্থা'))->options(array_map('__', SmsMessage::STATUSES))->multiple(),
+                SelectFilter::make('user_id')->label(__('কে পাঠালেন'))->relationship('user', 'name'),
+                SelectFilter::make('campaign_id')->label(__('পাঠানো (ক্রম)'))
                     ->options(fn () => SmsCampaign::where('company_id', Filament::getTenant()?->getKey() ?? 0)
                         ->latest('id')->limit(50)->get()
-                        ->mapWithKeys(fn ($c) => [$c->id => '#'.$c->id.' · '.$c->created_at->timezone('Asia/Dhaka')->format('d M g:i A').' · '.number_format($c->total).' জন'])),
-                Filter::make('date')->schema([DatePicker::make('from')->label('থেকে'), DatePicker::make('until')->label('পর্যন্ত')])
+                        ->mapWithKeys(fn ($c) => [$c->id => '#'.$c->id.' · '.$c->created_at->timezone('Asia/Dhaka')->format('d M g:i A').' · '.__(':n জন', ['n' => number_format($c->total)])])),
+                Filter::make('date')->schema([DatePicker::make('from')->label(__('থেকে')), DatePicker::make('until')->label(__('পর্যন্ত'))])
                     ->query(fn (Builder $query, array $data) => $query
                         ->when($data['from'] ?? null, fn ($q, $d) => $q->where('created_at', '>=', Carbon::parse($d, 'Asia/Dhaka')->startOfDay()->utc()))
                         ->when($data['until'] ?? null, fn ($q, $d) => $q->where('created_at', '<', Carbon::parse($d, 'Asia/Dhaka')->addDay()->startOfDay()->utc()))),

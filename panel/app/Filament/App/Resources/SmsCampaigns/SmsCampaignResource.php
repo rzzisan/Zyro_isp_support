@@ -57,41 +57,41 @@ class SmsCampaignResource extends Resource
         return $table
             ->defaultSort('created_at', 'desc')
             ->poll(fn () => static::getEloquentQuery()->whereIn('status', ['queued', 'sending'])->exists() ? '5s' : null)
-            ->emptyStateHeading('এখনো কোনো SMS পাঠানো হয়নি')
+            ->emptyStateHeading(__('এখনো কোনো SMS পাঠানো হয়নি'))
             ->columns([
-                TextColumn::make('created_at')->label('সময়')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
-                TextColumn::make('user.name')->label('কে')->placeholder('—'),
-                TextColumn::make('kind')->label('ধরন')->badge()->color('gray')
-                    ->formatStateUsing(fn (string $state) => ['bulk' => 'ফিল্টার', 'bill' => 'বিল পরিশোধ', 'ticket' => 'টিকিট', 'reminder' => 'রিমাইন্ডার'][$state] ?? 'নির্দিষ্ট'),
-                TextColumn::make('body')->label('লেখা')->limit(80)->wrap()->searchable(),
-                TextColumn::make('total')->label('জন')->numeric(),
-                TextColumn::make('sent')->label('গেছে')
+                TextColumn::make('created_at')->label(__('সময়'))->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
+                TextColumn::make('user.name')->label(__('কে'))->placeholder('—'),
+                TextColumn::make('kind')->label(__('ধরন'))->badge()->color('gray')
+                    ->formatStateUsing(fn (string $state) => ['bulk' => __('ফিল্টার'), 'bill' => __('বিল পরিশোধ'), 'ticket' => __('টিকিট'), 'reminder' => __('রিমাইন্ডার')][$state] ?? __('নির্দিষ্ট')),
+                TextColumn::make('body')->label(__('লেখা'))->limit(80)->wrap()->searchable(),
+                TextColumn::make('total')->label(__('জন'))->numeric(),
+                TextColumn::make('sent')->label(__('গেছে'))
                     ->formatStateUsing(fn ($state, SmsCampaign $record) => number_format((int) $state).' / '.number_format($record->total))
-                    ->description(fn (SmsCampaign $record) => $record->failed ? number_format($record->failed).'টি ব্যর্থ' : null),
+                    ->description(fn (SmsCampaign $record) => $record->failed ? __(':nটি ব্যর্থ', ['n' => number_format($record->failed)]) : null),
                 TextColumn::make('parts')->label('SMS')->numeric()->toggleable(),
-                TextColumn::make('cost')->label('খরচ (আনুমানিক)')->placeholder('—')
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2).' টাকা')->toggleable(),
-                TextColumn::make('status')->label('অবস্থা')->badge()
-                    ->formatStateUsing(fn (string $state) => SmsCampaign::STATUSES[$state] ?? $state)
+                TextColumn::make('cost')->label(__('খরচ (আনুমানিক)'))->placeholder('—')
+                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2).__(' টাকা'))->toggleable(),
+                TextColumn::make('status')->label(__('অবস্থা'))->badge()
+                    ->formatStateUsing(fn (string $state) => __(SmsCampaign::STATUSES[$state] ?? $state))
                     ->color(fn (string $state) => ['queued' => 'gray', 'sending' => 'info', 'done' => 'success', 'cancelled' => 'warning'][$state] ?? 'gray'),
             ])
             ->filters([
-                SelectFilter::make('status')->label('অবস্থা')->options(SmsCampaign::STATUSES),
-                SelectFilter::make('user_id')->label('কে')->relationship('user', 'name'),
+                SelectFilter::make('status')->label(__('অবস্থা'))->options(array_map('__', SmsCampaign::STATUSES)),
+                SelectFilter::make('user_id')->label(__('কে'))->relationship('user', 'name'),
             ])
             ->recordActions([
-                Action::make('messages')->label('SMS গুলো')->icon(Heroicon::OutlinedListBullet)->color('gray')
+                Action::make('messages')->label(__('SMS গুলো'))->icon(Heroicon::OutlinedListBullet)->color('gray')
                     ->url(fn (SmsCampaign $record) => SmsMessageResource::getUrl('index', ['filters' => ['campaign_id' => ['value' => $record->id]]])),
-                Action::make('cancel')->label('বাতিল')->icon(Heroicon::OutlinedXCircle)->color('danger')
+                Action::make('cancel')->label(__('বাতিল'))->icon(Heroicon::OutlinedXCircle)->color('danger')
                     ->visible(fn (SmsCampaign $record) => $record->open())
-                    ->requiresConfirmation()->modalHeading('বাকি SMS বাতিল করবেন?')
-                    ->modalDescription('যেগুলো এখনো যায়নি সেগুলো আর যাবে না। যেগুলো গেছে সেগুলো ফেরানো যায় না।')
+                    ->requiresConfirmation()->modalHeading(__('বাকি SMS বাতিল করবেন?'))
+                    ->modalDescription(__('যেগুলো এখনো যায়নি সেগুলো আর যাবে না। যেগুলো গেছে সেগুলো ফেরানো যায় না।'))
                     ->action(function (SmsCampaign $record) {
                         $n = $record->messages()->where('status', 'queued')->update(['status' => 'cancelled', 'updated_at' => now()]);
                         if (! $record->messages()->whereIn('status', ['queued', 'sending'])->exists()) {
                             $record->update(['status' => 'cancelled', 'finished_at' => now()]);
                         }
-                        Notification::make()->success()->title(number_format($n).'টি SMS বাতিল হয়েছে')->send();
+                        Notification::make()->success()->title(__(':nটি SMS বাতিল হয়েছে', ['n' => number_format($n)]))->send();
                     }),
             ]);
     }

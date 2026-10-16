@@ -58,27 +58,27 @@ class SmsTemplateResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->label('নাম')->required()->maxLength(100)->placeholder('যেমন: বকেয়া মনে করানো'),
-            Select::make('type')->label('ধরন')->options(SmsTemplate::TYPES)->default('general')->required()
+            TextInput::make('name')->label(__('নাম'))->required()->maxLength(100)->placeholder(__('যেমন: বকেয়া মনে করানো')),
+            Select::make('type')->label(__('ধরন'))->options(array_map('__', SmsTemplate::TYPES))->default('general')->required()
                 ->selectablePlaceholder(false)->live()
                 ->helperText(fn ($get) => match ($get('type')) {
-                    'bill_paid' => '"বিল নিন" দিয়ে বিল নেওয়ার পর কাস্টমারকে এই লেখা যায় (সেটিংস → SMS গেটওয়ে-তে বাছা টেমপ্লেট); {paid} {discount} {due} ওই বিল থেকে বসে',
-                    'ticket_open' => 'Desk থেকে টিকিট খোলার পর কাস্টমারকে যায়; {ticket_no} {problem} {technician} ওই টিকিট থেকে বসে',
-                    'ticket_solved' => 'Desk থেকে টিকিট Solve করার পর কাস্টমারকে যায়; {ticket_no} {problem} ওই টিকিট থেকে বসে',
-                    'bill_reminder' => 'মেয়াদ শেষের কয়েক দিন আগে নিজে থেকে যায় (সেটিংস → SMS গেটওয়ে → বিল রিমাইন্ডার); {expire_date} {days_left} বসে',
-                    default => 'হাতে SMS পাঠানোর সময় বাছা যায়',
+                    'bill_paid' => __('"বিল নিন" দিয়ে বিল নেওয়ার পর কাস্টমারকে এই লেখা যায় (সেটিংস → SMS গেটওয়ে-তে বাছা টেমপ্লেট); {paid} {discount} {due} ওই বিল থেকে বসে'),
+                    'ticket_open' => __('Desk থেকে টিকিট খোলার পর কাস্টমারকে যায়; {ticket_no} {problem} {technician} ওই টিকিট থেকে বসে'),
+                    'ticket_solved' => __('Desk থেকে টিকিট Solve করার পর কাস্টমারকে যায়; {ticket_no} {problem} ওই টিকিট থেকে বসে'),
+                    'bill_reminder' => __('মেয়াদ শেষের কয়েক দিন আগে নিজে থেকে যায় (সেটিংস → SMS গেটওয়ে → বিল রিমাইন্ডার); {expire_date} {days_left} বসে'),
+                    default => __('হাতে SMS পাঠানোর সময় বাছা যায়'),
                 }),
             View::make('filament.app.sms.placeholders')->columnSpanFull()
                 ->viewData(fn ($get) => ['items' => Sms::placeholders((string) ($get('type') ?: 'general'))]),
-            Textarea::make('body')->label('লেখা')->required()->rows(5)->maxLength(1000)->columnSpanFull()
+            Textarea::make('body')->label(__('লেখা'))->required()->rows(5)->maxLength(1000)->columnSpanFull()
                 ->extraInputAttributes(['data-sms-body' => 'true'])->live(debounce: 400)
                 ->helperText(function ($get) {
                     $p = Sms::parts((string) $get('body'));
 
-                    return $p['chars'].' অক্ষর · '.$p['parts'].' SMS ('.($p['unicode'] ? 'বাংলা/ইউনিকোড: ৭০, বড় হলে ৬৭ করে' : 'ইংরেজি: ১৬০, বড় হলে ১৫৩ করে')
-                        .')'.(Sms::usesPlaceholders((string) $get('body')) ? ' · তথ্য বসার আগে' : '');
+                    return __(':chars অক্ষর · :parts SMS', ['chars' => $p['chars'], 'parts' => $p['parts']]).' ('.($p['unicode'] ? __('বাংলা/ইউনিকোড: ৭০, বড় হলে ৬৭ করে') : __('ইংরেজি: ১৬০, বড় হলে ১৫৩ করে'))
+                        .')'.(Sms::usesPlaceholders((string) $get('body')) ? __(' · তথ্য বসার আগে') : '');
                 }),
-            TextInput::make('sort')->label('ক্রম')->numeric()->default(0),
+            TextInput::make('sort')->label(__('ক্রম'))->numeric()->default(0),
         ]);
     }
 
@@ -87,18 +87,18 @@ class SmsTemplateResource extends Resource
         return $table
             ->reorderable('sort')
             ->defaultSort('sort')
-            ->emptyStateHeading('কোনো টেমপ্লেট নেই')
+            ->emptyStateHeading(__('কোনো টেমপ্লেট নেই'))
             ->columns([
-                TextColumn::make('name')->label('নাম')->searchable(),
-                TextColumn::make('type')->label('ধরন')->badge()
-                    ->formatStateUsing(fn (string $state) => SmsTemplate::TYPES[$state] ?? $state)
+                TextColumn::make('name')->label(__('নাম'))->searchable(),
+                TextColumn::make('type')->label(__('ধরন'))->badge()
+                    ->formatStateUsing(fn (string $state) => __(SmsTemplate::TYPES[$state] ?? $state))
                     ->color(fn (string $state) => $state === 'general' ? 'gray' : 'success'),
-                TextColumn::make('body')->label('লেখা')->wrap()->limit(200)->searchable(),
-                TextColumn::make('length')->label('দৈর্ঘ্য')
-                    ->state(fn (SmsTemplate $r) => ($p = Sms::parts($r->body))['chars'].' অক্ষর · '.$p['parts'].' SMS'
-                        .(Sms::usesPlaceholders($r->body) ? ' (তথ্য বসার আগে)' : '')),
+                TextColumn::make('body')->label(__('লেখা'))->wrap()->limit(200)->searchable(),
+                TextColumn::make('length')->label(__('দৈর্ঘ্য'))
+                    ->state(fn (SmsTemplate $r) => __(':chars অক্ষর · :parts SMS', ['chars' => ($p = Sms::parts($r->body))['chars'], 'parts' => $p['parts']])
+                        .(Sms::usesPlaceholders($r->body) ? __(' (তথ্য বসার আগে)') : '')),
             ])
-            ->headerActions([CreateAction::make()->label('টেমপ্লেট যোগ করুন')
+            ->headerActions([CreateAction::make()->label(__('টেমপ্লেট যোগ করুন'))
                 ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => Filament::getTenant()->getKey()])])
             ->recordActions([EditAction::make(), DeleteAction::make()]);
     }

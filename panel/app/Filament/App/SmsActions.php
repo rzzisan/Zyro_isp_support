@@ -103,56 +103,56 @@ class SmsActions
 
     public static function send(?BillingCustomer $customer = null): Action
     {
-        return Action::make($customer ? 'sendSmsToCustomer' : 'sendSms')->label('SMS পাঠান')->icon(Heroicon::OutlinedChatBubbleLeftEllipsis)
+        return Action::make($customer ? 'sendSmsToCustomer' : 'sendSms')->label(__('SMS পাঠান'))->icon(Heroicon::OutlinedChatBubbleLeftEllipsis)
             ->visible(fn () => Menu::can('sms'))
-            ->modalHeading($customer ? "{$customer->name} (ID {$customer->customer_id}): SMS" : 'SMS পাঠান')
+            ->modalHeading($customer ? "{$customer->name} (ID {$customer->customer_id}): SMS" : __('SMS পাঠান'))
             ->modalWidth('4xl')->stickyModalHeader()->stickyModalFooter()
-            ->modalSubmitActionLabel('পাঠান')
+            ->modalSubmitActionLabel(__('পাঠান'))
             ->fillForm(fn () => ['mode' => 'single', 'customers' => $customer ? [(string) $customer->header_id] : [],
                 'list' => 'current'])
             ->schema([
-                Radio::make('mode')->label('কাকে')->inline()->live()->hidden((bool) $customer)
+                Radio::make('mode')->label(__('কাকে'))->inline()->live()->hidden((bool) $customer)
                     ->partiallyRenderComponentsAfterStateUpdated(['smsBody'])
-                    ->options(['single' => 'নির্দিষ্ট কাস্টমার / নম্বর', 'bulk' => 'ফিল্টার দিয়ে অনেককে']),
+                    ->options(['single' => __('নির্দিষ্ট কাস্টমার / নম্বর'), 'bulk' => __('ফিল্টার দিয়ে অনেককে')]),
                 Group::make([
                     Group::make([
-                        Select::make('customers')->label('কাস্টমার')->multiple()->searchable()->searchDebounce(300)->live()
+                        Select::make('customers')->label(__('কাস্টমার'))->multiple()->searchable()->searchDebounce(300)->live()
                             ->hidden((bool) $customer)
                             ->partiallyRenderComponentsAfterStateUpdated(['summary'])
-                            ->placeholder('কাস্টমার ID, মোবাইল, PPPoE বা নাম লিখুন')
+                            ->placeholder(__('কাস্টমার ID, মোবাইল, PPPoE বা নাম লিখুন'))
                             ->getSearchResultsUsing(fn (string $search) => static::searchCustomers($search))
                             ->getOptionLabelsUsing(fn (array $values) => BillingCustomer::where('company_id', static::company())
                                 ->whereIn('header_id', array_map('intval', $values))->get()
                                 ->mapWithKeys(fn ($c) => [(string) $c->header_id => BillingCustomer::searchLabel($c)])->all()),
-                        Textarea::make('numbers')->label('অন্য নম্বর')->rows(2)->live(debounce: 600)->hidden((bool) $customer)
+                        Textarea::make('numbers')->label(__('অন্য নম্বর'))->rows(2)->live(debounce: 600)->hidden((bool) $customer)
                             ->partiallyRenderComponentsAfterStateUpdated(['summary'])
-                            ->placeholder('01XXXXXXXXX, কমা বা নতুন লাইন দিয়ে কয়েকটা'),
+                            ->placeholder(__('01XXXXXXXXX, কমা বা নতুন লাইন দিয়ে কয়েকটা')),
                     ])->visible(fn ($get) => $get('mode') !== 'bulk'),
                     Grid::make(4)->visible(fn ($get) => $get('mode') === 'bulk')->schema([
-                        Select::make('list')->label('তালিকা')->selectablePlaceholder(false)->live()
-                            ->options(['current' => 'বর্তমান কাস্টমার', 'left' => 'Left কাস্টমার', 'all' => 'সব']),
+                        Select::make('list')->label(__('তালিকা'))->selectablePlaceholder(false)->live()
+                            ->options(['current' => __('বর্তমান কাস্টমার'), 'left' => __('Left কাস্টমার'), 'all' => __('সব')]),
                         Select::make('zone')->label('Zone')->multiple()->searchable()->live()
                             ->options(fn () => static::listOptions('zones', 'zone')),
                         Select::make('subzone')->label('Subzone')->multiple()->searchable()->live()
                             ->options(fn () => static::listOptions('subzones', 'subzone')),
                         Select::make('box')->label('Box')->multiple()->searchable()->live()
                             ->options(fn () => static::listOptions('boxes', 'box')),
-                        Select::make('package')->label('প্যাকেজ')->multiple()->searchable()->live()
+                        Select::make('package')->label(__('প্যাকেজ'))->multiple()->searchable()->live()
                             ->options(fn () => static::listOptions('packages', 'package')),
                         Select::make('connection_type')->label('Connection Type')->multiple()->live()
                             ->options(fn () => static::listOptions('connection_types', 'connection_type')),
-                        Select::make('status')->label('অবস্থা')->multiple()->live()
+                        Select::make('status')->label(__('অবস্থা'))->multiple()->live()
                             ->options(fn () => static::listOptions('customer_statuses', 'status')),
-                        Select::make('line')->label('লাইন')->live()->placeholder('সব')
-                            ->options(['on' => 'চালু', 'off' => 'বন্ধ']),
-                        Select::make('due')->label('বকেয়া')->live()->placeholder('সব')
-                            ->options(['due' => 'বকেয়া আছে', 'paid' => 'বকেয়া নেই']),
-                        TextInput::make('due_min')->label('বকেয়া কমপক্ষে')->numeric()->minValue(0)->suffix('টাকা')
+                        Select::make('line')->label(__('লাইন'))->live()->placeholder(__('সব'))
+                            ->options(['on' => __('চালু'), 'off' => __('বন্ধ')]),
+                        Select::make('due')->label(__('বকেয়া'))->live()->placeholder(__('সব'))
+                            ->options(['due' => __('বকেয়া আছে'), 'paid' => __('বকেয়া নেই')]),
+                        TextInput::make('due_min')->label(__('বকেয়া কমপক্ষে'))->numeric()->minValue(0)->suffix(__('টাকা'))
                             ->live(debounce: 600),
-                        Select::make('online')->label('এখন')->live()->placeholder('সব')
-                            ->options(['online' => 'অনলাইন', 'offline' => 'অফলাইন']),
+                        Select::make('online')->label(__('এখন'))->live()->placeholder(__('সব'))
+                            ->options(['online' => __('অনলাইন'), 'offline' => __('অফলাইন')]),
                     ]),
-                    Select::make('template')->label('টেমপ্লেট')->placeholder('টেমপ্লেট বাছুন (ঐচ্ছিক)')->live()
+                    Select::make('template')->label(__('টেমপ্লেট'))->placeholder(__('টেমপ্লেট বাছুন (ঐচ্ছিক)'))->live()
                         ->options(fn () => SmsTemplate::where('company_id', static::company())->where('type', 'general')
                             ->orderBy('sort')->orderBy('name')->pluck('name', 'id'))
                         ->afterStateUpdated(function ($state, callable $set) {
@@ -162,14 +162,14 @@ class SmsActions
                             }
                         }),
                     View::make('filament.app.sms.placeholders')->viewData(['items' => Sms::placeholders()]),
-                    Textarea::make('body')->label('লেখা')->required()->rows(5)->maxLength(1000)->live(debounce: 500)
+                    Textarea::make('body')->label(__('লেখা'))->required()->rows(5)->maxLength(1000)->live(debounce: 500)
                         ->extraInputAttributes(['data-sms-body' => 'true'])
                         ->partiallyRenderComponentsAfterStateUpdated(['summary']),
                     Placeholder::make('summary')->hiddenLabel()->key('summary')
                         ->content(fn ($get) => view('filament.app.sms.summary', static::summary($get))),
-                    Checkbox::make('confirm')->label(fn ($get) => 'হ্যাঁ, এই সবাইকে SMS পাঠাতে চাই')
+                    Checkbox::make('confirm')->label(fn ($get) => __('হ্যাঁ, এই সবাইকে SMS পাঠাতে চাই'))
                         ->visible(fn ($get) => $get('mode') === 'bulk')->accepted()
-                        ->validationMessages(['accepted' => 'পাঠানোর আগে টিক দিন']),
+                        ->validationMessages(['accepted' => __('পাঠানোর আগে টিক দিন')]),
                 ])->key('smsBody'),
             ])
             ->action(function (array $data, Action $action) use ($customer) {
@@ -179,7 +179,7 @@ class SmsActions
                 }
                 $r = static::resolve($data);
                 if (! $r['customers'] && ! $r['numbers']) {
-                    Notification::make()->warning()->title('কাউকে পাওয়া যায়নি')->body('সঠিক মোবাইল নম্বর আছে এমন কেউ নেই।')->send();
+                    Notification::make()->warning()->title(__('কাউকে পাওয়া যায়নি'))->body(__('সঠিক মোবাইল নম্বর আছে এমন কেউ নেই।'))->send();
                     $action->halt();
 
                     return;
@@ -190,11 +190,11 @@ class SmsActions
                 Engine::kickSms(static::company());
                 $settings = SmsSetting::forCompany(static::company());
                 $n = number_format($campaign->total);
-                Notification::make()->success()->title("{$n}টি SMS পাঠানোর তালিকায় উঠেছে")
+                Notification::make()->success()->title(__(':nটি SMS পাঠানোর তালিকায় উঠেছে', ['n' => $n]))
                     ->body($settings->enabled && $settings->configured()
-                        ? 'পেছনে পাঠানো হচ্ছে, অগ্রগতি "SMS পাঠান" পেজে।'
-                        : 'SMS গেটওয়ে এখনো চালু নয় (সেটিংস → SMS গেটওয়ে); চালু হলে পাঠানো শুরু হবে।')
-                    ->actions([Action::make('progress')->label('অগ্রগতি দেখুন')->button()->url(SmsCampaignResource::getUrl('index'))])
+                        ? __('পেছনে পাঠানো হচ্ছে, অগ্রগতি "SMS পাঠান" পেজে।')
+                        : __('SMS গেটওয়ে এখনো চালু নয় (সেটিংস → SMS গেটওয়ে); চালু হলে পাঠানো শুরু হবে।'))
+                    ->actions([Action::make('progress')->label(__('অগ্রগতি দেখুন'))->button()->url(SmsCampaignResource::getUrl('index'))])
                     ->send();
             });
     }

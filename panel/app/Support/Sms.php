@@ -66,12 +66,13 @@ class Sms
     {
         $out = collect(self::PLACEHOLDERS)->map(fn ($p) => $p[0])->all();
 
-        return match ($type) {
+        // labels are for the staff's chips, in the panel language
+        return array_map('__', match ($type) {
             'bill_paid' => self::BILL_PLACEHOLDERS + $out,
             'ticket_open', 'ticket_solved' => self::TICKET_PLACEHOLDERS + $out,
             'bill_reminder' => self::REMINDER_PLACEHOLDERS + $out,
             default => $out,
-        };
+        });
     }
 
     /** Placeholders of the automatic SMS (bill / ticket / reminder) used in a normal SMS (they stay empty there). */

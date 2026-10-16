@@ -1,7 +1,7 @@
 {{-- Placeholder chips: a click puts {key} into the SMS text (textarea[data-sms-body]) at the cursor, keeps the focus,
      and fires "input" so Livewire updates the length / parts / preview. $items = [key => label]. --}}
 <div class="zyro-sms-chips" style="display:flex;flex-wrap:wrap;gap:.35rem;align-items:center">
-    <span style="font-size:.75rem;opacity:.7">তথ্য বসাতে ক্লিক করুন:</span>
+    <span style="font-size:.75rem;opacity:.7">{{ __('তথ্য বসাতে ক্লিক করুন:') }}</span>
     @foreach ($items as $key => $label)
         <button type="button"
             title="{{ $label }}"
