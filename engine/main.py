@@ -968,7 +968,31 @@ def bill_form(request: Request, company_id: int, header_id: int, user_id: int = 
     t = internal_tenant(request, company_id)
     from engine import bills
     api = billing_call(lambda: tenants.billing_for_user(t, user_id))
-    return billing_call(lambda: bills.form_info(api, header_id))
+    info = billing_call(lambda: bills.form_info(api, header_id))
+    info["blocked"] = blocked_since(api, company_id, header_id)
+    return info
+
+
+def blocked_since(api, company_id: int, header_id: int) -> dict | None:
+    """Line off in billing, or on MikroTik's block profile: since when (the last "disable" in billing's enable/disable
+    log, re-read now for this one customer). None when the line is on."""
+    row = db.one("""SELECT bc.disabled, s.profile, (s.blocked AND s.seen_at > now() - interval '5 minutes') AS mk_blocked
+                    FROM billing_customers bc LEFT JOIN ppp_sessions s ON s.company_id = bc.company_id AND s.username = bc.username
+                    WHERE bc.company_id = %s AND bc.header_id = %s""", (company_id, header_id))
+    if not row or not (row["disabled"] or row["mk_blocked"]):
+        return None
+    from engine import customer_history
+    try:
+        customer_history.fetch_line(api, company_id, header_id)
+    except Exception:
+        log.exception("line log for %s", header_id)  # the nightly copy still answers
+    last = db.one("""SELECT action, changed_at, changed_by, remarks FROM billing_customer_line_logs
+                     WHERE company_id = %s AND customer_header_id = %s ORDER BY changed_at DESC, id DESC LIMIT 1""",
+                  (company_id, header_id))
+    since = last if last and last["action"] == "disable" else None
+    return {"since": since["changed_at"].replace(tzinfo=timezone.utc).isoformat() if since else None,
+            "by": since and since["changed_by"], "remarks": since and since["remarks"],
+            "profile": row["profile"] if row["mk_blocked"] else None}
 
 
 @app.post("/internal/{company_id}/customers/{header_id}/bill")

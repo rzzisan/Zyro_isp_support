@@ -1185,5 +1185,8 @@
     "ব্লক (:profile) · ইন্টারনেট নেই · ": "Blocked (:profile) · no internet · ",
     "ইন্টারনেট নেই": "No internet",
     "প্রোফাইল": "Profile",
-    "ব্লক, ইন্টারনেট নেই": "blocked, no internet"
+    "ব্লক, ইন্টারনেট নেই": "blocked, no internet",
+    "লাইন ব্লক :months মাস :days দিন ধরে": "Line blocked for :months months :days days",
+    ":date থেকে": "since :date",
+    "লাইন ব্লক (কবে থেকে বিলিংয়ের লগে পাওয়া যায়নি)": "Line blocked (since when is not in billing's log)"
 }

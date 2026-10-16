@@ -52,7 +52,7 @@ class BillCollectionTest extends TestCase
         Filament::setTenant($this->company);
     }
 
-    private function fakeEngine(array $pending = [], array $bill = ['message' => 'Succeeded...!!!', 'daily_bill_id' => 170239, 'balance' => 0], int $status = 200): void
+    private function fakeEngine(array $pending = [], array $bill = ['message' => 'Succeeded...!!!', 'daily_bill_id' => 170239, 'balance' => 0], int $status = 200, ?array $blocked = null): void
     {
         $cid = $this->company->id;
         Http::fake([
@@ -60,9 +60,23 @@ class BillCollectionTest extends TestCase
                 'username' => 'en.enamul', 'status' => 'Left', 'monthly' => 525, 'payable' => 525, 'period_id' => '394',
                 'bill_month' => 'October', 'received_from' => 'Bulbul', 'received_by' => ['1' => 'Zisan Ahammed', '3' => 'Arif'],
                 'received_by_default' => '1', 'methods' => ['71' => 'Cash', '72' => 'bKash'], 'method_default' => '71',
-                'pending' => $pending]),
+                'pending' => $pending, 'blocked' => $blocked]),
             "engine.test/internal/{$cid}/customers/3/bill" => Http::response($bill, $status),
         ]);
+    }
+
+    public function test_form_info_shows_how_long_the_line_has_been_blocked(): void
+    {
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-16 12:00', 'Asia/Dhaka'));
+        $info = ['username' => 'en.enamul', 'status' => 'Active', 'monthly' => 525, 'payable' => 1050, 'bill_month' => 'October', 'pending' => [],
+            'blocked' => ['since' => '2026-08-11T04:16:00+00:00', 'by' => 'arju11', 'remarks' => 'Disabled Selected Customer', 'profile' => 'BLOCKED-PROFILE']];
+        $html = view('filament.app.bills.form-info', ['info' => $info, 'error' => null])->render();
+        $this->assertStringContainsString('লাইন ব্লক 2 মাস 5 দিন ধরে', $html);
+        $this->assertStringContainsString('11 Aug 2026, 10:16 AM থেকে · arju11 · BLOCKED-PROFILE', $html);
+        $info['blocked'] = ['since' => null, 'by' => null, 'remarks' => null, 'profile' => null];
+        $this->assertStringContainsString('কবে থেকে বিলিংয়ের লগে পাওয়া যায়নি', view('filament.app.bills.form-info', ['info' => $info, 'error' => null])->render());
+        $info['blocked'] = null;
+        $this->assertStringNotContainsString('লাইন ব্লক', view('filament.app.bills.form-info', ['info' => $info, 'error' => null])->render());
     }
 
     public function test_owner_collects_full_bill_from_customer_page(): void
