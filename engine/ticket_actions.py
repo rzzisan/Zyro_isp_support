@@ -71,7 +71,7 @@ def followup_candidates(t: Tenant) -> list[dict]:
            WHERE wc.company_id = %(c)s AND wc.customer_id IS NOT NULL
              AND NOT wc.bot_paused AND COALESCE(wc.bot_paused_until <= now(), true)
              AND li.at BETWEEN now() - interval '23 hours 30 minutes' AND now() - interval '20 hours'
-             AND wc.wa_number NOT IN (SELECT wa_number FROM technicians WHERE company_id = %(c)s)
+             AND wc.wa_number NOT IN (SELECT wa_number FROM technicians WHERE company_id = %(c)s AND wa_number IS NOT NULL)
              AND EXISTS (SELECT 1 FROM billing_tickets bt WHERE bt.company_id = %(c)s AND bt.state IN ('pending', 'processing')
                            AND ltrim(bt.customer_id, '0') = ltrim(wc.customer_id, '0')
                            AND bt.opened_at < now() - interval '2 hours')

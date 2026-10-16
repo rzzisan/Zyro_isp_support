@@ -1,0 +1,36 @@
+{
+    "_comment": "Old ONU app (zisan.me/onu) -> Desk, decided by Zisan 2026-10-16. users: old employee id -> Desk login email (only the 4 who made entries). staff: old full_name -> Desk technician (existing by name, or new = added switched off, no WhatsApp number, linked to the billing employee). not_ids: old customer IDs that are not IDs (saved as 'other').",
+    "users": {
+        "1": "cln.networkbd@gmail.com",
+        "2": "alif@cln.com",
+        "8": "arzu@cln.com",
+        "11": "zisan@zisan.me"
+    },
+    "staff": {
+        "Zisan": {"technician": "Zisan"},
+        "Zisan Ahammed": {"technician": "Zisan"},
+        "Arzu": {"technician": "Arzu"},
+        "Yea Alif": {"technician": "Yea Alif"},
+        "Papon": {"technician": "Papon"},
+        "Rubel": {"technician": "Rubel"},
+        "Rezaul Karim": {"technician": "Rezaul"},
+        "Shuvo Ahammed": {"technician": "Shuvo"},
+        "Sobuj Ahammed": {"technician": "Sabuj Ahammed"},
+        "Arif": {"new": true, "billing_employee_id": "3", "billing_employee_name": "Arif"},
+        "Rifat": {"new": true, "billing_employee_id": "9", "billing_employee_name": "Rifat"},
+        "Maruf": {"new": true, "billing_employee_id": "8", "billing_employee_name": "Maruf"},
+        "Apon": {"new": true, "billing_employee_id": "21", "billing_employee_name": "Apon"},
+        "Yeasin": {"new": true, "billing_employee_id": "18", "billing_employee_name": "Yeasin"},
+        "Minto Ahammed": {"new": true, "billing_employee_id": "5", "billing_employee_name": "Minto Ahammed"},
+        "Abdul Jobbar": {"new": true, "billing_employee_id": "24", "billing_employee_name": "Abdul Jobbar"},
+        "Iqbal Mahmud": {"new": true, "billing_employee_id": "19", "billing_employee_name": "Iqbal Mahmud"},
+        "Shakib": {"new": true, "billing_employee_id": "17", "billing_employee_name": "Shakib"},
+        "Juwel": {"new": true, "billing_employee_id": "23", "billing_employee_name": "Md Juwel"},
+        "Abdul Kader": {"new": true, "billing_employee_id": "4", "billing_employee_name": "Kadir Khan"},
+        "kalo bi": {"new": true, "billing_employee_id": "31", "billing_employee_name": "Kamal Uddin Kalu"},
+        "Said": {"new": true, "billing_employee_id": "27", "billing_employee_name": "Abu Sahid"},
+        "Himel": {"new": true},
+        "Saif": {"new": true}
+    },
+    "not_ids": ["0", "0000", "8888", "9999", "9998", "9955", "19991", "6349"]
+}

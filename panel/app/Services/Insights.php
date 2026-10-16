@@ -36,7 +36,7 @@ class Insights
     public function newContacts(CarbonImmutable $from): int
     {
         return DB::table('wa_contacts')->where('company_id', $this->companyId)->where('created_at', '>=', $from)
-            ->whereNotIn('wa_number', DB::table('technicians')->where('company_id', $this->companyId)->select('wa_number'))->count();
+            ->whereNotIn('wa_number', DB::table('technicians')->where('company_id', $this->companyId)->whereNotNull('wa_number')->select('wa_number'))->count();
     }
 
     /** Chats whose latest message is from the customer (nobody has answered yet). */

@@ -2,7 +2,9 @@
 
 namespace App\Filament\Super\Resources\Companies\Schemas;
 
+use App\Models\Company;
 use App\Models\Plan;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -32,6 +34,10 @@ class CompanyForm
                     DateTimePicker::make('trial_ends_at')->label('ট্রায়াল শেষ')
                         ->helperText('তৈরির সময় খালি রাখলে প্যাকেজের ট্রায়াল দিন থেকে নিজে বসবে'),
                     DateTimePicker::make('subscription_ends_at')->label('সাবস্ক্রিপশন শেষ'),
+                ]),
+                Section::make('বাড়তি ফিচার')->schema([
+                    CheckboxList::make('modules')->label('এই কোম্পানির জন্য চালু')->options(Company::MODULES)
+                        ->helperText('চালু করলে কোম্পানির প্যানেলে মেনু দেখা যায়; বন্ধ করলে মেনু লুকায়, ডেটা থেকে যায়'),
                 ]),
                 Section::make('Owner অ্যাকাউন্ট')->description('কোম্পানির প্রধান ইউজার; এই ইমেইল দিয়ে /app-এ লগইন করবে। আগে থেকে থাকলে শুধু যুক্ত হবে।')
                     ->visibleOn('create')->columns(3)->schema([

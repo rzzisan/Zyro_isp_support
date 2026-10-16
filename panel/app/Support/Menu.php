@@ -25,6 +25,8 @@ class Menu
         'line_enables' => ['লাইন চালু/বন্ধের রেকর্ড', true, false],
         'line_switch' => ['কাস্টমার লিস্টে লাইন চালু/বন্ধ', false, false],
         'onus' => ['ONU মনিটরিং', true, false],
+        // off for agents until the cutover day from the old zisan.me/onu app (no entries in two places); owner can tick it per member
+        'onu_stock' => ['ONU স্টক, নতুন সংযোগ ও অন্যান্য মাল', false, false],
         'whatsapp' => ['WhatsApp সেটিং', false, true],
         'billing' => ['বিলিং সংযোগ', false, true],
         'billing_config' => ['বিলিং কনফিগারেশন', false, true],

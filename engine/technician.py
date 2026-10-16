@@ -181,7 +181,7 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
 def customer_contact(t: Tenant, customer: dict) -> dict | None:
     """The customer's own WhatsApp chat: the one identified as this customer, else their registered mobile's."""
     row = db.one("""SELECT * FROM wa_contacts WHERE company_id = %s AND customer_id = %s
-                    AND wa_number NOT IN (SELECT wa_number FROM technicians WHERE company_id = %s)
+                    AND wa_number NOT IN (SELECT wa_number FROM technicians WHERE company_id = %s AND wa_number IS NOT NULL)
                     ORDER BY last_message_at DESC NULLS LAST LIMIT 1""",
                  (t.company_id, customer.get("CustomerId"), t.company_id))
     if row:

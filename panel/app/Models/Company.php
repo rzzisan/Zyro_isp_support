@@ -11,11 +11,19 @@ use Illuminate\Support\Str;
 
 class Company extends Model
 {
-    protected $fillable = ['name', 'slug', 'status', 'plan_id', 'trial_ends_at', 'subscription_ends_at', 'contact_phone', 'contact_email'];
+    protected $fillable = ['name', 'slug', 'status', 'plan_id', 'trial_ends_at', 'subscription_ends_at', 'contact_phone', 'contact_email', 'modules'];
+
+    /** Optional features a super admin turns on per company (companies.modules). */
+    public const MODULES = ['onu' => 'ONU স্টক ও নতুন সংযোগ'];
 
     protected function casts(): array
     {
-        return ['trial_ends_at' => 'datetime', 'subscription_ends_at' => 'datetime'];
+        return ['trial_ends_at' => 'datetime', 'subscription_ends_at' => 'datetime', 'modules' => 'array'];
+    }
+
+    public function hasModule(string $module): bool
+    {
+        return in_array($module, $this->modules ?? [], true);
     }
 
     protected static function booted(): void

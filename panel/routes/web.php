@@ -111,6 +111,20 @@ Route::get('/live/{company:slug}/daily-bills', function (\App\Models\Company $co
     return response()->json(['version' => $version])->header('Cache-Control', 'no-store');
 })->middleware('web')->name('daily-bills.live');
 
+// ONU stickers (50×75 mm, one per page) for the given assignments; QR, its note, name and helpline come from the
+// money receipt settings, so the sticker always shows what the receipt shows. Members with the ONU stock menu only.
+Route::get('/print/{company:slug}/onu-stickers', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Onu::enabled($company) && \App\Support\Menu::allows($user, $company, 'onu_stock'), 403);
+    $ids = array_filter(array_map('intval', explode(',', (string) $request->query('ids'))));
+    $rows = \App\Models\OnuAssignment::where('company_id', $company->id)->whereIn('id', $ids ?: [0])->with('brand')
+        ->orderBy('assigned_at')->get();
+    abort_if($rows->isEmpty(), 404);
+
+    return view('print.onu-stickers', ['company' => $company, 'rows' => $rows,
+        'settings' => \App\Models\ReceiptSetting::forCompany($company), 'autoPrint' => $request->query('print') !== '0']);
+})->middleware('web')->name('onu.stickers');
+
 // all billing customers as CSV (no passwords); owner/admin of that company only
 Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company $company) {
     abort_unless(Auth::user()?->managesCompany($company), 403);

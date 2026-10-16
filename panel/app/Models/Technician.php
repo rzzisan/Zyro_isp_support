@@ -38,8 +38,20 @@ class Technician extends Model
         return $d;
     }
 
+    /** 01XXXXXXXXX, or '' for an old staff member kept only for old records (no WhatsApp number). */
     public function displayNumber(): string
     {
-        return str_starts_with($this->wa_number, '880') ? '0'.substr($this->wa_number, 3) : $this->wa_number;
+        $n = (string) $this->wa_number;
+
+        return str_starts_with($n, '880') ? '0'.substr($n, 3) : $n;
+    }
+
+    /**
+     * [id => name] of all the company's technicians for the ONU / connection staff pickers. "Off" only means the
+     * WhatsApp bot ignores them; staff without a WhatsApp number are still field workers and can be picked.
+     */
+    public static function pickerOptions(int $companyId): array
+    {
+        return static::where('company_id', $companyId)->orderBy('name')->pluck('name', 'id')->all();
     }
 }

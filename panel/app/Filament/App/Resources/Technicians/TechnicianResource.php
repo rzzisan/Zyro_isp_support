@@ -69,10 +69,12 @@ class TechnicianResource extends Resource
     {
         return $schema->components([
             TextInput::make('name')->label('নাম')->required(),
-            TextInput::make('wa_number')->label('WhatsApp নম্বর')->required()->tel()
+            TextInput::make('wa_number')->label('WhatsApp নম্বর')->tel()
+                ->required(fn ($get) => (bool) $get('active'))
+                ->helperText('বন্ধ (চালু না) টেকনিশিয়ানের নম্বর না দিলেও চলে; তখন তাকে শুধু ONU/সংযোগের রেকর্ডে বাছা যায়')
                 ->placeholder('01XXXXXXXXX')
                 ->formatStateUsing(fn (?string $state) => $state && str_starts_with($state, '880') ? '0'.substr($state, 3) : $state)
-                ->dehydrateStateUsing(fn (?string $state) => Technician::normalize((string) $state))
+                ->dehydrateStateUsing(fn (?string $state) => filled($state) ? Technician::normalize((string) $state) : null)
                 ->rule('regex:/^(\+?88)?01[3-9]\d{8}$/')
                 ->rule(fn (?Technician $record) => function (string $attribute, $value, \Closure $fail) use ($record) {
                     $exists = Technician::where('company_id', Filament::getTenant()->getKey())
@@ -92,7 +94,7 @@ class TechnicianResource extends Resource
                 ->visible(fn ($get) => filled($get('billing_employee_id'))),
             Toggle::make('can_switch_lines')->label('এর কথায় বট লাইন চালু/বন্ধ করতে পারবে')->default(false)
                 ->helperText('বন্ধ থাকলে লাইন চালু বা বন্ধ করতে বললে বট না বলবে, তবে অনুরোধটা রেকর্ডে থাকবে'),
-            Toggle::make('active')->label('চালু')->default(true),
+            Toggle::make('active')->label('চালু')->default(true)->live(),
         ]);
     }
 
@@ -103,7 +105,8 @@ class TechnicianResource extends Resource
             ->modifyQueryUsing(fn (Builder $query) => $query->with('lastTicketNotification'))
             ->columns([
                 TextColumn::make('name')->label('নাম')->searchable(),
-                TextColumn::make('wa_number')->label('WhatsApp')->formatStateUsing(fn ($state, Technician $r) => $r->displayNumber())->searchable(),
+                TextColumn::make('wa_number')->label('WhatsApp')->formatStateUsing(fn ($state, Technician $r) => $r->displayNumber())
+                    ->placeholder('নম্বর নেই')->searchable(),
                 TextColumn::make('note')->label('নোট')->placeholder('—'),
                 TextColumn::make('billing_employee_name')->label('বিলিং কর্মী')->placeholder('—')
                     ->description(fn (Technician $r) => $r->billing_employee_id && ! $r->notify_tickets ? 'টিকিট মেসেজ বন্ধ' : null),
