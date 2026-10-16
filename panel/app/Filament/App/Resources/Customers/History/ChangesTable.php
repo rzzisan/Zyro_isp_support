@@ -31,39 +31,39 @@ class ChangesTable extends HistoryTable
     {
         return $table
             ->query(fn () => $this->rows(BillingCustomerChangeLog::class)->orderByDesc('changed_at')->orderByDesc('id'))
-            ->heading('পরিবর্তনের ইতিহাস')
+            ->heading(__('পরিবর্তনের ইতিহাস'))
             ->description(fn () => $this->fetchedNote())
             ->paginated([10, 25, 50])->defaultPaginationPageOption(10)
-            ->emptyStateHeading('কোনো পরিবর্তন নেই')
+            ->emptyStateHeading(__('কোনো পরিবর্তন নেই'))
             ->filters([
-                Filter::make('only_changes')->label('শুধু যেখানে কিছু বদলেছে')->default()
+                Filter::make('only_changes')->label(__('শুধু যেখানে কিছু বদলেছে'))->default()
                     ->query(fn (Builder $query) => $query->where(fn (Builder $w) => $w->whereNull('changed')
                         ->orWhereRaw("changed::text NOT IN ('{}', '[]')")->orWhere('password_changed', true)->orWhereNotNull('remarks'))),
             ])
             ->columns([
-                TextColumn::make('changed_at')->label('সময়')->dateTime('d M Y h:i A', self::TZ),
-                TextColumn::make('changed_by')->label('করেছেন'),
-                TextColumn::make('what')->label('কী বদলেছে')->wrap()
+                TextColumn::make('changed_at')->label(__('সময়'))->dateTime('d M Y h:i A', self::TZ),
+                TextColumn::make('changed_by')->label(__('করেছেন')),
+                TextColumn::make('what')->label(__('কী বদলেছে'))->wrap()
                     ->state(fn (BillingCustomerChangeLog $r) => $this->describe($r)),
-                TextColumn::make('remarks')->label('মন্তব্য')->limit(40)->placeholder('—')->toggleable(),
+                TextColumn::make('remarks')->label(__('মন্তব্য'))->limit(40)->placeholder('—')->toggleable(),
             ]);
     }
 
     private function describe(BillingCustomerChangeLog $r): HtmlString
     {
-        $e = fn ($v) => e($v === null || $v === '' ? '(ফাঁকা)' : (is_scalar($v) ? (string) $v : json_encode($v)));
+        $e = fn ($v) => e($v === null || $v === '' ? __('(ফাঁকা)') : (is_scalar($v) ? (string) $v : json_encode($v)));
         $lines = [];
         if ($r->changed === null) {
-            $lines[] = '<span style="opacity:.7">প্রথম রেকর্ড: '.$e($r->snapshot['Package'] ?? null).', '
-                .$e($r->snapshot['Zone'] ?? null).', মাসিক '.$e($r->snapshot['MonthlyBill'] ?? null).'</span>';
+            $lines[] = '<span style="opacity:.7">'.__('প্রথম রেকর্ড: :package, :zone, মাসিক :bill', ['package' => $e($r->snapshot['Package'] ?? null),
+                'zone' => $e($r->snapshot['Zone'] ?? null), 'bill' => $e($r->snapshot['MonthlyBill'] ?? null)]).'</span>';
         }
         foreach ($r->changed ?? [] as $field => [$before, $after]) {
-            $lines[] = '<b>'.e(self::LABELS[$field] ?? $field).'</b>: '.$e($before).' → '.$e($after);
+            $lines[] = '<b>'.e(__(self::LABELS[$field] ?? $field)).'</b>: '.$e($before).' → '.$e($after);
         }
         if ($r->password_changed) {
-            $lines[] = '<b>PPPoE পাসওয়ার্ড</b> বদলেছে';
+            $lines[] = __('<b>PPPoE পাসওয়ার্ড</b> বদলেছে');
         }
 
-        return new HtmlString($lines ? implode('<br>', $lines) : '<span style="opacity:.6">কিছু বদলায়নি</span>');
+        return new HtmlString($lines ? implode('<br>', $lines) : __('<span style="opacity:.6">কিছু বদলায়নি</span>'));
     }
 }

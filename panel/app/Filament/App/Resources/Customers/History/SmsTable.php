@@ -16,23 +16,23 @@ class SmsTable extends HistoryTable
     {
         return $table
             ->query(fn () => $this->rows(BillingCustomerSms::class)->orderByDesc('sent_at')->orderByDesc('sms_log_id'))
-            ->heading('SMS (শেষ ১২ মাস)')
+            ->heading(__('SMS (শেষ ১২ মাস)'))
             ->description(fn () => $this->fetchedNote())
             ->paginated([10, 25, 50])->defaultPaginationPageOption(10)
-            ->emptyStateHeading('শেষ ১২ মাসে কোনো SMS নেই')
+            ->emptyStateHeading(__('শেষ ১২ মাসে কোনো SMS নেই'))
             ->filters([
-                SelectFilter::make('type_name')->label('ধরন')->options(fn () => $this->rows(BillingCustomerSms::class)
+                SelectFilter::make('type_name')->label(__('ধরন'))->options(fn () => $this->rows(BillingCustomerSms::class)
                     ->whereNotNull('type_name')->distinct()->orderBy('type_name')->pluck('type_name', 'type_name')->all()),
             ])
             ->columns([
-                TextColumn::make('sent_at')->label('সময়')
+                TextColumn::make('sent_at')->label(__('সময়'))
                     ->formatStateUsing(fn ($state) => $state?->timezone(self::TZ)
                         ->format($state->timezone(self::TZ)->format('H:i') === '00:00' ? 'd M Y' : 'd M Y h:i A')),
-                TextColumn::make('type_name')->label('ধরন')->badge()->color('gray'),
-                TextColumn::make('text')->label('লেখা')->wrap()->limit(160),
-                TextColumn::make('status')->label('অবস্থা')->badge()
+                TextColumn::make('type_name')->label(__('ধরন'))->badge()->color('gray'),
+                TextColumn::make('text')->label(__('লেখা'))->wrap()->limit(160),
+                TextColumn::make('status')->label(__('অবস্থা'))->badge()
                     ->color(fn ($state) => strtolower((string) $state) === 'success' ? 'success' : 'danger'),
-                TextColumn::make('sent_by')->label('পাঠিয়েছেন')->placeholder('সিস্টেম'),
+                TextColumn::make('sent_by')->label(__('পাঠিয়েছেন'))->placeholder(__('সিস্টেম')),
             ]);
     }
 }

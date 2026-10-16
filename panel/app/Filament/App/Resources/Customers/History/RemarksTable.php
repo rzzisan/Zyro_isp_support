@@ -15,15 +15,15 @@ class RemarksTable extends HistoryTable
     {
         return $table
             ->query(fn () => $this->rows(BillingCustomerRemark::class)->orderByDesc('created_at'))
-            ->heading('মন্তব্য')
+            ->heading(__('মন্তব্য'))
             ->description(fn () => $this->fetchedNote())
             ->paginated([10, 25, 50])->defaultPaginationPageOption(10)
-            ->emptyStateHeading('বিলিংয়ে কোনো মন্তব্য নেই')
+            ->emptyStateHeading(__('বিলিংয়ে কোনো মন্তব্য নেই'))
             ->columns([
-                TextColumn::make('created_at')->label('সময়')->dateTime('d M Y h:i A', self::TZ),
-                TextColumn::make('remarks_type')->label('ধরন')->badge()->color('gray'),
-                TextColumn::make('comment')->label('মন্তব্য')->wrap()->placeholder('—'),
-                TextColumn::make('created_by')->label('করেছেন'),
+                TextColumn::make('created_at')->label(__('সময়'))->dateTime('d M Y h:i A', self::TZ),
+                TextColumn::make('remarks_type')->label(__('ধরন'))->badge()->color('gray'),
+                TextColumn::make('comment')->label(__('মন্তব্য'))->wrap()->placeholder('—'),
+                TextColumn::make('created_by')->label(__('করেছেন')),
             ]);
     }
 }

@@ -3,8 +3,8 @@
     <table class="w-full text-sm">
         <thead>
             <tr class="text-left text-gray-500">
-                <th class="py-1 pr-3">কে / কীভাবে</th><th class="py-1 pr-3">প্যাকেজ</th><th class="py-1 pr-3">বিল</th>
-                <th class="py-1 pr-3">ডিসকাউন্ট</th><th class="py-1 pr-3">জমা</th><th class="py-1 pr-3">বকেয়া</th><th class="py-1">মন্তব্য</th>
+                <th class="py-1 pr-3">{{ __('কে / কীভাবে') }}</th><th class="py-1 pr-3">{{ __('প্যাকেজ') }}</th><th class="py-1 pr-3">{{ __('বিল') }}</th>
+                <th class="py-1 pr-3">{{ __('ডিসকাউন্ট') }}</th><th class="py-1 pr-3">{{ __('জমা') }}</th><th class="py-1 pr-3">{{ __('বকেয়া') }}</th><th class="py-1">{{ __('মন্তব্য') }}</th>
             </tr>
         </thead>
         <tbody>

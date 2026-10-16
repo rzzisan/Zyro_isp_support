@@ -34,9 +34,9 @@ class ViewCustomer extends ViewRecord
         $chat = $c->chat();
 
         return [
-            Action::make('live')->label('লাইভ অবস্থা')->icon(Heroicon::OutlinedSignal)
-                ->modalHeading(fn () => "{$c->name} (ID {$c->customer_id}): এখনকার অবস্থা")
-                ->modalSubmitAction(false)->modalCancelActionLabel('বন্ধ করুন')
+            Action::make('live')->label(__('লাইভ অবস্থা'))->icon(Heroicon::OutlinedSignal)
+                ->modalHeading(fn () => "{$c->name} (ID {$c->customer_id}): ".__('এখনকার অবস্থা'))
+                ->modalSubmitAction(false)->modalCancelActionLabel(__('বন্ধ করুন'))
                 ->modalContent(function () use ($c) {
                     try {
                         $live = Engine::customerLive($c->company_id, (int) $c->header_id);
@@ -48,20 +48,20 @@ class ViewCustomer extends ViewRecord
 
                     return view('filament.app.customers.live', ['live' => $live, 'error' => $error]);
                 }),
-            Action::make('password')->label('PPPoE পাসওয়ার্ড')->icon(Heroicon::OutlinedKey)->color('gray')
+            Action::make('password')->label(__('PPPoE পাসওয়ার্ড'))->icon(Heroicon::OutlinedKey)->color('gray')
                 ->visible(fn () => CustomerResource::managers() && filled($c->getRawOriginal('pppoe_password')))
                 ->requiresConfirmation()
-                ->modalDescription('পাসওয়ার্ড দেখলে কে কখন দেখেছেন তা লগে থাকবে।')
-                ->modalSubmitActionLabel('দেখান')
+                ->modalDescription(__('পাসওয়ার্ড দেখলে কে কখন দেখেছেন তা লগে থাকবে।'))
+                ->modalSubmitActionLabel(__('দেখান'))
                 ->action(function () use ($c) {
                     DB::table('customer_password_views')->insert(['company_id' => $c->company_id, 'user_id' => auth()->id(),
                         'billing_customer_id' => $c->id, 'customer_id' => $c->customer_id, 'viewed_at' => now()]);
                     $this->replaceMountedAction('showPassword');
                 }),
             BillActions::receive($c),
-            TicketActions::newTicket($c->customer_id)->label('টিকিট খুলুন')->color('gray'),
+            TicketActions::newTicket($c->customer_id)->label(__('টিকিট খুলুন'))->color('gray'),
             SmsActions::send($c)->label('SMS')->color('gray'),
-            Action::make('chat')->label('চ্যাট')->icon(Heroicon::OutlinedChatBubbleLeftRight)->color('gray')
+            Action::make('chat')->label(__('চ্যাট'))->icon(Heroicon::OutlinedChatBubbleLeftRight)->color('gray')
                 ->visible((bool) $chat)
                 ->url(fn () => $chat ? ConversationResource::getUrl('view', ['record' => $chat]) : null),
         ];
@@ -90,9 +90,9 @@ class ViewCustomer extends ViewRecord
         $c = $this->customer();
 
         return Action::make('showPassword')
-            ->modalHeading("{$c->username}: PPPoE পাসওয়ার্ড")
+            ->modalHeading("{$c->username}: ".__('PPPoE পাসওয়ার্ড'))
             ->modalContent(fn () => view('filament.app.customers.password', ['password' => $c->pppoe_password]))
-            ->modalSubmitAction(false)->modalCancelActionLabel('বন্ধ করুন')
+            ->modalSubmitAction(false)->modalCancelActionLabel(__('বন্ধ করুন'))
             ->visible(fn () => CustomerResource::managers());
     }
 }

@@ -17,26 +17,26 @@ class ComplainsTable extends HistoryTable
     {
         return $table
             ->query(fn () => $this->rows(BillingTicket::class)->orderByDesc('opened_at'))
-            ->heading('অভিযোগ')
+            ->heading(__('অভিযোগ'))
             ->description(fn () => $this->fetchedNote())
             ->paginated([10, 25, 50])->defaultPaginationPageOption(10)
-            ->emptyStateHeading('কোনো টিকিট নেই')
+            ->emptyStateHeading(__('কোনো টিকিট নেই'))
             ->columns([
-                TextColumn::make('complain_id')->label('টিকিট')->prefix('#'),
-                TextColumn::make('category')->label('সমস্যা'),
+                TextColumn::make('complain_id')->label(__('টিকিট'))->prefix('#'),
+                TextColumn::make('category')->label(__('সমস্যা')),
                 TextColumn::make('priority')->label('Priority')->badge()
                     ->color(fn ($state) => ['high' => 'danger', 'medium' => 'warning'][$state] ?? 'gray'),
-                TextColumn::make('state')->label('অবস্থা')->badge()
+                TextColumn::make('state')->label(__('অবস্থা'))->badge()
                     ->formatStateUsing(fn ($state) => BillingTicket::STATES[$state] ?? $state)
                     ->color(fn ($state) => $state === 'solved' ? 'success' : ($state === 'processing' ? 'info' : 'warning')),
-                TextColumn::make('opened_at')->label('খোলা')->dateTime('d M Y h:i A', self::TZ),
-                TextColumn::make('created_by')->label('খুলেছেন'),
-                TextColumn::make('solved_by')->label('সমাধান করেছেন')->placeholder('—'),
-                TextColumn::make('solved_at')->label('সমাধান')->dateTime('d M Y h:i A', self::TZ)->placeholder('—'),
+                TextColumn::make('opened_at')->label(__('খোলা'))->dateTime('d M Y h:i A', self::TZ),
+                TextColumn::make('created_by')->label(__('খুলেছেন')),
+                TextColumn::make('solved_by')->label(__('সমাধান করেছেন'))->placeholder('—'),
+                TextColumn::make('solved_at')->label(__('সমাধান'))->dateTime('d M Y h:i A', self::TZ)->placeholder('—'),
             ])
             ->recordActions([
-                ViewAction::make()->label('বিস্তারিত')->modalWidth('4xl')
-                    ->modalHeading(fn (BillingTicket $record) => 'টিকিট #'.$record->complain_id)
+                ViewAction::make()->label(__('বিস্তারিত'))->modalWidth('4xl')
+                    ->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id', ['id' => $record->complain_id]))
                     ->modalContent(fn (BillingTicket $record) => TicketActions::details($record))
                     ->schema([]),
             ])

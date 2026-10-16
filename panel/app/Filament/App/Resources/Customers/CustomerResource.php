@@ -134,7 +134,7 @@ class CustomerResource extends Resource
                         ->orWhere('mobile', 'like', '%'.preg_replace('/\D/', '', $search).'%'))),
                 TextColumn::make('username')->label('ID/IP')->copyable()->placeholder('—')
                     ->icon(Heroicon::Signal)->iconColor(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'success' : 'gray')
-                    ->tooltip(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'অনলাইন · '.$r->online_uptime : 'অফলাইন'),
+                    ->tooltip(fn (BillingCustomer $r) => $r->online_uptime !== null ? __('অনলাইন · ').$r->online_uptime : __('অফলাইন')),
                 TextColumn::make('name')->label('Cus.Name / Mobile')->wrap()->description(fn (BillingCustomer $r) => $r->mobile),
                 TextColumn::make('zone')->label('Zone')->sortable()->placeholder('—')
                     ->description(fn (BillingCustomer $r) => trim($r->subzone.($r->box ? ' · '.$r->box : '')) ?: null),
@@ -158,11 +158,11 @@ class CustomerResource extends Resource
                 ViewColumn::make('line')->label('M.Status')->view('filament.app.customers.line-switch')
                     ->disabledClick(fn (BillingCustomer $r) => ! static::canSwitch($r))
                     ->action(Action::make('switchLine')->requiresConfirmation()
-                        ->modalHeading(fn (BillingCustomer $record) => "{$record->name} (ID {$record->customer_id}): লাইন ".($record->disabled ? 'চালু' : 'বন্ধ').' করবেন?')
+                        ->modalHeading(fn (BillingCustomer $record) => "{$record->name} (ID {$record->customer_id}): ".($record->disabled ? __('লাইন চালু করবেন?') : __('লাইন বন্ধ করবেন?')))
                         ->modalDescription(fn (BillingCustomer $record) => $record->disabled
-                            ? 'বিলিং-এ লাইন Enable হবে।'.($record->due > 0 ? ' বকেয়া '.number_format((float) $record->due).' টাকা।' : '')
-                            : 'বিলিং-এ লাইন Disable হবে, কাস্টমারের ইন্টারনেট বন্ধ হয়ে যাবে।')
-                        ->modalSubmitActionLabel(fn (BillingCustomer $record) => $record->disabled ? 'চালু করুন' : 'বন্ধ করুন')
+                            ? __('বিলিং-এ লাইন Enable হবে।').($record->due > 0 ? ' '.__('বকেয়া :amount টাকা।', ['amount' => number_format((float) $record->due)]) : '')
+                            : __('বিলিং-এ লাইন Disable হবে, কাস্টমারের ইন্টারনেট বন্ধ হয়ে যাবে।'))
+                        ->modalSubmitActionLabel(fn (BillingCustomer $record) => $record->disabled ? __('চালু করুন') : __('বন্ধ করুন'))
                         ->color(fn (BillingCustomer $record) => $record->disabled ? 'success' : 'danger')
                         ->action(function (BillingCustomer $record) {
                             if (! static::canSwitch($record)) {
@@ -172,34 +172,34 @@ class CustomerResource extends Resource
                             try {
                                 Engine::switchLine((int) $record->company_id, (int) $record->header_id, $on);
                             } catch (RuntimeException $e) {
-                                Notification::make()->danger()->title('লাইন '.($on ? 'চালু' : 'বন্ধ').' হয়নি')->body($e->getMessage())->persistent()->send();
+                                Notification::make()->danger()->title($on ? __('লাইন চালু হয়নি') : __('লাইন বন্ধ হয়নি'))->body($e->getMessage())->persistent()->send();
 
                                 return;
                             }
                             $record->refresh();
-                            Notification::make()->success()->title("{$record->name}: লাইন ".($on ? 'চালু' : 'বন্ধ').' করা হয়েছে')->send();
+                            Notification::make()->success()->title("{$record->name}: ".($on ? __('লাইন চালু করা হয়েছে') : __('লাইন বন্ধ করা হয়েছে')))->send();
                         })),
                 TextColumn::make('bill_status')->label('B.Status')->badge()
                     ->state(fn (BillingCustomer $r) => $r->due > 0 ? 'Due' : 'Paid')
                     ->color(fn (string $state) => $state === 'Due' ? 'danger' : 'success'),
-                TextColumn::make('joined_on')->label('যোগ দিয়েছেন')->date('d M Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('joined_on')->label(__('যোগ দিয়েছেন'))->date('d M Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ]))
             ->filters([
                 SelectFilter::make('zone')->label('Zone')->options(fn () => static::listOptions('zones', 'zone'))->searchable(),
                 SelectFilter::make('subzone')->label('Subzone')->options(fn () => static::listOptions('subzones', 'subzone'))->searchable(),
                 SelectFilter::make('box')->label('Box')->options(fn () => static::listOptions('boxes', 'box'))->searchable(),
-                SelectFilter::make('package')->label('প্যাকেজ')->options(fn () => static::listOptions('packages', 'package'))->searchable(),
+                SelectFilter::make('package')->label(__('প্যাকেজ'))->options(fn () => static::listOptions('packages', 'package'))->searchable(),
                 SelectFilter::make('connection_type')->label('Connection Type')->options(fn () => static::listOptions('connection_types', 'connection_type')),
-                SelectFilter::make('status')->label('অবস্থা')->options(fn () => static::options('status')),
-                TernaryFilter::make('online')->label('এখন')->trueLabel('অনলাইন')->falseLabel('অফলাইন')
+                SelectFilter::make('status')->label(__('অবস্থা'))->options(fn () => static::options('status')),
+                TernaryFilter::make('online')->label(__('এখন'))->trueLabel(__('অনলাইন'))->falseLabel(__('অফলাইন'))
                     ->queries(true: fn (Builder $query) => $query->whereExists(static::freshSession()),
                         false: fn (Builder $query) => $query->whereNotExists(static::freshSession())),
-                TernaryFilter::make('disabled')->label('লাইন')->trueLabel('বন্ধ')->falseLabel('চালু'),
-                TernaryFilter::make('has_due')->label('বকেয়া')->trueLabel('বকেয়া আছে')->falseLabel('বকেয়া নেই')
+                TernaryFilter::make('disabled')->label(__('লাইন'))->trueLabel(__('বন্ধ'))->falseLabel(__('চালু')),
+                TernaryFilter::make('has_due')->label(__('বকেয়া'))->trueLabel(__('বকেয়া আছে'))->falseLabel(__('বকেয়া নেই'))
                     ->queries(true: fn (Builder $query) => $query->where('due', '>', 0),
                         false: fn (Builder $query) => $query->where(fn ($w) => $w->whereNull('due')->orWhere('due', '<=', 0))),
-                SelectFilter::make('list')->label('তালিকা')->default('current')->selectablePlaceholder(false)
-                    ->options(['current' => 'বর্তমান কাস্টমার', 'left' => 'Left কাস্টমার', 'gone' => 'বিলিংয়ে নেই', 'all' => 'সব'])
+                SelectFilter::make('list')->label(__('তালিকা'))->default('current')->selectablePlaceholder(false)
+                    ->options(['current' => __('বর্তমান কাস্টমার'), 'left' => __('Left কাস্টমার'), 'gone' => __('বিলিংয়ে নেই'), 'all' => __('সব')])
                     ->query(fn (Builder $query, array $data) => match ($data['value'] ?? 'current') {
                         'left' => $query->whereNull('gone_at')->where('is_left', true),
                         'gone' => $query->whereNotNull('gone_at'),
@@ -213,7 +213,7 @@ class CustomerResource extends Resource
             ->recordActions([
                 BillActions::receive(forRecord: true)->label('Pay')->button()->size('sm')->color('gray')
                     ->visible(fn (BillingCustomer $record) => $record->due > 0 && ! $record->gone_at && Menu::can('bills')),
-                ViewAction::make()->label('দেখুন')->iconButton(),
+                ViewAction::make()->label(__('দেখুন'))->iconButton(),
             ]);
     }
 
@@ -228,17 +228,17 @@ class CustomerResource extends Resource
         return $schema->components([
             View::make('filament.app.customers.profile-cards')->columnSpanFull(),
             Tabs::make('history')->columnSpanFull()->persistTabInQueryString()->tabs([
-                $tab('সার্ভিস', 'heroicon-o-wifi')->schema([$info('service')]),
-                $tab('নেটওয়ার্ক ও ডিভাইস', 'heroicon-o-server-stack')->schema([$info('network')]),
-                $tab('ব্যক্তিগত তথ্য', 'heroicon-o-identification')->schema([$info('personal')]),
-                $tab('বিল', 'heroicon-o-document-text')->schema([$list(History\BillsTable::class)])->visible(fn () => Menu::can('bills')),
-                $tab('পেমেন্ট', 'heroicon-o-banknotes')->schema([$list(History\PaymentsTable::class)])->visible(fn () => Menu::can('bills')),
-                $tab('অভিযোগ', 'heroicon-o-lifebuoy')->schema([$list(History\ComplainsTable::class)]),
-                $tab('মন্তব্য', 'heroicon-o-chat-bubble-bottom-center-text')->schema([$list(History\RemarksTable::class)]),
+                $tab(__('সার্ভিস'), 'heroicon-o-wifi')->schema([$info('service')]),
+                $tab(__('নেটওয়ার্ক ও ডিভাইস'), 'heroicon-o-server-stack')->schema([$info('network')]),
+                $tab(__('ব্যক্তিগত তথ্য'), 'heroicon-o-identification')->schema([$info('personal')]),
+                $tab(__('বিল'), 'heroicon-o-document-text')->schema([$list(History\BillsTable::class)])->visible(fn () => Menu::can('bills')),
+                $tab(__('পেমেন্ট'), 'heroicon-o-banknotes')->schema([$list(History\PaymentsTable::class)])->visible(fn () => Menu::can('bills')),
+                $tab(__('অভিযোগ'), 'heroicon-o-lifebuoy')->schema([$list(History\ComplainsTable::class)]),
+                $tab(__('মন্তব্য'), 'heroicon-o-chat-bubble-bottom-center-text')->schema([$list(History\RemarksTable::class)]),
                 $tab('SMS', 'heroicon-o-envelope')->schema([$list(History\SmsTable::class)]),
-                $tab('পরিবর্তনের ইতিহাস', 'heroicon-o-arrows-right-left')->schema([$list(History\ChangesTable::class)]),
-                $tab('লাইন চালু/বন্ধ', 'heroicon-o-power')->schema([$list(History\LineLogsTable::class)]),
-                $tab('ইনভয়েস', 'heroicon-o-receipt-percent')->schema([$list(History\InvoicesTable::class)]),
+                $tab(__('পরিবর্তনের ইতিহাস'), 'heroicon-o-arrows-right-left')->schema([$list(History\ChangesTable::class)]),
+                $tab(__('লাইন চালু/বন্ধ'), 'heroicon-o-power')->schema([$list(History\LineLogsTable::class)]),
+                $tab(__('ইনভয়েস'), 'heroicon-o-receipt-percent')->schema([$list(History\InvoicesTable::class)]),
             ]),
         ]);
     }
@@ -277,12 +277,12 @@ class CustomerResource extends Resource
             title: trim(($r->username ?: $r->name).' ('.$r->customer_id.')'),
             url: static::getUrl('view', ['record' => $r]),
             details: array_filter([
-                'নাম' => $r->name,
-                'মোবাইল' => $r->mobile,
+                __('নাম') => $r->name,
+                __('মোবাইল') => $r->mobile,
                 'Zone' => collect([$r->zone, $r->subzone, $r->box])->filter()->join(' / ') ?: null,
-                'অবস্থা' => $r->is_left ? 'Left'.($r->left_on ? ' ('.$r->left_on->format('d M Y').')' : '')
-                    : ($r->disabled ? 'লাইন বন্ধ' : ($r->status ?: null)),
-                'বকেয়া' => $r->due > 0 ? number_format((float) $r->due).' টাকা' : null,
+                __('অবস্থা') => $r->is_left ? 'Left'.($r->left_on ? ' ('.$r->left_on->format('d M Y').')' : '')
+                    : ($r->disabled ? __('লাইন বন্ধ') : ($r->status ?: null)),
+                __('বকেয়া') => $r->due > 0 ? number_format((float) $r->due).__(' টাকা') : null,
             ]),
         ));
     }

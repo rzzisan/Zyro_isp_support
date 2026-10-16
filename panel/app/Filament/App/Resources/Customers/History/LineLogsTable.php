@@ -15,17 +15,17 @@ class LineLogsTable extends HistoryTable
     {
         return $table
             ->query(fn () => $this->rows(BillingCustomerLineLog::class)->orderByDesc('changed_at')->orderByDesc('id'))
-            ->heading('লাইন চালু/বন্ধ')
+            ->heading(__('লাইন চালু/বন্ধ'))
             ->description(fn () => $this->fetchedNote())
             ->paginated([10, 25, 50])->defaultPaginationPageOption(10)
-            ->emptyStateHeading('কোনো রেকর্ড নেই')
+            ->emptyStateHeading(__('কোনো রেকর্ড নেই'))
             ->columns([
-                TextColumn::make('changed_at')->label('সময়')->dateTime('d M Y h:i A', self::TZ),
-                TextColumn::make('action')->label('কাজ')->badge()
-                    ->formatStateUsing(fn ($state) => ['enable' => 'চালু', 'disable' => 'বন্ধ'][$state] ?? $state)
+                TextColumn::make('changed_at')->label(__('সময়'))->dateTime('d M Y h:i A', self::TZ),
+                TextColumn::make('action')->label(__('কাজ'))->badge()
+                    ->formatStateUsing(fn ($state) => ['enable' => __('চালু'), 'disable' => __('বন্ধ')][$state] ?? $state)
                     ->color(fn ($state) => $state === 'enable' ? 'success' : 'danger'),
-                TextColumn::make('remarks')->label('কারণ')->wrap()->placeholder('—'),
-                TextColumn::make('changed_by')->label('করেছেন'),
+                TextColumn::make('remarks')->label(__('কারণ'))->wrap()->placeholder('—'),
+                TextColumn::make('changed_by')->label(__('করেছেন')),
             ]);
     }
 }

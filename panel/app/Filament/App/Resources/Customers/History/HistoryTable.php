@@ -38,11 +38,11 @@ abstract class HistoryTable extends TableWidget
         $row = DB::table('billing_customer_fetches')->where('company_id', $this->record?->company_id ?? 0)
             ->where('customer_header_id', $this->record?->header_id ?? 0)->where('section', static::$section)->first();
         if (! $row || ! $row->fetched_at) {
-            return 'বিলিং থেকে এখনো আনা হয়নি'.($row?->error ? ' (শেষ চেষ্টায় সমস্যা)' : '');
+            return __('বিলিং থেকে এখনো আনা হয়নি').($row?->error ? __(' (শেষ চেষ্টায় সমস্যা)') : '');
         }
 
-        return 'বিলিং থেকে আনা হয়েছে '.Carbon::parse($row->fetched_at, 'UTC')->locale('bn')->diffForHumans()
-            .($row->error ? ' · শেষ চেষ্টায় সমস্যা হয়েছিল' : '');
+        return __('বিলিং থেকে আনা হয়েছে :time', ['time' => Carbon::parse($row->fetched_at, 'UTC')->locale(app()->getLocale())->diffForHumans()])
+            .($row->error ? __(' · শেষ চেষ্টায় সমস্যা হয়েছিল') : '');
     }
 
     #[On('customer-history-updated')]

@@ -62,7 +62,8 @@ class Locale
         }
         array_push($keys, ...array_values(\App\Models\BillingTicket::STATES),
             ...array_values(\App\Filament\App\Resources\Conversations\Pages\ListConversations::BOXES),
-            ...array_column(Menu::ITEMS, 0), ...\App\Providers\Filament\AppPanelProvider::NAV_GROUPS);
+            ...array_column(Menu::ITEMS, 0), ...\App\Providers\Filament\AppPanelProvider::NAV_GROUPS,
+            ...array_values(\App\Filament\App\Resources\Customers\History\ChangesTable::LABELS));
         $keys = array_values(array_unique(array_filter($keys, fn ($k) => preg_match('/[\x{0980}-\x{09FF}]/u', $k))));
         sort($keys);
 
