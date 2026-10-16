@@ -17,7 +17,10 @@ class TicketStats extends StatsOverviewWidget
 
     protected ?string $pollingInterval = '60s';
 
-    protected ?string $heading = 'বিলিংয়ের টিকিট';
+    protected function getHeading(): ?string
+    {
+        return __('বিলিংয়ের টিকিট');
+    }
 
     protected ?string $description = 'বিলিং সফটওয়্যার থেকে প্রতি ৫ মিনিটে আপডেট হয়';
 

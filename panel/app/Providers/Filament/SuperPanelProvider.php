@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Http\Middleware\SetLocale;
+use App\Support\Locale;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -31,7 +33,7 @@ class SuperPanelProvider extends PanelProvider
             ->path('super')
             ->login()
             ->brandName('Zyro Support · Super Admin')
-            ->brandLogo(fn () => view('filament.brand', ['sub' => 'প্ল্যাটফর্ম অ্যাডমিন']))
+            ->brandLogo(fn () => view('filament.brand', ['sub' => __('প্ল্যাটফর্ম অ্যাডমিন')]))
             ->brandLogoHeight('2.5rem')
             ->font('Geist')
             ->maxContentWidth(Width::Full)
@@ -42,11 +44,13 @@ class SuperPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Super/Pages'), for: 'App\Filament\Super\Pages')
             ->pages([Dashboard::class])
             ->widgets([AccountWidget::class])
+            ->userMenuItems([Locale::menuItem()])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
                 AuthenticateSession::class,
+                SetLocale::class,
                 ShareErrorsFromSession::class,
                 PreventRequestForgery::class,
                 SubstituteBindings::class,

@@ -10,9 +10,15 @@ use Filament\Support\Icons\Heroicon;
 /** বিলিং কনফিগারেশন menu item with its lists as tabs: Package, Connection Type, Client Type, Protocol Type, Customer Status. */
 class ServiceCluster extends Cluster
 {
-    protected static ?string $navigationLabel = 'প্যাকেজ ও সংযোগ';
+    public static function getNavigationLabel(): string
+    {
+        return __('প্যাকেজ ও সংযোগ');
+    }
 
-    protected static ?string $clusterBreadcrumb = 'প্যাকেজ ও সংযোগ';
+    public static function getClusterBreadcrumb(): ?string
+    {
+        return __('প্যাকেজ ও সংযোগ');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'বিলিং কনফিগারেশন';
 

@@ -22,9 +22,15 @@ class PlanResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
-    protected static ?string $modelLabel = 'প্যাকেজ';
+    public static function getModelLabel(): string
+    {
+        return __('প্যাকেজ');
+    }
 
-    protected static ?string $pluralModelLabel = 'প্যাকেজ';
+    public static function getPluralModelLabel(): string
+    {
+        return __('প্যাকেজ');
+    }
 
     protected static ?int $navigationSort = 2;
 

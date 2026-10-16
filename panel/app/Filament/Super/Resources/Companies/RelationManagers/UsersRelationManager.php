@@ -18,7 +18,10 @@ class UsersRelationManager extends RelationManager
 {
     protected static string $relationship = 'users';
 
-    protected static ?string $title = 'ইউজার ও রোল';
+    public static function getTitle(\Illuminate\Database\Eloquent\Model $ownerRecord, string $pageClass): string
+    {
+        return __('ইউজার ও রোল');
+    }
 
     public static function roles(): array
     {

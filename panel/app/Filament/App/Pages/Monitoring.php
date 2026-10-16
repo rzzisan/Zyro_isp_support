@@ -39,9 +39,15 @@ class Monitoring extends Page implements HasTable
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSignal;
 
-    protected static ?string $navigationLabel = 'অনলাইন মনিটরিং';
+    public static function getNavigationLabel(): string
+    {
+        return __('অনলাইন মনিটরিং');
+    }
 
-    protected static ?string $title = 'অনলাইন ক্লায়েন্ট মনিটরিং';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('অনলাইন ক্লায়েন্ট মনিটরিং');
+    }
 
     protected static ?string $slug = 'monitoring';
 

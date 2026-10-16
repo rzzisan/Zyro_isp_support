@@ -39,11 +39,20 @@ class NewConnectionResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserPlus;
 
-    protected static ?string $navigationLabel = 'নতুন সংযোগ';
+    public static function getNavigationLabel(): string
+    {
+        return __('নতুন সংযোগ');
+    }
 
-    protected static ?string $modelLabel = 'নতুন সংযোগ';
+    public static function getModelLabel(): string
+    {
+        return __('নতুন সংযোগ');
+    }
 
-    protected static ?string $pluralModelLabel = 'নতুন সংযোগ';
+    public static function getPluralModelLabel(): string
+    {
+        return __('নতুন সংযোগ');
+    }
 
     protected static ?string $slug = 'new-connections';
 

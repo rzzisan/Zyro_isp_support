@@ -12,7 +12,10 @@ class TicketCategoryChart extends ChartWidget
 {
     protected static ?int $sort = 4;
 
-    protected ?string $heading = 'সমস্যার ধরন (৩০ দিন)';
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return __('সমস্যার ধরন (৩০ দিন)');
+    }
 
     protected ?string $pollingInterval = '60s';
 

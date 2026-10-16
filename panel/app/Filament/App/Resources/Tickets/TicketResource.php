@@ -29,11 +29,20 @@ class TicketResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
 
-    protected static ?string $navigationLabel = 'টিকিট';
+    public static function getNavigationLabel(): string
+    {
+        return __('টিকিট');
+    }
 
-    protected static ?string $modelLabel = 'টিকিট';
+    public static function getModelLabel(): string
+    {
+        return __('টিকিট');
+    }
 
-    protected static ?string $pluralModelLabel = 'টিকিট';
+    public static function getPluralModelLabel(): string
+    {
+        return __('টিকিট');
+    }
 
     protected static ?string $slug = 'tickets';
 
@@ -104,37 +113,37 @@ class TicketResource extends Resource
             ->defaultPaginationPageOption(50)
             ->defaultSort('opened_at', 'desc')
             ->columns([
-                TextColumn::make('complain_id')->label('টিকিট')->prefix('#')->searchable()->sortable(),
-                TextColumn::make('customer_name')->label('কাস্টমার')
-                    ->description(fn (BillingTicket $r) => trim('ID '.$r->customer_id.' · '.$r->mobile.(($c = $r->complainNumber()) && $c !== $r->mobile ? ' · অভিযোগ: '.$c : ''), ' ·'))
+                TextColumn::make('complain_id')->label(__('টিকিট'))->prefix('#')->searchable()->sortable(),
+                TextColumn::make('customer_name')->label(__('কাস্টমার'))
+                    ->description(fn (BillingTicket $r) => trim('ID '.$r->customer_id.' · '.$r->mobile.(($c = $r->complainNumber()) && $c !== $r->mobile ? __(' · অভিযোগ: ').$c : ''), ' ·'))
                     ->searchable(['customer_name', 'customer_id', 'mobile', 'username']),
                 TextColumn::make('zone')->label('Zone')->description(fn (BillingTicket $r) => $r->subzone)->toggleable(),
-                TextColumn::make('category')->label('সমস্যা')->wrap(),
+                TextColumn::make('category')->label(__('সমস্যা'))->wrap(),
                 TextColumn::make('priority')->label('Priority')->badge()
                     ->formatStateUsing(fn (?string $state) => BillingTicket::PRIORITIES[$state] ?? $state)
                     ->color(fn (?string $state) => ['high' => 'danger', 'medium' => 'warning', 'low' => 'gray'][$state] ?? 'gray')
                     ->toggleable(),
-                TextColumn::make('state')->label('অবস্থা')->badge()
-                    ->formatStateUsing(fn (string $state) => BillingTicket::STATES[$state] ?? $state)
+                TextColumn::make('state')->label(__('অবস্থা'))->badge()
+                    ->formatStateUsing(fn (string $state) => __(BillingTicket::STATES[$state] ?? $state))
                     ->color(fn (string $state) => ['pending' => 'danger', 'processing' => 'warning', 'solved' => 'success'][$state] ?? 'gray'),
-                TextColumn::make('person')->label('টেকনিশিয়ান')
-                    ->state(fn (BillingTicket $r) => $r->solved_by ?? $r->assigned_to)->placeholder('কেউ না')->wrap(),
-                TextColumn::make('opened_at')->label('খোলা হয়েছে')->dateTime('d M, g:i A', 'Asia/Dhaka')->sortable()
-                    ->description(fn (BillingTicket $r) => $r->created_by ? 'খুলেছেন '.$r->created_by : null),
-                TextColumn::make('duration')->label('সময় লেগেছে')
+                TextColumn::make('person')->label(__('টেকনিশিয়ান'))
+                    ->state(fn (BillingTicket $r) => $r->solved_by ?? $r->assigned_to)->placeholder(__('কেউ না'))->wrap(),
+                TextColumn::make('opened_at')->label(__('খোলা হয়েছে'))->dateTime('d M, g:i A', 'Asia/Dhaka')->sortable()
+                    ->description(fn (BillingTicket $r) => $r->created_by ? __('খুলেছেন :name', ['name' => $r->created_by]) : null),
+                TextColumn::make('duration')->label(__('সময় লেগেছে'))
                     ->state(fn (BillingTicket $r) => $r->duration())
-                    ->description(fn (BillingTicket $r) => $r->isOpen() ? 'এখনো খোলা' : null),
+                    ->description(fn (BillingTicket $r) => $r->isOpen() ? __('এখনো খোলা') : null),
             ])
             ->filters([
                 Filter::make('date')
                     ->schema([
-                        Select::make('field')->label('কোন তারিখ')->default('opened_at')->selectablePlaceholder(false)
-                            ->options(['opened_at' => 'খোলার তারিখ', 'solved_at' => 'সমাধানের তারিখ']),
-                        Select::make('period')->label('সময়')->placeholder('সব সময়')->live()
-                            ->options(['today' => 'আজ', 'yesterday' => 'গতকাল', '7d' => 'শেষ ৭ দিন', '30d' => 'শেষ ৩০ দিন',
-                                'this_month' => 'এই মাস', 'last_month' => 'গত মাস', 'custom' => 'নির্দিষ্ট তারিখ']),
-                        DatePicker::make('from')->label('থেকে')->visible(fn ($get) => $get('period') === 'custom'),
-                        DatePicker::make('until')->label('পর্যন্ত')->visible(fn ($get) => $get('period') === 'custom'),
+                        Select::make('field')->label(__('কোন তারিখ'))->default('opened_at')->selectablePlaceholder(false)
+                            ->options(['opened_at' => __('খোলার তারিখ'), 'solved_at' => __('সমাধানের তারিখ')]),
+                        Select::make('period')->label(__('সময়'))->placeholder(__('সব সময়'))->live()
+                            ->options(['today' => __('আজ'), 'yesterday' => __('গতকাল'), '7d' => __('শেষ ৭ দিন'), '30d' => __('শেষ ৩০ দিন'),
+                                'this_month' => __('এই মাস'), 'last_month' => __('গত মাস'), 'custom' => __('নির্দিষ্ট তারিখ')]),
+                        DatePicker::make('from')->label(__('থেকে'))->visible(fn ($get) => $get('period') === 'custom'),
+                        DatePicker::make('until')->label(__('পর্যন্ত'))->visible(fn ($get) => $get('period') === 'custom'),
                     ])
                     ->columns(4)->columnSpan(2)
                     ->query(function (Builder $query, array $data) {
@@ -149,21 +158,21 @@ class TicketResource extends Resource
                         if (! $from && ! $until) {
                             return null;
                         }
-                        $label = ($data['field'] ?? null) === 'solved_at' ? 'সমাধান' : 'খোলা';
+                        $label = ($data['field'] ?? null) === 'solved_at' ? __('সমাধান') : __('খোলা');
 
-                        return $label.': '.($from?->format('d M') ?? '…').' – '.($until?->subDay()->format('d M') ?? 'আজ');
+                        return $label.': '.($from?->format('d M') ?? '…').' – '.($until?->subDay()->format('d M') ?? __('আজ'));
                     }),
                 SelectFilter::make('zone')->label('Zone')->options(fn () => static::listOptions('zones', 'zone'))->searchable(),
-                SelectFilter::make('category')->label('সমস্যা')->options(fn () => static::listOptions('categories', 'category'))->searchable(),
-                SelectFilter::make('employee')->label('কর্মী (assign / সমাধান)')->options(fn () => static::employees())->searchable()
+                SelectFilter::make('category')->label(__('সমস্যা'))->options(fn () => static::listOptions('categories', 'category'))->searchable(),
+                SelectFilter::make('employee')->label(__('কর্মী (assign / সমাধান)'))->options(fn () => static::employees())->searchable()
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($q, $name) => $q->forEmployee($name))),
                 SelectFilter::make('priority')->label('Priority')->options(BillingTicket::PRIORITIES),
             ])
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
             ->deferFilters(false)
             ->filtersFormColumns(4)
-            ->recordActions([TicketActions::assign(), ViewAction::make()->label('বিস্তারিত')->modalWidth('4xl')->modalHeading(fn (BillingTicket $record) => 'টিকিট #'.$record->complain_id)
-                ->extraModalFooterActions(fn () => [TicketActions::step(-1), TicketActions::solve(), TicketActions::edit()->button(), TicketActions::assign()->label('কর্মী যোগ / বাদ')->button(), TicketActions::step(1)])])
+            ->recordActions([TicketActions::assign(), ViewAction::make()->label(__('বিস্তারিত'))->modalWidth('4xl')->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id', ['id' => $record->complain_id]))
+                ->extraModalFooterActions(fn () => [TicketActions::step(-1), TicketActions::solve(), TicketActions::edit()->button(), TicketActions::assign()->label(__('কর্মী যোগ / বাদ'))->button(), TicketActions::step(1)])])
             ->recordAction('view');
     }
 

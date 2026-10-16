@@ -23,9 +23,15 @@ class BotSettings extends CompanySettingsPage
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
-    protected static ?string $navigationLabel = 'বট সেটিংস';
+    public static function getNavigationLabel(): string
+    {
+        return __('বট সেটিংস');
+    }
 
-    protected static ?string $title = 'বট সেটিংস';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('বট সেটিংস');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp ও AI';
 

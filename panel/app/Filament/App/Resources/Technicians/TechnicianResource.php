@@ -27,11 +27,20 @@ class TechnicianResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
 
-    protected static ?string $navigationLabel = 'টেকনিশিয়ান';
+    public static function getNavigationLabel(): string
+    {
+        return __('টেকনিশিয়ান');
+    }
 
-    protected static ?string $modelLabel = 'টেকনিশিয়ান';
+    public static function getModelLabel(): string
+    {
+        return __('টেকনিশিয়ান');
+    }
 
-    protected static ?string $pluralModelLabel = 'টেকনিশিয়ান';
+    public static function getPluralModelLabel(): string
+    {
+        return __('টেকনিশিয়ান');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
 

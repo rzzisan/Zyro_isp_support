@@ -29,11 +29,20 @@ class OnuStockEntryResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBoxArrowDown;
 
-    protected static ?string $navigationLabel = 'ONU স্টক এন্ট্রি';
+    public static function getNavigationLabel(): string
+    {
+        return __('ONU স্টক এন্ট্রি');
+    }
 
-    protected static ?string $modelLabel = 'স্টক এন্ট্রি';
+    public static function getModelLabel(): string
+    {
+        return __('স্টক এন্ট্রি');
+    }
 
-    protected static ?string $pluralModelLabel = 'ONU স্টক এন্ট্রি';
+    public static function getPluralModelLabel(): string
+    {
+        return __('ONU স্টক এন্ট্রি');
+    }
 
     protected static ?string $slug = 'onu-stock-entries';
 

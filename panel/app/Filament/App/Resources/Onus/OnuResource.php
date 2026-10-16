@@ -25,7 +25,10 @@ class OnuResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWifi;
 
-    protected static ?string $navigationLabel = 'ONU মনিটরিং';
+    public static function getNavigationLabel(): string
+    {
+        return __('ONU মনিটরিং');
+    }
 
     protected static ?string $modelLabel = 'ONU';
 

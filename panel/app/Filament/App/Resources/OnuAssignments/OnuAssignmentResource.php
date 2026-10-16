@@ -44,11 +44,20 @@ class OnuAssignmentResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSignal;
 
-    protected static ?string $navigationLabel = 'ONU বরাদ্দ';
+    public static function getNavigationLabel(): string
+    {
+        return __('ONU বরাদ্দ');
+    }
 
-    protected static ?string $modelLabel = 'ONU বরাদ্দ';
+    public static function getModelLabel(): string
+    {
+        return __('ONU বরাদ্দ');
+    }
 
-    protected static ?string $pluralModelLabel = 'ONU বরাদ্দ';
+    public static function getPluralModelLabel(): string
+    {
+        return __('ONU বরাদ্দ');
+    }
 
     protected static ?string $slug = 'onu-assignments';
 

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="bn">
+<html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>টিকিট · {{ $employee }} · {{ $now->format('d M Y') }}</title>
+    <title>{{ __('টিকিট') }} · {{ $employee }} · {{ $now->format('d M Y') }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -32,34 +32,34 @@
     </style>
 </head>
 <body>
-<div class="bar"><button onclick="window.print()">প্রিন্ট করুন</button></div>
+<div class="bar"><button onclick="window.print()">{{ __('প্রিন্ট করুন') }}</button></div>
 <header>
     <div>
         <h1>{{ $company->name }}</h1>
-        <p class="sub">কাজ চলছে এমন টিকিট · কর্মী: <b>{{ $employee }}</b></p>
+        <p class="sub">{{ __('কাজ চলছে এমন টিকিট') }} · {{ __('কর্মী:') }} <b>{{ $employee }}</b></p>
     </div>
     <div class="meta">
-        মোট টিকিট: <b>{{ $tickets->count() }}</b><br>
-        প্রিন্টের সময়: {{ $now->format('d M Y, g:i A') }}
+        {{ __('মোট টিকিট:') }} <b>{{ $tickets->count() }}</b><br>
+        {{ __('প্রিন্টের সময়:') }} {{ $now->format('d M Y, g:i A') }}
     </div>
 </header>
 
 @if ($tickets->isEmpty())
-    <div class="empty">{{ $employee }}-এর নামে এখন কাজ চলছে এমন কোনো টিকিট নেই।</div>
+    <div class="empty">{{ __(':name-এর নামে এখন কাজ চলছে এমন কোনো টিকিট নেই।', ['name' => $employee]) }}</div>
 @else
     <table>
         <thead>
         <tr>
             <th class="num">#</th>
-            <th>টিকিট</th>
-            <th>কাস্টমার</th>
-            <th>মোবাইল (বিলিং)</th>
-            <th>অভিযোগের নম্বর</th>
-            <th>ঠিকানা (Zone / Subzone / Box)</th>
-            <th>সমস্যা</th>
-            <th>খোলা হয়েছে</th>
-            <th>মন্তব্য</th>
-            <th class="done">কাজের ফল / সই</th>
+            <th>{{ __('টিকিট') }}</th>
+            <th>{{ __('কাস্টমার') }}</th>
+            <th>{{ __('মোবাইল (বিলিং)') }}</th>
+            <th>{{ __('অভিযোগের নম্বর') }}</th>
+            <th>{{ __('ঠিকানা (Zone / Subzone / Box)') }}</th>
+            <th>{{ __('সমস্যা') }}</th>
+            <th>{{ __('খোলা হয়েছে') }}</th>
+            <th>{{ __('মন্তব্য') }}</th>
+            <th class="done">{{ __('কাজের ফল / সই') }}</th>
         </tr>
         </thead>
         <tbody>
@@ -74,7 +74,7 @@
                 <td>{{ $t->category }}</td>
                 <td>{{ $t->opened_at?->timezone('Asia/Dhaka')->format('d M, g:i A') }}<br><span class="muted">{{ $t->created_by }}</span></td>
                 <td class="desc">{{ collect([$t->description, $t->note,
-                    isset($rx[$t->username]) ? 'ONU পাওয়ার: '.number_format((float) $rx[$t->username], 1).' dBm' : null])->filter()->join("\n") }}</td>
+                    isset($rx[$t->username]) ? __('ONU পাওয়ার:').' '.number_format((float) $rx[$t->username], 1).' dBm' : null])->filter()->join("\n") }}</td>
                 <td class="done"></td>
             </tr>
         @endforeach
@@ -83,8 +83,8 @@
 @endif
 
 <footer>
-    <div class="sign">কর্মীর সই</div>
-    <div class="sign">দায়িত্বপ্রাপ্ত কর্মকর্তার সই</div>
+    <div class="sign">{{ __('কর্মীর সই') }}</div>
+    <div class="sign">{{ __('দায়িত্বপ্রাপ্ত কর্মকর্তার সই') }}</div>
 </footer>
 <script>window.addEventListener('load', () => setTimeout(() => window.print(), 400));</script>
 </body>

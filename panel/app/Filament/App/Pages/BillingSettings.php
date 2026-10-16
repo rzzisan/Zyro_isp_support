@@ -21,9 +21,15 @@ class BillingSettings extends CompanySettingsPage
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
 
-    protected static ?string $navigationLabel = 'বিলিং সংযোগ';
+    public static function getNavigationLabel(): string
+    {
+        return __('বিলিং সংযোগ');
+    }
 
-    protected static ?string $title = 'বিলিং সফটওয়্যার সংযোগ';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('বিলিং সফটওয়্যার সংযোগ');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
 

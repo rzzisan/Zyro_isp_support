@@ -18,7 +18,10 @@ class ListCustomers extends ListRecords
 {
     protected static string $resource = CustomerResource::class;
 
-    protected static ?string $title = 'কাস্টমার';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('কাস্টমার');
+    }
 
     public function getSubheading(): ?string
     {

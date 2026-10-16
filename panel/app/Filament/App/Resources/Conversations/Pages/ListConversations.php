@@ -15,7 +15,10 @@ class ListConversations extends Page
 
     protected string $view = 'filament.app.inbox';
 
-    protected static ?string $title = 'ইনবক্স';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('ইনবক্স');
+    }
 
     public function getBreadcrumbs(): array
     {

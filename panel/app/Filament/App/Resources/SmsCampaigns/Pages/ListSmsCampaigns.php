@@ -19,7 +19,10 @@ class ListSmsCampaigns extends ListRecords
 {
     protected static string $resource = SmsCampaignResource::class;
 
-    protected static ?string $title = 'SMS পাঠান';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('SMS পাঠান');
+    }
 
     public function getSubheading(): ?string
     {

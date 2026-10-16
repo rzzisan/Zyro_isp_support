@@ -22,9 +22,15 @@ class AiUsage extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
-    protected static ?string $navigationLabel = 'AI খরচ';
+    public static function getNavigationLabel(): string
+    {
+        return __('AI খরচ');
+    }
 
-    protected static ?string $title = 'AI টোকেন ও খরচ';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('AI টোকেন ও খরচ');
+    }
 
     protected static ?string $slug = 'ai-usage';
 

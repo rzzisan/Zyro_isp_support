@@ -10,9 +10,15 @@ use Filament\Support\Icons\Heroicon;
 /** বিলিং কনফিগারেশন menu item with its lists as tabs: Zone, Sub Zone, Box, District, Upazila. */
 class AreaCluster extends Cluster
 {
-    protected static ?string $navigationLabel = 'এলাকা';
+    public static function getNavigationLabel(): string
+    {
+        return __('এলাকা');
+    }
 
-    protected static ?string $clusterBreadcrumb = 'এলাকা';
+    public static function getClusterBreadcrumb(): ?string
+    {
+        return __('এলাকা');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'বিলিং কনফিগারেশন';
 

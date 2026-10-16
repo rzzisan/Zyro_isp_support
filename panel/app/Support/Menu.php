@@ -40,7 +40,7 @@ class Menu
 
     public static function options(bool $settings = true): array
     {
-        return collect(self::ITEMS)->filter(fn ($i) => $settings || ! $i[2])->map(fn ($i) => $i[0])->all();
+        return collect(self::ITEMS)->filter(fn ($i) => $settings || ! $i[2])->map(fn ($i) => __($i[0]))->all();
     }
 
     public static function defaults(string $role): array

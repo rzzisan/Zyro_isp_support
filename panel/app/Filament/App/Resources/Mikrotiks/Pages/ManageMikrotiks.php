@@ -9,7 +9,10 @@ class ManageMikrotiks extends ManageRecords
 {
     protected static string $resource = MikrotikResource::class;
 
-    protected static ?string $title = 'MikroTik রাউটার';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('MikroTik রাউটার');
+    }
 
     protected function getHeaderActions(): array
     {

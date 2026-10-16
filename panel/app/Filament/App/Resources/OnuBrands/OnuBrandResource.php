@@ -27,11 +27,20 @@ class OnuBrandResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;
 
-    protected static ?string $navigationLabel = 'ONU ব্র্যান্ড ও স্টক';
+    public static function getNavigationLabel(): string
+    {
+        return __('ONU ব্র্যান্ড ও স্টক');
+    }
 
-    protected static ?string $modelLabel = 'ব্র্যান্ড';
+    public static function getModelLabel(): string
+    {
+        return __('ব্র্যান্ড');
+    }
 
-    protected static ?string $pluralModelLabel = 'ONU ব্র্যান্ড ও স্টক';
+    public static function getPluralModelLabel(): string
+    {
+        return __('ONU ব্র্যান্ড ও স্টক');
+    }
 
     protected static ?string $slug = 'onu-brands';
 

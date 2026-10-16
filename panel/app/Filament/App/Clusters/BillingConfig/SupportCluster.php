@@ -10,9 +10,15 @@ use Filament\Support\Icons\Heroicon;
 /** বিলিং কনফিগারেশন menu item with its lists as tabs: কর্মী, ডিপার্টমেন্ট, সমস্যার ধরন, Priority. */
 class SupportCluster extends Cluster
 {
-    protected static ?string $navigationLabel = 'সাপোর্ট তালিকা';
+    public static function getNavigationLabel(): string
+    {
+        return __('সাপোর্ট তালিকা');
+    }
 
-    protected static ?string $clusterBreadcrumb = 'সাপোর্ট তালিকা';
+    public static function getClusterBreadcrumb(): ?string
+    {
+        return __('সাপোর্ট তালিকা');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'বিলিং কনফিগারেশন';
 

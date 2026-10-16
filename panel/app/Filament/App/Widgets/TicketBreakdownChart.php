@@ -14,7 +14,10 @@ class TicketBreakdownChart extends ChartWidget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected ?string $heading = 'টিকিটের ভাগ';
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return __('টিকিটের ভাগ');
+    }
 
     protected ?string $pollingInterval = '120s';
 

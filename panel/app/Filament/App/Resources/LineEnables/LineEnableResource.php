@@ -23,11 +23,20 @@ class LineEnableResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPower;
 
-    protected static ?string $navigationLabel = 'লাইন চালু/বন্ধের রেকর্ড';
+    public static function getNavigationLabel(): string
+    {
+        return __('লাইন চালু/বন্ধের রেকর্ড');
+    }
 
-    protected static ?string $modelLabel = 'লাইন চালু';
+    public static function getModelLabel(): string
+    {
+        return __('লাইন চালু');
+    }
 
-    protected static ?string $pluralModelLabel = 'লাইন চালু/বন্ধের রেকর্ড';
+    public static function getPluralModelLabel(): string
+    {
+        return __('লাইন চালু/বন্ধের রেকর্ড');
+    }
 
     protected static ?string $slug = 'line-enables';
 

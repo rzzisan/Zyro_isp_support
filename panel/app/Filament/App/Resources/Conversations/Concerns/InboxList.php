@@ -18,6 +18,7 @@ trait InboxList
     #[Url(as: 'box')]
     public string $box = 'all';
 
+    /** box => Bangla label, translated with __() where it is shown */
     public const BOXES = ['all' => 'সব', 'waiting' => 'উত্তরের অপেক্ষায়', 'mine' => 'আমার', 'paused' => 'বট থামানো', 'staff' => 'স্টাফ',
         'muted' => 'নোটিফিকেশন বন্ধ'];
 
@@ -78,7 +79,7 @@ trait InboxList
 
         return match (true) {
             $l->isSameDay($today) => $l->format('g:i A'),
-            $l->isSameDay($today->copy()->subDay()) => 'গতকাল',
+            $l->isSameDay($today->copy()->subDay()) => __('গতকাল'),
             default => $l->format('d M'),
         };
     }

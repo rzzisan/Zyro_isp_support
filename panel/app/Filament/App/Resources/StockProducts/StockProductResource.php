@@ -31,11 +31,20 @@ class StockProductResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSquares2x2;
 
-    protected static ?string $navigationLabel = 'অন্যান্য মাল';
+    public static function getNavigationLabel(): string
+    {
+        return __('অন্যান্য মাল');
+    }
 
-    protected static ?string $modelLabel = 'প্রোডাক্ট';
+    public static function getModelLabel(): string
+    {
+        return __('প্রোডাক্ট');
+    }
 
-    protected static ?string $pluralModelLabel = 'অন্যান্য মাল';
+    public static function getPluralModelLabel(): string
+    {
+        return __('অন্যান্য মাল');
+    }
 
     protected static ?string $slug = 'stock-products';
 

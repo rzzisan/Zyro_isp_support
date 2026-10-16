@@ -18,9 +18,15 @@ class ReceiptSettings extends CompanySettingsPage
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedReceiptPercent;
 
-    protected static ?string $navigationLabel = 'মানি রিসিট';
+    public static function getNavigationLabel(): string
+    {
+        return __('মানি রিসিট');
+    }
 
-    protected static ?string $title = 'মানি রিসিট';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('মানি রিসিট');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
 

@@ -60,13 +60,13 @@ class ViewConversation extends Page
     {
         $c = $this->contact();
 
-        return ($c->name ?: 'নাম নেই').' · '.$c->displayNumber();
+        return ($c->name ?: __('নাম নেই')).' · '.$c->displayNumber();
     }
 
     /** The chat header shows who it is; the page keeps only its action buttons. */
     public function getHeading(): string|Htmlable
     {
-        return 'ইনবক্স';
+        return __('ইনবক্স');
     }
 
     public function getBreadcrumbs(): array
@@ -79,50 +79,50 @@ class ViewConversation extends Page
         $company = Filament::getTenant();
 
         return [
-            \App\Filament\App\TicketActions::newTicket($this->contact()->customer_id)->label('টিকিট খুলুন')->color('gray'),
-            Action::make('take')->label('আমি নিলাম')->icon(Heroicon::OutlinedHandRaised)
+            \App\Filament\App\TicketActions::newTicket($this->contact()->customer_id)->label(__('টিকিট খুলুন'))->color('gray'),
+            Action::make('take')->label(__('আমি নিলাম'))->icon(Heroicon::OutlinedHandRaised)
                 ->visible(fn () => $this->contact()->assigned_user_id !== auth()->id())
                 ->action(function () {
                     $this->contact()->forceFill(['assigned_user_id' => auth()->id()])->save();
-                    Notification::make()->success()->title('কনভারসেশন আপনার দায়িত্বে')->send();
+                    Notification::make()->success()->title(__('কনভারসেশন আপনার দায়িত্বে'))->send();
                 }),
-            Action::make('assign')->label('অন্যকে দিন')->icon(Heroicon::OutlinedUserGroup)->color('gray')
+            Action::make('assign')->label(__('অন্যকে দিন'))->icon(Heroicon::OutlinedUserGroup)->color('gray')
                 ->schema([
-                    Select::make('user_id')->label('কার দায়িত্বে')
+                    Select::make('user_id')->label(__('কার দায়িত্বে'))
                         ->options(fn () => $company->users()->pluck('users.name', 'users.id'))
-                        ->placeholder('কেউ না'),
+                        ->placeholder(__('কেউ না')),
                 ])
                 ->fillForm(fn () => ['user_id' => $this->contact()->assigned_user_id])
                 ->action(function (array $data) use ($company) {
                     $id = $data['user_id'] ?? null;
                     abort_if($id && ! $company->users()->whereKey($id)->exists(), 403);
                     $this->contact()->forceFill(['assigned_user_id' => $id])->save();
-                    Notification::make()->success()->title('দায়িত্ব বদলানো হয়েছে')->send();
+                    Notification::make()->success()->title(__('দায়িত্ব বদলানো হয়েছে'))->send();
                 }),
-            Action::make('mute')->label('নোটিফিকেশন বন্ধ')->icon(Heroicon::OutlinedBellSlash)->color('gray')
+            Action::make('mute')->label(__('নোটিফিকেশন বন্ধ'))->icon(Heroicon::OutlinedBellSlash)->color('gray')
                 ->visible(fn () => ! $this->contact()->notify_muted)
                 ->requiresConfirmation()
-                ->modalDescription('এই নম্বর মেসেজ দিলে কেউ বেল, সাউন্ড বা পুশ নোটিফিকেশন পাবে না। চ্যাট ইনবক্সে আগের মতোই আসবে, বটও আগের মতো উত্তর দেবে।')
+                ->modalDescription(__('এই নম্বর মেসেজ দিলে কেউ বেল, সাউন্ড বা পুশ নোটিফিকেশন পাবে না। চ্যাট ইনবক্সে আগের মতোই আসবে, বটও আগের মতো উত্তর দেবে।'))
                 ->action(function () {
                     $this->contact()->forceFill(['notify_muted' => true])->save();
-                    Notification::make()->success()->title('এই নম্বরের নোটিফিকেশন বন্ধ')->send();
+                    Notification::make()->success()->title(__('এই নম্বরের নোটিফিকেশন বন্ধ'))->send();
                 }),
-            Action::make('unmute')->label('নোটিফিকেশন চালু')->icon(Heroicon::OutlinedBell)->color('gray')
+            Action::make('unmute')->label(__('নোটিফিকেশন চালু'))->icon(Heroicon::OutlinedBell)->color('gray')
                 ->visible(fn () => $this->contact()->notify_muted)
                 ->action(function () {
                     $this->contact()->forceFill(['notify_muted' => false])->save();
-                    Notification::make()->success()->title('এই নম্বরের নোটিফিকেশন আবার চালু')->send();
+                    Notification::make()->success()->title(__('এই নম্বরের নোটিফিকেশন আবার চালু'))->send();
                 }),
-            Action::make('pause')->label('বট থামান')->icon(Heroicon::OutlinedPause)->color('warning')
+            Action::make('pause')->label(__('বট থামান'))->icon(Heroicon::OutlinedPause)->color('warning')
                 ->visible(fn () => ! $this->contact()->isBotPaused())
                 ->requiresConfirmation()
-                ->modalDescription('এই নম্বরে বট ১২ ঘণ্টা উত্তর দেবে না, তারপর নিজে থেকে আবার চালু হবে। আগেই চালু করতে চাইলে "বট চালু করুন" চাপুন।')
+                ->modalDescription(__('এই নম্বরে বট ১২ ঘণ্টা উত্তর দেবে না, তারপর নিজে থেকে আবার চালু হবে। আগেই চালু করতে চাইলে "বট চালু করুন" চাপুন।'))
                 ->action(function () {
                     // a manual pause lasts MANUAL_PAUSE_HOURS, then the bot answers this number again on its own
                     $this->contact()->forceFill(['bot_paused' => false, 'bot_paused_until' => now()->addHours(self::MANUAL_PAUSE_HOURS)])->save();
-                    Notification::make()->success()->title('এই নম্বরে বট ১২ ঘণ্টার জন্য থামানো হয়েছে')->send();
+                    Notification::make()->success()->title(__('এই নম্বরে বট ১২ ঘণ্টার জন্য থামানো হয়েছে'))->send();
                 }),
-            Action::make('resume')->label('বট চালু করুন')->icon(Heroicon::OutlinedPlay)->color('success')
+            Action::make('resume')->label(__('বট চালু করুন'))->icon(Heroicon::OutlinedPlay)->color('success')
                 ->visible(fn () => $this->contact()->isBotPaused())
                 ->action(function () {
                     // a customer already identified stays identified; an unfinished identification starts fresh
@@ -130,7 +130,7 @@ class ViewConversation extends Page
                     $keep = ($state['stage'] ?? null) === 'ok' || ($state['mode'] ?? null) === 'technician';
                     $this->contact()->forceFill(['bot_paused' => false, 'bot_paused_until' => null,
                         'ident_state' => $keep ? $state : null])->save();
-                    Notification::make()->success()->title('এই নম্বরে বট আবার চালু')->send();
+                    Notification::make()->success()->title(__('এই নম্বরে বট আবার চালু'))->send();
                 }),
         ];
     }
@@ -139,15 +139,15 @@ class ViewConversation extends Page
     public function linkCustomerAction(): Action
     {
         return Action::make('linkCustomer')
-            ->label(fn () => $this->contact()->customer_set_at ? 'বদলান' : ($this->contact()->customer_id ? 'নিশ্চিত / বদলান' : 'ID দিন'))
+            ->label(fn () => $this->contact()->customer_set_at ? __('বদলান') : ($this->contact()->customer_id ? __('নিশ্চিত / বদলান') : __('ID দিন')))
             ->icon(Heroicon::OutlinedPencilSquare)->link()->size('sm')
-            ->modalHeading('এই চ্যাটের কাস্টমার')
-            ->modalDescription('যে লাইন দেবেন, বট এই নম্বরে সবসময় সেই লাইন ধরে উত্তর দেবে, পরিচয় আর জিজ্ঞেস করবে না।')
-            ->modalSubmitActionLabel('সেভ করুন')
+            ->modalHeading(__('এই চ্যাটের কাস্টমার'))
+            ->modalDescription(__('যে লাইন দেবেন, বট এই নম্বরে সবসময় সেই লাইন ধরে উত্তর দেবে, পরিচয় আর জিজ্ঞেস করবে না।'))
+            ->modalSubmitActionLabel(__('সেভ করুন'))
             ->fillForm(fn () => ['customer_id' => $this->contact()->suggestedCustomerId()])
             ->schema([
-                Select::make('customer_id')->label('কাস্টমার')->required()->searchable()
-                    ->helperText('কাস্টমার ID, মোবাইল, নাম বা username লিখে খুঁজুন')
+                Select::make('customer_id')->label(__('কাস্টমার'))->required()->searchable()
+                    ->helperText(__('কাস্টমার ID, মোবাইল, নাম বা username লিখে খুঁজুন'))
                     ->getSearchResultsUsing(fn (string $search) => collect(\App\Filament\App\TicketActions::searchCustomers($search))
                         ->mapWithKeys(fn ($c) => [$c['customer_id'] => BillingCustomer::searchLabel($c)])->all())
                     ->getOptionLabelUsing(function ($value) {
@@ -162,22 +162,22 @@ class ViewConversation extends Page
                 abort_unless(BillingCustomer::where('company_id', $this->contact()->company_id)->where('customer_id', $id)->exists(), 422);
                 // the engine checks customer_set_at before anything else, so ident_state can stay as it is
                 $this->contact()->forceFill(['customer_id' => $id, 'customer_set_by' => auth()->id(), 'customer_set_at' => now()])->save();
-                Notification::make()->success()->title("এই চ্যাট এখন কাস্টমার ID {$id}-এর")
-                    ->body('বট এই লাইন ধরেই উত্তর দেবে।')->send();
+                Notification::make()->success()->title(__('এই চ্যাট এখন কাস্টমার ID :id-এর', ['id' => $id]))
+                    ->body(__('বট এই লাইন ধরেই উত্তর দেবে।'))->send();
             });
     }
 
     /** Back to the bot's own identification (the last ID stays as a hint). */
     public function unlinkCustomerAction(): Action
     {
-        return Action::make('unlinkCustomer')->label('সরান')->icon(Heroicon::OutlinedXMark)->link()->size('sm')->color('danger')
+        return Action::make('unlinkCustomer')->label(__('সরান'))->icon(Heroicon::OutlinedXMark)->link()->size('sm')->color('danger')
             ->visible(fn () => (bool) $this->contact()->customer_set_at)
             ->requiresConfirmation()
-            ->modalHeading('এজেন্টের দেওয়া কাস্টমার ID সরাবেন?')
-            ->modalDescription('বট আবার নিজে লাইন চিনবে (নিবন্ধিত নম্বর বা আগের ID দিয়ে), না চিনলে কাস্টমারের কাছে ID চাইবে।')
+            ->modalHeading(__('এজেন্টের দেওয়া কাস্টমার ID সরাবেন?'))
+            ->modalDescription(__('বট আবার নিজে লাইন চিনবে (নিবন্ধিত নম্বর বা আগের ID দিয়ে), না চিনলে কাস্টমারের কাছে ID চাইবে।'))
             ->action(function () {
                 $this->contact()->forceFill(['customer_set_by' => null, 'customer_set_at' => null])->save();
-                Notification::make()->success()->title('এজেন্টের দেওয়া ID সরানো হয়েছে')->send();
+                Notification::make()->success()->title(__('এজেন্টের দেওয়া ID সরানো হয়েছে'))->send();
             });
     }
 
@@ -189,9 +189,9 @@ class ViewConversation extends Page
             'attachment' => ['nullable', 'file', 'max:12288',
                 'mimetypes:'.implode(',', array_keys(WhatsApp::MEDIA_TYPES))],
         ], [
-            'reply.required' => 'মেসেজ লিখুন',
-            'attachment.max' => 'ফাইল ১২ MB-এর বেশি হতে পারবে না',
-            'attachment.mimetypes' => 'শুধু ছবি (JPG/PNG/WEBP), PDF, MP4 বা MP3 পাঠানো যায়',
+            'reply.required' => __('মেসেজ লিখুন'),
+            'attachment.max' => __('ফাইল ১২ MB-এর বেশি হতে পারবে না'),
+            'attachment.mimetypes' => __('শুধু ছবি (JPG/PNG/WEBP), PDF, MP4 বা MP3 পাঠানো যায়'),
         ]);
         try {
             $m = $this->attachment
@@ -207,8 +207,8 @@ class ViewConversation extends Page
         $this->attachment = null;
         $this->contact()->refresh();
         Notification::make()->success()
-            ->title($m->status === 'test' ? 'টেস্ট মোড: সেভ হয়েছে, কাস্টমারের কাছে যায়নি' : 'পাঠানো হয়েছে')
-            ->body($this->pauseMinutes > 0 ? 'এই নম্বরে বট '.self::pauseLabel($this->pauseMinutes).' চুপ থাকবে।' : null)
+            ->title($m->status === 'test' ? __('টেস্ট মোড: সেভ হয়েছে, কাস্টমারের কাছে যায়নি') : __('পাঠানো হয়েছে'))
+            ->body($this->pauseMinutes > 0 ? __('এই নম্বরে বট :time চুপ থাকবে।', ['time' => self::pauseLabel($this->pauseMinutes)]) : null)
             ->send();
     }
 
@@ -247,7 +247,9 @@ class ViewConversation extends Page
 
     public static function pauseLabel(int $minutes): string
     {
-        return $minutes % 60 === 0 ? strtr((string) ($minutes / 60), ['0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪', '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯']).' ঘণ্টা'
-            : strtr((string) $minutes, ['0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪', '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯']).' মিনিট';
+        $digits = app()->getLocale() === 'bn' ? ['0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪', '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯'] : [];
+
+        return $minutes % 60 === 0 ? __(':n ঘণ্টা', ['n' => strtr((string) ($minutes / 60), $digits)])
+            : __(':n মিনিট', ['n' => strtr((string) $minutes, $digits)]);
     }
 }

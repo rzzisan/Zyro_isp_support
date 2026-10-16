@@ -27,11 +27,20 @@ class StockMovementResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowsRightLeft;
 
-    protected static ?string $navigationLabel = 'মালের হিসাব (ইন/বিতরণ)';
+    public static function getNavigationLabel(): string
+    {
+        return __('মালের হিসাব (ইন/বিতরণ)');
+    }
 
-    protected static ?string $modelLabel = 'মালের হিসাব';
+    public static function getModelLabel(): string
+    {
+        return __('মালের হিসাব');
+    }
 
-    protected static ?string $pluralModelLabel = 'মালের হিসাব (ইন/বিতরণ)';
+    public static function getPluralModelLabel(): string
+    {
+        return __('মালের হিসাব (ইন/বিতরণ)');
+    }
 
     protected static ?string $slug = 'stock-movements';
 

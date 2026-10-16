@@ -29,11 +29,20 @@ class SmsTemplateResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentDuplicate;
 
-    protected static ?string $navigationLabel = 'SMS টেমপ্লেট';
+    public static function getNavigationLabel(): string
+    {
+        return __('SMS টেমপ্লেট');
+    }
 
-    protected static ?string $modelLabel = 'টেমপ্লেট';
+    public static function getModelLabel(): string
+    {
+        return __('টেমপ্লেট');
+    }
 
-    protected static ?string $pluralModelLabel = 'SMS টেমপ্লেট';
+    public static function getPluralModelLabel(): string
+    {
+        return __('SMS টেমপ্লেট');
+    }
 
     protected static ?string $slug = 'sms-templates';
 

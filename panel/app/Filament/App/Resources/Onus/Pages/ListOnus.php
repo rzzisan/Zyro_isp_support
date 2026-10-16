@@ -11,7 +11,10 @@ class ListOnus extends ListRecords
 {
     protected static string $resource = OnuResource::class;
 
-    protected static ?string $title = 'ONU মনিটরিং';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('ONU মনিটরিং');
+    }
 
     public function getSubheading(): ?string
     {

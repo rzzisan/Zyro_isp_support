@@ -10,7 +10,10 @@ class ListSmsMessages extends ListRecords
 {
     protected static string $resource = SmsMessageResource::class;
 
-    protected static ?string $title = 'SMS লগ';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('SMS লগ');
+    }
 
     public function getSubheading(): ?string
     {

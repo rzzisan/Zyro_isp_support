@@ -17,7 +17,10 @@ class RecentChats extends TableWidget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected static ?string $heading = 'সাম্প্রতিক কনভারসেশন';
+    protected function getTableHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return __('সাম্প্রতিক কনভারসেশন');
+    }
 
     public function table(Table $table): Table
     {

@@ -46,7 +46,7 @@ class BillingTicket extends Model
         return in_array($this->state, ['pending', 'processing'], true);
     }
 
-    /** "3 ঘণ্টা 20 মিনিট" from opening to solving (or until now while open). */
+    /** "3 ঘণ্টা 20 মিনিট" from opening to solving (or until now while open), in the panel language. */
     public function duration(): ?string
     {
         if (! $this->opened_at) {
@@ -60,6 +60,6 @@ class BillingTicket extends Model
         $d = intdiv($m, 1440);
         $h = intdiv($m % 1440, 60);
 
-        return trim(($d ? "{$d} দিন " : '').($h ? "{$h} ঘণ্টা " : '').(! $d ? ($m % 60).' মিনিট' : ''));
+        return trim(($d ? __(':n দিন', ['n' => $d]).' ' : '').($h ? __(':n ঘণ্টা', ['n' => $h]).' ' : '').(! $d ? __(':n মিনিট', ['n' => $m % 60]) : ''));
     }
 }

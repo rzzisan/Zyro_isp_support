@@ -13,7 +13,10 @@ class TicketTrendChart extends ChartWidget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected ?string $heading = 'টিকিট: প্রতিদিন খোলা বনাম সমাধান';
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return __('টিকিট: প্রতিদিন খোলা বনাম সমাধান');
+    }
 
     protected ?string $pollingInterval = '120s';
 

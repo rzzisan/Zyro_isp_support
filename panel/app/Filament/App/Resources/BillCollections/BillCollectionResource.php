@@ -24,13 +24,22 @@ class BillCollectionResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static ?string $navigationLabel = 'Desk বিল লগ';
+    public static function getNavigationLabel(): string
+    {
+        return __('Desk বিল লগ');
+    }
 
     protected static bool $shouldRegisterNavigation = false;
 
-    protected static ?string $modelLabel = 'বিল কালেকশন';
+    public static function getModelLabel(): string
+    {
+        return __('বিল কালেকশন');
+    }
 
-    protected static ?string $pluralModelLabel = 'বিল কালেকশন';
+    public static function getPluralModelLabel(): string
+    {
+        return __('বিল কালেকশন');
+    }
 
     protected static ?string $slug = 'bill-collections';
 

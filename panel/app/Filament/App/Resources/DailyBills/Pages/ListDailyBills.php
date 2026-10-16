@@ -23,7 +23,10 @@ class ListDailyBills extends ListRecords
 
     protected static string $resource = DailyBillResource::class;
 
-    protected static ?string $title = 'বিল কালেকশন';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('বিল কালেকশন');
+    }
 
     public function getSubheading(): ?string
     {

@@ -10,6 +10,15 @@ Route::get('/', function () {
     return redirect($user && $user->is_super_admin && ! $user->companies()->exists() ? '/super' : '/app');
 })->middleware('web');
 
+// panel language switch in the user menu (both panels); saved on the user so it follows them to every device
+Route::get('/locale/{locale}', function (string $locale) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Locale::normalize($locale), 404);
+    $user->forceFill(['locale' => $locale])->save();
+
+    return redirect()->back(fallback: '/');
+})->middleware('web')->name('locale.switch');
+
 // voice / image / file of an inbox message; only members of the message's company
 Route::get('/media/{message}', function (\App\Models\WaMessage $message) {
     $user = Auth::user();

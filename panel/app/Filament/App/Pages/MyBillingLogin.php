@@ -24,9 +24,15 @@ class MyBillingLogin extends CompanySettingsPage
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedLockClosed;
 
-    protected static ?string $navigationLabel = 'আমার বিলিং লগইন';
+    public static function getNavigationLabel(): string
+    {
+        return __('আমার বিলিং লগইন');
+    }
 
-    protected static ?string $title = 'আমার বিলিং সফটওয়্যার লগইন';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('আমার বিলিং সফটওয়্যার লগইন');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
 

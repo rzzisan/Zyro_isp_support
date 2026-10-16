@@ -41,11 +41,20 @@ class CustomerResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
 
-    protected static ?string $navigationLabel = 'কাস্টমার';
+    public static function getNavigationLabel(): string
+    {
+        return __('কাস্টমার');
+    }
 
-    protected static ?string $modelLabel = 'কাস্টমার';
+    public static function getModelLabel(): string
+    {
+        return __('কাস্টমার');
+    }
 
-    protected static ?string $pluralModelLabel = 'কাস্টমার';
+    public static function getPluralModelLabel(): string
+    {
+        return __('কাস্টমার');
+    }
 
     protected static ?string $slug = 'customers';
 

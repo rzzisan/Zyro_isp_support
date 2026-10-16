@@ -16,7 +16,10 @@ class LiveStats extends StatsOverviewWidget
 
     protected ?string $pollingInterval = '10s';
 
-    protected ?string $heading = 'আজকের অবস্থা';
+    protected function getHeading(): ?string
+    {
+        return __('আজকের অবস্থা');
+    }
 
     protected ?string $description = 'প্রতি ১০ সেকেন্ডে নিজে থেকে আপডেট হয়';
 

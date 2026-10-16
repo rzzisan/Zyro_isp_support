@@ -18,7 +18,10 @@ class NetworkStats extends StatsOverviewWidget
 
     protected ?string $pollingInterval = '60s';
 
-    protected ?string $heading = 'নেটওয়ার্ক (MikroTik)';
+    protected function getHeading(): ?string
+    {
+        return __('নেটওয়ার্ক (MikroTik)');
+    }
 
     public static function canView(): bool
     {

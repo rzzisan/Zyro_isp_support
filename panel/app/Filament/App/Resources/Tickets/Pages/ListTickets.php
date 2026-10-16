@@ -14,15 +14,18 @@ class ListTickets extends ListRecords
 {
     protected static string $resource = TicketResource::class;
 
-    protected static ?string $title = 'বিলিংয়ের টিকিট';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('বিলিংয়ের টিকিট');
+    }
 
     public function getSubheading(): string|Htmlable|null
     {
         $at = BillingTicket::where('company_id', Filament::getTenant()->getKey())->max('synced_at');
 
-        return $at ? 'বিলিং সফটওয়্যার থেকে প্রতি ৫ মিনিটে আপডেট হয় · শেষ আপডেট '
-            .\Illuminate\Support\Carbon::parse($at, 'UTC')->timezone('Asia/Dhaka')->format('g:i A')
-            : 'এখনো বিলিং থেকে কোনো টিকিট আসেনি';
+        return $at ? __('বিলিং সফটওয়্যার থেকে প্রতি ৫ মিনিটে আপডেট হয় · শেষ আপডেট :time',
+            ['time' => \Illuminate\Support\Carbon::parse($at, 'UTC')->timezone('Asia/Dhaka')->format('g:i A')])
+            : __('এখনো বিলিং থেকে কোনো টিকিট আসেনি');
     }
 
     protected function getHeaderActions(): array
@@ -37,15 +40,15 @@ class ListTickets extends ListRecords
             ->whereIn('state', $states)->count();
 
         return [
-            'open' => Tab::make('খোলা')->badge($count(['pending', 'processing']))->badgeColor('warning')
+            'open' => Tab::make(__('খোলা'))->badge($count(['pending', 'processing']))->badgeColor('warning')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('state', ['pending', 'processing'])),
-            'pending' => Tab::make('অপেক্ষমাণ')->badge($count(['pending']))
+            'pending' => Tab::make(__('অপেক্ষমাণ'))->badge($count(['pending']))
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('state', 'pending')),
-            'processing' => Tab::make('কাজ চলছে')->badge($count(['processing']))
+            'processing' => Tab::make(__('কাজ চলছে'))->badge($count(['processing']))
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('state', 'processing')),
-            'solved' => Tab::make('সমাধান')
+            'solved' => Tab::make(__('সমাধান'))
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('state', ['solved', 'closed'])),
-            'all' => Tab::make('সব'),
+            'all' => Tab::make(__('সব')),
         ];
     }
 }

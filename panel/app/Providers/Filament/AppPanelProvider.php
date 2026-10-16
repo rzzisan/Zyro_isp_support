@@ -4,6 +4,8 @@ namespace App\Providers\Filament;
 
 use App\Models\Company;
 use App\Http\Middleware\AppPanelAuthenticate;
+use App\Http\Middleware\SetLocale;
+use App\Support\Locale;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -25,6 +27,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 /** Company panel: every page is scoped to the current company (tenant). */
 class AppPanelProvider extends PanelProvider
 {
+    public const NAV_GROUPS = ['সাপোর্ট', 'কাস্টমার ও বিল', 'ONU ও স্টক', 'SMS', 'নেটওয়ার্ক', 'বিলিং কনফিগারেশন', 'WhatsApp ও AI', 'সেটিংস'];
+
     public function panel(Panel $panel): Panel
     {
         return $panel
@@ -39,17 +43,10 @@ class AppPanelProvider extends PanelProvider
             ->maxContentWidth(Width::Full)
             ->sidebarWidth('16rem')
             ->sidebarCollapsibleOnDesktop()
-            // sidebar order: daily work first, setup last (items set their group in $navigationGroup)
-            ->navigationGroups([
-                NavigationGroup::make('সাপোর্ট'),
-                NavigationGroup::make('কাস্টমার ও বিল'),
-                NavigationGroup::make('ONU ও স্টক'),
-                NavigationGroup::make('SMS'),
-                NavigationGroup::make('নেটওয়ার্ক'),
-                NavigationGroup::make('বিলিং কনফিগারেশন'),
-                NavigationGroup::make('WhatsApp ও AI'),
-                NavigationGroup::make('সেটিংস'),
-            ])
+            // sidebar order: daily work first, setup last (items set their group in $navigationGroup, by the Bangla
+            // name used as the key here; the label shown is translated)
+            ->navigationGroups(collect(self::NAV_GROUPS)->mapWithKeys(fn (string $g) => [$g => NavigationGroup::make()->label(fn () => __($g))])->all())
+            ->userMenuItems([Locale::menuItem()])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString('<link rel="stylesheet" href="'.asset('css/zyro-theme.css').'?v='.filemtime(public_path('css/zyro-theme.css')).'">'))
             ->renderHook(PanelsRenderHook::BODY_END, fn () => new HtmlString('<script src="'.asset('js/zyro-page-info.js').'?v='.filemtime(public_path('js/zyro-page-info.js')).'"></script>'))
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn () => view('filament.notify-bell'))
@@ -67,6 +64,7 @@ class AppPanelProvider extends PanelProvider
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
                 AuthenticateSession::class,
+                SetLocale::class,
                 ShareErrorsFromSession::class,
                 PreventRequestForgery::class,
                 SubstituteBindings::class,

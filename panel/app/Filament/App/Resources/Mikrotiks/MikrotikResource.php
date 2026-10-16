@@ -34,9 +34,15 @@ class MikrotikResource extends Resource
 
     protected static ?string $navigationLabel = 'MikroTik';
 
-    protected static ?string $modelLabel = 'MikroTik রাউটার';
+    public static function getModelLabel(): string
+    {
+        return __('MikroTik রাউটার');
+    }
 
-    protected static ?string $pluralModelLabel = 'MikroTik রাউটার';
+    public static function getPluralModelLabel(): string
+    {
+        return __('MikroTik রাউটার');
+    }
 
     protected static ?string $slug = 'mikrotik';
 

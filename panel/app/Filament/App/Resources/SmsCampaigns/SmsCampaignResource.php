@@ -24,11 +24,17 @@ class SmsCampaignResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftEllipsis;
 
-    protected static ?string $navigationLabel = 'SMS পাঠান';
+    public static function getNavigationLabel(): string
+    {
+        return __('SMS পাঠান');
+    }
 
     protected static ?string $modelLabel = 'SMS';
 
-    protected static ?string $pluralModelLabel = 'SMS পাঠান';
+    public static function getPluralModelLabel(): string
+    {
+        return __('SMS পাঠান');
+    }
 
     protected static ?string $slug = 'sms';
 

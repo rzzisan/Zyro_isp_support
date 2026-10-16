@@ -23,11 +23,20 @@ class ConversationResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
 
-    protected static ?string $navigationLabel = 'ইনবক্স';
+    public static function getNavigationLabel(): string
+    {
+        return __('ইনবক্স');
+    }
 
-    protected static ?string $modelLabel = 'কনভারসেশন';
+    public static function getModelLabel(): string
+    {
+        return __('কনভারসেশন');
+    }
 
-    protected static ?string $pluralModelLabel = 'কনভারসেশন';
+    public static function getPluralModelLabel(): string
+    {
+        return __('কনভারসেশন');
+    }
 
     protected static ?string $slug = 'inbox';
 
@@ -52,33 +61,33 @@ class ConversationResource extends Resource
             ->defaultSort('last_message_at', 'desc')
             ->modifyQueryUsing(fn (Builder $query) => $query->with(['lastMessage', 'assignedUser']))
             ->columns([
-                TextColumn::make('name')->label('কাস্টমার')->placeholder('নাম নেই')
+                TextColumn::make('name')->label(__('কাস্টমার'))->placeholder(__('নাম নেই'))
                     ->description(fn (WaContact $r) => $r->displayNumber())
                     ->searchable(['name', 'wa_number', 'customer_id']),
-                TextColumn::make('customer_id')->label('ID')->placeholder('অচেনা'),
-                TextColumn::make('last')->label('শেষ মেসেজ')
+                TextColumn::make('customer_id')->label('ID')->placeholder(__('অচেনা')),
+                TextColumn::make('last')->label(__('শেষ মেসেজ'))
                     ->state(function (WaContact $r) {
                         $m = $r->lastMessage;
                         if (! $m) {
                             return '—';
                         }
-                        $who = $m->direction === 'in' ? '' : ($m->sender === 'bot' ? 'বট: ' : 'আমরা: ');
+                        $who = $m->direction === 'in' ? '' : ($m->sender === 'bot' ? __('বট: ') : __('আমরা: '));
 
                         return $who.Str::limit($m->body ?: "[{$m->type}]", 60);
                     }),
-                TextColumn::make('last_message_at')->label('সময়')->since()->sortable(),
-                TextColumn::make('assignedUser.name')->label('দায়িত্বে')->placeholder('কেউ না'),
-                TextColumn::make('bot')->label('বট')->badge()
-                    ->state(fn (WaContact $r) => $r->isBotPaused() ? 'থামানো' : 'চালু')
-                    ->color(fn (string $state) => $state === 'চালু' ? 'success' : 'warning'),
+                TextColumn::make('last_message_at')->label(__('সময়'))->since()->sortable(),
+                TextColumn::make('assignedUser.name')->label(__('দায়িত্বে'))->placeholder(__('কেউ না')),
+                TextColumn::make('bot')->label(__('বট'))->badge()
+                    ->state(fn (WaContact $r) => $r->isBotPaused() ? __('থামানো') : __('চালু'))
+                    ->color(fn (string $state) => $state === __('চালু') ? 'success' : 'warning'),
             ])
             ->filters([
-                Filter::make('mine')->label('শুধু আমার')
+                Filter::make('mine')->label(__('শুধু আমার'))
                     ->query(fn (Builder $query) => $query->where('assigned_user_id', auth()->id())),
-                Filter::make('unassigned')->label('কারো দায়িত্বে নেই')
+                Filter::make('unassigned')->label(__('কারো দায়িত্বে নেই'))
                     ->query(fn (Builder $query) => $query->whereNull('assigned_user_id')),
-                TernaryFilter::make('paused')->label('বট')
-                    ->trueLabel('থামানো')->falseLabel('চালু')
+                TernaryFilter::make('paused')->label(__('বট'))
+                    ->trueLabel(__('থামানো'))->falseLabel(__('চালু'))
                     ->queries(
                         true: fn (Builder $query) => $query->where(fn ($w) => $w->where('bot_paused', true)->orWhere('bot_paused_until', '>', now())),
                         false: fn (Builder $query) => $query->where('bot_paused', false)->where(fn ($w) => $w->whereNull('bot_paused_until')->orWhere('bot_paused_until', '<=', now())),

@@ -27,11 +27,17 @@ class SmsMessageResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedInboxStack;
 
-    protected static ?string $navigationLabel = 'SMS লগ';
+    public static function getNavigationLabel(): string
+    {
+        return __('SMS লগ');
+    }
 
     protected static ?string $modelLabel = 'SMS';
 
-    protected static ?string $pluralModelLabel = 'SMS লগ';
+    public static function getPluralModelLabel(): string
+    {
+        return __('SMS লগ');
+    }
 
     protected static ?string $slug = 'sms-log';
 

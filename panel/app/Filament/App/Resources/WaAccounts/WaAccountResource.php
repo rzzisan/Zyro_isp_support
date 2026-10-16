@@ -32,9 +32,15 @@ class WaAccountResource extends Resource
 
     protected static ?string $navigationLabel = 'WhatsApp';
 
-    protected static ?string $modelLabel = 'WhatsApp নম্বর';
+    public static function getModelLabel(): string
+    {
+        return __('WhatsApp নম্বর');
+    }
 
-    protected static ?string $pluralModelLabel = 'WhatsApp নম্বর';
+    public static function getPluralModelLabel(): string
+    {
+        return __('WhatsApp নম্বর');
+    }
 
     protected static ?string $slug = 'whatsapp';
 

@@ -9,7 +9,10 @@ class ListLineEnables extends ListRecords
 {
     protected static string $resource = LineEnableResource::class;
 
-    protected static ?string $title = 'লাইন চালু/বন্ধের রেকর্ড';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('লাইন চালু/বন্ধের রেকর্ড');
+    }
 
     public function getSubheading(): ?string
     {

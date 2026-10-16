@@ -13,7 +13,10 @@ class MessagesChart extends ChartWidget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected ?string $heading = 'মেসেজের ধারা';
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return __('মেসেজের ধারা');
+    }
 
     protected ?string $pollingInterval = '15s';
 

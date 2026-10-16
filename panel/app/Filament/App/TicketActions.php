@@ -117,18 +117,18 @@ class TicketActions
     {
         $prefill = fn (Action $action) => $customerId instanceof \Closure ? array_pad((array) $customerId($action->getRecord()), 2, null) : [$customerId, null];
 
-        return Action::make('newTicket')->label('নতুন টিকিট')->icon(Heroicon::OutlinedPlusCircle)
-            ->modalHeading('বিলিং সফটওয়্যারে নতুন টিকিট')
+        return Action::make('newTicket')->label(__('নতুন টিকিট'))->icon(Heroicon::OutlinedPlusCircle)
+            ->modalHeading(__('বিলিং সফটওয়্যারে নতুন টিকিট'))
             ->modalDescription(function (Action $action) use ($prefill) {
                 [$id] = $prefill($action);
                 $open = $id ? BillingTicket::where('company_id', static::company())->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$id])
                     ->whereIn('state', ['pending', 'processing'])->orderByDesc('id')->value('complain_id') : null;
 
-                return $open ? "এই কাস্টমারের টিকিট #{$open} এখনও খোলা আছে" : 'কাস্টমার বাছলে তার লাইনের এখনকার অবস্থা দেখাবে';
+                return $open ? __('এই কাস্টমারের টিকিট #:id এখনও খোলা আছে', ['id' => $open]) : __('কাস্টমার বাছলে তার লাইনের এখনকার অবস্থা দেখাবে');
             })
             ->modalIcon(Heroicon::OutlinedTicket)
             ->modalWidth('4xl')
-            ->modalSubmitActionLabel('টিকিট খুলুন')
+            ->modalSubmitActionLabel(__('টিকিট খুলুন'))
             ->fillForm(function (Action $action) use ($prefill) {
                 [$customerId, $comment] = $prefill($action);
                 $data = ['priority' => '2', 'sms_client' => SmsSetting::forCompany(static::company())->eventOn('ticket_open'),
@@ -147,8 +147,8 @@ class TicketActions
                 return $data;
             })
             ->schema([
-                Select::make('customer')->label('কাস্টমার')->required()->searchable()
-                    ->helperText('কাস্টমার ID, মোবাইল বা username লিখে খুঁজুন')
+                Select::make('customer')->label(__('কাস্টমার'))->required()->searchable()
+                    ->helperText(__('কাস্টমার ID, মোবাইল বা username লিখে খুঁজুন'))
                     ->getSearchResultsUsing(fn (string $search) => collect(static::searchCustomers($search))
                         ->mapWithKeys(fn ($c) => [static::customerKey($c) => static::customerLabel($c)])->all())
                     ->getOptionLabelUsing(function ($value) {
@@ -162,28 +162,28 @@ class TicketActions
                 Placeholder::make('info')->hiddenLabel()->columnSpanFull()
                     ->visible(fn ($get) => filled($get('customer')))
                     ->content(fn ($get) => static::infoView($get('customer'))),
-                Section::make('টিকিটের তথ্য')->icon(Heroicon::OutlinedPencilSquare)->schema([
+                Section::make(__('টিকিটের তথ্য'))->icon(Heroicon::OutlinedPencilSquare)->schema([
                     Grid::make(2)->schema([
-                        Select::make('category_id')->label('সমস্যার ধরন')->required()->searchable()
+                        Select::make('category_id')->label(__('সমস্যার ধরন'))->required()->searchable()
                             ->options(fn () => static::options('categories')),
                         Select::make('priority')->label('Priority')->required()
                             ->options(fn () => static::options('priorities') ?: ['1' => 'Low', '2' => 'Medium', '3' => 'High']),
                     ]),
-                    TextInput::make('mobile')->label('যোগাযোগের মোবাইল')->tel()->required(),
-                    Textarea::make('comment')->label('সমস্যার বিবরণ')->required()->rows(3)->maxLength(1900),
+                    TextInput::make('mobile')->label(__('যোগাযোগের মোবাইল'))->tel()->required(),
+                    Textarea::make('comment')->label(__('সমস্যার বিবরণ'))->required()->rows(3)->maxLength(1900),
                     Grid::make(2)->schema([
-                        Select::make('dept_id')->label('ডিপার্টমেন্ট (ঐচ্ছিক)')->options(fn () => static::options('departments')),
-                        Select::make('employees')->label('কর্মী assign (ঐচ্ছিক)')->multiple()->searchable()
+                        Select::make('dept_id')->label(__('ডিপার্টমেন্ট (ঐচ্ছিক)'))->options(fn () => static::options('departments')),
+                        Select::make('employees')->label(__('কর্মী assign (ঐচ্ছিক)'))->multiple()->searchable()
                             ->options(fn () => static::options('employees')),
                     ]),
                     Grid::make(2)->schema([
                         // the customer's SMS goes from the Desk gateway (template "টিকিট খোলা"), never billing's
-                        Toggle::make('sms_client')->label('কাস্টমারকে SMS')
+                        Toggle::make('sms_client')->label(__('কাস্টমারকে SMS'))
                             ->disabled(fn () => ! SmsSetting::forCompany(static::company())->eventReady('ticket_open'))
                             ->hintIcon('heroicon-o-information-circle', fn () => SmsSetting::forCompany(static::company())->eventReady('ticket_open')
-                                ? 'টিকিট খোলা হলে Desk-এর SMS গেটওয়ে দিয়ে "টিকিট খোলা" টেমপ্লেটের SMS যায় (যোগাযোগের মোবাইলে)'
-                                : 'চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "টিকিট খোলা" টেমপ্লেট সেট করুন'),
-                        Toggle::make('sms_employees')->label('কর্মীকে SMS'),
+                                ? __('টিকিট খোলা হলে Desk-এর SMS গেটওয়ে দিয়ে "টিকিট খোলা" টেমপ্লেটের SMS যায় (যোগাযোগের মোবাইলে)')
+                                : __('চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "টিকিট খোলা" টেমপ্লেট সেট করুন')),
+                        Toggle::make('sms_employees')->label(__('কর্মীকে SMS')),
                     ]),
                 ]),
             ])
@@ -199,7 +199,7 @@ class TicketActions
                         'sms_employees' => (bool) $data['sms_employees'],
                     ]);
                 } catch (RuntimeException $e) {
-                    Notification::make()->danger()->title('টিকিট খোলা যায়নি')->body($e->getMessage())->send();
+                    Notification::make()->danger()->title(__('টিকিট খোলা যায়নি'))->body($e->getMessage())->send();
                     $action->halt();
 
                     return;
@@ -207,10 +207,11 @@ class TicketActions
                 $smsNote = ($data['sms_client'] ?? false) ? static::queueTicketSms('ticket_open', (int) $headerId, $data['mobile'] ?? null, [
                     'ticket_no' => (string) ($res['complain_id'] ?? ''),
                     'problem' => static::options('categories')[$data['category_id']] ?? '',
+                    // {status} goes into the customer's SMS: stays Bangla, not the staff's panel language
                     'status' => 'খোলা', 'employees' => array_values($data['employees'] ?? []),
                 ]) : null;
                 Notification::make()->success()
-                    ->title(($res['complain_id'] ? "টিকিট #{$res['complain_id']} খোলা হয়েছে" : 'টিকিট খোলা হয়েছে').($smsNote ? ' · '.$smsNote : ''))
+                    ->title(($res['complain_id'] ? __('টিকিট #:id খোলা হয়েছে', ['id' => $res['complain_id']]) : __('টিকিট খোলা হয়েছে')).($smsNote ? ' · '.$smsNote : ''))
                     ->body($res['message'] ?? null)->send();
             });
     }
@@ -218,28 +219,28 @@ class TicketActions
     /** Pull the latest tickets from the billing software now (instead of waiting for the 5-minute sync). */
     public static function sync(): Action
     {
-        return Action::make('sync')->label('এখনই Sync')->icon(Heroicon::OutlinedArrowPath)->color('gray')
+        return Action::make('sync')->label(__('এখনই Sync'))->icon(Heroicon::OutlinedArrowPath)->color('gray')
             ->action(function () {
                 try {
                     $r = Engine::syncTickets(static::company());
                 } catch (RuntimeException $e) {
-                    Notification::make()->danger()->title('Sync হয়নি')->body($e->getMessage())->send();
+                    Notification::make()->danger()->title(__('Sync হয়নি'))->body($e->getMessage())->send();
 
                     return;
                 }
-                Notification::make()->success()->title('বিলিং থেকে আপডেট হয়েছে')
-                    ->body("খোলা {$r['open']}টা, গত ৩ দিনে সমাধান {$r['solved']}টা")->send();
+                Notification::make()->success()->title(__('বিলিং থেকে আপডেট হয়েছে'))
+                    ->body(__('খোলা :openটা, গত ৩ দিনে সমাধান :solvedটা', ['open' => $r['open'], 'solved' => $r['solved']]))->send();
             });
     }
 
     /** Printable list of one employee's in-progress tickets (opens in a new tab). */
     public static function print(): Action
     {
-        return Action::make('print')->label('প্রিন্ট')->icon(Heroicon::OutlinedPrinter)->color('gray')
-            ->modalHeading('কাজ চলছে এমন টিকিট প্রিন্ট')
-            ->modalSubmitActionLabel('প্রিন্ট পেজ খুলুন')
+        return Action::make('print')->label(__('প্রিন্ট'))->icon(Heroicon::OutlinedPrinter)->color('gray')
+            ->modalHeading(__('কাজ চলছে এমন টিকিট প্রিন্ট'))
+            ->modalSubmitActionLabel(__('প্রিন্ট পেজ খুলুন'))
             ->schema([
-                Select::make('employee')->label('কর্মী')->required()->searchable()
+                Select::make('employee')->label(__('কর্মী'))->required()->searchable()
                     ->options(function () {
                         $names = [];
                         foreach (BillingTicket::where('company_id', static::company())->where('state', 'processing')
@@ -253,9 +254,9 @@ class TicketActions
                         }
                         ksort($names);
 
-                        return collect($names)->mapWithKeys(fn ($c, $n) => [$n => "{$n} ({$c}টা)"])->all();
+                        return collect($names)->mapWithKeys(fn ($c, $n) => [$n => $n.' '.__('(:countটা)', ['count' => $c])])->all();
                     })
-                    ->helperText('শুধু যাদের নামে এখন কাজ চলছে এমন টিকিট আছে'),
+                    ->helperText(__('শুধু যাদের নামে এখন কাজ চলছে এমন টিকিট আছে')),
             ])
             ->action(function (array $data, $livewire) {
                 $url = route('tickets.print', ['company' => Filament::getTenant()->slug, 'employee' => $data['employee']]);
@@ -267,8 +268,8 @@ class TicketActions
     {
         return Action::make('assign')->label('Assign')->icon(Heroicon::OutlinedUserPlus)->color('gray')
             ->visible(fn (BillingTicket $record) => $record->isOpen())
-            ->modalHeading(fn (BillingTicket $record) => "টিকিট #{$record->complain_id}: কর্মী assign")
-            ->modalSubmitActionLabel('Assign করুন')
+            ->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id: কর্মী assign', ['id' => $record->complain_id]))
+            ->modalSubmitActionLabel(__('Assign করুন'))
             ->fillForm(function (BillingTicket $record) {
                 try {
                     $s = Engine::solvers(static::company(), $record->complain_id);
@@ -280,22 +281,22 @@ class TicketActions
                     'employees' => array_map('strval', $s['EmployeeIds'] ?? []), 'sms_employees' => false];
             })
             ->schema([
-                Select::make('dept_id')->label('ডিপার্টমেন্ট (ঐচ্ছিক)')->options(fn () => static::options('departments')),
-                Select::make('employees')->label('কর্মী')->multiple()->searchable()->required()
+                Select::make('dept_id')->label(__('ডিপার্টমেন্ট (ঐচ্ছিক)'))->options(fn () => static::options('departments')),
+                Select::make('employees')->label(__('কর্মী'))->multiple()->searchable()->required()
                     ->options(fn () => static::options('employees')),
-                Toggle::make('sms_employees')->label('কর্মীকে SMS'),
+                Toggle::make('sms_employees')->label(__('কর্মীকে SMS')),
             ])
             ->action(function (array $data, BillingTicket $record, Action $action) {
                 try {
                     Engine::assign(static::company(), $record->complain_id, $data['employees'], $data['dept_id'] ?? null,
                         (bool) $data['sms_employees']);
                 } catch (RuntimeException $e) {
-                    Notification::make()->danger()->title('Assign করা যায়নি')->body($e->getMessage())->send();
+                    Notification::make()->danger()->title(__('Assign করা যায়নি'))->body($e->getMessage())->send();
                     $action->halt();
 
                     return;
                 }
-                Notification::make()->success()->title("টিকিট #{$record->complain_id} assign হয়েছে")->send();
+                Notification::make()->success()->title(__('টিকিট #:id assign হয়েছে', ['id' => $record->complain_id]))->send();
             });
     }
 
@@ -324,10 +325,10 @@ class TicketActions
         $arrow = $dir < 0 ? 'arrow-left' : 'arrow-right';
 
         return Action::make($dir < 0 ? 'previousTicket' : 'nextTicket')
-            ->label($dir < 0 ? 'আগের' : 'পরের')->color('gray')->button()
+            ->label($dir < 0 ? __('আগের') : __('পরের'))->color('gray')->button()
             ->icon($dir < 0 ? Heroicon::OutlinedChevronLeft : Heroicon::OutlinedChevronRight)
             ->iconPosition($dir < 0 ? IconPosition::Before : IconPosition::After)
-            ->tooltip($dir < 0 ? 'আগের টিকিট (← কী)' : 'পরের টিকিট (→ কী)')
+            ->tooltip($dir < 0 ? __('আগের টিকিট (← কী)') : __('পরের টিকিট (→ কী)'))
             ->disabled(fn (BillingTicket $record, $livewire) => $key($record, $livewire) === null)
             ->alpineClickHandler(fn (BillingTicket $record, $livewire) => ($k = $key($record, $livewire)) === null ? 'void 0'
                 : '$wire.replaceMountedAction('.Js::from('view').', {}, '.Js::from(['table' => true, 'recordKey' => $k]).')')
@@ -338,12 +339,12 @@ class TicketActions
     /** "Edit": category, priority, complaint mobile, description and staff of an open ticket, saved in billing. */
     public static function edit(): Action
     {
-        return Action::make('edit')->label('এডিট')->icon(Heroicon::OutlinedPencilSquare)->color('gray')
+        return Action::make('edit')->label(__('এডিট'))->icon(Heroicon::OutlinedPencilSquare)->color('gray')
             ->visible(fn (BillingTicket $record) => $record->isOpen())
-            ->modalHeading(fn (BillingTicket $record) => "টিকিট #{$record->complain_id} এডিট")
-            ->modalDescription('বিলিং সফটওয়্যারেও বদলাবে (আপনার নিজের বিলিং লগইনে)। কাস্টমারকে SMS যাবে না।')
+            ->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id এডিট', ['id' => $record->complain_id]))
+            ->modalDescription(__('বিলিং সফটওয়্যারেও বদলাবে (আপনার নিজের বিলিং লগইনে)। কাস্টমারকে SMS যাবে না।'))
             ->modalWidth('2xl')
-            ->modalSubmitActionLabel('সেভ করুন')
+            ->modalSubmitActionLabel(__('সেভ করুন'))
             ->fillForm(function (BillingTicket $record) {
                 try {
                     $s = Engine::solvers(static::company(), $record->complain_id);
@@ -364,20 +365,20 @@ class TicketActions
             })
             ->schema([
                 Grid::make(2)->schema([
-                    Select::make('category_id')->label('সমস্যার ধরন')->required()->searchable()
+                    Select::make('category_id')->label(__('সমস্যার ধরন'))->required()->searchable()
                         ->options(fn () => static::options('categories')),
                     Select::make('priority')->label('Priority')->required()
                         ->options(fn () => static::options('priorities') ?: ['1' => 'Low', '2' => 'Medium', '3' => 'High']),
                 ]),
-                TextInput::make('mobile')->label('যোগাযোগের মোবাইল')->tel()->required(),
-                Textarea::make('comment')->label('সমস্যার বিবরণ')->required()->rows(4)->maxLength(1900),
+                TextInput::make('mobile')->label(__('যোগাযোগের মোবাইল'))->tel()->required(),
+                Textarea::make('comment')->label(__('সমস্যার বিবরণ'))->required()->rows(4)->maxLength(1900),
                 Grid::make(2)->schema([
-                    Select::make('dept_id')->label('ডিপার্টমেন্ট (ঐচ্ছিক)')->options(fn () => static::options('departments')),
-                    Select::make('employees')->label('কর্মী')->multiple()->searchable()
-                        ->helperText('খালি রাখলে কর্মী যেমন আছে থাকবে')
+                    Select::make('dept_id')->label(__('ডিপার্টমেন্ট (ঐচ্ছিক)'))->options(fn () => static::options('departments')),
+                    Select::make('employees')->label(__('কর্মী'))->multiple()->searchable()
+                        ->helperText(__('খালি রাখলে কর্মী যেমন আছে থাকবে'))
                         ->options(fn () => static::options('employees')),
                 ]),
-                Toggle::make('sms_employees')->label('কর্মীকে SMS'),
+                Toggle::make('sms_employees')->label(__('কর্মীকে SMS')),
             ])
             ->action(function (array $data, BillingTicket $record, Action $action) {
                 // re-assign only when the staff list really changed (AddSolver restarts the assignment)
@@ -400,12 +401,12 @@ class TicketActions
                         'sms_employees' => (bool) ($data['sms_employees'] ?? false),
                     ]);
                 } catch (RuntimeException $e) {
-                    Notification::make()->danger()->title('এডিট হয়নি')->body($e->getMessage())->send();
+                    Notification::make()->danger()->title(__('এডিট হয়নি'))->body($e->getMessage())->send();
                     $action->halt();
 
                     return;
                 }
-                Notification::make()->success()->title("টিকিট #{$record->complain_id} আপডেট হয়েছে")->send();
+                Notification::make()->success()->title(__('টিকিট #:id আপডেট হয়েছে', ['id' => $record->complain_id]))->send();
             });
     }
 
@@ -423,28 +424,28 @@ class TicketActions
             ->visible(fn (BillingTicket $record) => $record->isOpen())
             ->disabled(fn (BillingTicket $record) => $online($record) === false)
             ->tooltip(fn (BillingTicket $record) => match ($online($record)) {
-                false => 'কাস্টমার MikroTik-এ অফলাইন, তাই Solve করা যাবে না',
-                null => 'MikroTik থেকে উত্তর আসেনি; Solve চাপলে আবার যাচাই হবে',
+                false => __('কাস্টমার MikroTik-এ অফলাইন, তাই Solve করা যাবে না'),
+                null => __('MikroTik থেকে উত্তর আসেনি; Solve চাপলে আবার যাচাই হবে'),
                 default => null,
             })
-            ->modalHeading(fn (BillingTicket $record) => "টিকিট #{$record->complain_id} সমাধান")
-            ->modalDescription('কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে বিলিংয়ে Solved করা হবে। বিলিং থেকে কোনো SMS যায় না।')
-            ->modalSubmitActionLabel('Solve করুন')
+            ->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id সমাধান', ['id' => $record->complain_id]))
+            ->modalDescription(__('কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে বিলিংয়ে Solved করা হবে। বিলিং থেকে কোনো SMS যায় না।'))
+            ->modalSubmitActionLabel(__('Solve করুন'))
             ->fillForm(fn () => ['sms' => SmsSetting::forCompany(static::company())->eventOn('ticket_solved')])
             ->schema([
-                Textarea::make('remark')->label('মন্তব্য (ঐচ্ছিক)')->rows(2)->maxLength(500),
-                Toggle::make('sms')->label('কাস্টমারকে SMS')
+                Textarea::make('remark')->label(__('মন্তব্য (ঐচ্ছিক)'))->rows(2)->maxLength(500),
+                Toggle::make('sms')->label(__('কাস্টমারকে SMS'))
                     ->disabled(fn () => ! SmsSetting::forCompany(static::company())->eventReady('ticket_solved'))
                     ->hintIcon('heroicon-o-information-circle', fn () => SmsSetting::forCompany(static::company())->eventReady('ticket_solved')
-                        ? 'সমাধান হলে Desk-এর SMS গেটওয়ে দিয়ে "টিকিট সমাধান" টেমপ্লেটের SMS যায়'
-                        : 'চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "টিকিট সমাধান" টেমপ্লেট সেট করুন'),
+                        ? __('সমাধান হলে Desk-এর SMS গেটওয়ে দিয়ে "টিকিট সমাধান" টেমপ্লেটের SMS যায়')
+                        : __('চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "টিকিট সমাধান" টেমপ্লেট সেট করুন')),
             ])
             ->action(function (array $data, BillingTicket $record, Action $action) {
                 try {
                     Engine::solve(static::company(), $record->complain_id, $data['remark'] ?? null);
                 } catch (RuntimeException $e) {
                     Cache::forget('ticket-info:'.static::company().':'.(int) $record->customer_header_id);
-                    Notification::make()->danger()->title('Solve হয়নি')->body($e->getMessage())->send();
+                    Notification::make()->danger()->title(__('Solve হয়নি'))->body($e->getMessage())->send();
                     $action->halt();
 
                     return;
@@ -452,7 +453,7 @@ class TicketActions
                 $smsNote = ($data['sms'] ?? false) ? static::queueTicketSms('ticket_solved', (int) $record->customer_header_id,
                     $record->mobile, ['ticket_no' => (string) $record->complain_id, 'problem' => (string) $record->category,
                         'status' => 'সমাধান', 'technician' => (string) ($record->solved_by ?: $record->assigned_to)]) : null;
-                Notification::make()->success()->title("টিকিট #{$record->complain_id} সমাধান হয়েছে".($smsNote ? ' · '.$smsNote : ''))->send();
+                Notification::make()->success()->title(__('টিকিট #:id সমাধান হয়েছে', ['id' => $record->complain_id]).($smsNote ? ' · '.$smsNote : ''))->send();
             });
     }
 
@@ -475,13 +476,13 @@ class TicketActions
         } catch (\Throwable $e) {
             report($e);
 
-            return 'SMS তালিকায় তোলা যায়নি';
+            return __('SMS তালিকায় তোলা যায়নি');
         }
         if (! $campaign) {
-            return 'SMS যায়নি (মোবাইল নম্বর ঠিক নেই)';
+            return __('SMS যায়নি (মোবাইল নম্বর ঠিক নেই)');
         }
         Engine::kickSms(static::company());
 
-        return 'কাস্টমারকে SMS যাচ্ছে';
+        return __('কাস্টমারকে SMS যাচ্ছে');
     }
 }

@@ -10,7 +10,10 @@ class ListBillCollections extends ListRecords
 {
     protected static string $resource = BillCollectionResource::class;
 
-    protected static ?string $title = 'Desk বিল লগ';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('Desk বিল লগ');
+    }
 
     public function getSubheading(): ?string
     {

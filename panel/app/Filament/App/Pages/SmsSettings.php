@@ -29,9 +29,15 @@ class SmsSettings extends CompanySettingsPage
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSignal;
 
-    protected static ?string $navigationLabel = 'SMS গেটওয়ে';
+    public static function getNavigationLabel(): string
+    {
+        return __('SMS গেটওয়ে');
+    }
 
-    protected static ?string $title = 'SMS গেটওয়ে';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('SMS গেটওয়ে');
+    }
 
     protected static ?string $slug = 'sms-gateway';
 

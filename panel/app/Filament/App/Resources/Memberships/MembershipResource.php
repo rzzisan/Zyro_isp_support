@@ -27,11 +27,20 @@ class MembershipResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;
 
-    protected static ?string $navigationLabel = 'টিম';
+    public static function getNavigationLabel(): string
+    {
+        return __('টিম');
+    }
 
-    protected static ?string $modelLabel = 'সদস্য';
+    public static function getModelLabel(): string
+    {
+        return __('সদস্য');
+    }
 
-    protected static ?string $pluralModelLabel = 'টিম';
+    public static function getPluralModelLabel(): string
+    {
+        return __('টিম');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
 

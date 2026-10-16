@@ -12,7 +12,10 @@ class ReplyShareChart extends ChartWidget
 {
     protected static ?int $sort = 3;
 
-    protected ?string $heading = 'কে উত্তর দিয়েছে (৭ দিন)';
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return __('কে উত্তর দিয়েছে (৭ দিন)');
+    }
 
     protected ?string $pollingInterval = '30s';
 

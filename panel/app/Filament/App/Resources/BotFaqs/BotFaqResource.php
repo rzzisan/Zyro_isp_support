@@ -27,11 +27,17 @@ class BotFaqResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQuestionMarkCircle;
 
-    protected static ?string $navigationLabel = 'বটের FAQ';
+    public static function getNavigationLabel(): string
+    {
+        return __('বটের FAQ');
+    }
 
     protected static ?string $modelLabel = 'FAQ';
 
-    protected static ?string $pluralModelLabel = 'বটের FAQ';
+    public static function getPluralModelLabel(): string
+    {
+        return __('বটের FAQ');
+    }
 
     protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp ও AI';
 

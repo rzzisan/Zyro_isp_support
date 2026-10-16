@@ -23,9 +23,15 @@ class CompanyResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
-    protected static ?string $modelLabel = 'কোম্পানি';
+    public static function getModelLabel(): string
+    {
+        return __('কোম্পানি');
+    }
 
-    protected static ?string $pluralModelLabel = 'কোম্পানি';
+    public static function getPluralModelLabel(): string
+    {
+        return __('কোম্পানি');
+    }
 
     public static function form(Schema $schema): Schema
     {

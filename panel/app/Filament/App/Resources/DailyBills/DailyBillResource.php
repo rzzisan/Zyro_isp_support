@@ -30,11 +30,20 @@ class DailyBillResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static ?string $navigationLabel = 'বিল কালেকশন';
+    public static function getNavigationLabel(): string
+    {
+        return __('বিল কালেকশন');
+    }
 
-    protected static ?string $modelLabel = 'বিল';
+    public static function getModelLabel(): string
+    {
+        return __('বিল');
+    }
 
-    protected static ?string $pluralModelLabel = 'বিল কালেকশন';
+    public static function getPluralModelLabel(): string
+    {
+        return __('বিল কালেকশন');
+    }
 
     protected static ?string $slug = 'daily-bills';
 

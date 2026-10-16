@@ -9,7 +9,10 @@ class ManageWaAccounts extends ManageRecords
 {
     protected static string $resource = WaAccountResource::class;
 
-    protected static ?string $title = 'WhatsApp নম্বর';
+    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return __('WhatsApp নম্বর');
+    }
 
     protected function getHeaderActions(): array
     {

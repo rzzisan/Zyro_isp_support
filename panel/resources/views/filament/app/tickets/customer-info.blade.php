@@ -22,12 +22,12 @@
             </div>
             <div class="ztd-chips">
                 @if (! empty($c['status']))
-                    <span class="ztd-chip tone-{{ $disabled || strtolower((string) $c['status']) === 'left' ? 'bad' : 'good' }}">{{ $c['status'] }}{{ $disabled ? ' · লাইন বন্ধ' : '' }}</span>
+                    <span class="ztd-chip tone-{{ $disabled || strtolower((string) $c['status']) === 'left' ? 'bad' : 'good' }}">{{ $c['status'] }}{{ $disabled ? ' · '.__('লাইন বন্ধ') : '' }}</span>
                 @endif
             </div>
         </div>
     @endif
 
-    @include('filament.app.tickets.partials.line', ['part' => 'tiles', 'emptyText' => 'কাস্টমারের তথ্য পাওয়া যায়নি'])
+    @include('filament.app.tickets.partials.line', ['part' => 'tiles', 'emptyText' => __('কাস্টমারের তথ্য পাওয়া যায়নি')])
     @include('filament.app.tickets.partials.line', ['part' => 'cards'])
 </div>
