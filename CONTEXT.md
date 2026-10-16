@@ -318,3 +318,4 @@
 - নতুন লেখা যোগ করলে: `__('…')` + `lang/en.json`-এ ইংরেজি। `tests/Feature/LocaleTest.php` সব বাংলা key-এর ইংরেজি আর একই `:placeholder` আছে কিনা দেখে; না থাকলে ফেল।
 - গোটচা: const বা property-র ডিফল্ট মানে `__()` চলে না (মেথডে বা দেখানোর জায়গায় দিতে হয়)। StatsOverviewWidget-এর `getHeading()` protected, TableWidget-এ `getTableHeading()`, RelationManager-এর `getTitle()` static।
 - বাকি: অন্য পেজগুলো (SMS, কাস্টমার, বিল, সেটিংস, ONU, উইজেট), `public/js` (নোটিফিকেশন, page-info) এর লেখা, engine-এর মেসেজ, কাস্টমারমুখী টেমপ্লেটের ভাষা।
+- Deployed 2026-10-16 10:09 UTC (c205127): migrate, live `.env` APP_LOCALE=bn, config:cache → route/filament/view cache, fpm reload. Merge হয়েছিল migrate-এর আগে, তাই ~১৬ সেকেন্ড notify poll-এ "default_locale does not exist" (৩টা) — পরেরবার migrate আগে, তারপর merge না করে কোড বদলানো যায় না বলে migration-এর কলাম nullable/try রাখা বা merge আর migrate একসাথে চালানো।
