@@ -118,11 +118,12 @@
 .zi-muted { font-size: .78rem; color: var(--z-muted); }
 .zi-line { display: flex; flex-direction: column; gap: 8px; }
 /* line status in the page header, in the heading's place */
-.zi-line-head { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
-.zi-line-head .zi-st { background: var(--z-surface); min-width: 170px; }
-.zi-line-head .zi-st-traffic { display: inline; }
-.zi-line-head .zi-st-traffic::before { content: " · "; }
-.zi-line-tools { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; padding: 2px 0; }
+/* one row beside the action buttons: the boxes shrink (text cut with …) instead of pushing the buttons down */
+.fi-header > div:has(.zi-line-head) { flex: 1 1 0; min-width: 0; }
+.zi-line-head { flex-direction: row; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+.zi-line-head .zi-st { background: var(--z-surface); min-width: 0; flex: 0 1 auto; padding: 5px 9px; }
+.zi-line-head .zi-st-body small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zi-line-tools { flex: none; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; padding: 2px 0; }
 .zi-line-tools .zi-line-link { align-self: auto; }
 .zi-line-loading { padding: 10px 0; }
 .zi-line-btn { border: 0; background: none; padding: 2px; color: var(--z-muted); cursor: pointer; }
