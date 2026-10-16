@@ -71,31 +71,31 @@ class OnuResource extends Resource
             ->paginated([25, 50, 100, 250])->defaultPaginationPageOption(50)
             ->columns([
                 TextColumn::make('olt.name')->label('OLT')->toggleable(),
-                TextColumn::make('name')->label('পোর্ট')->sortable()->searchable(),
-                TextColumn::make('online')->label('অবস্থা')->badge()
-                    ->state(fn (Onu $record) => $record->online ? 'অনলাইন' : 'অফলাইন')
-                    ->color(fn (string $state) => $state === 'অনলাইন' ? 'success' : 'danger'),
+                TextColumn::make('name')->label(__('পোর্ট'))->sortable()->searchable(),
+                TextColumn::make('online')->label(__('অবস্থা'))->badge()
+                    ->state(fn (Onu $record) => $record->online ? __('অনলাইন') : __('অফলাইন'))
+                    ->color(fn (string $state) => $state === __('অনলাইন') ? 'success' : 'danger'),
                 TextColumn::make('rx_dbm')->label('Rx power')->sortable()->suffix(' dBm')->placeholder('—')
                     ->color(fn (?float $state) => $state === null ? null : ($state < Onu::WEAK_DBM ? 'danger' : ($state < -25 ? 'warning' : 'success'))),
                 TextColumn::make('tx_dbm')->label('Tx')->suffix(' dBm')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('distance_m')->label('দূরত্ব')->suffix(' m')->sortable()->placeholder('—'),
-                TextColumn::make('temp_c')->label('তাপমাত্রা')->suffix('°C')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('c_name')->label('কাস্টমার')->placeholder('মেলেনি')
+                TextColumn::make('distance_m')->label(__('দূরত্ব'))->suffix(' m')->sortable()->placeholder('—'),
+                TextColumn::make('temp_c')->label(__('তাপমাত্রা'))->suffix('°C')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('c_name')->label(__('কাস্টমার'))->placeholder(__('মেলেনি'))
                     ->description(fn (Onu $record) => $record->c_id ? 'ID '.$record->c_id.' · '.$record->c_user : null)
                     ->url(fn (Onu $record) => $record->c_row ? CustomerResource::getUrl('view', ['record' => $record->c_row]) : null),
-                TextColumn::make('last_change_at')->label('শেষ অবস্থা বদল')->dateTime('d M, g:i A', 'Asia/Dhaka')->sortable()->placeholder('—'),
+                TextColumn::make('last_change_at')->label(__('শেষ অবস্থা বদল'))->dateTime('d M, g:i A', 'Asia/Dhaka')->sortable()->placeholder('—'),
                 TextColumn::make('onu_mac')->label('ONU MAC')->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('olt_id')->label('OLT')
                     ->options(fn () => Olt::where('company_id', Filament::getTenant()->getKey())->pluck('name', 'id')->all()),
-                SelectFilter::make('pon')->label('PON পোর্ট')
+                SelectFilter::make('pon')->label(__('PON পোর্ট'))
                     ->options(fn () => Onu::where('company_id', Filament::getTenant()->getKey())
                         ->selectRaw("split_part(name, ':', 1) AS p")->distinct()->orderBy('p')->pluck('p', 'p')->all())
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null,
                         fn ($q, $v) => $q->where('onus.name', 'like', $v.':%'))),
-                TernaryFilter::make('online')->label('অবস্থা')->trueLabel('অনলাইন')->falseLabel('অফলাইন'),
-                TernaryFilter::make('weak')->label('Power')->trueLabel('দুর্বল (-27 dBm-এর নিচে)')->falseLabel('ঠিক আছে')
+                TernaryFilter::make('online')->label(__('অবস্থা'))->trueLabel(__('অনলাইন'))->falseLabel(__('অফলাইন')),
+                TernaryFilter::make('weak')->label('Power')->trueLabel(__('দুর্বল (-27 dBm-এর নিচে)'))->falseLabel(__('ঠিক আছে'))
                     ->queries(true: fn (Builder $query) => $query->where('rx_dbm', '<', Onu::WEAK_DBM),
                         false: fn (Builder $query) => $query->where('rx_dbm', '>=', Onu::WEAK_DBM)),
             ])

@@ -87,7 +87,7 @@ class Onu
 
         return OnuBrand::where('company_id', $companyId)->orderBy('name')->get()
             ->filter(fn ($b) => ($stock[$b->id]['left'] ?? 0) > 0 || $b->id === $keep)
-            ->mapWithKeys(fn ($b) => [$b->id => $b->name.' (স্টকে '.($stock[$b->id]['left'] ?? 0).')'])->all();
+            ->mapWithKeys(fn ($b) => [$b->id => $b->name.' ('.__('স্টকে :n', ['n' => $stock[$b->id]['left'] ?? 0]).')'])->all();
     }
 
     /** OLT ONUs by normalized MAC (one query per request), for showing live light levels next to an assignment. */

@@ -24,7 +24,8 @@ class ListOnus extends ListRecords
         $weak = (clone $q)->where('rx_dbm', '<', Onu::WEAK_DBM)->count();
         $last = (clone $q)->max('seen_at');
 
-        return "মোট {$total} ONU · অনলাইন {$online} · অফলাইন ".($total - $online)." · দুর্বল power {$weak}"
-            .' · OLT থেকে প্রতি ১০ মিনিটে আপডেট'.($last ? ' (শেষ '.\Illuminate\Support\Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('g:i A').')' : '');
+        return __('মোট :total ONU · অনলাইন :online · অফলাইন :offline · দুর্বল power :weak · OLT থেকে প্রতি ১০ মিনিটে আপডেট',
+            ['total' => $total, 'online' => $online, 'offline' => $total - $online, 'weak' => $weak])
+            .($last ? ' '.__('(শেষ :time)', ['time' => \Illuminate\Support\Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('g:i A')]) : '');
     }
 }

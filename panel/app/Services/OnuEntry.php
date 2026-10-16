@@ -129,7 +129,7 @@ class OnuEntry
             ->get(['customer_id', 'name', 'mobile', 'username', 'zone', 'subzone', 'box', 'is_left', 'left_on']);
         $options = $rows->mapWithKeys(fn ($c) => [$c->customer_id => BillingCustomer::searchLabel($c)])->all();
         if ($search !== '' && ctype_digit($search) && ! $rows->contains(fn ($c) => ltrim($c->customer_id, '0') === ltrim($search, '0'))) {
-            $options[$search] = 'ID '.$search.' (বিলিং-এর কাস্টমার তালিকায় এখনো নেই)';
+            $options[$search] = 'ID '.$search.' ('.__('বিলিং-এর কাস্টমার তালিকায় এখনো নেই').')';
         }
 
         return $options;
@@ -142,6 +142,6 @@ class OnuEntry
         }
         $c = BillingCustomer::where('company_id', $companyId)->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$code])->first();
 
-        return $c ? BillingCustomer::searchLabel($c) : 'ID '.$code.' (বিলিং-এ নেই)';
+        return $c ? BillingCustomer::searchLabel($c) : 'ID '.$code.' ('.__('বিলিং-এ নেই').')';
     }
 }

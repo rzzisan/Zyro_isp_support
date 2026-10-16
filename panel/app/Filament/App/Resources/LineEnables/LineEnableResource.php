@@ -62,29 +62,29 @@ class LineEnableResource extends Resource
             ->poll('30s')
             ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('created_at')->label('সময়')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
-                TextColumn::make('technician_name')->label('টেকনিশিয়ান')
+                TextColumn::make('created_at')->label(__('সময়'))->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
+                TextColumn::make('technician_name')->label(__('টেকনিশিয়ান'))
                     ->description(fn (LineEnable $r) => $r->technician_number && str_starts_with($r->technician_number, '880') ? '0'.substr($r->technician_number, 3) : $r->technician_number)
                     ->searchable(),
-                TextColumn::make('customer_name')->label('কাস্টমার')
+                TextColumn::make('customer_name')->label(__('কাস্টমার'))
                     ->description(fn (LineEnable $r) => trim('ID '.$r->customer_id.($r->username ? ' · '.$r->username : '')))
                     ->searchable(['customer_name', 'customer_id', 'username']),
-                TextColumn::make('action')->label('অনুরোধ')->badge()
-                    ->formatStateUsing(fn (string $state) => LineEnable::ACTIONS[$state] ?? $state)
+                TextColumn::make('action')->label(__('অনুরোধ'))->badge()
+                    ->formatStateUsing(fn (string $state) => __(LineEnable::ACTIONS[$state] ?? $state))
                     ->color(fn (string $state) => $state === 'disable' ? 'danger' : 'success'),
-                TextColumn::make('due')->label('তখন বকেয়া')->placeholder('—')->suffix(' টাকা'),
-                TextColumn::make('result')->label('ফল')->badge()
-                    ->formatStateUsing(fn (string $state) => LineEnable::RESULTS[$state] ?? $state)
+                TextColumn::make('due')->label(__('তখন বকেয়া'))->placeholder('—')->suffix(__(' টাকা')),
+                TextColumn::make('result')->label(__('ফল'))->badge()
+                    ->formatStateUsing(fn (string $state) => __(LineEnable::RESULTS[$state] ?? $state))
                     ->color(fn (string $state) => ['enabled' => 'success', 'disabled' => 'success', 'failed' => 'danger', 'not_allowed' => 'danger', 'dry_run' => 'warning'][$state] ?? 'gray'),
-                TextColumn::make('request')->label('টেকনিশিয়ানের মেসেজ')->limit(60)->wrap()->toggleable(),
+                TextColumn::make('request')->label(__('টেকনিশিয়ানের মেসেজ'))->limit(60)->wrap()->toggleable(),
             ])
             ->filters([
-                SelectFilter::make('technician_name')->label('টেকনিশিয়ান')
+                SelectFilter::make('technician_name')->label(__('টেকনিশিয়ান'))
                     ->options(fn () => LineEnable::where('company_id', $company())->distinct()->orderBy('technician_name')
                         ->pluck('technician_name', 'technician_name')->all()),
-                SelectFilter::make('action')->label('অনুরোধ')->options(LineEnable::ACTIONS),
-                SelectFilter::make('result')->label('ফল')->options(LineEnable::RESULTS),
-                Filter::make('date')->schema([DatePicker::make('from')->label('থেকে'), DatePicker::make('until')->label('পর্যন্ত')])
+                SelectFilter::make('action')->label(__('অনুরোধ'))->options(array_map('__', LineEnable::ACTIONS)),
+                SelectFilter::make('result')->label(__('ফল'))->options(array_map('__', LineEnable::RESULTS)),
+                Filter::make('date')->schema([DatePicker::make('from')->label(__('থেকে')), DatePicker::make('until')->label(__('পর্যন্ত'))])
                     ->query(fn (Builder $query, array $data) => $query
                         ->when($data['from'] ?? null, fn ($q, $d) => $q->where('created_at', '>=', Carbon::parse($d, 'Asia/Dhaka')->startOfDay()->utc()))
                         ->when($data['until'] ?? null, fn ($q, $d) => $q->where('created_at', '<', Carbon::parse($d, 'Asia/Dhaka')->addDay()->startOfDay()->utc()))),

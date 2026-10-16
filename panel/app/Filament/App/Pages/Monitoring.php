@@ -87,26 +87,26 @@ class Monitoring extends Page implements HasTable
     {
         $last = PppSession::where('company_id', Filament::getTenant()->getKey())->max('seen_at');
 
-        return 'MikroTik থেকে প্রতি ২ মিনিটে আপডেট হয়'.($this->refreshing ? ' · বিলিং থেকে কাস্টমার তালিকা আপডেট হচ্ছে…' : '').($last ? ' · শেষ আপডেট '.Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('g:i:s A') : '');
+        return __('MikroTik থেকে প্রতি ২ মিনিটে আপডেট হয়').($this->refreshing ? __(' · বিলিং থেকে কাস্টমার তালিকা আপডেট হচ্ছে…') : '').($last ? __(' · শেষ আপডেট ').Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('g:i:s A') : '');
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('sync')->label('এখনই Sync')->icon(Heroicon::OutlinedArrowPath)
+            Action::make('sync')->label(__('এখনই Sync'))->icon(Heroicon::OutlinedArrowPath)
                 ->action(function () {
                     try {
                         $rows = Engine::syncOnline(Filament::getTenant()->getKey());
                     } catch (RuntimeException $e) {
-                        Notification::make()->danger()->title('Sync হয়নি')->body($e->getMessage())->send();
+                        Notification::make()->danger()->title(__('Sync হয়নি'))->body($e->getMessage())->send();
 
                         return;
                     }
                     $rows = array_is_list($rows) ? $rows : [];
                     $failed = collect($rows)->where('ok', false);
                     Notification::make()->{$failed->isEmpty() ? 'success' : 'warning'}()
-                        ->title($failed->isEmpty() ? 'MikroTik থেকে আপডেট হয়েছে' : 'কিছু রাউটারে সংযোগ হয়নি')
-                        ->body(collect($rows)->map(fn ($r) => $r['ok'] ? "{$r['router']}: {$r['online']} অনলাইন" : "{$r['router']}: সংযোগ হয়নি")->join(' · '))
+                        ->title($failed->isEmpty() ? __('MikroTik থেকে আপডেট হয়েছে') : __('কিছু রাউটারে সংযোগ হয়নি'))
+                        ->body(collect($rows)->map(fn ($r) => $r['ok'] ? $r['router'].': '.__(':n অনলাইন', ['n' => $r['online']]) : $r['router'].': '.__('সংযোগ হয়নি'))->join(' · '))
                         ->send();
                     $this->resetTable();
                 }),
@@ -233,7 +233,7 @@ class Monitoring extends Page implements HasTable
         $t = max(0, time() - $since);
         $d = intdiv($t, 86400);
 
-        return ($d ? $d.' দিন ' : '').sprintf('%02d:%02d:%02d', intdiv($t % 86400, 3600), intdiv($t % 3600, 60), $t % 60);
+        return ($d ? __(':n দিন', ['n' => $d]).' ' : '').sprintf('%02d:%02d:%02d', intdiv($t % 86400, 3600), intdiv($t % 3600, 60), $t % 60);
     }
 
     private static function speed(int $bps): string
@@ -258,26 +258,26 @@ class Monitoring extends Page implements HasTable
                         ->orWhere('billing_customers.username', 'ilike', "%{$search}%")
                         ->orWhere('billing_customers.mobile', 'like', '%'.preg_replace('/\D/', '', $search).'%'))),
                 TextColumn::make('username')->label('PPPoE ID')->copyable(),
-                TextColumn::make('name')->label('নাম')->description(fn ($record) => $record->mobile)->wrap(),
+                TextColumn::make('name')->label(__('নাম'))->description(fn ($record) => $record->mobile)->wrap(),
                 TextColumn::make('zone')->label('Zone')->description(fn ($record) => trim($record->subzone.($record->box ? ' · '.$record->box : '')))->wrap(),
                 TextColumn::make('server')->label('Server')->toggleable(),
-                TextColumn::make('package')->label('প্যাকেজ')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('s_online')->label('অবস্থা')->badge()
-                    ->state(fn ($record) => $record->s_online ? 'অনলাইন' : 'অফলাইন')
-                    ->color(fn (string $state) => $state === 'অনলাইন' ? 'success' : 'danger'),
+                TextColumn::make('package')->label(__('প্যাকেজ'))->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('s_online')->label(__('অবস্থা'))->badge()
+                    ->state(fn ($record) => $record->s_online ? __('অনলাইন') : __('অফলাইন'))
+                    ->color(fn (string $state) => $state === __('অনলাইন') ? 'success' : 'danger'),
                 TextColumn::make('s_address')->label('IP')->state(fn ($record) => $record->s_online ? $record->s_address : null)->placeholder('—')->copyable(),
                 TextColumn::make('s_mac')->label('MAC')->state(fn ($record) => $record->s_online ? $record->s_mac : null)->placeholder('—')->toggleable(),
                 TextColumn::make('s_uptime')->label('Duration')->state(fn ($record) => $record->s_online ? $record->s_uptime : null)->placeholder('—'),
-                TextColumn::make('s_seen')->label('শেষ অনলাইন')
+                TextColumn::make('s_seen')->label(__('শেষ অনলাইন'))
                     ->state(fn ($record) => ! $record->s_online && $record->s_seen ? Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : null)
-                    ->placeholder(fn ($record) => $record->s_online ? 'এখন' : 'জানা নেই'),
-                TextColumn::make('s_offline_for')->label('অফলাইন কতক্ষণ')
+                    ->placeholder(fn ($record) => $record->s_online ? __('এখন') : __('জানা নেই')),
+                TextColumn::make('s_offline_for')->label(__('অফলাইন কতক্ষণ'))
                     ->state(fn ($record) => ! $record->s_online && $record->s_seen ? Carbon::parse($record->s_seen, 'UTC')->getTimestamp() : null)
                     ->formatStateUsing(fn ($state) => new HtmlString('<span class="zm-off-for" data-off-since="'.(int) $state.'">'.static::offlineFor((int) $state).'</span>'))
                     ->placeholder('—'),
             ])
             ->filters([
-                TernaryFilter::make('online')->label('অবস্থা')->trueLabel('অনলাইন')->falseLabel('অফলাইন')
+                TernaryFilter::make('online')->label(__('অবস্থা'))->trueLabel(__('অনলাইন'))->falseLabel(__('অফলাইন'))
                     ->queries(true: fn (Builder $q) => $q->where('s.seen_at', '>', $fresh()),
                         false: fn (Builder $q) => $q->where(fn ($w) => $w->whereNull('s.seen_at')->orWhere('s.seen_at', '<=', $fresh()))),
                 SelectFilter::make('zone')->label('Zone')->options(fn () => static::listOptions('zones', 'zone'))->searchable()
@@ -295,28 +295,28 @@ class Monitoring extends Page implements HasTable
             ->recordActions([
                 // one click: the new-ticket form with this customer (and, when offline, the problem) already filled in
                 TicketActions::newTicket(fn ($record) => [$record?->customer_id, $record && ! $record->s_online
-                    ? 'লাইন অফলাইন'.($record->s_seen ? ', শেষ অনলাইন '.Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : '')
+                    ? __('লাইন অফলাইন').($record->s_seen ? __(', শেষ অনলাইন ').Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : '')
                     : null])
-                    ->label('টিকিট')->icon(Heroicon::OutlinedTicket)->color('warning'),
-                Action::make('recheck')->label('রি-চেক')->icon(Heroicon::OutlinedArrowPath)->color('gray')
+                    ->label(__('টিকিট'))->icon(Heroicon::OutlinedTicket)->color('warning'),
+                Action::make('recheck')->label(__('রি-চেক'))->icon(Heroicon::OutlinedArrowPath)->color('gray')
                     ->action(function ($record) {
                         $this->runOn($record, 'recheck', fn ($r) => ($r['online'] ?? null) === null
-                            ? ['warning', 'রাউটার থেকে উত্তর আসেনি']
+                            ? ['warning', __('রাউটার থেকে উত্তর আসেনি')]
                             : (($r['online'] ?? false)
-                                ? ['success', "অনলাইন · {$r['uptime']} · {$r['router']}", "IP {$r['address']} · MAC {$r['caller_id']}"]
-                                : ['danger', "অফলাইন ({$r['router']})"]));
+                                ? ['success', __('অনলাইন')." · {$r['uptime']} · {$r['router']}", "IP {$r['address']} · MAC {$r['caller_id']}"]
+                                : ['danger', __('অফলাইন')." ({$r['router']})"]));
                     }),
-                Action::make('traffic')->label('ট্রাফিক')->icon(Heroicon::OutlinedArrowsUpDown)->color('gray')
+                Action::make('traffic')->label(__('ট্রাফিক'))->icon(Heroicon::OutlinedArrowsUpDown)->color('gray')
                     ->visible(fn ($record) => (bool) $record->s_online)
                     ->action(fn ($record) => $this->runOn($record, 'traffic', fn ($r) => ['success',
-                        'ডাউনলোড '.static::speed($r['download_bps'] ?? 0).' · আপলোড '.static::speed($r['upload_bps'] ?? 0),
-                        "এই মুহূর্তের গতি ({$record->username}, {$r['router']})"])),
-                Action::make('ping')->label('পিং')->icon(Heroicon::OutlinedSignal)->color('gray')
+                        __('ডাউনলোড :down · আপলোড :up', ['down' => static::speed($r['download_bps'] ?? 0), 'up' => static::speed($r['upload_bps'] ?? 0)]),
+                        __('এই মুহূর্তের গতি')." ({$record->username}, {$r['router']})"])),
+                Action::make('ping')->label(__('পিং'))->icon(Heroicon::OutlinedSignal)->color('gray')
                     ->visible(fn ($record) => (bool) $record->s_online)
                     ->action(fn ($record) => $this->runOn($record, 'ping', fn ($r) => [($r['received'] ?? 0) > 0 ? 'success' : 'warning',
-                        "পিং {$record->s_address}: {$r['received']}/{$r['sent']} এসেছে".(($r['avg_rtt'] ?? null) ? " · গড় {$r['avg_rtt']}" : ''),
-                        ($r['received'] ?? 0) > 0 ? null : 'রাউটার থেকে পিং গেছে, কাস্টমারের ডিভাইস উত্তর দেয়নি (অনেক রাউটার পিং বন্ধ রাখে)'])),
-                Action::make('open')->label('বিস্তারিত')->icon(Heroicon::OutlinedEye)->color('gray')
+                        __('পিং :ip: :got/:sent এসেছে', ['ip' => $record->s_address, 'got' => $r['received'], 'sent' => $r['sent']]).(($r['avg_rtt'] ?? null) ? ' · '.__('গড় :rtt', ['rtt' => $r['avg_rtt']]) : ''),
+                        ($r['received'] ?? 0) > 0 ? null : __('রাউটার থেকে পিং গেছে, কাস্টমারের ডিভাইস উত্তর দেয়নি (অনেক রাউটার পিং বন্ধ রাখে)')])),
+                Action::make('open')->label(__('বিস্তারিত'))->icon(Heroicon::OutlinedEye)->color('gray')
                     ->url(fn ($record) => CustomerResource::getUrl('view', ['record' => $record->id])),
             ]);
     }

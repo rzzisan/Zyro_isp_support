@@ -16,6 +16,6 @@ class ListLineEnables extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'কোন টেকনিশিয়ান WhatsApp-এ কোন কাস্টমারের লাইন চালু বা বন্ধ করতে বলেছেন, আর বট কী করেছে';
+        return __('কোন টেকনিশিয়ান WhatsApp-এ কোন কাস্টমারের লাইন চালু বা বন্ধ করতে বলেছেন, আর বট কী করেছে');
     }
 }

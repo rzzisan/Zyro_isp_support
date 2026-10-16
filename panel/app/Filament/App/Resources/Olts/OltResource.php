@@ -53,46 +53,46 @@ class OltResource extends Resource
     {
         return $schema->components([
             Grid::make(2)->schema([
-                TextInput::make('name')->label('নাম')->required()->placeholder('যেমন CLN_1_TILARDI'),
-                Select::make('brand')->label('ব্র্যান্ড')->options(Olt::BRANDS)->required()->default('bdcom'),
+                TextInput::make('name')->label(__('নাম'))->required()->placeholder(__('যেমন CLN_1_TILARDI')),
+                Select::make('brand')->label(__('ব্র্যান্ড'))->options(Olt::BRANDS)->required()->default('bdcom'),
                 TextInput::make('host')->label('IP')->required(),
-                TextInput::make('snmp_port')->label('SNMP পোর্ট')->numeric()->default(161)->required(),
+                TextInput::make('snmp_port')->label(__('SNMP পোর্ট'))->numeric()->default(161)->required(),
                 TextInput::make('community')->label('SNMP community (read-only)')->password()->revealable()
                     ->required(fn (string $operation) => $operation === 'create')
                     ->dehydrated(fn ($state) => filled($state))
-                    ->helperText(fn (string $operation) => $operation === 'edit' ? 'বদলাতে না চাইলে খালি রাখুন' : 'write community দেবেন না'),
-                Select::make('router_identity')->label('এর কাস্টমার কোন MikroTik-এ')
+                    ->helperText(fn (string $operation) => $operation === 'edit' ? __('বদলাতে না চাইলে খালি রাখুন') : __('write community দেবেন না')),
+                Select::make('router_identity')->label(__('এর কাস্টমার কোন MikroTik-এ'))
                     ->options(fn () => MikrotikRouter::where('company_id', Filament::getTenant()->getKey())->whereNotNull('identity')
                         ->pluck('identity', 'identity')->all())
-                    ->multiple()->placeholder('সব রাউটার')
+                    ->multiple()->placeholder(__('সব রাউটার'))
                     ->formatStateUsing(fn ($state) => is_array($state) ? $state : array_values(array_filter(array_map('trim', explode(',', (string) $state)))))
                     ->dehydrateStateUsing(fn ($state) => filled($state) ? implode(',', (array) $state) : null)
-                    ->helperText('দিলে শুধু সেই রাউটারগুলোর কাস্টমারদের MAC এই OLT-এ খোঁজা হয় (OLT-এর উপর চাপ কম)। একাধিক বাছা যায়।'),
+                    ->helperText(__('দিলে শুধু সেই রাউটারগুলোর কাস্টমারদের MAC এই OLT-এ খোঁজা হয় (OLT-এর উপর চাপ কম)। একাধিক বাছা যায়।')),
             ]),
-            Toggle::make('enabled')->label('চালু')->default(true),
+            Toggle::make('enabled')->label(__('চালু'))->default(true),
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
-            ->description('প্রতি ১০ মিনিটে প্রতিটা OLT থেকে সব ONU-র অবস্থা, optical power, distance পড়া হয় (শুধু পড়া, OLT-এ কিছু বদলায় না)। কাস্টমারের রাউটারের MAC দিয়ে তার ONU মেলানো হয়।')
+            ->description(__('প্রতি ১০ মিনিটে প্রতিটা OLT থেকে সব ONU-র অবস্থা, optical power, distance পড়া হয় (শুধু পড়া, OLT-এ কিছু বদলায় না)। কাস্টমারের রাউটারের MAC দিয়ে তার ONU মেলানো হয়।'))
             ->columns([
                 TextColumn::make('name')->label('OLT')->description(fn (Olt $r) => $r->sys_name),
-                TextColumn::make('brand')->label('ব্র্যান্ড')->formatStateUsing(fn ($state) => Olt::BRANDS[$state] ?? $state),
-                TextColumn::make('host')->label('IP : পোর্ট')->state(fn (Olt $r) => "{$r->host}:{$r->snmp_port}"),
-                TextColumn::make('router_identity')->label('MikroTik')->placeholder('সব')->formatStateUsing(fn ($state) => str_replace(',', ', ', $state)),
-                TextColumn::make('onu_online')->label('ONU অনলাইন')
+                TextColumn::make('brand')->label(__('ব্র্যান্ড'))->formatStateUsing(fn ($state) => Olt::BRANDS[$state] ?? $state),
+                TextColumn::make('host')->label(__('IP : পোর্ট'))->state(fn (Olt $r) => "{$r->host}:{$r->snmp_port}"),
+                TextColumn::make('router_identity')->label('MikroTik')->placeholder(__('সব'))->formatStateUsing(fn ($state) => str_replace(',', ', ', $state)),
+                TextColumn::make('onu_online')->label(__('ONU অনলাইন'))
                     ->state(fn (Olt $r) => $r->onu_total === null ? '—' : "{$r->onu_online} / {$r->onu_total}"),
-                TextColumn::make('last_poll_ok')->label('শেষ পড়া')
+                TextColumn::make('last_poll_ok')->label(__('শেষ পড়া'))
                     ->state(fn (Olt $r) => $r->last_poll_at === null ? '—' : ($r->last_poll_ok ? '✅ '.$r->last_poll_message : '❌ '.$r->last_poll_message))
                     ->description(fn (Olt $r) => $r->last_poll_at?->diffForHumans())->wrap(),
             ])
-            ->headerActions([CreateAction::make()->label('OLT যোগ করুন')
+            ->headerActions([CreateAction::make()->label(__('OLT যোগ করুন'))
                 ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => Filament::getTenant()->getKey()])
                 ->after(fn (Olt $record) => static::test($record))])
             ->recordActions([
-                Action::make('test')->label('পরীক্ষা')->icon(Heroicon::OutlinedSignal)->action(fn (Olt $record) => static::test($record)),
+                Action::make('test')->label(__('পরীক্ষা'))->icon(Heroicon::OutlinedSignal)->action(fn (Olt $record) => static::test($record)),
                 EditAction::make(),
                 DeleteAction::make(),
             ]);
@@ -103,12 +103,12 @@ class OltResource extends Resource
         try {
             $r = Engine::testOlt($record->company_id, $record->id);
         } catch (RuntimeException $e) {
-            Notification::make()->danger()->title('SNMP সংযোগ হয়নি')->body($e->getMessage())->send();
+            Notification::make()->danger()->title(__('SNMP সংযোগ হয়নি'))->body($e->getMessage())->send();
 
             return;
         }
-        Notification::make()->success()->title("সংযোগ ঠিক আছে: {$r['sys_name']}")
-            ->body($r['sys_descr'].(($r['supported'] ?? false) ? '' : ' · এই ব্র্যান্ডের ONU পড়া এখনো চালু হয়নি'))->send();
+        Notification::make()->success()->title(__('সংযোগ ঠিক আছে: :name', ['name' => $r['sys_name']]))
+            ->body($r['sys_descr'].(($r['supported'] ?? false) ? '' : __(' · এই ব্র্যান্ডের ONU পড়া এখনো চালু হয়নি')))->send();
     }
 
     public static function getEloquentQuery(): Builder

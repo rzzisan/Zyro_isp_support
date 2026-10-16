@@ -74,7 +74,7 @@ class BillCollectionResource extends Resource
                 TextColumn::make('received_by')->label('Received By')->placeholder('—'),
                 TextColumn::make('user.name')->label(__('Desk থেকে কে'))->placeholder('—'),
                 TextColumn::make('result')->label(__('ফল'))->badge()
-                    ->formatStateUsing(fn (string $state) => BillCollection::RESULTS[$state] ?? $state)
+                    ->formatStateUsing(fn (string $state) => __(BillCollection::RESULTS[$state] ?? $state))
                     ->color(fn (string $state) => ['saved' => 'success', 'blocked' => 'warning', 'failed' => 'danger'][$state] ?? 'gray'),
                 TextColumn::make('message')->label(__('বার্তা'))->limit(70)->wrap()->toggleable(),
                 TextColumn::make('trx_no')->label(__('Trx নম্বর'))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
@@ -88,7 +88,7 @@ class BillCollectionResource extends Resource
                     ->openUrlInNewTab(),
             ])
             ->filters([
-                SelectFilter::make('result')->label(__('ফল'))->options(BillCollection::RESULTS),
+                SelectFilter::make('result')->label(__('ফল'))->options(array_map('__', BillCollection::RESULTS)),
                 SelectFilter::make('user_id')->label(__('Desk থেকে কে'))->relationship('user', 'name'),
                 Filter::make('date')->schema([DatePicker::make('from')->label(__('থেকে')), DatePicker::make('until')->label(__('পর্যন্ত'))])
                     ->query(fn (Builder $query, array $data) => $query

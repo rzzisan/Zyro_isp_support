@@ -65,10 +65,10 @@ class StockProductResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->label('প্রোডাক্টের নাম')->required()->maxLength(150)
+            TextInput::make('name')->label(__('প্রোডাক্টের নাম'))->required()->maxLength(150)
                 ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule) => $rule->where('company_id', static::company()))
-                ->validationMessages(['unique' => 'এই নামের প্রোডাক্ট আগেই আছে']),
-            TextInput::make('maker')->label('কোম্পানি (ঐচ্ছিক)')->maxLength(150),
+                ->validationMessages(['unique' => __('এই নামের প্রোডাক্ট আগেই আছে')]),
+            TextInput::make('maker')->label(__('কোম্পানি (ঐচ্ছিক)'))->maxLength(150),
         ]);
     }
 
@@ -77,10 +77,10 @@ class StockProductResource extends Resource
     {
         try {
             $p->move($type, (int) $data['quantity'], array_merge(array_diff_key($data, ['quantity' => 1]), ['user_id' => auth()->id()]));
-            Notification::make()->success()->title($type === 'in' ? 'স্টক যোগ হয়েছে' : 'বিতরণ সেভ হয়েছে')
-                ->body('এখন স্টকে '.$p->current_stock)->send();
+            Notification::make()->success()->title($type === 'in' ? __('স্টক যোগ হয়েছে') : __('বিতরণ সেভ হয়েছে'))
+                ->body(__('এখন স্টকে ').$p->current_stock)->send();
         } catch (\RuntimeException $e) {
-            Notification::make()->danger()->title('সেভ হয়নি')->body($e->getMessage())->send();
+            Notification::make()->danger()->title(__('সেভ হয়নি'))->body($e->getMessage())->send();
         }
     }
 
@@ -89,37 +89,37 @@ class StockProductResource extends Resource
         return $table
             ->defaultSort('name')
             ->columns([
-                TextColumn::make('name')->label('প্রোডাক্ট')->searchable()->sortable(),
-                TextColumn::make('maker')->label('কোম্পানি')->placeholder('—'),
-                TextColumn::make('current_stock')->label('স্টকে আছে')->weight('bold')->sortable()
+                TextColumn::make('name')->label(__('প্রোডাক্ট'))->searchable()->sortable(),
+                TextColumn::make('maker')->label(__('কোম্পানি'))->placeholder('—'),
+                TextColumn::make('current_stock')->label(__('স্টকে আছে'))->weight('bold')->sortable()
                     ->color(fn ($state) => (int) $state > 0 ? 'success' : 'danger'),
             ])
-            ->headerActions([CreateAction::make()->label('প্রোডাক্ট যোগ করুন')
+            ->headerActions([CreateAction::make()->label(__('প্রোডাক্ট যোগ করুন'))
                 ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => static::company(), 'current_stock' => 0])])
             ->recordActions([
-                Action::make('stockIn')->label('স্টক ইন')->icon(Heroicon::OutlinedArrowDownTray)->color('success')
+                Action::make('stockIn')->label(__('স্টক ইন'))->icon(Heroicon::OutlinedArrowDownTray)->color('success')
                     ->fillForm(['moved_on' => now('Asia/Dhaka')->toDateString()])
                     ->schema([
-                        DatePicker::make('moved_on')->label('তারিখ')->required(),
-                        TextInput::make('quantity')->label('পরিমাণ')->integer()->minValue(1)->required(),
-                        TextInput::make('unit_price')->label('একক দাম')->numeric()->minValue(0)->required(),
+                        DatePicker::make('moved_on')->label(__('তারিখ'))->required(),
+                        TextInput::make('quantity')->label(__('পরিমাণ'))->integer()->minValue(1)->required(),
+                        TextInput::make('unit_price')->label(__('একক দাম'))->numeric()->minValue(0)->required(),
                     ])
                     ->action(fn (StockProduct $record, array $data) => static::move($record, 'in', $data)),
-                Action::make('stockOut')->label('বিতরণ')->icon(Heroicon::OutlinedArrowUpTray)->color('warning')
+                Action::make('stockOut')->label(__('বিতরণ'))->icon(Heroicon::OutlinedArrowUpTray)->color('warning')
                     ->fillForm(['moved_on' => now('Asia/Dhaka')->toDateString()])
                     ->schema([
-                        DatePicker::make('moved_on')->label('তারিখ')->required(),
-                        TextInput::make('quantity')->label('পরিমাণ')->integer()->minValue(1)->required()
-                            ->helperText(fn (StockProduct $record) => 'স্টকে আছে '.$record->current_stock),
-                        Select::make('technician_id')->label('কর্মী')->required()->searchable()
+                        DatePicker::make('moved_on')->label(__('তারিখ'))->required(),
+                        TextInput::make('quantity')->label(__('পরিমাণ'))->integer()->minValue(1)->required()
+                            ->helperText(fn (StockProduct $record) => __('স্টকে আছে ').$record->current_stock),
+                        Select::make('technician_id')->label(__('কর্মী'))->required()->searchable()
                             ->options(fn () => Technician::pickerOptions(static::company())),
-                        TextInput::make('reference')->label('রেফারেন্স (কাস্টমার ID / কোথায়)')->maxLength(100),
+                        TextInput::make('reference')->label(__('রেফারেন্স (কাস্টমার ID / কোথায়)'))->maxLength(100),
                     ])
                     ->action(fn (StockProduct $record, array $data) => static::move($record, 'out', $data)),
                 EditAction::make(),
                 DeleteAction::make()->before(function (StockProduct $record, DeleteAction $action) {
                     if ($record->movements()->exists()) {
-                        Notification::make()->danger()->title('ডিলিট করা যাবে না')->body('এই প্রোডাক্টের স্টক ইন/বিতরণের রেকর্ড আছে।')->send();
+                        Notification::make()->danger()->title(__('ডিলিট করা যাবে না'))->body(__('এই প্রোডাক্টের স্টক ইন/বিতরণের রেকর্ড আছে।'))->send();
                         $action->cancel();
                     }
                 }),

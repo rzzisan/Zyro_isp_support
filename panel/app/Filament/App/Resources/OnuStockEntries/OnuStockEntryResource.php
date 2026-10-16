@@ -63,10 +63,10 @@ class OnuStockEntryResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('brand_id')->label('ব্র্যান্ড')->required()
+            Select::make('brand_id')->label(__('ব্র্যান্ড'))->required()
                 ->options(fn () => OnuBrand::where('company_id', static::company())->orderBy('name')->pluck('name', 'id')->all()),
-            TextInput::make('quantity')->label('পরিমাণ')->integer()->minValue(1)->required(),
-            DatePicker::make('purchase_date')->label('কেনার তারিখ')->required()->default(fn () => now('Asia/Dhaka')->toDateString()),
+            TextInput::make('quantity')->label(__('পরিমাণ'))->integer()->minValue(1)->required(),
+            DatePicker::make('purchase_date')->label(__('কেনার তারিখ'))->required()->default(fn () => now('Asia/Dhaka')->toDateString()),
         ]);
     }
 
@@ -75,17 +75,17 @@ class OnuStockEntryResource extends Resource
         return $table
             ->defaultSort('purchase_date', 'desc')
             ->columns([
-                TextColumn::make('brand.name')->label('ব্র্যান্ড')->searchable(),
-                TextColumn::make('quantity')->label('পরিমাণ'),
-                TextColumn::make('purchase_date')->label('কেনার তারিখ')->date('d M Y')->sortable(),
-                TextColumn::make('created_at')->label('এন্ট্রির সময়')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->toggleable(),
-                TextColumn::make('user.name')->label('এন্ট্রি করেছেন')->placeholder('—')->toggleable(),
+                TextColumn::make('brand.name')->label(__('ব্র্যান্ড'))->searchable(),
+                TextColumn::make('quantity')->label(__('পরিমাণ')),
+                TextColumn::make('purchase_date')->label(__('কেনার তারিখ'))->date('d M Y')->sortable(),
+                TextColumn::make('created_at')->label(__('এন্ট্রির সময়'))->dateTime('d M Y, g:i A', 'Asia/Dhaka')->toggleable(),
+                TextColumn::make('user.name')->label(__('এন্ট্রি করেছেন'))->placeholder('—')->toggleable(),
             ])
             ->filters([
-                SelectFilter::make('brand_id')->label('ব্র্যান্ড')
+                SelectFilter::make('brand_id')->label(__('ব্র্যান্ড'))
                     ->options(fn () => OnuBrand::where('company_id', static::company())->orderBy('name')->pluck('name', 'id')->all()),
             ])
-            ->headerActions([CreateAction::make()->label('স্টক যোগ করুন')
+            ->headerActions([CreateAction::make()->label(__('স্টক যোগ করুন'))
                 ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => static::company(), 'user_id' => auth()->id()])])
             ->recordActions([EditAction::make(), DeleteAction::make()]);
     }

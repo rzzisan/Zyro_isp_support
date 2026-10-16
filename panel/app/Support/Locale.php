@@ -69,7 +69,10 @@ class Locale
             ...array_values(\App\Models\SmsTemplate::TYPES), ...array_values(\App\Filament\App\Pages\SmsSettings::EVENTS),
             ...array_column(Sms::PLACEHOLDERS, 0), ...array_values(Sms::BILL_PLACEHOLDERS),
             ...array_values(Sms::TICKET_PLACEHOLDERS), ...array_values(Sms::REMINDER_PLACEHOLDERS),
-            ...array_values(\App\Filament\App\Pages\AiUsage::PURPOSES));
+            ...array_values(\App\Filament\App\Pages\AiUsage::PURPOSES),
+            ...Onu::PURPOSES, ...Onu::CONNECTION_TYPES, ...Onu::MATERIALS,
+            ...array_values(\App\Models\LineEnable::RESULTS), ...array_values(\App\Models\LineEnable::ACTIONS),
+            ...array_values(\App\Models\StockMovement::TYPES), ...array_values(\App\Models\BillCollection::RESULTS));
         $keys = array_values(array_unique(array_filter($keys, fn ($k) => preg_match('/[\x{0980}-\x{09FF}]/u', $k))));
         sort($keys);
 

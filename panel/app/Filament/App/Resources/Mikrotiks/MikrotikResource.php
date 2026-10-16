@@ -67,21 +67,21 @@ class MikrotikResource extends Resource
     {
         return $schema->components([
             Grid::make(2)->schema([
-                TextInput::make('host')->label('IP / হোস্ট')->required()->placeholder('103.157.253.x বা 10.x.x.x'),
-                TextInput::make('api_port')->label('API পোর্ট')->numeric()->required()->default(8728)
-                    ->helperText('সাধারণত 8728 (TLS হলে 8729)'),
-                TextInput::make('username')->label('ইউজারনেম')->required()
-                    ->helperText('read-only API ইউজার দিলে ভালো (group=read)'),
-                TextInput::make('password')->label('পাসওয়ার্ড')->password()->revealable()
+                TextInput::make('host')->label(__('IP / হোস্ট'))->required()->placeholder(__('103.157.253.x বা 10.x.x.x')),
+                TextInput::make('api_port')->label(__('API পোর্ট'))->numeric()->required()->default(8728)
+                    ->helperText(__('সাধারণত 8728 (TLS হলে 8729)')),
+                TextInput::make('username')->label(__('ইউজারনেম'))->required()
+                    ->helperText(__('read-only API ইউজার দিলে ভালো (group=read)')),
+                TextInput::make('password')->label(__('পাসওয়ার্ড'))->password()->revealable()
                     ->required(fn (string $operation) => $operation === 'create')
                     ->dehydrated(fn ($state) => filled($state))
-                    ->helperText(fn (string $operation) => $operation === 'edit' ? 'বদলাতে না চাইলে খালি রাখুন' : 'এনক্রিপ্ট করে রাখা হবে'),
+                    ->helperText(fn (string $operation) => $operation === 'edit' ? __('বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে')),
             ]),
-            Select::make('billing_server')->label('বিলিংয়ে এই রাউটারের নাম')
-                ->options(fn () => collect(static::billingServers())->mapWithKeys(fn ($n, $s) => [$s => "{$s} ({$n} জন কাস্টমার)"])->all())
-                ->placeholder('পরীক্ষা করলে নিজে মিলিয়ে নেবে')
-                ->helperText('বিলিং সফটওয়্যারে কাস্টমারের "Server" ঘরে যে নাম থাকে। খালি রাখলে রাউটারের identity নাম দিয়ে নিজে মেলাবে।'),
-            Toggle::make('enabled')->label('চালু')->default(true),
+            Select::make('billing_server')->label(__('বিলিংয়ে এই রাউটারের নাম'))
+                ->options(fn () => collect(static::billingServers())->mapWithKeys(fn ($n, $s) => [$s => "{$s} (".__(':n জন কাস্টমার', ['n' => $n]).')'])->all())
+                ->placeholder(__('পরীক্ষা করলে নিজে মিলিয়ে নেবে'))
+                ->helperText(__('বিলিং সফটওয়্যারে কাস্টমারের "Server" ঘরে যে নাম থাকে। খালি রাখলে রাউটারের identity নাম দিয়ে নিজে মেলাবে।')),
+            Toggle::make('enabled')->label(__('চালু'))->default(true),
         ]);
     }
 
@@ -93,25 +93,25 @@ class MikrotikResource extends Resource
                 $linked = MikrotikRouter::where('company_id', Filament::getTenant()->getKey())->whereNotNull('billing_server')->pluck('billing_server')->all();
                 $missing = array_diff(array_keys($servers), $linked);
 
-                return 'বিলিংয়ে সার্ভার: '.collect($servers)->map(fn ($n, $s) => "{$s} ({$n})")->join(', ')
-                    .($missing ? ' · এখনো যুক্ত হয়নি: '.implode(', ', $missing) : ' · সবগুলো যুক্ত');
+                return __('বিলিংয়ে সার্ভার: ').collect($servers)->map(fn ($n, $s) => "{$s} ({$n})")->join(', ')
+                    .($missing ? __(' · এখনো যুক্ত হয়নি: ').implode(', ', $missing) : __(' · সবগুলো যুক্ত'));
             })
             ->columns([
-                TextColumn::make('identity')->label('রাউটার (identity)')->placeholder('পরীক্ষা করা হয়নি')
+                TextColumn::make('identity')->label(__('রাউটার (identity)'))->placeholder(__('পরীক্ষা করা হয়নি'))
                     ->description(fn (MikrotikRouter $r) => $r->version ? 'RouterOS '.$r->version : null),
-                TextColumn::make('host')->label('IP : পোর্ট')->state(fn (MikrotikRouter $r) => "{$r->host}:{$r->api_port}"),
-                TextColumn::make('billing_server')->label('বিলিংয়ে নাম')->placeholder('মেলেনি')
-                    ->description(fn (MikrotikRouter $r) => $r->billing_server ? $r->customerCount().' জন কাস্টমার' : null),
-                TextColumn::make('ppp_active')->label('অনলাইন PPPoE')->placeholder('—'),
-                TextColumn::make('last_check_ok')->label('শেষ পরীক্ষা')
-                    ->state(fn (MikrotikRouter $r) => $r->last_checked_at === null ? '—' : ($r->last_check_ok ? '✅ ঠিক আছে' : '❌ '.$r->last_check_message))
+                TextColumn::make('host')->label(__('IP : পোর্ট'))->state(fn (MikrotikRouter $r) => "{$r->host}:{$r->api_port}"),
+                TextColumn::make('billing_server')->label(__('বিলিংয়ে নাম'))->placeholder(__('মেলেনি'))
+                    ->description(fn (MikrotikRouter $r) => $r->billing_server ? __(':n জন কাস্টমার', ['n' => $r->customerCount()]) : null),
+                TextColumn::make('ppp_active')->label(__('অনলাইন PPPoE'))->placeholder('—'),
+                TextColumn::make('last_check_ok')->label(__('শেষ পরীক্ষা'))
+                    ->state(fn (MikrotikRouter $r) => $r->last_checked_at === null ? '—' : ($r->last_check_ok ? __('✅ ঠিক আছে') : '❌ '.$r->last_check_message))
                     ->description(fn (MikrotikRouter $r) => $r->last_checked_at?->diffForHumans())->wrap(),
             ])
-            ->headerActions([CreateAction::make()->label('MikroTik যোগ করুন')
+            ->headerActions([CreateAction::make()->label(__('MikroTik যোগ করুন'))
                 ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => Filament::getTenant()->getKey()])
                 ->after(fn (MikrotikRouter $record) => static::test($record))])
             ->recordActions([
-                Action::make('test')->label('পরীক্ষা')->icon(Heroicon::OutlinedSignal)->action(fn (MikrotikRouter $record) => static::test($record)),
+                Action::make('test')->label(__('পরীক্ষা'))->icon(Heroicon::OutlinedSignal)->action(fn (MikrotikRouter $record) => static::test($record)),
                 EditAction::make(),
                 DeleteAction::make(),
             ]);
@@ -122,12 +122,13 @@ class MikrotikResource extends Resource
         try {
             $r = Engine::testMikrotik($record->company_id, $record->id);
         } catch (RuntimeException $e) {
-            Notification::make()->danger()->title('সংযোগ হয়নি')->body($e->getMessage())->send();
+            Notification::make()->danger()->title(__('সংযোগ হয়নি'))->body($e->getMessage())->send();
 
             return;
         }
-        Notification::make()->success()->title("সংযোগ ঠিক আছে: {$r['identity']}")
-            ->body("RouterOS {$r['version']} · {$r['ppp_active']} PPPoE অনলাইন · বিলিংয়ে নাম: ".($r['billing_server'] ?? 'মেলেনি, হাতে বেছে দিন'))
+        Notification::make()->success()->title(__('সংযোগ ঠিক আছে: :name', ['name' => $r['identity']]))
+            ->body(__('RouterOS :version · :n PPPoE অনলাইন · বিলিংয়ে নাম: :name', ['version' => $r['version'], 'n' => $r['ppp_active'],
+                        'name' => $r['billing_server'] ?? __('মেলেনি, হাতে বেছে দিন')]))
             ->send();
     }
 
