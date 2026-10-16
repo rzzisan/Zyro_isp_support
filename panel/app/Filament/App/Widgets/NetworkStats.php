@@ -35,12 +35,12 @@ class NetworkStats extends StatsOverviewWidget
         $total = BillingCustomer::where('company_id', $company)->whereNull('gone_at')->where('is_left', false)->where('disabled', false)->count();
         // only PPPoE users of the billing software whose line is on count (same as the monitoring page and billing's own)
         $billed = fn ($q) => $q->whereIn('username', BillingCustomer::where('company_id', $company)->whereNull('gone_at')->where('is_left', false)->where('disabled', false)->select('username'));
-        $online = PppSession::where('company_id', $company)->where('seen_at', '>', $fresh)->where($billed)->count();
+        $online = PppSession::where('company_id', $company)->where('seen_at', '>', $fresh)->where('blocked', false)->where($billed)->count();
         $stats = [Stat::make(__('এখন অনলাইন'), number_format($online))
             ->description(__('লাইন চালু কাস্টমার :n জন', ['n' => $total]))->icon(Heroicon::OutlinedSignal)->color('success')
             ->url(CustomerResource::getUrl('index'))];
         foreach (MikrotikRouter::where('company_id', $company)->orderBy('id')->get() as $r) {
-            $n = PppSession::where('router_id', $r->id)->where('seen_at', '>', $fresh)->where($billed)->count();
+            $n = PppSession::where('router_id', $r->id)->where('seen_at', '>', $fresh)->where('blocked', false)->where($billed)->count();
             $stats[] = Stat::make($r->identity ?: $r->host, number_format($n))
                 ->description($r->last_check_ok === false ? __('রাউটারে সংযোগ হচ্ছে না') : __('অনলাইন PPPoE'))
                 ->descriptionColor($r->last_check_ok === false ? 'danger' : 'gray')

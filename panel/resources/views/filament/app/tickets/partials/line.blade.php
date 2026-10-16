@@ -27,7 +27,9 @@
 
         return $b.' B';
     };
-    $conn = $mk === null ? 'mute' : ($online ? 'good' : 'bad');
+    // connected on a block profile (billing disabled the line): no internet
+    $blocked = (bool) ($mk['blocked'] ?? false);
+    $conn = $mk === null ? 'mute' : ($online ? 'good' : ($blocked ? 'warn' : 'bad'));
 @endphp
 @if ($part === 'tiles')
     @if ($error)
@@ -37,9 +39,10 @@
         <div class="ztd-stats">
             <div class="ztd-stat tone-{{ $conn }}">
                 <div class="ztd-label">{{ __('সংযোগ') }}</div>
-                <div class="ztd-big"><span class="ztd-dot {{ $online ? 'live' : '' }}"></span>{{ $mk === null ? __('অজানা') : ($online ? __('অনলাইন') : __('অফলাইন')) }}</div>
+                <div class="ztd-big"><span class="ztd-dot {{ $online ? 'live' : '' }}"></span>{{ $mk === null ? __('অজানা') : ($online ? __('অনলাইন') : ($blocked ? __('ব্লক') : __('অফলাইন'))) }}</div>
                 <div class="ztd-sub">
                     @if ($online) Uptime {{ $mk['uptime'] ?? '—' }}
+                    @elseif ($blocked) {{ __('ইন্টারনেট নেই') }} · {{ $mk['profile'] ?? '' }}
                     @elseif (! empty($last['seen_at'])) {{ __('শেষ দেখা') }} {{ $ago(\Illuminate\Support\Carbon::parse($last['seen_at'], 'UTC')) }}
                     @else {{ $mk === null ? __('রাউটার উত্তর দেয়নি') : 'MikroTik' }}
                     @endif
@@ -74,7 +77,8 @@
                     <span class="ztd-chip tone-{{ $conn }}"><span class="ztd-dot {{ $online ? 'live' : '' }}"></span>{{ $mk['router'] ?? __('রাউটার') }}</span>
                 </div>
                 <div class="ztd-rows">
-                    @if ($online)
+                    @if ($online || $blocked)
+                        @if ($blocked)<div class="ztd-row"><span>{{ __('প্রোফাইল') }}</span><span>{{ $val($mk['profile'] ?? null) }} ({{ __('ব্লক, ইন্টারনেট নেই') }})</span></div>@endif
                         <div class="ztd-row"><span>IP</span><span class="ztd-mono">{{ $val($mk['address'] ?? null) }}</span></div>
                         <div class="ztd-row"><span>Uptime</span><span>{{ $val($mk['uptime'] ?? null) }}</span></div>
                     @elseif (! empty($last['seen_at']))

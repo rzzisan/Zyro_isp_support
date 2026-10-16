@@ -20,7 +20,6 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -128,8 +127,22 @@ class Monitoring extends Page implements HasTable
             ->when($this->server !== '', fn ($q) => $q->where('server', $this->server))
             ->leftJoin('ppp_sessions as s', fn ($j) => $j->on('s.company_id', '=', 'billing_customers.company_id')
                 ->on('s.username', '=', 'billing_customers.username'))
-            ->select('billing_customers.*', 's.address as s_address', 's.caller_id as s_mac', 's.uptime as s_uptime', 's.seen_at as s_seen')
-            ->selectRaw('(s.seen_at IS NOT NULL AND s.seen_at > ?) AS s_online', [$fresh]);
+            ->select('billing_customers.*', 's.address as s_address', 's.caller_id as s_mac', 's.uptime as s_uptime', 's.seen_at as s_seen', 's.profile as s_profile')
+            // on a block profile (billing disabled the line) the customer is connected but has no internet: blocked, not online
+            ->selectRaw('(s.seen_at IS NOT NULL AND s.seen_at > ? AND NOT s.blocked) AS s_online', [$fresh])
+            ->selectRaw('(s.seen_at IS NOT NULL AND s.seen_at > ? AND s.blocked) AS s_blocked', [$fresh]);
+    }
+
+    /** Status filter: online (with internet) | offline | blocked (connected on a block profile). Joined ppp_sessions as s. */
+    private static function whereLine(Builder $q, string $state): void
+    {
+        $fresh = now()->subMinutes(PppSession::FRESH_MINUTES);
+        match ($state) {
+            'online' => $q->where('s.seen_at', '>', $fresh)->where('s.blocked', false),
+            'blocked' => $q->where('s.seen_at', '>', $fresh)->where('s.blocked', true),
+            'offline' => $q->where(fn ($w) => $w->whereNull('s.seen_at')->orWhere('s.seen_at', '<=', $fresh)),
+            default => null,
+        };
     }
 
     /** [server => [total, online]] plus '' for all servers, counting only customers that match the table's filters and search. */
@@ -141,17 +154,18 @@ class Monitoring extends Page implements HasTable
             ->leftJoin('ppp_sessions as s', fn ($j) => $j->on('s.company_id', '=', 'billing_customers.company_id')
                 ->on('s.username', '=', 'billing_customers.username'));
         $this->applyCardFilters($q);
-        $rows = $q->selectRaw('server, count(*) AS total, count(*) FILTER (WHERE s.seen_at > ?) AS online', [$fresh])
+        $rows = $q->selectRaw('server, count(*) AS total, count(*) FILTER (WHERE s.seen_at > ? AND NOT s.blocked) AS online,
+                count(*) FILTER (WHERE s.seen_at > ? AND s.blocked) AS blocked', [$fresh, $fresh])
             ->groupBy('server')->orderByDesc('total')->get();
-        $out = ['' => ['total' => (int) $rows->sum('total'), 'online' => (int) $rows->sum('online')]];
+        $out = ['' => ['total' => (int) $rows->sum('total'), 'online' => (int) $rows->sum('online'), 'blocked' => (int) $rows->sum('blocked')]];
         foreach ($rows as $r) {
             if ($r->server && $r->server !== 'Not Found') {
-                $out[$r->server] = ['total' => (int) $r->total, 'online' => (int) $r->online];
+                $out[$r->server] = ['total' => (int) $r->total, 'online' => (int) $r->online, 'blocked' => (int) $r->blocked];
             }
         }
         // keep the chosen server's card even when the filters leave it empty
         if ($this->server !== '' && ! isset($out[$this->server])) {
-            $out[$this->server] = ['total' => 0, 'online' => 0];
+            $out[$this->server] = ['total' => 0, 'online' => 0, 'blocked' => 0];
         }
 
         return $out;
@@ -161,13 +175,7 @@ class Monitoring extends Page implements HasTable
     private function applyCardFilters(Builder $q): void
     {
         $f = $this->tableFilters ?? [];
-        $online = $f['online']['value'] ?? null;
-        if ($online !== null && $online !== '') {
-            $fresh = now()->subMinutes(PppSession::FRESH_MINUTES);
-            filter_var($online, FILTER_VALIDATE_BOOLEAN)
-                ? $q->where('s.seen_at', '>', $fresh)
-                : $q->where(fn ($w) => $w->whereNull('s.seen_at')->orWhere('s.seen_at', '<=', $fresh));
-        }
+        static::whereLine($q, (string) ($f['online']['value'] ?? ''));
         foreach (['zone', 'subzone', 'box', 'connection_type'] as $col) {
             if (($v = $f[$col]['value'] ?? null) !== null && $v !== '') {
                 $q->where("billing_customers.{$col}", $v);
@@ -243,8 +251,6 @@ class Monitoring extends Page implements HasTable
 
     public function table(Table $table): Table
     {
-        $fresh = fn () => now()->subMinutes(PppSession::FRESH_MINUTES);
-
         return $table
             ->query(fn () => $this->base())
             ->poll('60s')
@@ -263,23 +269,24 @@ class Monitoring extends Page implements HasTable
                 TextColumn::make('server')->label('Server')->toggleable(),
                 TextColumn::make('package')->label(__('প্যাকেজ'))->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('s_online')->label(__('অবস্থা'))->badge()
-                    ->state(fn ($record) => $record->s_online ? __('অনলাইন') : __('অফলাইন'))
-                    ->color(fn (string $state) => $state === __('অনলাইন') ? 'success' : 'danger'),
-                TextColumn::make('s_address')->label('IP')->state(fn ($record) => $record->s_online ? $record->s_address : null)->placeholder('—')->copyable(),
-                TextColumn::make('s_mac')->label('MAC')->state(fn ($record) => $record->s_online ? $record->s_mac : null)->placeholder('—')->toggleable(),
-                TextColumn::make('s_uptime')->label('Duration')->state(fn ($record) => $record->s_online ? $record->s_uptime : null)->placeholder('—'),
+                    ->state(fn ($record) => $record->s_online ? __('অনলাইন') : ($record->s_blocked ? __('ব্লক') : __('অফলাইন')))
+                    ->color(fn ($record) => $record->s_online ? 'success' : ($record->s_blocked ? 'warning' : 'danger'))
+                    ->tooltip(fn ($record) => $record->s_blocked ? __('MikroTik-এ ব্লক প্রোফাইলে (:profile): কানেক্ট আছে, ইন্টারনেট নেই', ['profile' => $record->s_profile]) : null),
+                TextColumn::make('s_address')->label('IP')->state(fn ($record) => $record->s_online || $record->s_blocked ? $record->s_address : null)->placeholder('—')->copyable(),
+                TextColumn::make('s_mac')->label('MAC')->state(fn ($record) => $record->s_online || $record->s_blocked ? $record->s_mac : null)->placeholder('—')->toggleable(),
+                TextColumn::make('s_uptime')->label('Duration')->state(fn ($record) => $record->s_online || $record->s_blocked ? $record->s_uptime : null)->placeholder('—'),
                 TextColumn::make('s_seen')->label(__('শেষ অনলাইন'))
-                    ->state(fn ($record) => ! $record->s_online && $record->s_seen ? Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : null)
-                    ->placeholder(fn ($record) => $record->s_online ? __('এখন') : __('জানা নেই')),
+                    ->state(fn ($record) => ! $record->s_online && ! $record->s_blocked && $record->s_seen ? Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : null)
+                    ->placeholder(fn ($record) => $record->s_online || $record->s_blocked ? __('এখন') : __('জানা নেই')),
                 TextColumn::make('s_offline_for')->label(__('অফলাইন কতক্ষণ'))
-                    ->state(fn ($record) => ! $record->s_online && $record->s_seen ? Carbon::parse($record->s_seen, 'UTC')->getTimestamp() : null)
+                    ->state(fn ($record) => ! $record->s_online && ! $record->s_blocked && $record->s_seen ? Carbon::parse($record->s_seen, 'UTC')->getTimestamp() : null)
                     ->formatStateUsing(fn ($state) => new HtmlString('<span class="zm-off-for" data-off-since="'.(int) $state.'">'.static::offlineFor((int) $state).'</span>'))
                     ->placeholder('—'),
             ])
             ->filters([
-                TernaryFilter::make('online')->label(__('অবস্থা'))->trueLabel(__('অনলাইন'))->falseLabel(__('অফলাইন'))
-                    ->queries(true: fn (Builder $q) => $q->where('s.seen_at', '>', $fresh()),
-                        false: fn (Builder $q) => $q->where(fn ($w) => $w->whereNull('s.seen_at')->orWhere('s.seen_at', '<=', $fresh()))),
+                SelectFilter::make('online')->label(__('অবস্থা'))
+                    ->options(['online' => __('অনলাইন'), 'offline' => __('অফলাইন'), 'blocked' => __('ব্লক')])
+                    ->query(fn (Builder $query, array $data) => static::whereLine($query, (string) ($data['value'] ?? ''))),
                 SelectFilter::make('zone')->label('Zone')->options(fn () => static::listOptions('zones', 'zone'))->searchable()
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($x, $v) => $x->where('billing_customers.zone', $v))),
                 SelectFilter::make('subzone')->label('Subzone')->options(fn () => $this->scopedOptions('subzone', ['zone']))->searchable()
@@ -294,9 +301,10 @@ class Monitoring extends Page implements HasTable
             ->filtersFormColumns(5)
             ->recordActions([
                 // one click: the new-ticket form with this customer (and, when offline, the problem) already filled in
-                TicketActions::newTicket(fn ($record) => [$record?->customer_id, $record && ! $record->s_online
-                    ? __('লাইন অফলাইন').($record->s_seen ? __(', শেষ অনলাইন ').Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : '')
-                    : null])
+                TicketActions::newTicket(fn ($record) => [$record?->customer_id, $record && $record->s_blocked
+                    ? __('MikroTik-এ লাইন ব্লক (:profile), ইন্টারনেট নেই', ['profile' => $record->s_profile])
+                    : ($record && ! $record->s_online ? __('লাইন অফলাইন').($record->s_seen ? __(', শেষ অনলাইন ').Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : '')
+                    : null)])
                     ->label(__('টিকিট'))->icon(Heroicon::OutlinedTicket)->color('warning'),
                 Action::make('recheck')->label(__('রি-চেক'))->icon(Heroicon::OutlinedArrowPath)->color('gray')
                     ->action(function ($record) {
@@ -304,7 +312,9 @@ class Monitoring extends Page implements HasTable
                             ? ['warning', __('রাউটার থেকে উত্তর আসেনি')]
                             : (($r['online'] ?? false)
                                 ? ['success', __('অনলাইন')." · {$r['uptime']} · {$r['router']}", "IP {$r['address']} · MAC {$r['caller_id']}"]
-                                : ['danger', __('অফলাইন')." ({$r['router']})"]));
+                                : (($r['blocked'] ?? false)
+                                    ? ['warning', __('ব্লক')." ({$r['profile']}) · {$r['router']}", __('কানেক্ট আছে, ইন্টারনেট নেই')." · IP {$r['address']}"]
+                                    : ['danger', __('অফলাইন')." ({$r['router']})"])));
                     }),
                 Action::make('traffic')->label(__('ট্রাফিক'))->icon(Heroicon::OutlinedArrowsUpDown)->color('gray')
                     ->visible(fn ($record) => (bool) $record->s_online)

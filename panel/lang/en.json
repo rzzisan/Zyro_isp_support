@@ -1174,5 +1174,16 @@
     "🎬 ভিডিও": "🎬 Video",
     "📄 ফাইল": "📄 File",
     "📍 লোকেশন": "📍 Location",
-    "📷 ছবি": "📷 Photo"
+    "📷 ছবি": "📷 Photo",
+    "ব্লক": "Blocked",
+    "MikroTik-এ ব্লক প্রোফাইলে (:profile): কানেক্ট আছে, ইন্টারনেট নেই": "On a block profile on MikroTik (:profile): connected, no internet",
+    "MikroTik-এ লাইন ব্লক (:profile), ইন্টারনেট নেই": "Line blocked on MikroTik (:profile), no internet",
+    "কানেক্ট আছে, ইন্টারনেট নেই": "Connected, no internet",
+    "কানেক্ট আছে কিন্তু MikroTik-এ ব্লক প্রোফাইলে, ইন্টারনেট নেই": "Connected but on a block profile on MikroTik, no internet",
+    "ব্লক · ইন্টারনেট নেই (:profile)": "Blocked · no internet (:profile)",
+    "কাস্টমারের লাইন MikroTik-এ ব্লক (ইন্টারনেট নেই), তাই Solve করা যাবে না": "The customer's line is blocked on MikroTik (no internet), so it can't be solved",
+    "ব্লক (:profile) · ইন্টারনেট নেই · ": "Blocked (:profile) · no internet · ",
+    "ইন্টারনেট নেই": "No internet",
+    "প্রোফাইল": "Profile",
+    "ব্লক, ইন্টারনেট নেই": "blocked, no internet"
 }

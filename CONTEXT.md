@@ -322,3 +322,9 @@
 - 2026-10-16 (Zisan: "eke eke sokol page translate"): পুরো প্যানেল অনুবাদ হয়েছে: কাস্টমার, বিল, SMS, সেটিংস, বট/AI, নেটওয়ার্ক, ONU স্টক, উইজেট, বিলিং কনফিগারেশন, সুপার প্যানেল, স্টাফকে দেখানো service এরর, `routes/web.php`-এর লেখা। `lang/en.json`-এ ~১১৭৬টা লেখা। JS (`public/js/zyro-notify.js`, `zyro-page-info.js`) `window.zyroT('বাংলা')` ডাকে; ম্যাপ `Locale::JS` থেকে `Locale::jsScript()` দুই প্যানেলের `<head>`-এ বসায়।
 - ইচ্ছা করে বাংলাই রাখা (কাস্টমারমুখী বা ডেটা): SMS টেমপ্লেটের ডিফল্ট লেখা, রসিদ (`print/receipt`), স্টিকারের লেখা, `ReceiptSetting::QR_NOTE`, টিকিট SMS-এর `{status}`, `Onu::PURPOSES/CONNECTION_TYPES/MATERIALS`-এর সেভ হওয়া মান (শুধু দেখানো লেবেল অনুবাদ হয়), `Insights` (ডেটা মেলায়), `billing_connections.last_check_message`, engine-এর পুশ নোটিফিকেশন ও বটের লেখা।
 - `LocaleTest::test_every_company_page_opens_in_english_as_in_bangla`: কোম্পানি প্যানেলের সব রিসোর্স/পেজ দুই ভাষায় একই status দেয় কিনা দেখে।
+
+## ব্লক প্রোফাইল = ব্লক, অনলাইন না (2026-10-16)
+- বিলিং লাইন বন্ধ করলে MikroTik-এ secret মুছে না, profile `BLOCKED-PROFILE` (পুল `BLOCKED-POOL`, 10.144-146.x) করে সেশন কাটে; কাস্টমার আবার কানেক্ট হয়, `/ppp/active`-এ থাকে কিন্তু ইন্টারনেট নেই। আগে Desk এদের অনলাইন দেখাত।
+- এখন `engine/ppp_sync.py` প্রতি sync-এ `/ppp/secret` (name,profile) আর `/ppp/profile` পড়ে; profile বা তার পুলের নামে `block|disabl|suspend|unpaid` থাকলে ব্লক (`BLOCKED-PROFILE`, `DueDisabled`)। `ppp_sessions.profile`, `ppp_sessions.blocked` (migration 2026_10_16_000020)। রাউটারের `ppp_active` গণনায় ব্লক বাদ।
+- `online_now()` ব্লক হলে `{"online": false, "blocked": true, "profile": …}` দেয়, তাই যেখানে blocked দেখা হয় না সেখানেও "ইন্টারনেট নেই" ধরা হয়। Solve (ডেস্ক ও বট) ব্লক হলে আলাদা কারণ বলে আটকায়; বটের প্রম্পটে blocked মানে বলা আছে।
+- প্যানেল: Monitoring-এ অবস্থা অনলাইন/অফলাইন/ব্লক (ফিল্টারও), কার্ডে "ব্লক" সংখ্যা; কাস্টমার লিস্টে লাল সিগন্যাল আইকন "ব্লক"; ড্যাশবোর্ডের অনলাইন সংখ্যায় ব্লক বাদ; টিকিট/কাস্টমার লাইভ কার্ডে "ব্লক · ইন্টারনেট নেই"।

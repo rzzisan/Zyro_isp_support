@@ -15,7 +15,13 @@ class PppSession extends Model
 
     protected function casts(): array
     {
-        return ['seen_at' => 'datetime'];
+        return ['seen_at' => 'datetime', 'blocked' => 'boolean'];
+    }
+
+    /** Connected but on a block profile (billing disabled the line): no internet, so never counted as online. */
+    public function isBlocked(): bool
+    {
+        return $this->blocked && $this->isFresh();
     }
 
     public function router(): BelongsTo

@@ -9,9 +9,12 @@
         $online = strtolower((string) ($p['connectivity'] ?? '')) === 'connected' || str_contains(strtolower((string) ($p['connectivity'] ?? '')), 'online');
         $mk = $live['mikrotik'] ?? null;
         if ($mk) { $online = (bool) ($mk['online'] ?? false); }
+        // connected on a block profile (billing disabled the line): no internet
+        $blocked = (bool) ($mk['blocked'] ?? false);
         $rows = [
-            __('MikroTik (এখন)') => $mk ? (($mk['online'] ?? false) ? __('অনলাইন · ').($mk['uptime'] ?? '').' · '.($mk['router'] ?? '') : __('অফলাইন · ').($mk['router'] ?? '')) : __('রাউটার থেকে উত্তর আসেনি'),
-            __('IP / MAC (রাউটার)') => $mk && ($mk['online'] ?? false) ? (($mk['address'] ?? '—').' · '.($mk['caller_id'] ?? '—')) : '—',
+            __('MikroTik (এখন)') => $mk ? (($mk['online'] ?? false) ? __('অনলাইন · ').($mk['uptime'] ?? '').' · '.($mk['router'] ?? '')
+                : ($blocked ? __('ব্লক (:profile) · ইন্টারনেট নেই · ', ['profile' => $mk['profile'] ?? '']).($mk['router'] ?? '') : __('অফলাইন · ').($mk['router'] ?? ''))) : __('রাউটার থেকে উত্তর আসেনি'),
+            __('IP / MAC (রাউটার)') => $mk && (($mk['online'] ?? false) || $blocked) ? (($mk['address'] ?? '—').' · '.($mk['caller_id'] ?? '—')) : '—',
             __('PPPoE (বিলিং)') => ($p['connectivity'] ?? '—'),
             'Uptime' => $p['uptime'] ?? '—',
             __('শেষ logout') => $p['last_logout'] ?? '—',
@@ -28,7 +31,7 @@
     <div style="display:grid; grid-template-columns: auto 1fr; gap:6px 16px; font-size:.9rem">
         @foreach ($rows as $k => $v)
             <div style="color:#6b7280">{{ $k }}</div>
-            <div style="font-weight:600; {{ $k === __('MikroTik (এখন)') ? ($online ? 'color:#059669' : 'color:#dc2626') : '' }}">{{ $v }}</div>
+            <div style="font-weight:600; {{ $k === __('MikroTik (এখন)') ? ($online ? 'color:#059669' : ($blocked ? 'color:#d97706' : 'color:#dc2626')) : '' }}">{{ $v }}</div>
         @endforeach
     </div>
     @if (! empty($live['payments']))

@@ -38,6 +38,8 @@ def solve_for_customer(t: Tenant, customer: dict, remark: str) -> tuple[bool, st
         mk = None
     if mk is None:
         return False, f"টিকিট {nos} সমাধান করা হয়নি: MikroTik থেকে উত্তর আসেনি, লাইন অনলাইন কিনা যাচাই করা গেল না।"
+    if mk.get("blocked"):
+        return False, f"টিকিট {nos} সমাধান করা হয়নি: কাস্টমারের লাইন MikroTik-এ ব্লক, ইন্টারনেট নেই।"
     if not mk.get("online"):
         return False, f"টিকিট {nos} সমাধান করা হয়নি: কাস্টমারের লাইন এখন অফলাইন।"
     if os.environ.get("ENGINE_DRY_RUN", "1") == "1":

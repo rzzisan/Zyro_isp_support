@@ -109,21 +109,28 @@ class CustomerResource extends Resource
         return null;
     }
 
-    /** Subquery: a PPPoE session for this customer seen in the last few minutes. */
-    public static function freshSession(): \Closure
+    /** Subquery: a PPPoE session for this customer seen in the last few minutes, with internet (not on a block profile). */
+    public static function freshSession(bool $blocked = false): \Closure
     {
         return fn ($q) => $q->from('ppp_sessions')->whereColumn('ppp_sessions.company_id', 'billing_customers.company_id')
             ->whereColumn('ppp_sessions.username', 'billing_customers.username')
-            ->where('ppp_sessions.seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES));
+            ->where('ppp_sessions.seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))
+            ->where('ppp_sessions.blocked', $blocked);
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->defaultSort('customer_id')
-            ->modifyQueryUsing(fn (Builder $query) => $query->select('billing_customers.*')->addSelect(['online_uptime' => PppSession::query()->select('uptime')->whereColumn('ppp_sessions.company_id', 'billing_customers.company_id')
-                ->whereColumn('ppp_sessions.username', 'billing_customers.username')
-                ->where('seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))->limit(1)]))
+            ->modifyQueryUsing(fn (Builder $query) => $query->select('billing_customers.*')->addSelect([
+                'online_uptime' => PppSession::query()->select('uptime')->whereColumn('ppp_sessions.company_id', 'billing_customers.company_id')
+                    ->whereColumn('ppp_sessions.username', 'billing_customers.username')
+                    ->where('seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))->where('blocked', false)->limit(1),
+                // connected on a block profile: billing disabled the line, no internet
+                'online_blocked' => PppSession::query()->select('profile')->whereColumn('ppp_sessions.company_id', 'billing_customers.company_id')
+                    ->whereColumn('ppp_sessions.username', 'billing_customers.username')
+                    ->where('seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))->where('blocked', true)->limit(1),
+            ]))
             ->striped()
             // same columns, in the same order, as billing's customer list, so staff find things where they expect them
             // compact rows (public/css/zyro-theme.css .z-cc) so the whole list fits without scrolling sideways
@@ -133,8 +140,9 @@ class CustomerResource extends Resource
                         ->orWhere('name', 'ilike', "%{$search}%")->orWhere('username', 'ilike', "%{$search}%")
                         ->orWhere('mobile', 'like', '%'.preg_replace('/\D/', '', $search).'%'))),
                 TextColumn::make('username')->label('ID/IP')->copyable()->placeholder('—')
-                    ->icon(Heroicon::Signal)->iconColor(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'success' : 'gray')
-                    ->tooltip(fn (BillingCustomer $r) => $r->online_uptime !== null ? __('অনলাইন · ').$r->online_uptime : __('অফলাইন')),
+                    ->icon(Heroicon::Signal)->iconColor(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'success' : ($r->online_blocked !== null ? 'danger' : 'gray'))
+                    ->tooltip(fn (BillingCustomer $r) => $r->online_uptime !== null ? __('অনলাইন · ').$r->online_uptime
+                        : ($r->online_blocked !== null ? __('ব্লক · ইন্টারনেট নেই (:profile)', ['profile' => $r->online_blocked]) : __('অফলাইন'))),
                 TextColumn::make('name')->label('Cus.Name / Mobile')->wrap()->description(fn (BillingCustomer $r) => $r->mobile),
                 TextColumn::make('zone')->label('Zone')->sortable()->placeholder('—')
                     ->description(fn (BillingCustomer $r) => trim($r->subzone.($r->box ? ' · '.$r->box : '')) ?: null),

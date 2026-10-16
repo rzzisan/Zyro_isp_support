@@ -745,6 +745,8 @@ async def solve(request: Request, company_id: int, complain_id: int, background:
     mk = await run_in_threadpool(online_now, company_id, row["username"] or "", row["server"])
     if mk is None:
         raise HTTPException(status_code=400, detail="MikroTik থেকে উত্তর আসেনি, তাই অনলাইন কিনা যাচাই করা গেল না")
+    if mk.get("blocked"):
+        raise HTTPException(status_code=400, detail=f"কাস্টমারের লাইন MikroTik-এ ব্লক ({mk.get('profile')}), ইন্টারনেট নেই; লাইন চালু হলে Solve করুন")
     if not mk.get("online"):
         raise HTTPException(status_code=400, detail="কাস্টমার MikroTik-এ অফলাইন, লাইন চালু হলে Solve করুন")
     api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
@@ -922,12 +924,13 @@ def monitor(request: Request, company_id: int, header_id: int, what: str):
     try:
         if what == "recheck":
             res = ppp_sync.online_now(company_id, row["username"], row["server"])
-            if res and res.get("online"):
-                db.execute("""INSERT INTO ppp_sessions (company_id, router_id, username, address, caller_id, uptime, seen_at)
-                              SELECT %s, id, %s, %s, %s, %s, now() FROM mikrotik_routers WHERE company_id = %s AND identity = %s LIMIT 1
+            if res and (res.get("online") or res.get("blocked")):
+                db.execute("""INSERT INTO ppp_sessions (company_id, router_id, username, address, caller_id, uptime, profile, blocked, seen_at)
+                              SELECT %s, id, %s, %s, %s, %s, %s, %s, now() FROM mikrotik_routers WHERE company_id = %s AND identity = %s LIMIT 1
                               ON CONFLICT (company_id, username) DO UPDATE SET address = EXCLUDED.address, caller_id = EXCLUDED.caller_id,
-                                uptime = EXCLUDED.uptime, seen_at = now()""",
-                           (company_id, row["username"], res.get("address"), res.get("caller_id"), res.get("uptime"), company_id, res.get("router")))
+                                uptime = EXCLUDED.uptime, profile = EXCLUDED.profile, blocked = EXCLUDED.blocked, seen_at = now()""",
+                           (company_id, row["username"], res.get("address"), res.get("caller_id"), res.get("uptime"), res.get("profile"),
+                            bool(res.get("blocked")), company_id, res.get("router")))
             return res or {"online": None}
         if what == "traffic":
             return ppp_sync.traffic(company_id, row["username"], row["server"]) or {}

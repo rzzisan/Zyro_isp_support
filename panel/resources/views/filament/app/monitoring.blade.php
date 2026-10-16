@@ -10,6 +10,7 @@
         .zm-nums span strong { font-size: 1.05rem; color: var(--z-fg); }
         .zm-on strong { color: #059669 !important; }
         .zm-off strong { color: #dc2626 !important; }
+        .zm-blk strong { color: #d97706 !important; }
         .zm-bar { height: 5px; border-radius: 999px; background: color-mix(in srgb, #dc2626 25%, transparent); margin-top: 8px; overflow: hidden; }
         .zm-bar i { display: block; height: 100%; background: #10b981; }
         .zm-note { font-size: .8rem; color: var(--z-muted); margin-bottom: -4px; }
@@ -28,7 +29,10 @@
                 <div class="zm-nums">
                     <span>{{ __('মোট') }} <strong>{{ number_format($c['total']) }}</strong></span>
                     <span class="zm-on">{{ __('অনলাইন') }} <strong>{{ number_format($c['online']) }}</strong></span>
-                    <span class="zm-off">{{ __('অফলাইন') }} <strong>{{ number_format($c['total'] - $c['online']) }}</strong></span>
+                    <span class="zm-off">{{ __('অফলাইন') }} <strong>{{ number_format($c['total'] - $c['online'] - $c['blocked']) }}</strong></span>
+                    @if ($c['blocked'])
+                        <span class="zm-blk" title="{{ __('কানেক্ট আছে কিন্তু MikroTik-এ ব্লক প্রোফাইলে, ইন্টারনেট নেই') }}">{{ __('ব্লক') }} <strong>{{ number_format($c['blocked']) }}</strong></span>
+                    @endif
                 </div>
                 <div class="zm-bar"><i style="width: {{ $c['total'] ? round(100 * $c['online'] / $c['total']) : 0 }}%"></i></div>
             </button>

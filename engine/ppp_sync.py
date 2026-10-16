@@ -2,33 +2,50 @@
 
 Sessions are never deleted: a customer who drops keeps the row and its seen_at is when they were last online.
 The panel treats a session as online only when seen in the last few minutes.
+Billing "disable" does not drop the secret: it moves it to a block profile (BLOCKED-PROFILE, pool BLOCKED-POOL) and kills
+the session, so the customer reconnects and is in /ppp/active with no internet. Such sessions are stored as blocked.
   set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.ppp_sync
 """
 import logging
+import re
 
 from engine import db
 from engine.mikrotik import RouterOS
 
 log = logging.getLogger("zyro-ppp-sync")
 
+# profile (or its remote-address pool) names that mean "no internet": BLOCKED-PROFILE / BLOCKED-POOL, DueDisabled, unpaid
+BLOCK_NAME = re.compile(r"block|disabl|suspend|unpaid", re.I)
+
+
+def block_profiles(api: RouterOS, name: str | None = None) -> set[str]:
+    """Names of the router's PPP profiles that cut the internet (by profile name or its pool's name)."""
+    rows = api.talk("/ppp/profile/print", {".proplist": "name,remote-address"}, query={"name": name} if name else None)
+    return {p["name"] for p in rows if p.get("name") and BLOCK_NAME.search(f'{p["name"]} {p.get("remote-address") or ""}')}
+
 
 def sync_router(r: dict) -> int:
     with RouterOS(r["host"], r["api_port"], r["username"], db.decrypt(r["password"]), timeout=15) as api:
         rows = api.talk("/ppp/active/print", {".proplist": "name,address,caller-id,uptime"})
+        profile = {s.get("name"): s.get("profile") for s in api.talk("/ppp/secret/print", {".proplist": "name,profile"})}
+        blocks = block_profiles(api)
+    rows = [x for x in rows if x.get("name")]
     with db.conn() as c:
         with c.transaction():
             # keep sessions that dropped: their seen_at becomes "last seen online" (≈ logout time)
             with c.cursor() as cur:
                 cur.executemany(
-                    """INSERT INTO ppp_sessions (company_id, router_id, username, address, caller_id, uptime, seen_at)
-                       VALUES (%s, %s, %s, %s, %s, %s, now())
+                    """INSERT INTO ppp_sessions (company_id, router_id, username, address, caller_id, uptime, profile, blocked, seen_at)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
                        ON CONFLICT (company_id, username) DO UPDATE SET router_id = EXCLUDED.router_id,
-                         address = EXCLUDED.address, caller_id = EXCLUDED.caller_id, uptime = EXCLUDED.uptime, seen_at = now()""",
-                    [(r["company_id"], r["id"], x.get("name"), x.get("address"), x.get("caller-id"), x.get("uptime"))
-                     for x in rows if x.get("name")])
-            # count only PPPoE users that exist in the billing software
+                         address = EXCLUDED.address, caller_id = EXCLUDED.caller_id, uptime = EXCLUDED.uptime,
+                         profile = EXCLUDED.profile, blocked = EXCLUDED.blocked, seen_at = now()""",
+                    [(r["company_id"], r["id"], x["name"], x.get("address"), x.get("caller-id"), x.get("uptime"),
+                      profile.get(x["name"]), profile.get(x["name"]) in blocks) for x in rows])
+            # count only PPPoE users that exist in the billing software and have internet (not on a block profile)
             n = c.execute("""SELECT count(*) AS n FROM billing_customers WHERE company_id = %s AND gone_at IS NULL AND NOT is_left
-                             AND username = ANY(%s)""", (r["company_id"], [x.get("name") for x in rows if x.get("name")])).fetchone()["n"]
+                             AND username = ANY(%s)""",
+                          (r["company_id"], [x["name"] for x in rows if profile.get(x["name"]) not in blocks])).fetchone()["n"]
             c.execute("""UPDATE mikrotik_routers SET ppp_active = %s, last_checked_at = now(), last_check_ok = true,
                          updated_at = now() WHERE id = %s""", (n, r["id"]))
     return n
@@ -47,7 +64,8 @@ def main() -> None:
 
 def online_now(company_id: int, username: str, server: str | None) -> dict | None:
     """Ask the customer's own router right now (falls back to every router of the company).
-    Returns {"online": bool, "router": ..., "uptime": ..., "address": ..., "caller_id": ...} or None if no router answered."""
+    Returns {"online": bool, "blocked": bool, "profile": ..., "router": ..., "uptime": ..., "address": ..., "caller_id": ...}
+    or None if no router answered. A session on a block profile has no internet: online False, blocked True."""
     if not username:
         return None
     routers = db.all_rows("SELECT * FROM mikrotik_routers WHERE company_id = %s AND enabled ORDER BY (billing_server = %s) DESC, id",
@@ -57,8 +75,13 @@ def online_now(company_id: int, username: str, server: str | None) -> dict | Non
         try:
             with RouterOS(r["host"], r["api_port"], r["username"], db.decrypt(r["password"]), timeout=6) as api:
                 rows = api.talk("/ppp/active/print", query={"name": username})
-                iface = {}
+                iface, profile, blocked = {}, None, False
                 if rows:  # bytes moved this session; the router's tx to the customer is the customer's download
+                    try:
+                        profile = (api.talk("/ppp/secret/print", {".proplist": "profile"}, query={"name": username}) or [{}])[0].get("profile")
+                        blocked = bool(profile) and profile in block_profiles(api, profile)
+                    except Exception as e:
+                        log.warning("secret profile for %s: %s", username, e)
                     try:
                         iface = (api.talk("/interface/print", {".proplist": "rx-byte,tx-byte"},
                                           query={"name": f"<pppoe-{username}>"}) or [{}])[0]
@@ -67,10 +90,11 @@ def online_now(company_id: int, username: str, server: str | None) -> dict | Non
         except Exception as e:
             log.warning("router %s not reachable: %s", r["identity"], e)
             continue
-        answered = {"online": False, "router": r["identity"]}
+        answered = {"online": False, "blocked": False, "router": r["identity"]}
         if rows:
             x = rows[0]
-            return {"online": True, "router": r["identity"], "uptime": x.get("uptime"), "address": x.get("address"),
+            return {"online": not blocked, "blocked": blocked, "profile": profile, "router": r["identity"],
+                    "uptime": x.get("uptime"), "address": x.get("address"),
                     "caller_id": x.get("caller-id"),
                     "download_bytes": int(iface["tx-byte"]) if str(iface.get("tx-byte", "")).isdigit() else None,
                     "upload_bytes": int(iface["rx-byte"]) if str(iface.get("rx-byte", "")).isdigit() else None}

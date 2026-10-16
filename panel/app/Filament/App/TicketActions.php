@@ -424,7 +424,9 @@ class TicketActions
             ->visible(fn (BillingTicket $record) => $record->isOpen())
             ->disabled(fn (BillingTicket $record) => $online($record) === false)
             ->tooltip(fn (BillingTicket $record) => match ($online($record)) {
-                false => __('কাস্টমার MikroTik-এ অফলাইন, তাই Solve করা যাবে না'),
+                false => ! empty(static::liveInfo((int) $record->customer_header_id)[0]['mikrotik']['blocked'])
+                    ? __('কাস্টমারের লাইন MikroTik-এ ব্লক (ইন্টারনেট নেই), তাই Solve করা যাবে না')
+                    : __('কাস্টমার MikroTik-এ অফলাইন, তাই Solve করা যাবে না'),
                 null => __('MikroTik থেকে উত্তর আসেনি; Solve চাপলে আবার যাচাই হবে'),
                 default => null,
             })

@@ -35,6 +35,8 @@ class MonitoringTest extends TestCase
             'server' => 'CLNBD', 'status' => 'Active', 'disabled' => true]);
         $free = BillingCustomer::create(['company_id' => $company->id, 'header_id' => 5, 'customer_id' => '0005', 'username' => 'u0005',
             'server' => 'CLN_4', 'status' => 'Free']);
+        // billing disabled the line but its row here is not yet updated: MikroTik moved it to a block profile, it reconnected
+        $blk = $mk('0006', 'CLNBD');
         $r = MikrotikRouter::create(['company_id' => $company->id, 'host' => 'h', 'api_port' => 8728, 'username' => 'u', 'password' => 'p', 'identity' => 'CLNBD', 'billing_server' => 'CLNBD']);
         DB::table('ppp_sessions')->insert([
             ['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0001', 'address' => '10.1.1.1', 'uptime' => '2h', 'seen_at' => now()],
@@ -42,17 +44,21 @@ class MonitoringTest extends TestCase
             ['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0004', 'address' => '10.144.1.4', 'uptime' => '3h', 'seen_at' => now()],
             ['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0005', 'address' => '10.1.1.5', 'uptime' => '4h', 'seen_at' => now()],
         ]);
+        DB::table('ppp_sessions')->insert(['company_id' => $company->id, 'router_id' => $r->id, 'username' => 'u0006', 'address' => '10.144.1.6',
+            'uptime' => '5m', 'seen_at' => now(), 'profile' => 'BLOCKED-PROFILE', 'blocked' => true]);
         Http::fake(['engine.test/internal/*/customers/refresh*' => Http::response(['started' => true, 'running' => true])]);
         $this->actingAs($agent)->get("/app/{$company->slug}/monitoring")->assertOk()->assertSee('সব সার্ভার');
         Filament::setCurrentPanel('app');
         Filament::setTenant($company);
         $page = Livewire::test(Monitoring::class);
-        $this->assertSame(['total' => 4, 'online' => 2], $page->instance()->counts()['']);
-        $this->assertSame(['total' => 2, 'online' => 1], $page->instance()->counts()['CLNBD']);
-        $this->assertSame(['total' => 2, 'online' => 1], $page->instance()->counts()['CLN_4']);
+        $this->assertSame(['total' => 5, 'online' => 2, 'blocked' => 1], $page->instance()->counts()['']);
+        $this->assertSame(['total' => 3, 'online' => 1, 'blocked' => 1], $page->instance()->counts()['CLNBD']);
+        $this->assertSame(['total' => 2, 'online' => 1, 'blocked' => 0], $page->instance()->counts()['CLN_4']);
         $page->assertCanSeeTableRecords([$on, $off, $other, $free])->assertCanNotSeeTableRecords([$cut])->assertSee('10.1.1.1')->assertDontSee('10.1.1.2')
             ->call('setServer', 'CLNBD')->assertCanSeeTableRecords([$on, $off])->assertCanNotSeeTableRecords([$other])
-            ->filterTable('online', true)->assertCanSeeTableRecords([$on])->assertCanNotSeeTableRecords([$off]);
+            ->filterTable('online', 'online')->assertCanSeeTableRecords([$on])->assertCanNotSeeTableRecords([$off, $blk])
+            ->filterTable('online', 'blocked')->assertCanSeeTableRecords([$blk])->assertCanNotSeeTableRecords([$on, $off])->assertSee('ব্লক')
+            ->filterTable('online', 'offline')->assertCanSeeTableRecords([$off])->assertCanNotSeeTableRecords([$on, $blk]);
 
         Http::assertSent(fn ($req) => str_contains($req->url(), "/internal/{$company->id}/customers/refresh"));
         $page->assertSet('refreshing', true)->call('checkRefresh')->assertSet('refreshing', false);
@@ -60,6 +66,9 @@ class MonitoringTest extends TestCase
         Http::fake(['engine.test/*' => Http::response(['online' => true, 'router' => 'CLNBD', 'uptime' => '2h1m', 'address' => '10.1.1.1', 'caller_id' => 'AA'])]);
         Livewire::test(Monitoring::class)->callAction(TestAction::make('recheck')->table($on))->assertNotified('অনলাইন · 2h1m · CLNBD');
         Http::assertSent(fn ($req) => str_ends_with($req->url(), "/internal/{$company->id}/monitor/1/recheck"));
+        config(['services.engine.url' => 'http://engine3.test']);
+        Http::fake(['engine3.test/*' => Http::response(['online' => false, 'blocked' => true, 'profile' => 'BLOCKED-PROFILE', 'router' => 'CLNBD', 'uptime' => '5m', 'address' => '10.144.1.6'])]);
+        Livewire::test(Monitoring::class)->callAction(TestAction::make('recheck')->table($blk))->assertNotified('ব্লক (BLOCKED-PROFILE) · CLNBD');
         config(['services.engine.url' => 'http://engine2.test']);
         Http::fake(["engine2.test/internal/{$company->id}/ppp/sync" => Http::response([['router' => 'CLNBD', 'online' => 2523, 'ok' => true]])]);
         Livewire::test(Monitoring::class)->callAction('sync')->assertNotified('MikroTik থেকে আপডেট হয়েছে');

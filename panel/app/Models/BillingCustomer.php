@@ -52,10 +52,10 @@ class BillingCustomer extends Model
             : WaContact::where('company_id', $this->company_id)->where('customer_id', $this->customer_id)->first();
     }
 
-    /** Its PPPoE session seen on a MikroTik in the last few minutes (online now), or null. */
+    /** Its PPPoE session seen on a MikroTik in the last few minutes (online now, not on a block profile), or null. */
     public function onlineSession(): ?PppSession
     {
         return $this->username ? PppSession::where('company_id', $this->company_id)->where('username', $this->username)
-            ->where('seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))->first() : null;
+            ->where('seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))->where('blocked', false)->first() : null;
     }
 }
