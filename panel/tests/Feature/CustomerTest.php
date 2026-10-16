@@ -81,7 +81,7 @@ class CustomerTest extends TestCase
             ->filterTable('list', 'all')->assertCanSeeTableRecords([$a, $l, $g]);
         DB::table('billing_customer_changes')->insert(['company_id' => $this->company->id, 'header_id' => $l->header_id,
             'change' => 'left', 'left_on' => '2026-10-04', 'seen_at' => '2026-10-04 06:00:00']);
-        Livewire::test(ViewCustomer::class, ['record' => $l->id])->assertSee('Left হয়েছেন · 04 Oct 2026')->assertSee('04 Oct 2026 থেকে');
+        Livewire::test(ViewCustomer::class, ['record' => $l->id])->assertSee('Left হয়েছেন · 04 Oct 2026')->assertSee('Left · 04 Oct 2026');
     }
 
     public function test_password_is_encrypted_and_viewing_it_is_logged(): void
