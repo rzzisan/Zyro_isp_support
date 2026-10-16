@@ -20,5 +20,5 @@
      x-init="check(); setInterval(() => check(), 5000); document.addEventListener('visibilitychange', () => { if (! document.hidden) check() })"
      style="font-size:.75rem; color:var(--z-muted,#6b7280); text-align:right">
     <span x-show="ok" style="color:#16a34a">●</span><span x-show="! ok" style="color:#d97706">●</span>
-    <span x-text="ok ? 'লাইভ' + (at ? ' · শেষ দেখা ' + at : '') : 'লাইভ আপডেট থেমে আছে, পরে আবার চেষ্টা হবে'"></span>
+    <span x-text="ok ? @js(__('লাইভ')) + (at ? ' · ' + @js(__('শেষ দেখা')) + ' ' + at : '') : @js(__('লাইভ আপডেট থেমে আছে, পরে আবার চেষ্টা হবে'))"></span>
 </div>

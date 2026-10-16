@@ -111,14 +111,14 @@ class BillActions
         } catch (\Throwable $e) {
             report($e);
 
-            return 'SMS তালিকায় তোলা যায়নি';
+            return __('SMS তালিকায় তোলা যায়নি');
         }
         if (! $campaign) {
-            return 'SMS যায়নি (মোবাইল নম্বর ঠিক নেই)';
+            return __('SMS যায়নি (মোবাইল নম্বর ঠিক নেই)');
         }
         Engine::kickSms(static::company());
 
-        return 'কাস্টমারকে SMS যাচ্ছে';
+        return __('কাস্টমারকে SMS যাচ্ছে');
     }
 
     /**
@@ -129,12 +129,12 @@ class BillActions
     {
         $headerOf = fn ($get) => $customer ? (int) $customer->header_id : (int) $get('header_id');
 
-        return Action::make($forRecord ? 'payBill' : 'receiveBill')->label('বিল নিন')->icon(Heroicon::OutlinedBanknotes)
+        return Action::make($forRecord ? 'payBill' : 'receiveBill')->label(__('বিল নিন'))->icon(Heroicon::OutlinedBanknotes)
             ->visible(fn () => Menu::can('bills'))
             ->modalHeading(fn (?BillingCustomer $record = null) => ($c = $customer ?? ($forRecord ? $record : null))
-                ? "{$c->name} (ID {$c->customer_id}): বিল নিন" : 'বিল নিন')
+                ? "{$c->name} (ID {$c->customer_id}): ".__('বিল নিন') : __('বিল নিন'))
             ->modalWidth('3xl')->stickyModalHeader()->stickyModalFooter()
-            ->modalSubmitActionLabel('বিল জমা দিন')
+            ->modalSubmitActionLabel(__('বিল জমা দিন'))
             ->fillForm(function (?BillingCustomer $record = null) use ($customer, $forRecord) {
                 $c = $customer ?? ($forRecord ? $record : null);
                 $plain = ['desk_sms' => static::deskSmsDefault(), 'next_billing_date' => true, 'print' => true];
@@ -150,11 +150,11 @@ class BillActions
             })
             ->schema([
                 $forRecord ? Hidden::make('header_id') :
-                Select::make('header_id')->label('কাস্টমার')->required(! $customer)->visible(! $customer)->searchable()->autofocus()
+                Select::make('header_id')->label(__('কাস্টমার'))->required(! $customer)->visible(! $customer)->searchable()->autofocus()
                     ->searchDebounce(300)
                     // picking a customer re-renders only this form, not the whole page behind the modal (~900 KB on বিল কালেকশন)
                     ->partiallyRenderComponentsAfterStateUpdated(['billBody'])
-                    ->placeholder('কাস্টমার ID, মোবাইল, PPPoE বা নাম লিখুন')
+                    ->placeholder(__('কাস্টমার ID, মোবাইল, PPPoE বা নাম লিখুন'))
                     ->getSearchResultsUsing(fn (string $search) => static::searchCustomers($search))
                     ->getOptionLabelUsing(function ($value) {
                         $c = BillingCustomer::where('company_id', static::company())->where('header_id', (int) $value)->first();
@@ -180,14 +180,14 @@ class BillActions
                         }),
                     Hidden::make('expected_payable'),
                     Grid::make(3)->schema([
-                        TextInput::make('paid')->label('টাকা নিলেন')->numeric()->minValue(0)->suffix('টাকা')->required()->live(debounce: 400)
+                        TextInput::make('paid')->label(__('টাকা নিলেন'))->numeric()->minValue(0)->suffix(__('টাকা'))->required()->live(debounce: 400)
                             ->partiallyRenderComponentsAfterStateUpdated(['summary'])
                             ->autofocus((bool) $customer || $forRecord)
                             ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
-                        TextInput::make('discount')->label('ডিসকাউন্ট')->numeric()->minValue(0)->suffix('টাকা')->default(0)->live(debounce: 400)
+                        TextInput::make('discount')->label(__('ডিসকাউন্ট'))->numeric()->minValue(0)->suffix(__('টাকা'))->default(0)->live(debounce: 400)
                             ->partiallyRenderComponentsAfterStateUpdated(['summary'])
                             ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
-                        Select::make('method_id')->label('মাধ্যম')->required()
+                        Select::make('method_id')->label(__('মাধ্যম'))->required()
                             ->options(fn ($get) => static::tryForm($headerOf($get))[0]['methods'] ?? []),
                     ]),
                     // live sum like the billing form's Details box: due - discount - received = balance
@@ -198,24 +198,24 @@ class BillActions
                     Grid::make(3)->schema([
                         Select::make('received_by_id')->label('Received By')->required()->searchable()
                             ->options(fn ($get) => static::tryForm($headerOf($get))[0]['received_by'] ?? []),
-                        TextInput::make('trx_no')->label('Trx নম্বর')->maxLength(100)
-                            ->regex('/^\S*$/')->validationMessages(['regex' => 'ফাঁকা জায়গা ছাড়া লিখুন']),
-                        TextInput::make('bill_month')->label('বিলের মাস')->maxLength(100),
+                        TextInput::make('trx_no')->label(__('Trx নম্বর'))->maxLength(100)
+                            ->regex('/^\S*$/')->validationMessages(['regex' => __('ফাঁকা জায়গা ছাড়া লিখুন')]),
+                        TextInput::make('bill_month')->label(__('বিলের মাস'))->maxLength(100),
                     ]),
-                    TextInput::make('remarks')->label('নোট')->maxLength(500)
+                    TextInput::make('remarks')->label(__('নোট'))->maxLength(500)
                         ->required(fn ($get) => (float) $get('discount') > 0
                             || abs((float) $get('paid') + (float) $get('discount') - (float) $get('expected_payable')) > 0.001)
-                        ->placeholder('আংশিক টাকা বা ডিসকাউন্ট হলে লিখতে হবে'),
+                        ->placeholder(__('আংশিক টাকা বা ডিসকাউন্ট হলে লিখতে হবে')),
                     Grid::make(3)->schema([
-                        Toggle::make('print')->label('জমার পর রিসিট প্রিন্ট')->default(true),
+                        Toggle::make('print')->label(__('জমার পর রিসিট প্রিন্ট'))->default(true),
                         // the customer's SMS goes only from the Desk's gateway; billing is always told not to send one
-                        Toggle::make('desk_sms')->label('কাস্টমারকে SMS')
+                        Toggle::make('desk_sms')->label(__('কাস্টমারকে SMS'))
                             ->disabled(fn () => ! SmsSetting::forCompany(static::company())->billSmsReady())
                             ->hintIcon('heroicon-o-information-circle', fn () => SmsSetting::forCompany(static::company())->billSmsReady()
-                                ? 'জমা হলে Desk-এর SMS গেটওয়ে দিয়ে "বিল পরিশোধ" টেমপ্লেটের SMS যায় (জমা দেরি হয় না)'
-                                : 'চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "বিল পরিশোধের টেমপ্লেট" সেট করুন'),
-                        Toggle::make('next_billing_date')->label('পরের বিলিং তারিখ সেট')
-                            ->hintIcon('heroicon-o-information-circle', 'বিলিং-এর "Is it next billing date?"'),
+                                ? __('জমা হলে Desk-এর SMS গেটওয়ে দিয়ে "বিল পরিশোধ" টেমপ্লেটের SMS যায় (জমা দেরি হয় না)')
+                                : __('চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "বিল পরিশোধের টেমপ্লেট" সেট করুন')),
+                        Toggle::make('next_billing_date')->label(__('পরের বিলিং তারিখ সেট'))
+                            ->hintIcon('heroicon-o-information-circle', __('বিলিং-এর "Is it next billing date?"')),
                     ]),
                 ])->key('billBody'),
             ])
@@ -232,7 +232,7 @@ class BillActions
                         'expected_payable' => isset($data['expected_payable']) ? (float) $data['expected_payable'] : null,
                     ]);
                 } catch (RuntimeException $e) {
-                    Notification::make()->danger()->title('বিল নেওয়া হয়নি')->body($e->getMessage())->persistent()->send();
+                    Notification::make()->danger()->title(__('বিল নেওয়া হয়নি'))->body($e->getMessage())->persistent()->send();
                     $action->halt();
 
                     return;
@@ -247,9 +247,9 @@ class BillActions
                         .json_encode($receipt).'; document.body.appendChild(f); setTimeout(() => f.remove(), 120000); })()');
                 }
                 $smsNote = ($data['desk_sms'] ?? false) ? static::queueBillSms($headerId, $data, $res, $methodName) : null;
-                Notification::make()->success()->title('বিল জমা হয়েছে, বিলিং-এ approve বাকি'.($smsNote ? ' · '.$smsNote : ''))
-                    ->body(trim(($res['message'] ?? '').' · বাকি বকেয়া '.($res['balance'] ?? 0).' টাকা', ' ·'))
-                    ->actions(! empty($res['collection_id']) ? [Action::make('printReceipt')->label('রিসিট প্রিন্ট')->button()
+                Notification::make()->success()->title(__('বিল জমা হয়েছে, বিলিং-এ approve বাকি').($smsNote ? ' · '.$smsNote : ''))
+                    ->body(trim(($res['message'] ?? '').' · '.__('বাকি বকেয়া :amount টাকা', ['amount' => $res['balance'] ?? 0]), ' ·'))
+                    ->actions(! empty($res['collection_id']) ? [Action::make('printReceipt')->label(__('রিসিট প্রিন্ট'))->button()
                         ->url(route('receipts.print', ['company' => Filament::getTenant()->slug, 'collection' => $res['collection_id']]))
                         ->openUrlInNewTab()] : [])
                     ->duration(3000)->send();

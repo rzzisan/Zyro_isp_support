@@ -63,34 +63,34 @@ class BillCollectionResource extends Resource
         return $table
             ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('created_at')->label('সময়')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
-                TextColumn::make('customer_name')->label('কাস্টমার')
+                TextColumn::make('created_at')->label(__('সময়'))->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
+                TextColumn::make('customer_name')->label(__('কাস্টমার'))
                     ->description(fn (BillCollection $r) => trim('ID '.$r->customer_id.($r->username ? ' · '.$r->username : '')))
                     ->searchable(['customer_name', 'customer_id', 'username']),
-                TextColumn::make('paid')->label('টাকা')->formatStateUsing(fn ($state) => $tk($state))->suffix(' টাকা')
-                    ->description(fn (BillCollection $r) => (float) $r->discount > 0 ? 'ডিসকাউন্ট '.$tk($r->discount) : null),
-                TextColumn::make('payable')->label('তখন বকেয়া')->formatStateUsing(fn ($state) => $tk($state))->placeholder('—')->toggleable(),
-                TextColumn::make('payment_method')->label('মাধ্যম')->placeholder('—'),
+                TextColumn::make('paid')->label(__('টাকা'))->formatStateUsing(fn ($state) => $tk($state))->suffix(__(' টাকা'))
+                    ->description(fn (BillCollection $r) => (float) $r->discount > 0 ? __('ডিসকাউন্ট :amount', ['amount' => $tk($r->discount)]) : null),
+                TextColumn::make('payable')->label(__('তখন বকেয়া'))->formatStateUsing(fn ($state) => $tk($state))->placeholder('—')->toggleable(),
+                TextColumn::make('payment_method')->label(__('মাধ্যম'))->placeholder('—'),
                 TextColumn::make('received_by')->label('Received By')->placeholder('—'),
-                TextColumn::make('user.name')->label('Desk থেকে কে')->placeholder('—'),
-                TextColumn::make('result')->label('ফল')->badge()
+                TextColumn::make('user.name')->label(__('Desk থেকে কে'))->placeholder('—'),
+                TextColumn::make('result')->label(__('ফল'))->badge()
                     ->formatStateUsing(fn (string $state) => BillCollection::RESULTS[$state] ?? $state)
                     ->color(fn (string $state) => ['saved' => 'success', 'blocked' => 'warning', 'failed' => 'danger'][$state] ?? 'gray'),
-                TextColumn::make('message')->label('বার্তা')->limit(70)->wrap()->toggleable(),
-                TextColumn::make('trx_no')->label('Trx নম্বর')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('remarks')->label('নোট')->placeholder('—')->limit(50)->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('message')->label(__('বার্তা'))->limit(70)->wrap()->toggleable(),
+                TextColumn::make('trx_no')->label(__('Trx নম্বর'))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('remarks')->label(__('নোট'))->placeholder('—')->limit(50)->toggleable(isToggledHiddenByDefault: true),
                 IconColumn::make('send_sms')->label('SMS')->boolean()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->recordActions([
-                \Filament\Actions\Action::make('receipt')->label('রিসিট')->icon(\Filament\Support\Icons\Heroicon::OutlinedPrinter)
+                \Filament\Actions\Action::make('receipt')->label(__('রিসিট'))->icon(\Filament\Support\Icons\Heroicon::OutlinedPrinter)
                     ->visible(fn (BillCollection $record) => $record->result === 'saved')
                     ->url(fn (BillCollection $record) => route('receipts.print', ['company' => Filament::getTenant()->slug, 'collection' => $record->id]))
                     ->openUrlInNewTab(),
             ])
             ->filters([
-                SelectFilter::make('result')->label('ফল')->options(BillCollection::RESULTS),
-                SelectFilter::make('user_id')->label('Desk থেকে কে')->relationship('user', 'name'),
-                Filter::make('date')->schema([DatePicker::make('from')->label('থেকে'), DatePicker::make('until')->label('পর্যন্ত')])
+                SelectFilter::make('result')->label(__('ফল'))->options(BillCollection::RESULTS),
+                SelectFilter::make('user_id')->label(__('Desk থেকে কে'))->relationship('user', 'name'),
+                Filter::make('date')->schema([DatePicker::make('from')->label(__('থেকে')), DatePicker::make('until')->label(__('পর্যন্ত'))])
                     ->query(fn (Builder $query, array $data) => $query
                         ->when($data['from'] ?? null, fn ($q, $d) => $q->where('created_at', '>=', Carbon::parse($d, 'Asia/Dhaka')->startOfDay()->utc()))
                         ->when($data['until'] ?? null, fn ($q, $d) => $q->where('created_at', '<', Carbon::parse($d, 'Asia/Dhaka')->addDay()->startOfDay()->utc()))),

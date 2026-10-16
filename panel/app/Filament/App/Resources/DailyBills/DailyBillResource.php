@@ -102,32 +102,32 @@ class DailyBillResource extends Resource
             ->defaultSort('collected_at', 'desc')
             ->paginated([25, 50, 100])->defaultPaginationPageOption(50)
             ->columns([
-                TextColumn::make('collected_at')->label('সময়')->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
-                TextColumn::make('customer_name')->label('কাস্টমার')
+                TextColumn::make('collected_at')->label(__('সময়'))->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
+                TextColumn::make('customer_name')->label(__('কাস্টমার'))
                     ->description(fn (BillingDailyBill $r) => trim('ID '.$r->customer_id.($r->username ? ' · '.$r->username : '')))
                     ->searchable(['customer_name', 'customer_id', 'username', 'mobile']),
-                TextColumn::make('receive_amount')->label('টাকা')->formatStateUsing(fn ($state) => $tk($state))->sortable(),
-                TextColumn::make('discount_amount')->label('ডিসকাউন্ট')->formatStateUsing(fn ($state) => $tk($state))->toggleable(),
-                TextColumn::make('balance_due')->label('বকেয়া')->formatStateUsing(fn ($state) => $tk($state))->toggleable(),
-                TextColumn::make('payment_method')->label('মাধ্যম')->placeholder('—'),
+                TextColumn::make('receive_amount')->label(__('টাকা'))->formatStateUsing(fn ($state) => $tk($state))->sortable(),
+                TextColumn::make('discount_amount')->label(__('ডিসকাউন্ট'))->formatStateUsing(fn ($state) => $tk($state))->toggleable(),
+                TextColumn::make('balance_due')->label(__('বকেয়া'))->formatStateUsing(fn ($state) => $tk($state))->toggleable(),
+                TextColumn::make('payment_method')->label(__('মাধ্যম'))->placeholder('—'),
                 TextColumn::make('received_by')->label('Received By')->placeholder('—')->sortable(),
-                TextColumn::make('created_by')->label('কে এন্ট্রি দিলেন')->placeholder('—')->toggleable(),
-                TextColumn::make('status')->label('অবস্থা')->badge()
+                TextColumn::make('created_by')->label(__('কে এন্ট্রি দিলেন'))->placeholder('—')->toggleable(),
+                TextColumn::make('status')->label(__('অবস্থা'))->badge()
                     ->state(fn (BillingDailyBill $r) => $r->status())
-                    ->formatStateUsing(fn (string $state) => ['approved' => 'Approved', 'pending' => 'approve বাকি', 'deleted' => 'Deleted'][$state])
+                    ->formatStateUsing(fn (string $state) => ['approved' => 'Approved', 'pending' => __('approve বাকি'), 'deleted' => 'Deleted'][$state])
                     ->color(fn (string $state) => ['approved' => 'success', 'pending' => 'warning', 'deleted' => 'danger'][$state])
                     ->tooltip(fn (BillingDailyBill $r) => $r->approved_by ? 'Approved by '.$r->approved_by : null),
-                TextColumn::make('mobile')->label('মোবাইল')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('description')->label('নোট')->limit(40)->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('mobile')->label(__('মোবাইল'))->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('description')->label(__('নোট'))->limit(40)->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
             ])
             ->recordActions([
-                Action::make('receipt')->label('রিসিট')->icon(Heroicon::OutlinedPrinter)
+                Action::make('receipt')->label(__('রিসিট'))->icon(Heroicon::OutlinedPrinter)
                     ->visible(fn (BillingDailyBill $record) => ! $record->is_deleted)
                     ->url(fn (BillingDailyBill $record) => route('bills.receipt', ['company' => Filament::getTenant()->slug, 'dailyBill' => $record->daily_bill_id]))
                     ->openUrlInNewTab(),
             ])
             ->filters([
-                SelectFilter::make('month')->label('মাস')->options(fn () => static::months())->default(now('Asia/Dhaka')->format('Y-m'))
+                SelectFilter::make('month')->label(__('মাস'))->options(fn () => static::months())->default(now('Asia/Dhaka')->format('Y-m'))
                     ->query(function (Builder $query, array $data) {
                         if (! ($m = $data['value'] ?? null)) {
                             return $query;
@@ -136,34 +136,34 @@ class DailyBillResource extends Resource
 
                         return $query->where('collected_at', '>=', $start->copy()->utc())->where('collected_at', '<', $start->copy()->addMonth()->utc());
                     }),
-                Filter::make('date')->label('তারিখ')
-                    ->schema([DatePicker::make('from')->label('তারিখ থেকে'), DatePicker::make('until')->label('তারিখ পর্যন্ত')])
+                Filter::make('date')->label(__('তারিখ'))
+                    ->schema([DatePicker::make('from')->label(__('তারিখ থেকে')), DatePicker::make('until')->label(__('তারিখ পর্যন্ত'))])
                     ->query(fn (Builder $query, array $data) => $query
                         ->when($data['from'] ?? null, fn ($q, $d) => $q->where('collected_at', '>=', Carbon::parse($d, 'Asia/Dhaka')->startOfDay()->utc()))
                         ->when($data['until'] ?? null, fn ($q, $d) => $q->where('collected_at', '<', Carbon::parse($d, 'Asia/Dhaka')->addDay()->startOfDay()->utc())))
                     ->indicateUsing(fn (array $data) => array_values(array_filter([
-                        ($data['from'] ?? null) ? 'থেকে '.Carbon::parse($data['from'])->format('d M Y') : null,
-                        ($data['until'] ?? null) ? 'পর্যন্ত '.Carbon::parse($data['until'])->format('d M Y') : null]))),
-                Filter::make('time')->label('সময়')
-                    ->schema([TimePicker::make('from')->label('সময় থেকে')->seconds(false), TimePicker::make('until')->label('সময় পর্যন্ত')->seconds(false)])
+                        ($data['from'] ?? null) ? __('থেকে :date', ['date' => Carbon::parse($data['from'])->format('d M Y')]) : null,
+                        ($data['until'] ?? null) ? __('পর্যন্ত :date', ['date' => Carbon::parse($data['until'])->format('d M Y')]) : null]))),
+                Filter::make('time')->label(__('সময়'))
+                    ->schema([TimePicker::make('from')->label(__('সময় থেকে'))->seconds(false), TimePicker::make('until')->label(__('সময় পর্যন্ত'))->seconds(false)])
                     ->query(fn (Builder $query, array $data) => $query
                         ->when($data['from'] ?? null, fn ($q, $t) => $q->whereRaw(self::LOCAL.'::time >= ?::time', [$t]))
                         ->when($data['until'] ?? null, fn ($q, $t) => $q->whereRaw(self::LOCAL.'::time <= ?::time', [$t])))
                     ->indicateUsing(fn (array $data) => array_values(array_filter([
-                        ($data['from'] ?? null) ? 'সময় '.substr($data['from'], 0, 5).' থেকে' : null,
-                        ($data['until'] ?? null) ? 'সময় '.substr($data['until'], 0, 5).' পর্যন্ত' : null]))),
-                SelectFilter::make('emp_header_id')->label('Received By (ইউজার)')->multiple()->options(fn () => static::collectorOptions()),
-                SelectFilter::make('created_by')->label('কে এন্ট্রি দিলেন')->multiple()
+                        ($data['from'] ?? null) ? __('সময় :time থেকে', ['time' => substr($data['from'], 0, 5)]) : null,
+                        ($data['until'] ?? null) ? __('সময় :time পর্যন্ত', ['time' => substr($data['until'], 0, 5)]) : null]))),
+                SelectFilter::make('emp_header_id')->label(__('Received By (ইউজার)'))->multiple()->options(fn () => static::collectorOptions()),
+                SelectFilter::make('created_by')->label(__('কে এন্ট্রি দিলেন'))->multiple()
                     ->options(fn () => BillingDailyBill::where('company_id', $company())->visibleTo(static::membership())
                         ->whereNotNull('created_by')->distinct()->orderBy('created_by')->pluck('created_by', 'created_by')->all()),
-                SelectFilter::make('status')->label('অবস্থা')->options(self::STATUSES)->default('active')
+                SelectFilter::make('status')->label(__('অবস্থা'))->options(array_map('__', self::STATUSES))->default('active')
                     ->query(fn (Builder $query, array $data) => match ($data['value'] ?? 'active') {
                         'approved' => $query->where('is_deleted', false)->where('is_approved', true),
                         'pending' => $query->where('is_deleted', false)->where('is_approved', false),
                         'deleted' => $query->where('is_deleted', true),
                         default => $query->where('is_deleted', false),
                     }),
-                SelectFilter::make('payment_method')->label('মাধ্যম')
+                SelectFilter::make('payment_method')->label(__('মাধ্যম'))
                     ->options(fn () => BillingDailyBill::where('company_id', $company())->whereNotNull('payment_method')
                         ->distinct()->orderBy('payment_method')->pluck('payment_method', 'payment_method')->all()),
             ])
