@@ -265,4 +265,53 @@ class InboxTest extends TestCase
         $this->assertNull($c->customer_set_by);
         $this->assertSame('0202', $c->customer_id);
     }
+
+    /** Details column: the chat customer's MikroTik/ONU now, and Solve on their open ticket (blocked line refused). */
+    private function lineFor(array $mikrotik): \App\Models\BillingTicket
+    {
+        config(['services.engine.url' => 'http://engine.test', 'services.engine.key' => 'k']);
+        $cid = $this->company->id;
+        \App\Models\BillingCustomer::create(['company_id' => $cid, 'header_id' => 15630, 'customer_id' => '5629',
+            'name' => 'Rezaul', 'mobile' => '01838216754', 'username' => 'rz5629']);
+        $this->contact->forceFill(['customer_id' => '5629'])->save();
+        Http::fake([
+            "engine.test/internal/{$cid}/customers/15630/ticket-info" => Http::response(['customer' => ['customer_id' => '5629', 'due' => 0],
+                'mikrotik' => $mikrotik, 'onu' => ['source' => 'olt', 'OnuStatus' => 'Online', 'OpticalPower' => -19.5, 'OLTName' => 'OLT-1', 'OLTPort' => '0/1:7']]),
+            "engine.test/internal/{$cid}/tickets/*/solve" => Http::response(['ok' => true]),
+        ]);
+
+        return \App\Models\BillingTicket::create(['company_id' => $cid, 'complain_id' => '57231', 'state' => 'processing',
+            'customer_header_id' => 15630, 'customer_id' => '5629', 'mobile' => '01838216754', 'category' => 'Line Off', 'opened_at' => now()]);
+    }
+
+    public function test_details_show_line_now_and_solve_an_open_ticket(): void
+    {
+        $t = $this->lineFor(['online' => true, 'uptime' => '2h5m', 'address' => '10.20.0.9', 'router' => 'CCR']);
+        $this->as($this->agent());
+        $w = Livewire::test(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class, ['customerId' => '5629'])
+            ->assertSee('MikroTik · অনলাইন')->assertSee('2h5m')->assertSee('-19.5 dBm')->assertSee('#57231')
+            ->assertActionVisible(\Filament\Actions\Testing\TestAction::make('solve')->arguments(['ticket' => $t->id]))
+            ->callAction(\Filament\Actions\Testing\TestAction::make('solve')->arguments(['ticket' => $t->id]), ['remark' => 'ok'])
+            ->assertHasNoErrors()->assertNotified('টিকিট #57231 সমাধান হয়েছে');
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/tickets/57231/solve') && $r['remark'] === 'ok');
+    }
+
+    public function test_details_refuse_solve_on_a_blocked_line(): void
+    {
+        $t = $this->lineFor(['online' => false, 'blocked' => true, 'profile' => 'BLOCKED-PROFILE', 'router' => 'CCR']);
+        $this->as($this->agent());
+        Livewire::test(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class, ['customerId' => '5629'])
+            ->assertSee('MikroTik · ব্লক')->assertSee('BLOCKED-PROFILE')
+            ->assertActionDisabled(\Filament\Actions\Testing\TestAction::make('solve')->arguments(['ticket' => $t->id]));
+    }
+
+    public function test_details_cannot_solve_another_customers_ticket(): void
+    {
+        $this->lineFor(['online' => true]);
+        $other = \App\Models\BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => '9', 'state' => 'pending',
+            'customer_id' => '7777', 'opened_at' => now()]);
+        $this->as($this->agent());
+        Livewire::test(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class, ['customerId' => '5629'])
+            ->assertActionHidden(\Filament\Actions\Testing\TestAction::make('solve')->arguments(['ticket' => $other->id]));
+    }
 }

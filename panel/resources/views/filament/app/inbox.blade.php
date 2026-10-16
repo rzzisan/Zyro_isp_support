@@ -239,17 +239,9 @@
                     <dt>{{ __('প্রথম মেসেজ') }}</dt><dd>{{ $current->created_at?->timezone('Asia/Dhaka')->format('d M Y') }}</dd>
                     <dt>{{ __('মোট মেসেজ') }}</dt><dd>{{ $messageCount }}</dd>
                 </dl>
-                <div class="zi-info-head">{{ __('বিলিংয়ের টিকিট') }}</div>
-                @forelse ($tickets as $t)
-                    <div class="zi-ticket">
-                        <span class="zi-tstate {{ $t->state }}">{{ __(\App\Models\BillingTicket::STATES[$t->state] ?? $t->state) }}</span>
-                        <b>#{{ $t->complain_id }}</b> {{ $t->category }}
-                        <small>{{ $t->opened_at?->timezone('Asia/Dhaka')->format('d M, g:i A') }}
-                            @if ($t->solved_by) · {{ $t->solved_by }} @elseif ($t->assigned_to) · {{ $t->assigned_to }} @endif</small>
-                    </div>
-                @empty
-                    <div class="zi-muted">{{ $current->customer_id ? __('কোনো টিকিট নেই') : __('কাস্টমার চেনা গেলে টিকিট দেখাবে') }}</div>
-                @endforelse
+                {{-- line status and tickets load on their own, so a slow router never holds up the chat --}}
+                @livewire(\App\Filament\App\Resources\Conversations\Widgets\CustomerLine::class,
+                    ['customerId' => (string) $current->customer_id, 'lazy' => true], key('line-'.$current->id.'-'.$current->customer_id))
             </aside>
         @endif
     </div>

@@ -1188,5 +1188,7 @@
     "ব্লক, ইন্টারনেট নেই": "blocked, no internet",
     "লাইন ব্লক :months মাস :days দিন ধরে": "Line blocked for :months months :days days",
     ":date থেকে": "since :date",
-    "লাইন ব্লক (কবে থেকে বিলিংয়ের লগে পাওয়া যায়নি)": "Line blocked (since when is not in billing's log)"
+    "লাইন ব্লক (কবে থেকে বিলিংয়ের লগে পাওয়া যায়নি)": "Line blocked (since when is not in billing's log)",
+    "লাইনের অবস্থা": "Line status",
+    "কাস্টমারের পুরো তথ্য": "Full customer details"
 }

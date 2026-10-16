@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\App\Resources\Conversations\Pages\ViewConversation;
+use App\Filament\App\Resources\Conversations\Widgets\CustomerLine;
 use App\Filament\App\Resources\Tickets\Pages\ListTickets;
 use App\Filament\App\Widgets\TicketBreakdownChart;
 use App\Filament\App\Widgets\TicketStats;
@@ -89,6 +90,7 @@ class TicketTest extends TestCase
         foreach (['open_zone', 'zone', 'category', 'solved_by'] as $f) {
             Livewire::test(TicketBreakdownChart::class)->set('filter', $f)->assertOk();
         }
-        Livewire::test(ViewConversation::class, ['record' => $c->id])->assertSee('#57231')->assertSee('অপেক্ষমাণ');
+        Livewire::test(ViewConversation::class, ['record' => $c->id])->assertOk();
+        Livewire::test(CustomerLine::class, ['customerId' => '5629'])->assertSee('#57231')->assertSee('অপেক্ষমাণ');
     }
 }

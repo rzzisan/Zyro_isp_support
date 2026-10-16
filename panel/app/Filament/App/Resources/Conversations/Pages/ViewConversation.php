@@ -5,7 +5,6 @@ namespace App\Filament\App\Resources\Conversations\Pages;
 use App\Filament\App\Resources\Conversations\Concerns\InboxList;
 use App\Filament\App\Resources\Conversations\ConversationResource;
 use App\Models\BillingCustomer;
-use App\Models\BillingTicket;
 use App\Models\WaContact;
 use App\Models\WaDraft;
 use App\Services\WhatsApp;
@@ -79,7 +78,8 @@ class ViewConversation extends Page
         $company = Filament::getTenant();
 
         return [
-            \App\Filament\App\TicketActions::newTicket($this->contact()->customer_id)->label(__('টিকিট খুলুন'))->color('gray'),
+            \App\Filament\App\TicketActions::newTicket($this->contact()->customer_id)->label(__('টিকিট খুলুন'))->color('gray')
+                ->after(fn () => $this->dispatch('inbox-tickets-changed')),
             Action::make('take')->label(__('আমি নিলাম'))->icon(Heroicon::OutlinedHandRaised)
                 ->visible(fn () => $this->contact()->assigned_user_id !== auth()->id())
                 ->action(function () {
@@ -238,10 +238,6 @@ class ViewConversation extends Page
             'messageCount' => $c->messages()->count(),
             'sending' => WhatsApp::sendingEnabled(),
             'company' => Filament::getTenant(),
-            'tickets' => $c->customer_id
-                ? BillingTicket::where('company_id', $c->company_id)->where('customer_id', $c->customer_id)
-                    ->orderByRaw("state IN ('pending', 'processing') DESC")->latest('opened_at')->limit(5)->get()
-                : collect(),
         ];
     }
 
