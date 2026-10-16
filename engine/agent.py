@@ -91,10 +91,23 @@ def knowledge(t: Tenant, query: str | None = None) -> str:
     return "\n\n".join(parts)
 
 
+# always added, also to a company's own edited rules: "[ছবি] ..." lines come from see_image
+IMAGE_RULE = (
+    "ছবি: কাস্টমারের মেসেজে \"[ছবি] ...\" মানে কাস্টমার একটা ছবি পাঠিয়েছে, আর সিস্টেম ছবিটা দেখে তাতে কী আছে লিখেছে। "
+    "এটাকে কাস্টমারের নিজের কথার মতো ধরে উত্তর দাও: পেমেন্টের স্ক্রিনশট বা রসিদ হলে live_data-র payments-এর সাথে মিলিয়ে "
+    "দেখো, আর ছবিতে টাকা, মাধ্যম বা ট্রানজেকশন আইডি থাকলে সেগুলো আবার জিজ্ঞেস করবে না। পেমেন্ট হয়েছে কি হয়নি, কত বাকি, "
+    "সেটা শুধু live_data থেকে বলবে, ছবির সংখ্যা দেখে না (ছবি ভুল পড়া হতে পারে)। অনু বা রাউটারের বাতির ছবি হলে সমস্যা "
+    "খোঁজার নিয়মে চলো; Wi-Fi বা এররের স্ক্রিনশট হলে স্ক্রিনে যা লেখা সেই লক্ষণ থেকে শুরু করো। ছবির বর্ণনা কাস্টমারকে "
+    "ফিরিয়ে লিখবে না, \"ছবি দেখতে পাচ্ছি না\" বলবে না। ছবি থেকে বোঝা না গেলে এক লাইনে জিজ্ঞেস করো কী সমস্যা। ব্যক্তিগত "
+    "ডকুমেন্ট (পাসপোর্ট, NID) বা লাইনের সাথে সম্পর্ক নেই এমন ছবি হলে ছবিটা নিয়ে কোনো মন্তব্য না করে শুধু জিজ্ঞেস করো কী "
+    "সাহায্য লাগবে।"
+)
+
+
 def system_prompt(t: Tenant, query: str | None = None) -> str:
     # the company may have edited the built-in rules (Bot settings); empty = the built-in text
     base = (t.bot.get("customer_prompt") or "").strip() or SYSTEM_PROMPT
-    prompt = base.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)")
+    prompt = base.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)") + "\n\n" + IMAGE_RULE
     block = knowledge(t, query)
     if not block:
         return prompt
@@ -311,6 +324,63 @@ def transcribe(t: Tenant, audio: bytes, mime: str, contact_id: int | None = None
     if not any(_keys(t, p) for p in VOICE_PROVIDERS):
         raise RuntimeError("no Gemini or Groq key for voice transcription")
     return None
+
+
+# WhatsApp sends photos at most 1600 px on the long side (HD ones bigger). 1600 keeps small text (a bKash
+# transaction ID, a crumpled money receipt) and ONU lights readable: ~1500-2500 image tokens, about $0.0002 a photo
+# on Claude Haiku 5.5 (2026-10-16, ~30 real customer photos looked at).
+IMAGE_MAX_EDGE = 1600
+IMAGE_MODEL = "claude-haiku-5-5"  # when the company's chat AI isn't Claude
+IMAGE_PROMPT = (
+    "তুমি বাংলাদেশের একটা ইন্টারনেট সার্ভিস প্রোভাইডারের (ISP) সাপোর্ট টিমকে সাহায্য করছ। কাস্টমার WhatsApp-এ একটা ছবি "
+    "পাঠিয়েছে। ছবিতে কী আছে বাংলায় ১-৩ লাইনে লেখো, শুধু যা সত্যিই দেখা যাচ্ছে, অনুমান না:\n"
+    "- পেমেন্টের স্ক্রিনশট বা রসিদ (বিকাশ, নগদ, রকেট, মানি রিসিপ্ট): মাধ্যম, সফল কিনা, টাকা, ট্রানজেকশন আইডি, তারিখ-সময়, "
+    "কাকে পাঠানো (নাম, নম্বর), রেফারেন্স বা কাস্টমার আইডি থাকলে সেটা। কাগজের রসিদে লেখা আর সংখ্যা প্রায়ই এক লাইনে থাকে না: "
+    "কোন টাকা কোন ঘরের, নিশ্চিত না হলে ঘরের নাম না দিয়ে শুধু লেখো রসিদে কী কী টাকা লেখা আছে।\n"
+    "- অনু (ONU) বা রাউটারের ছবি: কোন ডিভাইস, কোন বাতি জ্বলছে আর কী রঙ (লাল বাতি, LOS/PON/Internet লেখা বাতি আলাদা করে), "
+    "কোনো বাতি বন্ধ কিনা, তার খোলা কিনা। বাতি ঠিকমতো বোঝা না গেলে সেটাই লেখো।\n"
+    "- মোবাইল বা কম্পিউটারের স্ক্রিনশট (Wi-Fi, স্পিড টেস্ট, এরর, অ্যাপ): স্ক্রিনের মূল লেখা হুবহু, যেমন "
+    "\"Connected without internet\", Wi-Fi-এর নাম, স্পিড কত Mbps।\n"
+    "- পাসপোর্ট, NID, মেডিকেল কাগজের মতো ব্যক্তিগত ডকুমেন্ট: শুধু কী ধরনের ডকুমেন্ট; ভেতরের নাম, নম্বর বা অন্য তথ্য লিখবে না।\n"
+    "- অন্য কিছু (খাবার, খেলা, ভিডিও, মানুষ): এক লাইনে কী ধরনের ছবি। মানুষের পরিচয় বলবে না।\n"
+    "শুধু বর্ণনা লেখো; কাস্টমারকে উত্তর, পরামর্শ বা কোনো শিরোনাম/বুলেট না।"
+)
+
+
+def _image_for_claude(data: bytes, mime: str) -> tuple[bytes, str]:
+    """The photo as Claude takes it: as it came when it is a JPEG/PNG/WebP within IMAGE_MAX_EDGE (no second
+    compression), otherwise re-encoded by ffmpeg (already there for voice) as a JPEG that fits."""
+    mime = (mime or "").split(";")[0].strip()
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                            "-of", "csv=p=0", "pipe:0"], input=data, capture_output=True, timeout=30)
+    try:
+        w, h = (int(x) for x in probe.stdout.decode().strip().splitlines()[0].split(",")[:2])
+    except (ValueError, IndexError):
+        w = h = 0
+    if mime in ("image/jpeg", "image/png", "image/webp") and 0 < max(w, h) <= IMAGE_MAX_EDGE:
+        return data, mime
+    e = IMAGE_MAX_EDGE
+    out = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", "pipe:0", "-frames:v", "1", "-vf",
+                          f"scale='min({e},iw)':'min({e},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+                          "-q:v", "3", "-f", "image2", "-c:v", "mjpeg", "pipe:1"],
+                         input=data, capture_output=True, timeout=60)
+    if out.returncode != 0 or not out.stdout:
+        raise RuntimeError(f"ffmpeg could not read the photo: {out.stderr[:300]!r}")
+    return out.stdout, "image/jpeg"
+
+
+def see_image(t: Tenant, data: bytes, mime: str, caption: str | None = None, contact_id: int | None = None) -> str | None:
+    """What the customer's photo shows, in a few Bangla lines for the reply AI and the staff, read by Claude with the
+    company's Claude keys (AI খরচ: "image"). Raises when the company has no usable Claude key or every key fails."""
+    img, img_mime = _image_for_claude(data, mime)
+    said = f"ছবির সাথে কাস্টমার লিখেছে: {caption}" if caption else "ছবির সাথে কাস্টমার কিছু লেখেনি।"
+    messages = [{"role": "user", "content": [
+        {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": base64.b64encode(img).decode()}},
+        {"type": "text", "text": said}]}]
+    model = t.bot.get("ai_model") if t.bot.get("ai_provider") == "claude" and t.bot.get("ai_model") else IMAGE_MODEL
+    text, _, _ = generate(t, IMAGE_PROMPT, messages, "claude", model, "image", contact_id)
+    text = re.sub(r"\s*\n\s*", " ", re.sub(r"[*#`]", "", text or "")).strip()
+    return text or None
 
 
 GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"

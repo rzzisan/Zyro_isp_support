@@ -119,7 +119,7 @@ def save_message(t: Tenant, contact_id: int, wa_message_id: str | None, directio
 def history_for(t: Tenant, contact_id: int, limit: int = 6) -> list[dict]:
     rows = db.all_rows(
         """SELECT direction, sender, body FROM wa_messages
-           WHERE company_id = %s AND contact_id = %s AND type IN ('text', 'audio') AND body IS NOT NULL
+           WHERE company_id = %s AND contact_id = %s AND type IN ('text', 'audio', 'image') AND body IS NOT NULL
            ORDER BY created_at DESC, id DESC LIMIT %s""",
         (t.company_id, contact_id, limit),
     )
@@ -348,6 +348,9 @@ def customer_view(context: dict, verified: bool, text: str = "") -> dict:
 # --- one reply per burst of messages ------------------------------------------------------------
 BURST_WAIT = 7  # seconds to wait for the rest of a burst ("হায়" / "নেট নাই" / "চালান যায় না")
 _contact_locks: dict[int, threading.Lock] = {}
+# contacts whose photo is being read right now: a text sent just after the photo waits for it (one answer for both)
+_seeing: dict[int, set[int]] = {}  # contact id -> message ids of its photos being read
+SEEING_WAIT = 30  # seconds at most
 
 
 def newer_inbound(t: Tenant, contact_id: int, message_id: int) -> bool:
@@ -464,6 +467,29 @@ def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str
         return f"{note} → টিকেট খোলা যায়নি: {str(e)[:200]}", None
 
 
+def read_photo(t: Tenant, contact: dict, photo: dict, message_id: int) -> str | None:
+    """The photo's caption plus "[ছবি] what it shows" (also saved as the message body, so the staff, the history and
+    unanswered_text see it), or None when it could not be read (no Claude key, download failed...)."""
+    from engine.agent import see_image
+    from engine import whatsapp
+    caption = (photo.get("caption") or "").strip()
+    reading = _seeing.setdefault(contact["id"], set())
+    reading.add(message_id)
+    try:
+        data, mime = whatsapp.download_media(t, photo.get("id", ""))
+        seen = see_image(t, data, photo.get("mime_type") or mime, caption, contact["id"])
+    except Exception:
+        log.exception("reading the photo failed for company %s", t.company_id)
+        seen = None
+    finally:
+        reading.discard(message_id)
+    if not seen:
+        return None
+    body = "\n".join(x for x in (caption, f"[ছবি] {seen}") if x)
+    db.execute("UPDATE wa_messages SET body = %s WHERE id = %s", (body, message_id))
+    return body
+
+
 def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
     from engine.agent import draft_reply, transcribe
 
@@ -472,6 +498,13 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
     mtype = m.get("type")
     if mtype == "button":
         m, mtype = {**m, "type": "text", "text": {"body": (m.get("button") or {}).get("text", "")}}, "text"
+    photo = (m.get(mtype) or {}) if mtype in ("image", "document") else {}
+    if mtype == "image" or (photo.get("mime_type") or "").startswith("image/"):
+        seen = read_photo(t, contact, photo, message_id)
+        if seen or photo.get("caption") or unanswered_text(t, contact["id"]):
+            # read: answer it like a text; not read but there is text to answer (its caption, or a message just
+            # before that waited for this photo): answer the text
+            m, mtype = {**m, "type": "text", "text": {"body": seen or photo.get("caption") or ""}}, "text"
     if mtype in ("image", "video", "document") and not ((m.get(mtype) or {}).get("caption")):
         deliver(t, contact, message_id, "জি, পেয়েছি। আমাদের টিম দেখে নেবে। সমস্যাটা একটু লিখে জানালে দ্রুত সাহায্য করতে পারব।",
                 f"কাস্টমার {mtype} পাঠিয়েছে, টিম দেখবে", provider="flow", model="fixed")
@@ -497,13 +530,19 @@ def handle_message(t: Tenant, contact: dict, m: dict, message_id: int) -> None:
     text = (m.get("text") or {}).get("body", "")
     # several messages in a row get one answer: wait a moment, and leave it to the newest one
     time.sleep(BURST_WAIT)
-    if newer_inbound(t, contact["id"], message_id):
-        return
+    if newer_inbound(t, contact["id"], message_id) or any(i > message_id for i in _seeing.get(contact["id"], ())):
+        return  # a newer photo still being read is newer too
+    for _ in range(SEEING_WAIT):  # an older photo still being read: wait for it, then answer both
+        if not _seeing.get(contact["id"]):
+            break
+        time.sleep(1)
     with _contact_locks.setdefault(contact["id"], threading.Lock()):
         contact = db.one("SELECT * FROM wa_contacts WHERE id = %s", (contact["id"],)) or contact
         if bot_paused(contact):  # staff took over while we waited
             return
         text = unanswered_text(t, contact["id"]) or text
+        if not text.strip():  # an unreadable photo whose earlier text was answered meanwhile: nothing left to say
+            return
         _answer(t, contact, text, message_id, voice=mtype == "audio")
 
 
@@ -520,7 +559,10 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = 
         return
     context = None
     try:
-        customer, fixed, pending, note, verified = identify(t, contact, text)
+        # only the customer's own words find the line: a photo's numbers (our bKash merchant number, someone
+        # else's receipt) must not switch the chat to another customer
+        said = re.sub(r"^\[ছবি\].*$", "", text, flags=re.M).strip()
+        customer, fixed, pending, note, verified = identify(t, contact, said)
         if not customer and not fixed:
             return
         if fixed:
