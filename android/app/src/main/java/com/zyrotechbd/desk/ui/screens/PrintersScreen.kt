@@ -48,8 +48,8 @@ import com.zyrotechbd.desk.core.BluetoothPermissions
 import com.zyrotechbd.desk.printing.PrinterManager
 import com.zyrotechbd.desk.printing.PrinterSettings
 import com.zyrotechbd.desk.printing.PrinterType
-import com.zyrotechbd.desk.ui.components.CatvCard
-import com.zyrotechbd.desk.ui.components.CatvTextField
+import com.zyrotechbd.desk.ui.components.DeskCard
+import com.zyrotechbd.desk.ui.components.DeskTextField
 import com.zyrotechbd.desk.ui.components.Chip
 import com.zyrotechbd.desk.ui.components.EmptyText
 import com.zyrotechbd.desk.ui.components.Good
@@ -60,6 +60,7 @@ import com.zyrotechbd.desk.ui.components.SectionTitle
 import com.zyrotechbd.desk.ui.components.SmallAction
 import com.zyrotechbd.desk.ui.components.Warn
 import com.zyrotechbd.desk.ui.strings.LocalStrings
+import com.zyrotechbd.desk.ui.theme.Line
 import com.zyrotechbd.desk.ui.theme.Ink
 import com.zyrotechbd.desk.ui.theme.Muted
 import kotlinx.coroutines.delay
@@ -151,14 +152,14 @@ fun PrintersScreen() {
             }
             Spacer(Modifier.height(10.dp))
 
-            CatvCard {
+            DeskCard {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
                     if (printerType == PrinterType.CLASSIC) {
                         val devices = remember(permissionTick) { adapter.bondedDevices?.toList().orEmpty() }
                         if (devices.isEmpty()) EmptyText(s.noPairedPrinters)
                         else Text(s.pairedDevicesLabel, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(vertical = 6.dp))
                         devices.forEachIndexed { i, d ->
-                            if (i > 0) HorizontalDivider(color = Color(0xFFF0EDE8))
+                            if (i > 0) HorizontalDivider(color = Line)
                             DeviceRow(d.name ?: d.address, d.address, selected == d.address && PrinterSettings.getPrinterType() == PrinterType.CLASSIC,
                                 s.printerSelect, s.printerSelected) { choose(d, PrinterType.CLASSIC) }
                         }
@@ -174,16 +175,16 @@ fun PrintersScreen() {
                                 scanning = true
                             }
                             scanResults.forEachIndexed { i, d ->
-                                if (i > 0) HorizontalDivider(color = Color(0xFFF0EDE8))
+                                if (i > 0) HorizontalDivider(color = Line)
                                 DeviceRow(d.name ?: d.address, d.address, selected == d.address && PrinterSettings.getPrinterType() == PrinterType.BLE,
                                     s.printerSelect, s.printerSelected) { choose(d, PrinterType.BLE) }
                             }
                             Spacer(Modifier.height(10.dp))
                             Text("BLE Service UUID", fontSize = 12.sp, color = Muted)
-                            CatvTextField(bleService, { bleService = it.trim() })
+                            DeskTextField(bleService, { bleService = it.trim() })
                             Spacer(Modifier.height(6.dp))
                             Text("BLE Characteristic UUID", fontSize = 12.sp, color = Muted)
-                            CatvTextField(bleCharacteristic, { bleCharacteristic = it.trim() })
+                            DeskTextField(bleCharacteristic, { bleCharacteristic = it.trim() })
                             Spacer(Modifier.height(8.dp))
                             SmallAction(s.saveUuidsBtn, Icons.Filled.CheckCircle) {
                                 PrinterSettings.setBleUuids(bleService, bleCharacteristic)

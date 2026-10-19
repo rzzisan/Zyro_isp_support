@@ -40,7 +40,7 @@ import com.zyrotechbd.desk.core.Format
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.CustomerDetail
 import com.zyrotechbd.desk.data.network.LiveInfo
-import com.zyrotechbd.desk.ui.components.CatvCard
+import com.zyrotechbd.desk.ui.components.DeskCard
 import com.zyrotechbd.desk.ui.components.CustomerAvatar
 import com.zyrotechbd.desk.ui.components.Danger
 import com.zyrotechbd.desk.ui.components.EmptyText
@@ -56,6 +56,7 @@ import com.zyrotechbd.desk.ui.components.SmallAction
 import com.zyrotechbd.desk.ui.components.Warn
 import com.zyrotechbd.desk.ui.navigation.Routes
 import com.zyrotechbd.desk.ui.strings.LocalStrings
+import com.zyrotechbd.desk.ui.theme.Line
 import com.zyrotechbd.desk.ui.theme.Ink
 import com.zyrotechbd.desk.ui.theme.Muted
 import com.zyrotechbd.desk.ui.theme.PrimaryStrong
@@ -111,7 +112,7 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
             val d = detail ?: run { LoadingBox(); return@ScreenBody }
             val c = d.customer
 
-            CatvCard {
+            DeskCard {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CustomerAvatar(c.name ?: "?", c.customerId ?: c.headerId.toString(), size = 52.dp)
@@ -121,8 +122,8 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                             Text("ID ${c.customerId ?: ""}" + (c.username?.let { " · $it" } ?: ""), fontSize = 13.sp, color = Muted)
                             Spacer(Modifier.height(4.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Pill(if (c.online) s.online else s.offlineLabel, if (c.online) Good else Color(0xFF7B8496))
-                                if (c.isLeft == true) Pill("LEFT", Color(0xFF7B8496))
+                                Pill(if (c.online) s.online else s.offlineLabel, if (c.online) Good else Muted)
+                                if (c.isLeft == true) Pill("LEFT", Muted)
                                 else if (c.disabled == true) Pill(s.lineOff, Danger)
                                 c.status?.takeIf { it.isNotBlank() }?.let { Pill(it, PrimaryStrong) }
                             }
@@ -146,7 +147,7 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
             Spacer(Modifier.height(12.dp))
 
             val due = c.due ?: 0.0
-            CatvCard {
+            DeskCard {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -166,7 +167,7 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
             }
             Spacer(Modifier.height(12.dp))
 
-            CatvCard {
+            DeskCard {
                 Column(Modifier.padding(16.dp)) {
                     InfoRow(s.mobile, c.mobile)
                     InfoRow(s.packageLabel, c.`package`)
@@ -185,7 +186,7 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                     Icon(Icons.Filled.Refresh, contentDescription = s.refresh, tint = PrimaryStrong)
                 }
             }
-            CatvCard {
+            DeskCard {
                 Column(Modifier.padding(16.dp)) {
                     when {
                         liveLoading && live == null -> LoadingBox()
@@ -199,7 +200,7 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
             if (d.tickets.isNotEmpty()) {
                 SectionTitle(s.openTickets)
                 d.tickets.forEach { t ->
-                    CatvCard {
+                    DeskCard {
                         Column(Modifier.padding(14.dp)) {
                             Text("#${t.complainId ?: ""} · ${t.category ?: ""}", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 14.sp)
                             Text(listOfNotNull(Format.dateTime(t.openedAt), t.assignedTo).joinToString(" · "), fontSize = 12.sp, color = Muted)
@@ -212,11 +213,11 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
             }
 
             SectionTitle(s.recentPayments)
-            CatvCard {
+            DeskCard {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     if (d.payments.isEmpty()) EmptyText(s.noPayments)
                     d.payments.forEachIndexed { i, p ->
-                        if (i > 0) HorizontalDivider(color = Color(0xFFF0EDE8))
+                        if (i > 0) HorizontalDivider(color = Line)
                         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(Format.date(p.date) + (p.billMonth?.let { " · $it" } ?: ""), fontSize = 13.sp, color = Ink)

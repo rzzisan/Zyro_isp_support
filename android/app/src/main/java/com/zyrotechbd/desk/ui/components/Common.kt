@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -34,12 +33,15 @@ import androidx.compose.ui.unit.sp
 import com.zyrotechbd.desk.ui.theme.Ink
 import com.zyrotechbd.desk.ui.theme.Muted
 import com.zyrotechbd.desk.ui.theme.Primary
-import com.zyrotechbd.desk.ui.theme.PrimaryLight
+import com.zyrotechbd.desk.ui.theme.InputLine
+import com.zyrotechbd.desk.ui.theme.Line
+import com.zyrotechbd.desk.ui.theme.PrimarySoft
+import com.zyrotechbd.desk.ui.theme.Surface
 import com.zyrotechbd.desk.ui.theme.PrimaryStrong
 
-val Danger = Color(0xFFB24734)
-val Good = Color(0xFF1AA57B)
-val Warn = Color(0xFFB45309)
+val Danger = Color(0xFFDC2626)
+val Good = Color(0xFF16A34A)
+val Warn = Color(0xFFD97706)
 
 @Composable
 fun LoadingBox(modifier: Modifier = Modifier) {
@@ -53,9 +55,9 @@ fun MessageBox(text: String, color: Color = Danger, onRetry: (() -> Unit)? = nul
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(color.copy(alpha = 0.10f))
-            .border(1.dp, color.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(8.dp))
+            .background(color.copy(alpha = 0.08f))
+            .border(1.dp, color.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
             .padding(12.dp)
     ) {
         Text(text, color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -73,48 +75,40 @@ fun EmptyText(text: String) {
         modifier = Modifier.fillMaxWidth().padding(24.dp))
 }
 
-/** A big number on the dashboard. */
+/** A big number on the dashboard, laid out like the panel's stats widgets: label, value, then a short note. */
 @Composable
 fun StatCard(label: String, value: String, icon: ImageVector, modifier: Modifier = Modifier, sub: String? = null,
              tint: Color = Primary, onClick: (() -> Unit)? = null) {
-    CatvCard(modifier = modifier.then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)) {
-        Column(Modifier.padding(14.dp)) {
+    DeskCard(modifier = modifier.then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(tint.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(17.dp))
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(label, fontSize = 12.sp, color = Muted, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
+                Text(label, fontSize = 13.sp, color = Muted, fontWeight = FontWeight.Medium, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
             }
-            Spacer(Modifier.height(8.dp))
-            Text(value, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Ink, maxLines = 1)
-            if (sub != null) Text(sub, fontSize = 11.sp, color = Muted, maxLines = 2)
+            Spacer(Modifier.height(6.dp))
+            Text(value, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Ink, maxLines = 1)
+            if (sub != null) Text(sub, fontSize = 12.sp, color = if (tint == Primary) Muted else tint, maxLines = 2)
         }
     }
 }
 
-/** A filled gradient button like the CATV login button. */
+/** A flat filled button, like the panel's primary buttons. */
 @Composable
 fun PrimaryButton(text: String, enabled: Boolean = true, loading: Boolean = false, modifier: Modifier = Modifier,
                   color: Color? = null, onClick: () -> Unit) {
-    val brush = if (!enabled) Brush.horizontalGradient(listOf(Color(0xFFD9D6CF), Color(0xFFD9D6CF)))
-    else if (color != null) Brush.horizontalGradient(listOf(color, color))
-    else Brush.horizontalGradient(listOf(Primary, PrimaryLight))
+    val fill = if (!enabled) Color(0xFFD1D5DB) else color ?: Primary
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(brush)
+            .height(46.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(fill)
             .clickable(enabled = enabled && !loading) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         if (loading) CircularProgressIndicator(color = Color.White, strokeWidth = 2.5.dp, modifier = Modifier.size(22.dp))
-        else Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        else Text(text, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     }
 }
 
@@ -124,8 +118,9 @@ fun SmallAction(text: String, icon: ImageVector, modifier: Modifier = Modifier, 
                 enabled: Boolean = true, onClick: () -> Unit) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, color.copy(alpha = if (enabled) 0.35f else 0.12f), RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(8.dp))
+            .background(Surface)
+            .border(1.dp, if (enabled) InputLine else Line, RoundedCornerShape(8.dp))
             .clickable(enabled = enabled) { onClick() }
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -152,29 +147,32 @@ fun InfoRow(label: String, value: String?, valueColor: Color = Ink, bold: Boolea
 fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(if (selected) Primary else Color.White)
-            .border(1.dp, if (selected) Primary else Color(0xFFE0DAD0), RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) PrimarySoft else Surface)
+            .border(1.dp, if (selected) Primary else InputLine, RoundedCornerShape(8.dp))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 7.dp)
     ) {
-        Text(text, fontSize = 12.sp, color = if (selected) Color.White else Ink, fontWeight = FontWeight.SemiBold)
+        Text(text, fontSize = 13.sp, color = if (selected) PrimaryStrong else Ink, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 fun Pill(text: String, color: Color) {
     Box(
-        modifier = Modifier.background(color, RoundedCornerShape(999.dp)).padding(horizontal = 8.dp, vertical = 2.dp)
+        modifier = Modifier
+            .background(color.copy(alpha = 0.10f), RoundedCornerShape(6.dp))
+            .border(1.dp, color.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 7.dp, vertical = 1.dp)
     ) {
-        Text(text, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text(text, color = color, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier, trailing: @Composable RowScope.() -> Unit = {}) {
     Row(modifier = modifier.fillMaxWidth().padding(top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
+        Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink, modifier = Modifier.weight(1f))
         trailing()
     }
 }

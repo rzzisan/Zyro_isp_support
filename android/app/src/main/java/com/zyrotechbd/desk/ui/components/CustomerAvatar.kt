@@ -33,13 +33,13 @@ fun CustomerAvatar(name: String, seed: String, size: Dp = 44.dp) {
     Box(
         modifier = Modifier
             .size(size)
-            .background(color = color, shape = CircleShape),
+            .background(color = color.copy(alpha = 0.12f), shape = CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = initial,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
+            color = color,
+            fontWeight = FontWeight.SemiBold,
             fontSize = (size.value * 0.42f).sp
         )
     }

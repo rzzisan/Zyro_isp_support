@@ -13,7 +13,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import com.zyrotechbd.desk.ui.theme.InputLine
+import com.zyrotechbd.desk.ui.theme.Primary
+import com.zyrotechbd.desk.ui.theme.Surface
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
@@ -22,8 +30,9 @@ import androidx.compose.ui.unit.sp
 import com.zyrotechbd.desk.ui.theme.Ink
 import com.zyrotechbd.desk.ui.theme.Muted
 
+/** A white input with a gray border that turns teal while typing, like the panel's inputs. */
 @Composable
-fun CatvTextField(
+fun DeskTextField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String = "",
@@ -32,6 +41,7 @@ fun CatvTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     singleLine: Boolean = true,
 ) {
+    var focused by remember { mutableStateOf(false) }
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -39,15 +49,16 @@ fun CatvTextField(
         keyboardOptions = keyboardOptions,
         visualTransformation = visualTransformation,
         textStyle = TextStyle(color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Normal),
-        modifier = modifier,
+        cursorBrush = SolidColor(Primary),
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
         decorationBox = { inner ->
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Color(0xFFFFFAF2))
-                    .border(1.dp, Color(0xFFE6E1D7), RoundedCornerShape(999.dp))
-                    .padding(horizontal = 16.dp, vertical = 11.dp),
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Surface)
+                    .border(1.dp, if (focused) Primary else InputLine, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
                 if (value.isEmpty()) {

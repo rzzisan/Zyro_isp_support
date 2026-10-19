@@ -44,18 +44,18 @@ cat > "$APK_DIR/index.html" << HTML
 <title>Zyro Desk অ্যাপ</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, sans-serif; background: #FBF8F3; color: #1F2430; }
-  .head { background: linear-gradient(135deg, #C9702E, #E08A3C); color: #fff; padding: 32px 16px; text-align: center; }
+  body { font-family: system-ui, sans-serif; background: #F9FAFB; color: #111827; }
+  .head { background: #0F7C7B; color: #fff; padding: 32px 16px; text-align: center; }
   .head h1 { font-size: 22px; } .head p { opacity: .85; font-size: 14px; margin-top: 6px; }
   .wrap { max-width: 760px; margin: 24px auto; padding: 0 16px; }
-  .btn { display: block; text-align: center; background: #C9702E; color: #fff; padding: 14px; border-radius: 12px; font-weight: 700; text-decoration: none; }
-  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-top: 18px; overflow-x: auto; }
+  .btn { display: block; text-align: center; background: #0F7C7B; color: #fff; padding: 14px; border-radius: 8px; font-weight: 600; text-decoration: none; }
+  .card { background: #fff; border-radius: 12px; border: 1px solid #E5E7EB; margin-top: 18px; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #F0EDE8; white-space: nowrap; }
-  th { font-size: 12px; color: #7B8496; }
-  a { color: #A85A20; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #E5E7EB; white-space: nowrap; }
+  th { font-size: 12px; color: #6B7280; }
+  a { color: #0B5F5E; }
   .new { background: #D7F2E6; color: #12704F; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; }
-  .note { margin-top: 18px; background: #FFF6E5; border: 1px solid #F3C77A; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.6; }
+  .note { margin-top: 18px; background: #fff; border: 1px solid #E5E7EB; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.6; }
   .foot { text-align: center; color: #9AA1AE; font-size: 12px; margin: 16px 0; }
 </style>
 </head>

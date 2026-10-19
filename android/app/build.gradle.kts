@@ -18,8 +18,8 @@ android {
         applicationId = "com.zyrotechbd.desk"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
         buildConfigField("String", "DESK_URL", "\"https://desk.zyrotechbd.com/\"")
         buildConfigField("String", "API_BASE_URL", "\"https://desk.zyrotechbd.com/api/v1/\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -66,6 +66,9 @@ android {
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        unitTests.all { test ->
+            (project.findProperty("screens") as String?)?.let { test.systemProperty("screens.dir", it) }
+        }
     }
     packaging {
         resources {

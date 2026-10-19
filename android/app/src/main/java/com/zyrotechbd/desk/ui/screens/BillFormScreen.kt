@@ -48,8 +48,8 @@ import com.zyrotechbd.desk.data.network.Choice
 import com.zyrotechbd.desk.data.network.Customer
 import com.zyrotechbd.desk.printing.PrinterManager
 import com.zyrotechbd.desk.printing.ReceiptRef
-import com.zyrotechbd.desk.ui.components.CatvCard
-import com.zyrotechbd.desk.ui.components.CatvTextField
+import com.zyrotechbd.desk.ui.components.DeskCard
+import com.zyrotechbd.desk.ui.components.DeskTextField
 import com.zyrotechbd.desk.ui.components.CustomerAvatar
 import com.zyrotechbd.desk.ui.components.Danger
 import com.zyrotechbd.desk.ui.components.Good
@@ -130,7 +130,7 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         ScreenBody {
             customer?.let { c ->
-                CatvCard {
+                DeskCard {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         CustomerAvatar(c.name ?: "?", c.customerId ?: c.headerId.toString(), size = 44.dp)
                         Spacer(Modifier.width(12.dp))
@@ -145,7 +145,7 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
 
             val res = result
             if (res != null) {
-                CatvCard {
+                DeskCard {
                     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Good, modifier = Modifier.height(48.dp))
                         Spacer(Modifier.height(6.dp))
@@ -178,7 +178,7 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
                 return@ScreenBody
             }
 
-            CatvCard {
+            DeskCard {
                 Column(Modifier.padding(14.dp)) {
                     InfoRow("PPPoE", f.username, bold = true)
                     InfoRow("Billing Status", f.status)
@@ -212,15 +212,15 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
             val balance = f.payable - discountValue - paidValue
             val remarksRequired = discountValue > 0 || kotlin.math.abs(paidValue + discountValue - f.payable) > 0.001
 
-            CatvCard {
+            DeskCard {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Field(s.paidLabel, Modifier.weight(1f)) {
-                            CatvTextField(paid, { paid = it.filter { ch -> ch.isDigit() || ch == '.' } }, "0",
+                            DeskTextField(paid, { paid = it.filter { ch -> ch.isDigit() || ch == '.' } }, "0",
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                         }
                         Field(s.discountLabel, Modifier.weight(1f)) {
-                            CatvTextField(discount, { discount = it.filter { ch -> ch.isDigit() || ch == '.' } }, "0",
+                            DeskTextField(discount, { discount = it.filter { ch -> ch.isDigit() || ch == '.' } }, "0",
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                         }
                     }
@@ -230,12 +230,12 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
                     Field("Received By") { Picker(f.receivedBy, receivedById) { receivedById = it } }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Field(s.trxLabel, Modifier.weight(1f)) {
-                            CatvTextField(trxNo, { trxNo = it.filter { ch -> !ch.isWhitespace() } }, "")
+                            DeskTextField(trxNo, { trxNo = it.filter { ch -> !ch.isWhitespace() } }, "")
                         }
-                        Field(s.billMonth, Modifier.weight(1f)) { CatvTextField(billMonth, { billMonth = it }, "") }
+                        Field(s.billMonth, Modifier.weight(1f)) { DeskTextField(billMonth, { billMonth = it }, "") }
                     }
                     Field(s.remarksLabel + if (remarksRequired) " *" else "") {
-                        CatvTextField(remarks, { remarks = it.take(500) }, s.remarksHint)
+                        DeskTextField(remarks, { remarks = it.take(500) }, s.remarksHint)
                     }
                     Toggle(s.smsToCustomer, deskSms, enabled = f.smsReady, hint = if (f.smsReady) null else s.smsNotReady) { deskSms = it }
                     Toggle(s.nextBillingDate, nextBillingDate) { nextBillingDate = it }
@@ -295,7 +295,7 @@ private fun Field(label: String, modifier: Modifier = Modifier, content: @Compos
 private fun Picker(options: List<Choice>, selected: String?, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        CatvCard(Modifier.fillMaxWidth().clickable { open = true }) {
+        DeskCard(Modifier.fillMaxWidth().clickable { open = true }) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(options.firstOrNull { it.id == selected }?.name ?: "—", fontSize = 15.sp, color = Ink, modifier = Modifier.weight(1f))
                 Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = Muted)
