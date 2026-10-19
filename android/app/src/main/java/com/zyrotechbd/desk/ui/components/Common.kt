@@ -112,6 +112,23 @@ fun PrimaryButton(text: String, enabled: Boolean = true, loading: Boolean = fals
     }
 }
 
+/** An outlined button the size of [PrimaryButton], for the other choice beside it. */
+@Composable
+fun SecondaryButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(46.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Surface)
+            .border(1.dp, InputLine, RoundedCornerShape(8.dp))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    }
+}
+
 /** A small outlined action (call, WhatsApp, print). */
 @Composable
 fun SmallAction(text: String, icon: ImageVector, modifier: Modifier = Modifier, color: Color = PrimaryStrong,
@@ -144,16 +161,26 @@ fun InfoRow(label: String, value: String?, valueColor: Color = Ink, bold: Boolea
 }
 
 @Composable
-fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
+fun Chip(text: String, selected: Boolean, icon: ImageVector? = null, trailing: ImageVector? = null, onClick: () -> Unit) {
+    Row(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
             .background(if (selected) PrimarySoft else Surface)
             .border(1.dp, if (selected) Primary else InputLine, RoundedCornerShape(8.dp))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 7.dp)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text, fontSize = 13.sp, color = if (selected) PrimaryStrong else Ink, fontWeight = FontWeight.Medium)
+        val tint = if (selected) PrimaryStrong else Ink
+        icon?.let {
+            Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(text, fontSize = 13.sp, color = tint, fontWeight = FontWeight.Medium)
+        trailing?.let {
+            Spacer(Modifier.width(4.dp))
+            Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
+        }
     }
 }
 

@@ -34,7 +34,19 @@ interface ApiService {
         @Query("due") due: Int? = null,
         @Query("zone") zone: String? = null,
         @Query("page") page: Int? = null,
+        @Query("subzone") subzone: String? = null,
+        @Query("box") box: String? = null,
+        @Query("package") pkg: String? = null,
+        @Query("status") status: String? = null,
+        @Query("line") line: String? = null,
+        @Query("online") online: Int? = null,
+        @Query("exp_from") expFrom: Int? = null,
+        @Query("exp_to") expTo: Int? = null,
+        @Query("list") list: String? = null,
     ): CustomerPage
+
+    @GET("c/{company}/customer-filters")
+    suspend fun customerFilters(@Path("company") company: String): CustomerFilterChoices
 
     @GET("c/{company}/zones")
     suspend fun zones(@Path("company") company: String): ZoneList

@@ -42,6 +42,11 @@ import androidx.navigation.NavHostController
 import com.zyrotechbd.desk.core.Format
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.Customer
+import com.zyrotechbd.desk.data.network.CustomerFilterChoices
+import com.zyrotechbd.desk.data.network.Place
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Tune
 import com.zyrotechbd.desk.ui.components.DeskCard
 import com.zyrotechbd.desk.ui.components.DeskTextField
 import com.zyrotechbd.desk.ui.components.RefreshBox
@@ -71,9 +76,10 @@ import kotlinx.coroutines.launch
 fun CustomersScreen(navController: NavHostController, company: String, collect: Boolean) {
     val s = LocalStrings.current
     var query by rememberSaveable { mutableStateOf("") }
-    var dueOnly by rememberSaveable { mutableStateOf(collect) }
-    var zone by rememberSaveable { mutableStateOf<String?>(null) }
-    var zones by remember { mutableStateOf<List<String>>(emptyList()) }
+    var filter by rememberSaveable(stateSaver = CustomerFilter.Saver) { mutableStateOf(CustomerFilter(due = if (collect) true else null)) }
+    var choices by remember { mutableStateOf(CustomerFilterChoices()) }
+    var showFilters by remember { mutableStateOf(false) }
+    var total by remember { mutableStateOf<Int?>(null) }
     val rows = remember { mutableStateListOf<Customer>() }
     var nextPage by remember { mutableStateOf<Int?>(null) }
     var loading by remember { mutableStateOf(false) }
@@ -83,7 +89,8 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(company) {
-        zones = runCatching { ApiClient.service.zones(company).data }.getOrDefault(emptyList())
+        choices = runCatching { ApiClient.service.customerFilters(company) }
+            .getOrElse { runCatching { CustomerFilterChoices(ApiClient.service.zones(company).data.map { Place(zone = it) }) }.getOrDefault(choices) }
     }
 
     // first page whenever the search or a filter changes (typing waits a moment so every key is not a request)
@@ -92,11 +99,11 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
         error = null
         try {
             val q = query.trim()
-            val page = if (q.isNotEmpty()) ApiClient.service.customers(company, query = q)
-            else ApiClient.service.customers(company, due = if (dueOnly) 1 else null, zone = zone, page = 1)
+            val page = if (q.isNotEmpty()) ApiClient.service.customers(company, query = q) else fetchPage(company, filter, 1)
             rows.clear()
             rows.addAll(page.data)
             nextPage = page.nextPage
+            total = if (q.isNotEmpty()) null else page.total
             listState.scrollToItem(0)
         } catch (e: Exception) {
             error = ApiClient.errorMessage(e, s.loadFailed, s.offline)
@@ -104,7 +111,7 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
             loading = false
         }
     }
-    LaunchedEffect(query, dueOnly, zone, reload) {
+    LaunchedEffect(query, filter, reload) {
         if (query.isNotBlank()) delay(350)
         firstPage()
     }
@@ -120,11 +127,11 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
         val page = nextPage ?: return
         if (loading || query.isNotBlank()) return
         loading = true
-        val filters = dueOnly to zone
+        val filters = filter
         scope.launch {
             try {
-                val res = ApiClient.service.customers(company, due = if (dueOnly) 1 else null, zone = zone, page = page)
-                if (filters != (dueOnly to zone)) return@launch  // a filter changed meanwhile; the first page reloads
+                val res = fetchPage(company, filters, page)
+                if (filters != filter) return@launch  // a filter changed meanwhile; the first page reloads
                 rows.addAll(res.data.filter { r -> rows.none { it.headerId == r.headerId } })
                 nextPage = res.nextPage
                 error = null
@@ -149,16 +156,30 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
                 modifier = Modifier.fillMaxWidth(), clearable = true)
             if (query.isBlank()) {
                 Spacer(Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { Chip(s.dueOnly, dueOnly) { dueOnly = !dueOnly } }
-                    item { Chip(s.allZones, zone == null) { zone = null } }
-                    items(zones) { z -> Chip(z, zone == z) { zone = if (zone == z) null else z } }
+                val active = activeFilters(filter, s)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    item {
+                        Chip(if (filter.count > 0) "${s.fFilter} · ${filter.count}" else s.fFilter, filter.count > 0,
+                            icon = Icons.Filled.Tune) { showFilters = true }
+                    }
+                    if (filter.due == null) item { Chip(s.dueOnly, false) { filter = filter.copy(due = true) } }
+                    items(active) { (label, cleared) -> Chip(label, true, trailing = Icons.Filled.Close) { filter = cleared } }
+                }
+                total?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text("${s.fTotal} ${Format.amount(it.toDouble())} ${s.fPeople}", fontSize = 12.sp, color = Muted)
                 }
             }
             Spacer(Modifier.height(8.dp))
             if (error != null) {
                 MessageBox(error!!, onRetry = { if (rows.isNotEmpty() && nextPage != null) loadMore() else reload++ }, retryLabel = s.retry)
                 Spacer(Modifier.height(8.dp))
+            }
+        }
+        if (showFilters) {
+            CustomerFilterSheet(filter, choices, s, onDismiss = { showFilters = false }) {
+                showFilters = false
+                filter = it
             }
         }
         RefreshBox({ firstPage() }) {
@@ -178,6 +199,13 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
         }
         }
     }
+}
+
+/** One page of the list with [f]'s filters. */
+private suspend fun fetchPage(company: String, f: CustomerFilter, page: Int) = f.expRange().let { exp ->
+    ApiClient.service.customers(company, due = f.due?.let { if (it) 1 else 0 }, zone = f.zone, page = page, subzone = f.subzone,
+        box = f.box, pkg = f.pkg, status = f.status, line = f.lineOn?.let { if (it) "on" else "off" },
+        online = f.online?.let { if (it) 1 else 0 }, expFrom = exp?.first, expTo = exp?.second, list = if (f.left) "left" else null)
 }
 
 @Composable

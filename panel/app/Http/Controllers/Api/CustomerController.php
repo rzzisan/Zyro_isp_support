@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Http\Controllers\Controller;
 use App\Models\BillingCustomer;
 use App\Models\BillingCustomerPayment;
@@ -42,7 +43,7 @@ class CustomerController extends Controller
         return $out + ['online' => $online];
     }
 
-    /** Header search with ?q= (like the panel's); without q, a page of current customers (?due=1, ?zone=, ?page=). */
+    /** Header search with ?q= (like the panel's); without q, a page of customers with the list's filters (see filtered()). */
     public function index(Request $request, Company $company): JsonResponse
     {
         $this->allow($request, $company);
@@ -53,13 +54,51 @@ class CustomerController extends Controller
             return response()->json(['data' => $this->withOnline($company, $rows), 'next_page' => null]);
         }
         $page = $request->integer('page', 1);
-        $rows = BillingCustomer::where('company_id', $company->id)->whereNull('gone_at')->where('is_left', false)
-            ->when($request->boolean('due'), fn ($w) => $w->where('due', '>', 0))
-            ->when($request->query('zone'), fn ($w, $z) => $w->where('zone', $z))
-            ->orderByRaw("CASE WHEN customer_id ~ '^[0-9]{1,9}$' THEN customer_id::bigint END NULLS LAST")->orderBy('customer_id')
-            ->forPage($page, 50)->get();
+        $base = $this->filtered($request, $company);
+        $total = $page === 1 ? (clone $base)->count() : null;
+        if ($base->getConnection()->getDriverName() === 'pgsql') {  // numeric IDs in number order (tests run on sqlite)
+            $base->orderByRaw("CASE WHEN customer_id ~ '^[0-9]{1,9}$' THEN customer_id::bigint END NULLS LAST");
+        }
+        $rows = $base->orderBy('customer_id')->forPage($page, 50)->get();
 
-        return response()->json(['data' => $this->withOnline($company, $rows), 'next_page' => $rows->count() === 50 ? $page + 1 : null]);
+        return response()->json(['data' => $this->withOnline($company, $rows), 'next_page' => $rows->count() === 50 ? $page + 1 : null,
+            'total' => $total]);
+    }
+
+    /**
+     * The list's filters, like the panel's customer list: ?zone= &subzone= &box= &package= &status=, ?due=1|0, ?line=on|off,
+     * ?online=1|0, ?exp_from=&exp_to= (bill day of month, 1-31; from > to wraps past the month's end), ?list=current|left|all.
+     */
+    private function filtered(Request $request, Company $company)
+    {
+        $q = BillingCustomer::where('company_id', $company->id)->whereNull('gone_at');
+        match ($request->query('list', 'current')) {
+            'left' => $q->where('is_left', true),
+            'all' => null,
+            default => $q->where('is_left', false),
+        };
+        foreach (['zone', 'subzone', 'box', 'package', 'status'] as $f) {
+            if (($v = $request->query($f)) !== null && $v !== '') {
+                $q->where($f, $v);
+            }
+        }
+        if ($request->has('due')) {
+            $request->boolean('due') ? $q->where('due', '>', 0) : $q->where(fn ($w) => $w->whereNull('due')->orWhere('due', '<=', 0));
+        }
+        if ($request->filled('line')) {
+            $q->where('disabled', $request->query('line') === 'off');
+        }
+        if ($request->has('online')) {
+            $request->boolean('online') ? $q->whereExists(CustomerResource::freshSession()) : $q->whereNotExists(CustomerResource::freshSession());
+        }
+        $from = $request->integer('exp_from');
+        $to = $request->integer('exp_to', $from);
+        if ($from >= 1 && $from <= 31 && $to >= 1 && $to <= 31) {
+            $from <= $to ? $q->whereBetween('bill_day', [$from, $to])
+                : $q->where(fn ($w) => $w->where('bill_day', '>=', $from)->orWhere('bill_day', '<=', $to));
+        }
+
+        return $q;
     }
 
     private function withOnline(Company $company, $rows): array
@@ -79,6 +118,22 @@ class CustomerController extends Controller
 
         return response()->json(['data' => BillingCustomer::where('company_id', $company->id)->whereNull('gone_at')
             ->whereNotNull('zone')->where('zone', '!=', '')->distinct()->orderBy('zone')->pluck('zone')->values()]);
+    }
+
+    /** Choices for the list's filters: zones with their subzones and boxes (so the app can narrow them), packages, statuses. */
+    public function filters(Request $request, Company $company): JsonResponse
+    {
+        $this->allow($request, $company);
+        $base = BillingCustomer::where('company_id', $company->id)->whereNull('gone_at')->where('is_left', false);
+        $places = (clone $base)->select('zone', 'subzone', 'box')->distinct()->get()
+            ->map(fn ($r) => ['zone' => trim((string) $r->zone), 'subzone' => trim((string) $r->subzone), 'box' => trim((string) $r->box)]);
+        $list = fn (string $col) => (clone $base)->whereNotNull($col)->where($col, '!=', '')->distinct()->orderBy($col)->pluck($col)->values();
+
+        return response()->json([
+            'places' => $places->values(),
+            'packages' => $list('package'),
+            'statuses' => $list('status'),
+        ]);
     }
 
     /** One customer: details, recent payments and open tickets from the Desk's copy (fast; the live part is separate). */
