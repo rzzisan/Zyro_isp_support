@@ -66,6 +66,7 @@ class OnuResource extends Resource
                 'c_id' => static::customerField('customer_id'), 'c_name' => static::customerField('name'),
                 'c_user' => static::customerField('username'), 'c_row' => static::customerField('id'),
             ]))
+            ->searchPlaceholder(__('পোর্ট বা ONU MAC দিয়ে খুঁজুন'))
             ->poll('120s')
             ->defaultSort('name')
             ->paginated([25, 50, 100, 250])->defaultPaginationPageOption(50)
@@ -84,7 +85,12 @@ class OnuResource extends Resource
                     ->description(fn (Onu $record) => $record->c_id ? 'ID '.$record->c_id.' · '.$record->c_user : null)
                     ->url(fn (Onu $record) => $record->c_row ? CustomerResource::getUrl('view', ['record' => $record->c_row]) : null),
                 TextColumn::make('last_change_at')->label(__('শেষ অবস্থা বদল'))->dateTime('d M, g:i A', 'Asia/Dhaka')->sortable()->placeholder('—'),
-                TextColumn::make('onu_mac')->label('ONU MAC')->toggleable(isToggledHiddenByDefault: true),
+                // Any MAC format works ("2cd2e3038d10", "2C-D2-E3-03-8D-10", part of it): compared as hex only.
+                TextColumn::make('onu_mac')->label('ONU MAC')->toggleable()->placeholder('—')->copyable()
+                    ->formatStateUsing(fn (?string $state) => \App\Support\Onu::displayMac(\App\Support\Onu::normalizeMac($state), $state))
+                    ->searchable(query: fn (Builder $query, string $search) => $query->when(
+                        preg_match('/^[0-9A-Fa-f:.\-\s]+$/', $search) && strlen($hex = (string) preg_replace('/[^0-9A-F]/', '', strtoupper($search))) >= 4,
+                        fn ($q) => $q->whereRaw("regexp_replace(upper(coalesce(onus.onu_mac, '')), '[^0-9A-F]', '', 'g') LIKE ?", ['%'.$hex.'%']))),
             ])
             ->filters([
                 SelectFilter::make('olt_id')->label('OLT')
