@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ConfirmationNumber
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.People
@@ -62,17 +64,24 @@ import com.zyrotechbd.desk.ui.theme.PrimarySoft
 import com.zyrotechbd.desk.ui.theme.PrimaryStrong
 import com.zyrotechbd.desk.ui.theme.Surface
 
-private data class Tab(val route: String, val label: String, val icon: ImageVector)
+data class Tab(val route: String, val label: String, val icon: ImageVector)
 
-/** Bottom-bar tabs the member may open in this company (the same menu permissions as the Desk panel). */
-private fun tabsFor(company: CompanyInfo?, s: AppStrings): List<Tab> = buildList {
+/**
+ * The screens this member may open in this company (the same menu permissions as the Desk panel), most used first.
+ * The first four sit in the bottom bar next to "More"; the rest are listed on the More screen.
+ */
+private fun screensFor(company: CompanyInfo?, s: AppStrings): List<Tab> = buildList {
     add(Tab(Routes.Dashboard, s.navDashboard, Icons.Filled.Home))
+    if (company?.can("inbox") == true) add(Tab(Routes.Inbox, s.navInbox, Icons.Filled.Forum))
+    if (company?.can("tickets") == true) add(Tab(Routes.Tickets, s.navTickets, Icons.Filled.ConfirmationNumber))
     if (company?.can("customers") == true || company?.can("bills") == true) {
         add(Tab(Routes.Customers, s.navCustomers, Icons.Filled.People))
     }
     if (company?.can("bills") == true) add(Tab(Routes.Bills, s.navBillsShort, Icons.Filled.ReceiptLong))
-    add(Tab(Routes.More, s.navMore, Icons.Filled.MoreHoriz))
 }
+
+private fun tabsFor(company: CompanyInfo?, s: AppStrings): List<Tab> =
+    screensFor(company, s).take(4) + Tab(Routes.More, s.navMore, Icons.Filled.MoreHoriz)
 
 private fun titleFor(route: String?, s: AppStrings): String? = when (route) {
     Routes.Dashboard -> null
@@ -81,6 +90,11 @@ private fun titleFor(route: String?, s: AppStrings): String? = when (route) {
     Routes.Bills -> s.navBills
     Routes.Printers -> s.navPrinters
     Routes.More -> s.navMore
+    Routes.Inbox -> s.navInbox
+    Routes.Chat -> s.titleChat
+    Routes.Tickets -> s.navTickets
+    Routes.Ticket -> s.titleTicket
+    Routes.NewTicket -> s.titleNewTicket
     Routes.CustomerDetail -> s.titleCustomer
     Routes.BillForm -> s.titleBillForm
     else -> null
@@ -172,6 +186,8 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
                     MoreScreen(
                         company = company,
                         companies = companies,
+                        extra = screensFor(company, s).drop(4),
+                        onOpen = { navController.navigate(it) },
                         onPrinters = { navController.navigate(Routes.Printers) },
                         onSwitchCompany = { slug ->
                             SessionStore.selectCompany(slug)

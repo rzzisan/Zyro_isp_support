@@ -15,6 +15,10 @@ class FakeDesk {
     private val customer = """{"header_id":3,"customer_id":"0003","name":"Bulbul Ahmed","mobile":"01714080210",
         "username":"en.enamul","zone":"Tilardi","subzone":"Bazar","package":"10 Mbps","monthly_bill":525,"due":525,
         "status":"Active","disabled":false,"is_left":false,"online":true,"last_payment_date":"2026-09-10"}"""
+    private val ticket get() = """{"id":5,"complain_id":"57231","customer_name":"Bulbul Ahmed","customer_id":"0003","header_id":3,
+        "username":"en.enamul","mobile":"01714080210","zone":"Tilardi","subzone":"Bazar","category":"Line Off","priority":"High",
+        "state":"pending","person":"Maruf","description":"লাল বাতি জ্বলছে, সকাল থেকে নেট নেই","created_by":"Desk Bot",
+        "opened_at":"$now","duration":"2 ঘণ্টা 5 মিনিট","open":true}"""
     private val customer2 = """{"header_id":4,"customer_id":"0004","name":"Rahima Khatun","mobile":"01811000000",
         "username":"rahima","zone":"Murma","package":"15 Mbps","monthly_bill":700,"due":0,"status":"Active",
         "disabled":false,"is_left":false,"online":false}"""
@@ -23,6 +27,8 @@ class FakeDesk {
 
     /** Paths asked for so far, to tell "never asked" from "asked but not drawn" when a test fails. */
     val paths = java.util.Collections.synchronizedList(mutableListOf<String>())
+
+    private val now = java.time.OffsetDateTime.now().toString()
 
     fun start(delayMs: Long = 150) {
         server.dispatcher = object : Dispatcher() {
@@ -36,6 +42,35 @@ class FakeDesk {
                     path.endsWith("/dashboard") -> json("""{"bills":{"count":3,"paid":1500,"pending":300,"mine_count":1,"mine_paid":525},
                         "tickets":{"open":4,"opened_today":2,"solved_today":1},"network":{"online":900,"active_customers":4800},
                         "inbox":{"waiting":2}}""")
+                    path.endsWith("/chats") -> json("""{"waiting_count":1,"data":[
+                        {"id":7,"name":"Bulbul Ahmed","number":"01714080210","customer_id":"0003","last_message_at":"$now",
+                         "last_message":{"type":"text","body":"লাইন বন্ধ, লাল বাতি জ্বলছে","direction":"in","sender":"customer"},
+                         "waiting":true,"staff":false,"assigned":null,"bot_paused":false,"notify_muted":false},
+                        {"id":8,"name":"Rahima Khatun","number":"01811000000","customer_id":"0004","last_message_at":"2026-10-18T09:00:00+06:00",
+                         "last_message":{"type":"text","body":"বিল কত?","direction":"out","sender":"bot"},
+                         "waiting":false,"staff":false,"assigned":{"id":1,"name":"Zisan"},"bot_paused":true,"notify_muted":false},
+                        {"id":9,"name":"Rafiq","number":"01911000000","last_message_at":"2026-10-12T09:00:00+06:00",
+                         "last_message":{"type":"audio","direction":"in","sender":"customer"},
+                         "waiting":false,"staff":true,"assigned":null,"bot_paused":false,"notify_muted":true}]}""")
+                    path.endsWith("/chats/7") -> json("""{"chat":{"id":7,"name":"Bulbul Ahmed","number":"01714080210","customer_id":"0003",
+                        "waiting":true,"assigned":{"id":1,"name":"Zisan"},"bot_paused":true,"bot_paused_until":"$now","window_open":true,"sending":true},
+                        "members":[{"id":1,"name":"Zisan"},{"id":2,"name":"Arif"}],
+                        "messages":[
+                        {"id":1,"direction":"in","sender":"customer","type":"text","body":"লাইন বন্ধ, লাল বাতি জ্বলছে","at":"$now"},
+                        {"id":2,"direction":"out","sender":"bot","type":"text","body":"Bulbul Ahmed, আপনার ONU-তে লাল বাতি মানে ফাইবারে সমস্যা। টিকিট খুলে দিচ্ছি।","at":"$now"},
+                        {"id":3,"direction":"in","sender":"customer","type":"audio","has_media":true,"media_mime":"audio/ogg","at":"$now"},
+                        {"id":4,"direction":"out","sender":"staff","user":"Zisan","type":"text","body":"টেকনিশিয়ান আসছে।\n\n- Zisan","status":"sent","at":"$now"}]}""")
+                    path.endsWith("/tickets") -> json("""{"counts":{"open":2,"pending":1,"processing":1},"next_page":null,"data":[$ticket,
+                        {"id":6,"complain_id":"57232","customer_name":"Rahima Khatun","customer_id":"0004","header_id":4,
+                        "category":"Slow Speed","priority":"Medium","state":"processing","person":"Rifat","zone":"Murma",
+                        "opened_at":"$now","duration":"20 মিনিট","open":true}]}""")
+                    path.endsWith("/tickets/5") -> json("""{"ticket":$ticket,"live":{"mikrotik":{"online":false,"router":"CLN-3"},
+                        "onu":{"OpticalPower":"-29.4","OnuStatus":"Offline","OLTName":"CLN-VSOL-42","OLTPort":"PON 2",
+                        "LastDeregisterTime":"2026-10-19 09:12","DeregisterReason":"LOS"},"mac":"AA:BB:CC:DD:EE:FF"},"live_error":null}""")
+                    path.endsWith("/ticket-options") -> json("""{"categories":[{"id":"7","name":"Line Off"},{"id":"8","name":"Slow Speed"}],
+                        "priorities":[{"id":"1","name":"Low"},{"id":"2","name":"Medium"},{"id":"3","name":"High"}],"departments":[],
+                        "employees":[{"id":"3","name":"Maruf"},{"id":"4","name":"Rifat"}],"sms_open":{"ready":true,"on":true},
+                        "sms_solved":{"ready":true,"on":false},"customer":$customer,"open_ticket":"57231"}""")
                     path.endsWith("/zones") -> json("""{"data":["Tilardi","Murma"]}""")
                     path.endsWith("/customers") -> json("""{"data":[$customer,$customer2],"next_page":null}""")
                     path.endsWith("/customers/3") -> json("""{"customer":$customer,"payments":[{"date":"2026-09-10",

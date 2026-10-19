@@ -13,6 +13,7 @@ object Format {
     private val dateTime = DateTimeFormatter.ofPattern("d MMM, h:mm a", Locale.ENGLISH)
     private val date = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
     private val time = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+    private val dayMonth = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH)
 
     fun tk(v: Double?): String = "৳" + money.format(v ?: 0.0)
 
@@ -22,6 +23,17 @@ object Format {
     fun dateTime(iso: String?): String = parse(iso)?.format(dateTime) ?: ""
 
     fun time(iso: String?): String = parse(iso)?.format(time) ?: ""
+
+    /** For a chat list: "10:24 AM" today, [yesterday] for yesterday, else "06 Oct" (like the panel's inbox). */
+    fun shortTime(iso: String?, yesterday: String): String {
+        val at = parse(iso) ?: return ""
+        val day = at.toLocalDate()
+        return when (day) {
+            today() -> at.format(time)
+            today().minusDays(1) -> yesterday
+            else -> at.format(dayMonth)
+        }
+    }
 
     /** "12 Oct 2026" from "2026-10-12". */
     fun date(ymd: String?): String = runCatching { LocalDate.parse(ymd).format(date) }.getOrDefault(ymd ?: "")

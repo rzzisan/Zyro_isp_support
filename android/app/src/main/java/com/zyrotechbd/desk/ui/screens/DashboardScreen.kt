@@ -130,7 +130,7 @@ private fun DashboardStats(d: Dashboard, navController: NavHostController) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             d.tickets?.let { t ->
                 StatCard(s.openTickets, t.open.toString(), Icons.Filled.ConfirmationNumber, Modifier.weight(1f),
-                    sub = s.ticketsToday(t.openedToday, t.solvedToday))
+                    sub = s.ticketsToday(t.openedToday, t.solvedToday)) { navController.navigate(Routes.Tickets) }
             }
             d.network?.let { n ->
                 StatCard(s.onlineNow, n.online.toString(), Icons.Filled.Wifi, Modifier.weight(1f),
@@ -139,7 +139,9 @@ private fun DashboardStats(d: Dashboard, navController: NavHostController) {
         }
         d.inbox?.let { i ->
             Spacer(Modifier.height(10.dp))
-            StatCard(s.waitingChats, i.waiting.toString(), Icons.Filled.Chat, sub = s.waitingChatsHint)
+            StatCard(s.waitingChats, i.waiting.toString(), Icons.Filled.Chat, sub = s.waitingChatsHint) {
+                navController.navigate(Routes.Inbox)
+            }
         }
     }
 }

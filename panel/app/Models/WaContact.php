@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,6 +24,44 @@ class WaContact extends Model
             'last_message_at' => 'datetime',
             'customer_set_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The inbox list (panel and app): a company's chats, newest first, filtered by box (all, waiting, mine, paused,
+     * staff, muted) and a search on name, customer ID or number.
+     */
+    public static function inbox(int $companyId, string $box, string $search, ?int $userId): Builder
+    {
+        $q = static::query()->where('company_id', $companyId)->with(['lastMessage', 'assignedUser'])
+            ->orderByDesc('last_message_at');
+        if (($s = trim($search)) !== '') {
+            $digits = preg_replace('/\D/', '', $s);
+            $q->where(fn ($w) => $w->where('name', 'ilike', "%{$s}%")->orWhere('customer_id', $s)
+                ->when(strlen($digits) >= 4, fn ($x) => $x->orWhere('wa_number', 'like', '%'.ltrim($digits, '0').'%')));
+        }
+        $lastDir = "(SELECT m.direction FROM wa_messages m WHERE m.contact_id = wa_contacts.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1)";
+        $staff = fn ($x) => $x->from('technicians')
+            ->whereColumn('technicians.company_id', 'wa_contacts.company_id')->whereColumn('technicians.wa_number', 'wa_contacts.wa_number');
+        match ($box) {
+            'waiting' => $q->whereRaw("{$lastDir} = 'in'")->whereNotExists($staff),
+            'staff' => $q->whereExists($staff),
+            'mine' => $q->where('assigned_user_id', $userId),
+            'paused' => $q->where(fn ($w) => $w->where('bot_paused', true)->orWhere('bot_paused_until', '>', now())),
+            'muted' => $q->where('notify_muted', true),
+            default => null,
+        };
+
+        return $q;
+    }
+
+    /** Chats whose last message is the customer's (not a technician's): they wait for an answer. */
+    public static function waitingCount(int $companyId): int
+    {
+        return (int) \Illuminate\Support\Facades\DB::selectOne(
+            "SELECT count(*) AS n FROM wa_contacts c WHERE c.company_id = ? AND (
+                 SELECT m.direction FROM wa_messages m WHERE m.contact_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) = 'in'
+               AND NOT EXISTS (SELECT 1 FROM technicians t WHERE t.company_id = c.company_id AND t.wa_number = c.wa_number)",
+            [$companyId])->n;
     }
 
     public function company(): BelongsTo
@@ -68,6 +107,20 @@ class WaContact extends Model
     public function lastMessage(): HasOne
     {
         return $this->hasOne(WaMessage::class, 'contact_id')->latestOfMany();
+    }
+
+    /** A manual pause: the bot stays quiet on this number for $hours, then answers again on its own. */
+    public function pauseBot(int $hours = 12): void
+    {
+        $this->forceFill(['bot_paused' => false, 'bot_paused_until' => now()->addHours($hours)])->save();
+    }
+
+    /** The bot answers again; a customer already identified stays identified, an unfinished identification starts fresh. */
+    public function resumeBot(): void
+    {
+        $state = $this->ident_state;
+        $keep = ($state['stage'] ?? null) === 'ok' || ($state['mode'] ?? null) === 'technician';
+        $this->forceFill(['bot_paused' => false, 'bot_paused_until' => null, 'ident_state' => $keep ? $state : null])->save();
     }
 
     public function isBotPaused(): bool

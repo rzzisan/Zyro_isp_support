@@ -144,6 +144,100 @@ abstract class AppStrings {
     abstract fun dueShort(amount: String): String
     abstract fun balanceLeft(amount: String): String
     abstract fun balanceAfter(payable: String, discount: String, paid: String, balance: String): String
+    abstract val navInbox: String
+    abstract val boxAll: String
+    abstract val boxWaiting: String
+    abstract val boxMine: String
+    abstract val boxPaused: String
+    abstract val boxStaff: String
+    abstract val boxMuted: String
+    abstract val searchChats: String
+    abstract val noChats: String
+    abstract val noName: String
+    abstract val waitingLabel: String
+    abstract val staffLabel: String
+    abstract val botPausedLabel: String
+    abstract val titleChat: String
+    abstract val replyHint: String
+    abstract val sendBtn: String
+    abstract val windowClosed: String
+    abstract val testMode: String
+    abstract val sentTestMode: String
+    abstract val botQuietFor: String
+    abstract val noPause: String
+    abstract val takeChat: String
+    abstract val assignChat: String
+    abstract val assignNobody: String
+    abstract val assignedTo: String
+    abstract val pauseBot: String
+    abstract val resumeBot: String
+    abstract val muteChat: String
+    abstract val unmuteChat: String
+    abstract val openCustomer: String
+    abstract val attachFile: String
+    abstract val removeFile: String
+    abstract val senderBot: String
+    abstract val senderCustomer: String
+    abstract val imageLabel: String
+    abstract val voiceLabel: String
+    abstract val videoLabel: String
+    abstract val fileLabel: String
+    abstract val playLabel: String
+    abstract val stopLabel: String
+    abstract val openFile: String
+    abstract val mediaFailed: String
+    abstract val yesterday: String
+    abstract val more: String
+    abstract val chatActions: String
+    abstract val navTickets: String
+    abstract val titleTicket: String
+    abstract val titleNewTicket: String
+    abstract val tabOpen: String
+    abstract val tabPending: String
+    abstract val tabProcessing: String
+    abstract val tabSolved: String
+    abstract val searchTickets: String
+    abstract val noTickets: String
+    abstract val stateClosed: String
+    abstract val categoryLabel: String
+    abstract val priorityLabel: String
+    abstract val departmentLabel: String
+    abstract val employeesLabel: String
+    abstract val assignedLabel: String
+    abstract val solvedByLabel: String
+    abstract val createdByLabel: String
+    abstract val openedLabel: String
+    abstract val solvedAtLabel: String
+    abstract val durationLabel: String
+    abstract val complainNoLabel: String
+    abstract val descriptionLabel: String
+    abstract val customerLabel: String
+    abstract val assignTicket: String
+    abstract val solveTicket: String
+    abstract val solveRemark: String
+    abstract val solveHint: String
+    abstract val smsSolved: String
+    abstract val smsOpen: String
+    abstract val smsOff: String
+    abstract val pickEmployees: String
+    abstract val noDepartment: String
+    abstract val ticketSolved: String
+    abstract val ticketAssigned: String
+    abstract val newTicket: String
+    abstract val pickCustomer: String
+    abstract val changeCustomer: String
+    abstract val commentLabel: String
+    abstract val commentHint: String
+    abstract val pickCategory: String
+    abstract val writeComment: String
+    abstract val enterMobile: String
+    abstract val createTicket: String
+    abstract val ticketCreated: String
+    abstract val openTicketWarn: String
+    abstract val syncedAt: String
+    abstract val loadMore: String
+    abstract val cancel: String
+    abstract val save: String
     abstract fun blockedFor(months: Int, days: Int): String
     abstract fun pendingWarning(amount: String, date: String, by: String): String
     abstract fun roleName(role: String?): String
@@ -300,6 +394,100 @@ object BengaliStrings : AppStrings() {
         "agent" -> "এজেন্ট"
         else -> role ?: ""
     }
+    override val navInbox = "ইনবক্স"
+    override val boxAll = "সব"
+    override val boxWaiting = "উত্তরের অপেক্ষায়"
+    override val boxMine = "আমার"
+    override val boxPaused = "বট থামানো"
+    override val boxStaff = "স্টাফ"
+    override val boxMuted = "নোটিফিকেশন বন্ধ"
+    override val searchChats = "নাম, কাস্টমার ID বা নম্বর"
+    override val noChats = "কোনো চ্যাট নেই"
+    override val noName = "নাম নেই"
+    override val waitingLabel = "উত্তর দিন"
+    override val staffLabel = "স্টাফ"
+    override val botPausedLabel = "বট থামানো"
+    override val titleChat = "চ্যাট"
+    override val replyHint = "মেসেজ লিখুন"
+    override val sendBtn = "পাঠান"
+    override val windowClosed = "কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই এখন সাধারণ মেসেজ যাবে না।"
+    override val testMode = "টেস্ট মোড: মেসেজ সেভ হবে, কাস্টমারের কাছে যাবে না।"
+    override val sentTestMode = "টেস্ট মোড: সেভ হয়েছে, কাস্টমারের কাছে যায়নি"
+    override val botQuietFor = "বট চুপ থাকবে"
+    override val noPause = "চুপ থাকবে না"
+    override val takeChat = "আমি নিলাম"
+    override val assignChat = "অন্যকে দিন"
+    override val assignNobody = "কেউ না"
+    override val assignedTo = "দায়িত্বে"
+    override val pauseBot = "বট থামান (১২ ঘণ্টা)"
+    override val resumeBot = "বট চালু করুন"
+    override val muteChat = "নোটিফিকেশন বন্ধ"
+    override val unmuteChat = "নোটিফিকেশন চালু"
+    override val openCustomer = "কাস্টমার পাতা"
+    override val attachFile = "ফাইল যোগ করুন"
+    override val removeFile = "বাদ দিন"
+    override val senderBot = "বট"
+    override val senderCustomer = "কাস্টমার"
+    override val imageLabel = "ছবি"
+    override val voiceLabel = "ভয়েস"
+    override val videoLabel = "ভিডিও"
+    override val fileLabel = "ফাইল"
+    override val playLabel = "শুনুন"
+    override val stopLabel = "থামান"
+    override val openFile = "খুলুন"
+    override val mediaFailed = "মিডিয়া খোলা যায়নি"
+    override val yesterday = "গতকাল"
+    override val more = "আরও"
+    override val chatActions = "চ্যাটের কাজ"
+    override val navTickets = "টিকিট"
+    override val titleTicket = "টিকিট"
+    override val titleNewTicket = "নতুন টিকিট"
+    override val tabOpen = "খোলা"
+    override val tabPending = "অপেক্ষমাণ"
+    override val tabProcessing = "কাজ চলছে"
+    override val tabSolved = "সমাধান"
+    override val searchTickets = "টিকিট নং, নাম, ID, মোবাইল"
+    override val noTickets = "কোনো টিকিট নেই"
+    override val stateClosed = "বন্ধ"
+    override val categoryLabel = "সমস্যা"
+    override val priorityLabel = "প্রায়োরিটি"
+    override val departmentLabel = "ডিপার্টমেন্ট"
+    override val employeesLabel = "কর্মী"
+    override val assignedLabel = "দায়িত্বে"
+    override val solvedByLabel = "সমাধান করেছে"
+    override val createdByLabel = "খুলেছে"
+    override val openedLabel = "খোলা হয়েছে"
+    override val solvedAtLabel = "সমাধান হয়েছে"
+    override val durationLabel = "সময় লেগেছে"
+    override val complainNoLabel = "অভিযোগের নম্বর"
+    override val descriptionLabel = "সমস্যার বিবরণ"
+    override val customerLabel = "কাস্টমার"
+    override val assignTicket = "কর্মী দিন"
+    override val solveTicket = "সমাধান করুন"
+    override val solveRemark = "সমাধানের নোট"
+    override val solveHint = "বিলিং আবার দেখে নেবে লাইন MikroTik-এ অনলাইন কিনা"
+    override val smsSolved = "কাস্টমারকে সমাধানের SMS"
+    override val smsOpen = "কাস্টমারকে টিকিটের SMS"
+    override val smsOff = "SMS সেটিংস চালু নেই"
+    override val pickEmployees = "অন্তত একজন কর্মী বেছে নিন"
+    override val noDepartment = "কোনোটা না"
+    override val ticketSolved = "টিকিট সমাধান হয়েছে"
+    override val ticketAssigned = "কর্মী দেওয়া হয়েছে"
+    override val newTicket = "টিকিট খুলুন"
+    override val pickCustomer = "কাস্টমার বেছে নিন"
+    override val changeCustomer = "বদলান"
+    override val commentLabel = "সমস্যা লিখুন"
+    override val commentHint = "কী সমস্যা, কখন থেকে"
+    override val pickCategory = "সমস্যার ধরন বেছে নিন"
+    override val writeComment = "সমস্যা লিখুন"
+    override val enterMobile = "মোবাইল নম্বর লিখুন"
+    override val createTicket = "টিকিট খুলুন"
+    override val ticketCreated = "টিকিট খোলা হয়েছে"
+    override val openTicketWarn = "এই কাস্টমারের একটা টিকিট এখনো খোলা আছে"
+    override val syncedAt = "বিলিং থেকে আনা"
+    override val loadMore = "আরো দেখুন"
+    override val cancel = "বাতিল"
+    override val save = "সেভ"
 }
 
 object EnglishStrings : AppStrings() {
@@ -453,4 +641,98 @@ object EnglishStrings : AppStrings() {
         "agent" -> "Agent"
         else -> role ?: ""
     }
+    override val navInbox = "Inbox"
+    override val boxAll = "All"
+    override val boxWaiting = "Waiting"
+    override val boxMine = "Mine"
+    override val boxPaused = "Bot paused"
+    override val boxStaff = "Staff"
+    override val boxMuted = "Muted"
+    override val searchChats = "Name, customer ID or number"
+    override val noChats = "No chats"
+    override val noName = "No name"
+    override val waitingLabel = "Reply"
+    override val staffLabel = "Staff"
+    override val botPausedLabel = "Bot paused"
+    override val titleChat = "Chat"
+    override val replyHint = "Type a message"
+    override val sendBtn = "Send"
+    override val windowClosed = "The customer's last message is over 24 hours old, so a normal message cannot be sent now."
+    override val testMode = "Test mode: messages are saved but not sent to the customer."
+    override val sentTestMode = "Test mode: saved, not sent to the customer"
+    override val botQuietFor = "Bot stays quiet"
+    override val noPause = "No pause"
+    override val takeChat = "I'll take it"
+    override val assignChat = "Give to someone"
+    override val assignNobody = "Nobody"
+    override val assignedTo = "Assigned to"
+    override val pauseBot = "Pause bot (12 hours)"
+    override val resumeBot = "Resume bot"
+    override val muteChat = "Mute notifications"
+    override val unmuteChat = "Unmute notifications"
+    override val openCustomer = "Customer page"
+    override val attachFile = "Attach file"
+    override val removeFile = "Remove"
+    override val senderBot = "Bot"
+    override val senderCustomer = "Customer"
+    override val imageLabel = "Photo"
+    override val voiceLabel = "Voice"
+    override val videoLabel = "Video"
+    override val fileLabel = "File"
+    override val playLabel = "Play"
+    override val stopLabel = "Stop"
+    override val openFile = "Open"
+    override val mediaFailed = "Could not open the media"
+    override val yesterday = "Yesterday"
+    override val more = "More"
+    override val chatActions = "Chat actions"
+    override val navTickets = "Tickets"
+    override val titleTicket = "Ticket"
+    override val titleNewTicket = "New ticket"
+    override val tabOpen = "Open"
+    override val tabPending = "Pending"
+    override val tabProcessing = "In progress"
+    override val tabSolved = "Solved"
+    override val searchTickets = "Ticket no, name, ID, mobile"
+    override val noTickets = "No tickets"
+    override val stateClosed = "Closed"
+    override val categoryLabel = "Problem"
+    override val priorityLabel = "Priority"
+    override val departmentLabel = "Department"
+    override val employeesLabel = "Employees"
+    override val assignedLabel = "Assigned to"
+    override val solvedByLabel = "Solved by"
+    override val createdByLabel = "Opened by"
+    override val openedLabel = "Opened"
+    override val solvedAtLabel = "Solved"
+    override val durationLabel = "Time taken"
+    override val complainNoLabel = "Complaint number"
+    override val descriptionLabel = "Problem description"
+    override val customerLabel = "Customer"
+    override val assignTicket = "Assign"
+    override val solveTicket = "Solve"
+    override val solveRemark = "Solve note"
+    override val solveHint = "Billing checks again that the line is online on MikroTik"
+    override val smsSolved = "Solved SMS to customer"
+    override val smsOpen = "Ticket SMS to customer"
+    override val smsOff = "SMS is not set up"
+    override val pickEmployees = "Pick at least one employee"
+    override val noDepartment = "None"
+    override val ticketSolved = "Ticket solved"
+    override val ticketAssigned = "Employees assigned"
+    override val newTicket = "Open ticket"
+    override val pickCustomer = "Pick a customer"
+    override val changeCustomer = "Change"
+    override val commentLabel = "Describe the problem"
+    override val commentHint = "What is wrong, since when"
+    override val pickCategory = "Pick the problem type"
+    override val writeComment = "Write the problem"
+    override val enterMobile = "Enter a mobile number"
+    override val createTicket = "Open ticket"
+    override val ticketCreated = "Ticket opened"
+    override val openTicketWarn = "This customer already has an open ticket"
+    override val syncedAt = "From billing"
+    override val loadMore = "Load more"
+    override val cancel = "Cancel"
+    override val save = "Save"
 }

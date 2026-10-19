@@ -1216,5 +1216,7 @@
     "ইমেইল বা পাসওয়ার্ড ভুল": "Wrong email or password",
     "এই কোম্পানিতে আপনার অ্যাক্সেস নেই": "You have no access to this company",
     "পোর্ট বা ONU MAC দিয়ে খুঁজুন": "Search by port or ONU MAC",
-    "বিল কালেকশনের অনুমতি নেই": "No permission for bill collection"
+    "বিল কালেকশনের অনুমতি নেই": "No permission for bill collection",
+    "এই সদস্য এই কোম্পানিতে নেই": "This member is not in this company",
+    "টিকিটটা আর খোলা নেই": "This ticket is no longer open"
 }

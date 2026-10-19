@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- inbox media downloaded for viewing in another app (PDF, video) -->
+<paths>
+    <cache-path name="media" path="media/" />
+</paths>

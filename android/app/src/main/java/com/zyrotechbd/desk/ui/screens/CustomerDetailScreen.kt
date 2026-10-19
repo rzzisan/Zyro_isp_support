@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.zyrotechbd.desk.core.Format
+import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.CustomerDetail
 import com.zyrotechbd.desk.data.network.LiveInfo
@@ -163,6 +165,12 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                         Spacer(Modifier.height(12.dp))
                         PrimaryButton(s.collectBill) { navController.navigate(Routes.billForm(c.headerId)) }
                     }
+                    if (SessionStore.company()?.can("tickets") == true && c.isLeft != true) {
+                        Spacer(Modifier.height(8.dp))
+                        SmallAction(s.newTicket, Icons.Filled.ConfirmationNumber, Modifier.fillMaxWidth()) {
+                            navController.navigate(Routes.newTicket(c.headerId))
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -238,7 +246,7 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
 
 /** MikroTik session and ONU now, the way the panel's live box shows them. */
 @Composable
-private fun LiveBox(info: LiveInfo) {
+fun LiveBox(info: LiveInfo) {
     val s = LocalStrings.current
     val mk = info.mikrotik
     fun str(m: Map<String, Any?>?, k: String): String? = m?.get(k)?.toString()?.takeIf { it.isNotBlank() && it != "null" }

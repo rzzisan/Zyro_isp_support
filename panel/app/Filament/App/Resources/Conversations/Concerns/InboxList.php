@@ -25,36 +25,12 @@ trait InboxList
     /** Up to 60 chats for the list, newest first, with their last message and the "waiting" flag. */
     public function chatList(): Collection
     {
-        $company = Filament::getTenant()->getKey();
-        $q = WaContact::query()->where('company_id', $company)->with(['lastMessage', 'assignedUser'])
-            ->orderByDesc('last_message_at');
-        if (($s = trim($this->search)) !== '') {
-            $digits = preg_replace('/\D/', '', $s);
-            $q->where(fn ($w) => $w->where('name', 'ilike', "%{$s}%")->orWhere('customer_id', $s)
-                ->when(strlen($digits) >= 4, fn ($x) => $x->orWhere('wa_number', 'like', '%'.ltrim($digits, '0').'%')));
-        }
-        $lastDir = "(SELECT m.direction FROM wa_messages m WHERE m.contact_id = wa_contacts.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1)";
-        match ($this->box) {
-            'waiting' => $q->whereRaw("{$lastDir} = 'in'")->whereNotExists(fn ($x) => $x->from('technicians')
-                ->whereColumn('technicians.company_id', 'wa_contacts.company_id')->whereColumn('technicians.wa_number', 'wa_contacts.wa_number')),
-            'staff' => $q->whereExists(fn ($x) => $x->from('technicians')
-                ->whereColumn('technicians.company_id', 'wa_contacts.company_id')->whereColumn('technicians.wa_number', 'wa_contacts.wa_number')),
-            'mine' => $q->where('assigned_user_id', auth()->id()),
-            'paused' => $q->where(fn ($w) => $w->where('bot_paused', true)->orWhere('bot_paused_until', '>', now())),
-            'muted' => $q->where('notify_muted', true),
-            default => null,
-        };
-
-        return $q->limit(60)->get();
+        return WaContact::inbox(Filament::getTenant()->getKey(), $this->box, $this->search, auth()->id())->limit(60)->get();
     }
 
     public function waitingCount(): int
     {
-        return (int) \Illuminate\Support\Facades\DB::selectOne(
-            "SELECT count(*) AS n FROM wa_contacts c WHERE c.company_id = ? AND (
-                 SELECT m.direction FROM wa_messages m WHERE m.contact_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) = 'in'
-               AND NOT EXISTS (SELECT 1 FROM technicians t WHERE t.company_id = c.company_id AND t.wa_number = c.wa_number)",
-            [Filament::getTenant()->getKey()])->n;
+        return WaContact::waitingCount(Filament::getTenant()->getKey());
     }
 
     public function setBox(string $box): void

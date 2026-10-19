@@ -32,10 +32,11 @@ class TicketActions
         return (int) Filament::getTenant()->getKey();
     }
 
-    private static function options(string $key): array
+    /** One billing list (categories, priorities, departments, employees) as [id => name]; the app passes its company. */
+    public static function options(string $key, ?int $company = null): array
     {
         try {
-            return Engine::ticketOptions(static::company())[$key] ?? [];
+            return Engine::ticketOptions($company ?? static::company())[$key] ?? [];
         } catch (RuntimeException) {
             return [];
         }
@@ -63,17 +64,18 @@ class TicketActions
     }
 
     /** [info, error] for a billing customer header id: bill, MikroTik now, OLT/ONU now (cached 60 s). */
-    public static function liveInfo(int $headerId, bool $fresh = false): array
+    public static function liveInfo(int $headerId, bool $fresh = false, ?int $company = null): array
     {
         if (! $headerId) {
             return [null, null];
         }
-        $key = 'ticket-info:'.static::company().':'.$headerId;
+        $company ??= static::company();
+        $key = 'ticket-info:'.$company.':'.$headerId;
         if ($fresh) {
             Cache::forget($key);
         }
         try {
-            return [Cache::remember($key, 60, fn () => Engine::ticketInfo(static::company(), $headerId)), null];
+            return [Cache::remember($key, 60, fn () => Engine::ticketInfo($company, $headerId)), null];
         } catch (RuntimeException $e) {
             return [null, $e->getMessage()];
         }
@@ -463,18 +465,19 @@ class TicketActions
      * The ticket SMS (template of $type chosen in the gateway settings) through the Desk's gateway, in the background;
      * a short note for the toast. $ticket['employees'] (billing employee ids) fill {technician} / {technician_phone}.
      */
-    private static function queueTicketSms(string $type, int $headerId, ?string $mobile, array $ticket): ?string
+    public static function queueTicketSms(string $type, int $headerId, ?string $mobile, array $ticket, ?int $company = null): ?string
     {
-        $c = $headerId ? BillingCustomer::where('company_id', static::company())->where('header_id', $headerId)->first() : null;
+        $company ??= static::company();
+        $c = $headerId ? BillingCustomer::where('company_id', $company)->where('header_id', $headerId)->first() : null;
         if ($ids = array_map('strval', $ticket['employees'] ?? [])) {
-            $names = static::options('employees');
+            $names = static::options('employees', $company);
             $ticket['technician'] = collect($ids)->map(fn ($id) => $names[$id] ?? null)->filter()->implode(', ');
-            $phone = Technician::where('company_id', static::company())->whereIn('billing_employee_id', $ids)
+            $phone = Technician::where('company_id', $company)->whereIn('billing_employee_id', $ids)
                 ->whereNotNull('wa_number')->value('wa_number');
             $ticket['technician_phone'] = $phone ? preg_replace('/^88(?=01)/', '', (string) $phone) : '';
         }
         try {
-            $campaign = Sms::ticket(static::company(), auth()->id(), $type, $c, $mobile, $ticket);
+            $campaign = Sms::ticket($company, auth()->id(), $type, $c, $mobile, $ticket);
         } catch (\Throwable $e) {
             report($e);
 
@@ -483,7 +486,7 @@ class TicketActions
         if (! $campaign) {
             return __('SMS যায়নি (মোবাইল নম্বর ঠিক নেই)');
         }
-        Engine::kickSms(static::company());
+        Engine::kickSms($company);
 
         return __('কাস্টমারকে SMS যাচ্ছে');
     }
