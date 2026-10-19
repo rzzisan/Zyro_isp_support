@@ -15,13 +15,15 @@ import com.zyrotechbd.desk.ui.screens.DashboardScreen
 import com.zyrotechbd.desk.ui.screens.PrintersScreen
 
 @Composable
-fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: Modifier = Modifier) {
+fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: Modifier = Modifier,
+                more: @Composable () -> Unit) {
     NavHost(navController = navController, startDestination = Routes.Dashboard, modifier = modifier) {
         composable(Routes.Dashboard) { DashboardScreen(navController, companyKey) }
         composable(Routes.Customers) { CustomersScreen(navController, companyKey, collect = false) }
         composable(Routes.Collect) { CustomersScreen(navController, companyKey, collect = true) }
         composable(Routes.Bills) { BillsScreen(companyKey) }
         composable(Routes.Printers) { PrintersScreen() }
+        composable(Routes.More) { more() }
         composable(Routes.CustomerDetail, arguments = listOf(navArgument("headerId") { type = NavType.LongType })) {
             CustomerDetailScreen(navController, companyKey, it.arguments?.getLong("headerId") ?: 0L)
         }

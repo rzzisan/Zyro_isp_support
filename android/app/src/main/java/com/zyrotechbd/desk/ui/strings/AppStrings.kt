@@ -21,6 +21,10 @@ abstract class AppStrings {
     abstract val navCollect: String
     abstract val navBills: String
     abstract val navPrinters: String
+    abstract val navBillsShort: String
+    abstract val navMore: String
+    abstract val language: String
+    abstract val version: String
     abstract val titleCustomer: String
     abstract val titleBillForm: String
     abstract val findCustomer: String
@@ -165,6 +169,10 @@ object BengaliStrings : AppStrings() {
     override val navCollect = "বিল নিন"
     override val navBills = "বিল কালেকশন"
     override val navPrinters = "প্রিন্টার"
+    override val navBillsShort = "বিল"
+    override val navMore = "আরও"
+    override val language = "ভাষা"
+    override val version = "সংস্করণ"
     override val titleCustomer = "কাস্টমার"
     override val titleBillForm = "বিল নিন"
     override val findCustomer = "কাস্টমার খুঁজুন"
@@ -314,6 +322,10 @@ object EnglishStrings : AppStrings() {
     override val navCollect = "Collect bill"
     override val navBills = "Bill collection"
     override val navPrinters = "Printer"
+    override val navBillsShort = "Bills"
+    override val navMore = "More"
+    override val language = "Language"
+    override val version = "Version"
     override val titleCustomer = "Customer"
     override val titleBillForm = "Collect bill"
     override val findCustomer = "Find customer"

@@ -41,8 +41,8 @@ import androidx.navigation.NavHostController
 import com.zyrotechbd.desk.core.Format
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.Customer
-import com.zyrotechbd.desk.ui.components.CatvSurface
-import com.zyrotechbd.desk.ui.components.CatvTextField
+import com.zyrotechbd.desk.ui.components.DeskCard
+import com.zyrotechbd.desk.ui.components.DeskTextField
 import com.zyrotechbd.desk.ui.components.Chip
 import com.zyrotechbd.desk.ui.components.CustomerAvatar
 import com.zyrotechbd.desk.ui.components.Danger
@@ -54,6 +54,7 @@ import com.zyrotechbd.desk.ui.components.Pill
 import com.zyrotechbd.desk.ui.navigation.Routes
 import com.zyrotechbd.desk.ui.strings.AppStrings
 import com.zyrotechbd.desk.ui.strings.LocalStrings
+import com.zyrotechbd.desk.ui.theme.InputLine
 import com.zyrotechbd.desk.ui.theme.Ink
 import com.zyrotechbd.desk.ui.theme.Muted
 import kotlinx.coroutines.delay
@@ -128,7 +129,7 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
                 Text(s.collectHint, fontSize = 13.sp, color = Muted)
                 Spacer(Modifier.height(8.dp))
             }
-            CatvTextField(value = query, onValueChange = { query = it }, placeholder = s.searchCustomer,
+            DeskTextField(value = query, onValueChange = { query = it }, placeholder = s.searchCustomer,
                 modifier = Modifier.fillMaxWidth())
             if (query.isBlank()) {
                 Spacer(Modifier.height(8.dp))
@@ -163,14 +164,14 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
 
 @Composable
 private fun CustomerRow(c: Customer, s: AppStrings, onClick: () -> Unit) {
-    CatvSurface(modifier = Modifier.clickable { onClick() }) {
+    DeskCard(modifier = Modifier.clickable { onClick() }) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box {
                 CustomerAvatar(c.name ?: "?", c.customerId ?: c.headerId.toString(), size = 42.dp)
                 Box(
                     Modifier.align(Alignment.BottomEnd).size(12.dp).clip(CircleShape).background(Color.White).padding(2.dp)
                 ) {
-                    Box(Modifier.fillMaxSize().clip(CircleShape).background(if (c.online) Good else Color(0xFFBDB6AA)))
+                    Box(Modifier.fillMaxSize().clip(CircleShape).background(if (c.online) Good else InputLine))
                 }
             }
             Spacer(Modifier.width(12.dp))
@@ -180,7 +181,7 @@ private fun CustomerRow(c: Customer, s: AppStrings, onClick: () -> Unit) {
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (c.isLeft == true) {
                         Spacer(Modifier.width(6.dp))
-                        Pill("LEFT", Color(0xFF7B8496))
+                        Pill("LEFT", Muted)
                     } else if (c.disabled == true) {
                         Spacer(Modifier.width(6.dp))
                         Pill(s.lineOff, Danger)

@@ -47,8 +47,8 @@ import com.zyrotechbd.desk.data.network.DeskCollection
 import com.zyrotechbd.desk.data.network.Totals
 import com.zyrotechbd.desk.printing.PrinterManager
 import com.zyrotechbd.desk.printing.ReceiptRef
-import com.zyrotechbd.desk.ui.components.CatvCard
-import com.zyrotechbd.desk.ui.components.CatvTextField
+import com.zyrotechbd.desk.ui.components.DeskCard
+import com.zyrotechbd.desk.ui.components.DeskTextField
 import com.zyrotechbd.desk.ui.components.Chip
 import com.zyrotechbd.desk.ui.components.Danger
 import com.zyrotechbd.desk.ui.components.EmptyText
@@ -150,7 +150,7 @@ private fun DailyBillsTab(company: String) {
                         date.year, date.monthValue - 1, date.dayOfMonth).show()
                 }
                 Spacer(Modifier.width(8.dp))
-                CatvTextField(query, { query = it }, s.searchCustomer, modifier = Modifier.weight(1f))
+                DeskTextField(query, { query = it }, s.searchCustomer, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -160,7 +160,7 @@ private fun DailyBillsTab(company: String) {
         }
         totals?.let { t ->
             item {
-                CatvCard {
+                DeskCard {
                     Row(Modifier.fillMaxWidth().padding(12.dp)) {
                         TotalCell(s.billCount(t.count), Format.tk(t.paid), Good, Modifier.weight(1f))
                         TotalCell(s.discountLabel, Format.tk(t.discount), Ink, Modifier.weight(1f))
@@ -223,7 +223,7 @@ private fun MyCollectionsTab(company: String) {
         if (list == null && error == null) item { LoadingBox() }
         if (list != null) {
             item {
-                CatvCard {
+                DeskCard {
                     Row(Modifier.fillMaxWidth().padding(12.dp)) {
                         TotalCell(s.billCount(list.size), Format.tk(list.sumOf { it.paid }), Good, Modifier.weight(1f))
                         TotalCell(s.discountLabel, Format.tk(list.sumOf { it.discount }), Ink, Modifier.weight(1f))
@@ -258,7 +258,7 @@ private fun BillRow(
     title: String, sub: String, meta: String, paid: Double, discount: Double, due: Double?, receiptNo: String,
     status: String?, s: AppStrings, printing: Boolean, message: String?, canPrint: Boolean, onPrint: () -> Unit,
 ) {
-    CatvCard {
+    DeskCard {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
