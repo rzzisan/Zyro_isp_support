@@ -56,56 +56,17 @@ Route::get('/print/{company:slug}/tickets', function (\App\Models\Company $compa
 // money receipt of a bill collected from the Desk, for a thermal printer (?w=58 narrow paper, ?print=0 no print dialog);
 // members with the bills menu only. Billing's own receipt number is fetched (and kept) once the bill is approved there.
 Route::get('/print/{company:slug}/receipt/{collection}', function (\App\Models\Company $company, int $collection, \Illuminate\Http\Request $request) {
-    $user = Auth::user();
-    abort_unless($user && \App\Support\Menu::allows($user, $company, 'bills'), 403);
-    $c = \App\Models\BillCollection::where('company_id', $company->id)->where('result', 'saved')->findOrFail($collection);
-    // billing only has a receipt number after approval; asking before that just makes printing slower
-    $approved = $c->daily_bill_id && \App\Models\BillingDailyBill::where('company_id', $company->id)
-        ->where('daily_bill_id', $c->daily_bill_id)->where('is_approved', true)->exists();
-    if (! $c->money_receipt_no && $approved) {
-        try {
-            $c->money_receipt_no = \App\Services\Engine::receiptNo($company->id, $c->id);
-        } catch (\Throwable $e) {
-            report($e); // billing unreachable: print with the Desk number
-        }
-    }
-    $settings = \App\Models\ReceiptSetting::forCompany($company);
-    $width = in_array((int) $request->query('w'), [58, 80], true) ? (int) $request->query('w') : ($settings->paper_width ?: 80);
+    abort_unless(\App\Support\Menu::allows(Auth::user(), $company, 'bills'), 403);
 
-    return view('print.receipt', ['company' => $company, 'c' => $c, 'settings' => $settings, 'width' => $width,
-        'customer' => \App\Models\BillingCustomer::where('company_id', $company->id)->where('header_id', $c->customer_header_id)->first(),
-        'receiptNo' => $c->money_receipt_no ?: 'D-'.$c->id, 'autoPrint' => $request->query('print') !== '0']);
+    return \App\Support\Receipts::collection($company, $collection, $request->query('w'), $request->query('print') !== '0');
 })->middleware('web')->name('receipts.print');
 
 // money receipt of any bill in billing's Daily Bill Collection (synced), same layout as above; members who may see
 // that bill on the বিল কালেকশন page. Billing's receipt number once approved, else "B-{DailyBillId}".
 Route::get('/print/{company:slug}/bill/{dailyBill}', function (\App\Models\Company $company, int $dailyBill, \Illuminate\Http\Request $request) {
-    $user = Auth::user();
-    abort_unless($user && \App\Support\Menu::allows($user, $company, 'bills'), 403);
-    $m = \App\Models\Membership::where('company_id', $company->id)->where('user_id', $user->id)->first();
-    $d = \App\Models\BillingDailyBill::where('company_id', $company->id)->where('daily_bill_id', $dailyBill)
-        ->where('is_deleted', false)->visibleTo($m)->firstOrFail();
-    if (! $d->money_receipt_no && $d->is_approved) {
-        try {
-            $d->money_receipt_no = \App\Services\Engine::dailyReceiptNo($company->id, $d->daily_bill_id);
-        } catch (\Throwable $e) {
-            report($e); // billing unreachable: print with the bill's own number
-        }
-    }
-    // the receipt layout reads a collection; fill one (unsaved) from the synced bill
-    $c = new \App\Models\BillCollection(['customer_id' => $d->customer_id, 'customer_name' => $d->customer_name,
-        'username' => $d->username, 'payable' => round((float) $d->receive_amount + (float) $d->discount_amount + max(0, (float) $d->balance_due), 2),
-        'paid' => $d->receive_amount, 'discount' => $d->discount_amount, 'payment_method' => $d->payment_method,
-        'received_by' => $d->received_by, 'money_receipt_no' => $d->money_receipt_no]);
-    $c->created_at = $d->collected_at;
-    $c->mobile = $d->mobile;
-    $settings = \App\Models\ReceiptSetting::forCompany($company);
-    $width = in_array((int) $request->query('w'), [58, 80], true) ? (int) $request->query('w') : ($settings->paper_width ?: 80);
+    abort_unless(\App\Support\Menu::allows(Auth::user(), $company, 'bills'), 403);
 
-    return view('print.receipt', ['company' => $company, 'c' => $c, 'settings' => $settings, 'width' => $width,
-        'customer' => $d->customer_header_id ? \App\Models\BillingCustomer::where('company_id', $company->id)->where('header_id', $d->customer_header_id)->first() : null,
-        'receiptNo' => $d->money_receipt_no ?: 'B-'.$d->daily_bill_id,
-        'autoPrint' => $request->query('print') !== '0']);
+    return \App\Support\Receipts::dailyBill($company, Auth::user(), $dailyBill, $request->query('w'), $request->query('print') !== '0');
 })->middleware('web')->name('bills.receipt');
 
 // বিল কালেকশন page, every 5 s while open and visible: has anything changed? (tiny JSON; the page refreshes only then)

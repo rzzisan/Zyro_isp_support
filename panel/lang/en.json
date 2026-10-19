@@ -1211,5 +1211,10 @@
     "এক-দুই মিনিট লাগতে পারে। MikroTik ব্যাকআপ পেজে দেখা যাবে।": "It can take a minute or two. See it on the MikroTik backups page.",
     "রাউটারে export আর backup ফাইল বানিয়ে Desk-এ নামিয়ে আনবে, তারপর রাউটার থেকে ফাইল মুছে দেবে।": "Creates export and backup files on the router, downloads them to Desk, then deletes them from the router.",
     "MikroTik ব্যাকআপ কতদিন রাখা হবে (দিন)": "Keep MikroTik backups for (days)",
-    "এর চেয়ে পুরনো ব্যাকআপ প্রতি রাতে নিজে মুছে যায়।": "Older backups are deleted automatically every night."
+    "এর চেয়ে পুরনো ব্যাকআপ প্রতি রাতে নিজে মুছে যায়।": "Older backups are deleted automatically every night.",
+    "আপনি কোনো কোম্পানির সদস্য নন": "You are not a member of any company",
+    "ইমেইল বা পাসওয়ার্ড ভুল": "Wrong email or password",
+    "এই কোম্পানিতে আপনার অ্যাক্সেস নেই": "You have no access to this company",
+    "পোর্ট বা ONU MAC দিয়ে খুঁজুন": "Search by port or ONU MAC",
+    "বিল কালেকশনের অনুমতি নেই": "No permission for bill collection"
 }

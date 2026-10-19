@@ -14,8 +14,8 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
-use Filament\Notifications\Notification;
 use Filament\GlobalSearch\GlobalSearchResult;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Livewire;
 use Filament\Schemas\Components\Tabs;
@@ -31,7 +31,6 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 /** All billing customers from our own copy (synced nightly). Everyone can look; passwords and CSV are owner/admin. */
@@ -258,28 +257,10 @@ class CustomerResource extends Resource
      */
     public static function getGlobalSearchResults(string $search): Collection
     {
-        $q = trim(mb_substr($search, 0, 30));
-        if ($q === '' || ! ($company = Filament::getTenant())) {
+        if (! ($company = Filament::getTenant())) {
             return collect();
         }
-        $rows = static::globalSearchQuery()->where(function (Builder $w) use ($q) {
-            $like = '%'.addcslashes($q, '%_\\').'%';
-            $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$q])->orWhere('customer_id', 'ilike', $like)
-                ->orWhere('username', 'ilike', $like)->orWhere('name', 'ilike', $like);
-            $digits = ltrim(preg_replace('/\D/', '', $q), '0');
-            if (strlen($digits) >= 4 && strlen($digits) * 2 >= strlen($q)) {
-                $w->orWhere('mobile_normalized', 'like', "%{$digits}%");
-            }
-        })
-            ->orderByRaw("(ltrim(customer_id, '0') = ltrim(?, '0') OR lower(username) = lower(?)) DESC", [$q, $q])
-            ->orderBy('is_left')->orderByRaw("CASE WHEN customer_id ~ '^[0-9]{1,9}$' THEN customer_id::bigint END")
-            ->limit(30)->get();
-
-        if ($rows->isEmpty() && mb_strlen($q) >= 3) {
-            $ids = Cache::remember('header-search:'.$company->getKey().':'.mb_strtolower($q), 300,
-                fn () => Engine::findInBilling($company->getKey(), $q));
-            $rows = $ids ? static::globalSearchQuery()->whereIn('header_id', $ids)->orderBy('is_left')->limit(30)->get() : $rows;
-        }
+        $rows = BillingCustomer::headerSearch((int) $company->getKey(), $search);
 
         return $rows->map(fn (BillingCustomer $r) => new GlobalSearchResult(
             title: trim(($r->username ?: $r->name).' ('.$r->customer_id.')'),
@@ -293,11 +274,6 @@ class CustomerResource extends Resource
                 __('বকেয়া') => $r->due > 0 ? number_format((float) $r->due).__(' টাকা') : null,
             ]),
         ));
-    }
-
-    private static function globalSearchQuery(): Builder
-    {
-        return static::getEloquentQuery()->whereNull('gone_at');
     }
 
     public static function getEloquentQuery(): Builder

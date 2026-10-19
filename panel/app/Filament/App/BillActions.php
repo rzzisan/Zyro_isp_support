@@ -90,10 +90,13 @@ class BillActions
             ->all();
     }
 
-    /** The bill-payment SMS after a saved collection (Desk's gateway, in the background); a short note for the toast. */
-    private static function queueBillSms(int $headerId, array $data, array $res, ?string $methodName): ?string
+    /**
+     * The bill-payment SMS after a saved collection (Desk's gateway, in the background); a short note for the toast.
+     * Also used by the Android app's bill collection.
+     */
+    public static function queueBillSms(int $companyId, int $headerId, array $data, array $res, ?string $methodName): ?string
     {
-        $c = BillingCustomer::where('company_id', static::company())->where('header_id', $headerId)->first();
+        $c = BillingCustomer::where('company_id', $companyId)->where('header_id', $headerId)->first();
         if (! $c) {
             return null;
         }
@@ -103,7 +106,7 @@ class BillActions
         $receipt = ! empty($res['collection_id'])
             ? (BillCollection::whereKey($res['collection_id'])->value('money_receipt_no') ?: 'D-'.$res['collection_id']) : '';
         try {
-            $campaign = Sms::billPaid(static::company(), auth()->id(), $c, [
+            $campaign = Sms::billPaid($companyId, auth()->id(), $c, [
                 'paid' => $paid, 'discount' => $discount, 'payable' => $payable,
                 'due' => isset($res['balance']) ? (float) $res['balance'] : $payable - $paid - $discount,
                 'months' => $data['bill_month'] ?? '', 'method' => $methodName ?? '', 'receipt_no' => $receipt,
@@ -116,7 +119,7 @@ class BillActions
         if (! $campaign) {
             return __('SMS যায়নি (মোবাইল নম্বর ঠিক নেই)');
         }
-        Engine::kickSms(static::company());
+        Engine::kickSms($companyId);
 
         return __('কাস্টমারকে SMS যাচ্ছে');
     }
@@ -246,7 +249,7 @@ class BillActions
                     $livewire->js('(() => { const f = document.createElement("iframe"); f.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0"; f.src = '
                         .json_encode($receipt).'; document.body.appendChild(f); setTimeout(() => f.remove(), 120000); })()');
                 }
-                $smsNote = ($data['desk_sms'] ?? false) ? static::queueBillSms($headerId, $data, $res, $methodName) : null;
+                $smsNote = ($data['desk_sms'] ?? false) ? static::queueBillSms(static::company(), $headerId, $data, $res, $methodName) : null;
                 Notification::make()->success()->title(__('বিল জমা হয়েছে, বিলিং-এ approve বাকি').($smsNote ? ' · '.$smsNote : ''))
                     ->body(trim(($res['message'] ?? '').' · '.__('বাকি বকেয়া :amount টাকা', ['amount' => $res['balance'] ?? 0]), ' ·'))
                     ->actions(! empty($res['collection_id']) ? [Action::make('printReceipt')->label(__('রিসিট প্রিন্ট'))->button()

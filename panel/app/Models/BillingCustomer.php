@@ -2,9 +2,13 @@
 
 namespace App\Models;
 
+use App\Services\Engine;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 /** A customer copied from the billing software (engine/customer_sync.py). Read-only in the panel. */
 class BillingCustomer extends Model
@@ -36,6 +40,40 @@ class BillingCustomer extends Model
         }
 
         return $label;
+    }
+
+    /**
+     * Header search, like the billing software's: any part of the customer ID, PPPoE user, name or mobile. Reads the
+     * desk's own copy; when that has nobody, asks billing's header search and copies the customers we don't have.
+     * Left customers are included after the current ones. Shared by the panel's header search and the app.
+     */
+    public static function headerSearch(int $companyId, string $search, int $limit = 30): Collection
+    {
+        $q = trim(mb_substr($search, 0, 30));
+        if ($q === '') {
+            return collect();
+        }
+        $base = fn () => static::where('company_id', $companyId)->whereNull('gone_at');
+        $rows = $base()->where(function (Builder $w) use ($q) {
+            $like = '%'.addcslashes($q, '%_\\').'%';
+            $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$q])->orWhere('customer_id', 'ilike', $like)
+                ->orWhere('username', 'ilike', $like)->orWhere('name', 'ilike', $like);
+            $digits = ltrim(preg_replace('/\D/', '', $q), '0');
+            if (strlen($digits) >= 4 && strlen($digits) * 2 >= strlen($q)) {
+                $w->orWhere('mobile_normalized', 'like', "%{$digits}%");
+            }
+        })
+            ->orderByRaw("(ltrim(customer_id, '0') = ltrim(?, '0') OR lower(username) = lower(?)) DESC", [$q, $q])
+            ->orderBy('is_left')->orderByRaw("CASE WHEN customer_id ~ '^[0-9]{1,9}$' THEN customer_id::bigint END")
+            ->limit($limit)->get();
+
+        if ($rows->isEmpty() && mb_strlen($q) >= 3) {
+            $ids = Cache::remember('header-search:'.$companyId.':'.mb_strtolower($q), 300,
+                fn () => Engine::findInBilling($companyId, $q));
+            $rows = $ids ? $base()->whereIn('header_id', $ids)->orderBy('is_left')->limit($limit)->get() : $rows;
+        }
+
+        return $rows;
     }
 
     public function company(): BelongsTo
