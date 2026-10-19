@@ -101,8 +101,17 @@ fun DashboardScreen(navController: NavHostController, company: String) {
         val d = data
         if (d == null) {
             if (loading) LoadingBox()
-            return@Column
+        } else {
+            DashboardStats(d, navController)
         }
+    }
+}
+
+/** Today's numbers, only the parts the member's menus allow. */
+@Composable
+private fun DashboardStats(d: Dashboard, navController: NavHostController) {
+    val s = LocalStrings.current
+    Column {
         d.bills?.let { b ->
             SectionTitle(s.todayBills)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

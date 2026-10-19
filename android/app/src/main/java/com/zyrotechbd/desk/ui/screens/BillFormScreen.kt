@@ -57,6 +57,7 @@ import com.zyrotechbd.desk.ui.components.InfoRow
 import com.zyrotechbd.desk.ui.components.LoadingBox
 import com.zyrotechbd.desk.ui.components.MessageBox
 import com.zyrotechbd.desk.ui.components.PrimaryButton
+import com.zyrotechbd.desk.ui.components.ScreenBody
 import com.zyrotechbd.desk.ui.components.SmallAction
 import com.zyrotechbd.desk.ui.components.Warn
 import com.zyrotechbd.desk.ui.strings.LocalStrings
@@ -127,156 +128,158 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
     LaunchedEffect(headerId) { load() }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        customer?.let { c ->
-            CatvCard {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CustomerAvatar(c.name ?: "?", c.customerId ?: c.headerId.toString(), size = 44.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(c.name ?: "", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
-                        Text("ID ${c.customerId ?: ""}" + (c.mobile?.let { " · $it" } ?: ""), fontSize = 12.sp, color = Muted)
+        ScreenBody {
+            customer?.let { c ->
+                CatvCard {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CustomerAvatar(c.name ?: "?", c.customerId ?: c.headerId.toString(), size = 44.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(c.name ?: "", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            Text("ID ${c.customerId ?: ""}" + (c.mobile?.let { " · $it" } ?: ""), fontSize = 12.sp, color = Muted)
+                        }
                     }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
+            val res = result
+            if (res != null) {
+                CatvCard {
+                    Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Good, modifier = Modifier.height(48.dp))
+                        Spacer(Modifier.height(6.dp))
+                        Text(s.billSaved, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
+                        Text(s.balanceLeft(Format.amount(res.balance)), fontSize = 13.sp, color = Muted)
+                        res.message?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, color = Muted) }
+                        res.sms?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, color = Muted) }
+                        Spacer(Modifier.height(12.dp))
+                        res.collectionId?.let { id ->
+                            PrimaryButton(s.printReceipt, loading = printing) { print(id) }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        printStatus?.let {
+                            Text(it, fontSize = 13.sp, color = if (it == s.printSuccessMsg) Good else Warn, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        SmallAction(s.done, Icons.Filled.CheckCircle, Modifier.fillMaxWidth()) { navController.popBackStack() }
+                    }
+                }
+                return@ScreenBody
+            }
+
+            if (error != null) {
+                MessageBox(error!!, onRetry = { load() }, retryLabel = s.retry)
+                return@ScreenBody
+            }
+            val f = form ?: run {
+                LoadingBox()
+                Text(s.billFormLoading, fontSize = 12.sp, color = Muted, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                return@ScreenBody
+            }
+
+            CatvCard {
+                Column(Modifier.padding(14.dp)) {
+                    InfoRow("PPPoE", f.username, bold = true)
+                    InfoRow("Billing Status", f.status)
+                    InfoRow(s.monthlyBill, Format.tk(f.monthly))
+                    InfoRow(s.dueNow, Format.tk(f.payable), valueColor = if (f.payable > 0) Danger else Good, bold = true)
+                    InfoRow(s.billMonth, f.billMonth)
+                }
+            }
+            f.blocked?.let { b ->
+                Spacer(Modifier.height(8.dp))
+                val since = b.since?.let { runCatching { OffsetDateTime.parse(it).atZoneSameInstant(Format.dhaka) }.getOrNull() }
+                val text = if (since != null) {
+                    val gap = Period.between(since.toLocalDate(), LocalDate.now(Format.dhaka))
+                    s.blockedFor(gap.years * 12 + gap.months, gap.days) + " (" + listOfNotNull(Format.dateTime(b.since), b.by, b.profile)
+                        .filter { it.isNotBlank() }.joinToString(" · ") + ")"
+                } else s.blockedUnknown
+                MessageBox(text, color = Danger)
+            }
+            f.pending.forEach { p ->
+                Spacer(Modifier.height(8.dp))
+                MessageBox(s.pendingWarning(p.amount?.toString() ?: "", p.date?.toString() ?: "", p.createdBy ?: ""), color = Warn)
+            }
+            if (f.pending.isEmpty() && f.payable <= 0) {
+                Spacer(Modifier.height(8.dp))
+                MessageBox(s.noDueInBilling, color = Good)
+            }
+            Spacer(Modifier.height(12.dp))
+
+            val paidValue = paid.toDoubleOrNull() ?: 0.0
+            val discountValue = discount.toDoubleOrNull() ?: 0.0
+            val balance = f.payable - discountValue - paidValue
+            val remarksRequired = discountValue > 0 || kotlin.math.abs(paidValue + discountValue - f.payable) > 0.001
+
+            CatvCard {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Field(s.paidLabel, Modifier.weight(1f)) {
+                            CatvTextField(paid, { paid = it.filter { ch -> ch.isDigit() || ch == '.' } }, "0",
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        }
+                        Field(s.discountLabel, Modifier.weight(1f)) {
+                            CatvTextField(discount, { discount = it.filter { ch -> ch.isDigit() || ch == '.' } }, "0",
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        }
+                    }
+                    Text(s.balanceAfter(Format.amount(f.payable), Format.amount(discountValue), Format.amount(paidValue), Format.amount(balance)),
+                        fontSize = 12.sp, color = if (balance < -0.001) Danger else Muted)
+                    Field(s.methodLabel) { Picker(f.methods, methodId) { methodId = it } }
+                    Field("Received By") { Picker(f.receivedBy, receivedById) { receivedById = it } }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Field(s.trxLabel, Modifier.weight(1f)) {
+                            CatvTextField(trxNo, { trxNo = it.filter { ch -> !ch.isWhitespace() } }, "")
+                        }
+                        Field(s.billMonth, Modifier.weight(1f)) { CatvTextField(billMonth, { billMonth = it }, "") }
+                    }
+                    Field(s.remarksLabel + if (remarksRequired) " *" else "") {
+                        CatvTextField(remarks, { remarks = it.take(500) }, s.remarksHint)
+                    }
+                    Toggle(s.smsToCustomer, deskSms, enabled = f.smsReady, hint = if (f.smsReady) null else s.smsNotReady) { deskSms = it }
+                    Toggle(s.nextBillingDate, nextBillingDate) { nextBillingDate = it }
+                    Toggle(s.printAfterSave, printAfter) { printAfter = it }
                 }
             }
             Spacer(Modifier.height(12.dp))
-        }
-
-        val res = result
-        if (res != null) {
-            CatvCard {
-                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Good, modifier = Modifier.height(48.dp))
-                    Spacer(Modifier.height(6.dp))
-                    Text(s.billSaved, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Text(s.balanceLeft(Format.amount(res.balance)), fontSize = 13.sp, color = Muted)
-                    res.message?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, color = Muted) }
-                    res.sms?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, color = Muted) }
-                    Spacer(Modifier.height(12.dp))
-                    res.collectionId?.let { id ->
-                        PrimaryButton(s.printReceipt, loading = printing) { print(id) }
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    printStatus?.let {
-                        Text(it, fontSize = 13.sp, color = if (it == s.printSuccessMsg) Good else Warn, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    SmallAction(s.done, Icons.Filled.CheckCircle, Modifier.fillMaxWidth()) { navController.popBackStack() }
+            saveError?.let {
+                MessageBox(it)
+                Spacer(Modifier.height(8.dp))
+            }
+            val blockedByPending = f.pending.isNotEmpty()
+            PrimaryButton(s.saveBill, enabled = !blockedByPending, loading = saving) {
+                saveError = when {
+                    paidValue <= 0 && discountValue <= 0 -> s.enterAmount
+                    balance < -0.001 -> s.overPayment
+                    methodId == null -> s.pickMethod
+                    receivedById == null -> s.pickReceivedBy
+                    remarksRequired && remarks.isBlank() -> s.remarksRequired
+                    else -> null
                 }
-            }
-            return@Column
-        }
-
-        if (error != null) {
-            MessageBox(error!!, onRetry = { load() }, retryLabel = s.retry)
-            return@Column
-        }
-        val f = form ?: run {
-            LoadingBox()
-            Text(s.billFormLoading, fontSize = 12.sp, color = Muted, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
-            return@Column
-        }
-
-        CatvCard {
-            Column(Modifier.padding(14.dp)) {
-                InfoRow("PPPoE", f.username, bold = true)
-                InfoRow("Billing Status", f.status)
-                InfoRow(s.monthlyBill, Format.tk(f.monthly))
-                InfoRow(s.dueNow, Format.tk(f.payable), valueColor = if (f.payable > 0) Danger else Good, bold = true)
-                InfoRow(s.billMonth, f.billMonth)
-            }
-        }
-        f.blocked?.let { b ->
-            Spacer(Modifier.height(8.dp))
-            val since = b.since?.let { runCatching { OffsetDateTime.parse(it).atZoneSameInstant(Format.dhaka) }.getOrNull() }
-            val text = if (since != null) {
-                val gap = Period.between(since.toLocalDate(), LocalDate.now(Format.dhaka))
-                s.blockedFor(gap.years * 12 + gap.months, gap.days) + " (" + listOfNotNull(Format.dateTime(b.since), b.by, b.profile)
-                    .filter { it.isNotBlank() }.joinToString(" · ") + ")"
-            } else s.blockedUnknown
-            MessageBox(text, color = Danger)
-        }
-        f.pending.forEach { p ->
-            Spacer(Modifier.height(8.dp))
-            MessageBox(s.pendingWarning(p.amount?.toString() ?: "", p.date?.toString() ?: "", p.createdBy ?: ""), color = Warn)
-        }
-        if (f.pending.isEmpty() && f.payable <= 0) {
-            Spacer(Modifier.height(8.dp))
-            MessageBox(s.noDueInBilling, color = Good)
-        }
-        Spacer(Modifier.height(12.dp))
-
-        val paidValue = paid.toDoubleOrNull() ?: 0.0
-        val discountValue = discount.toDoubleOrNull() ?: 0.0
-        val balance = f.payable - discountValue - paidValue
-        val remarksRequired = discountValue > 0 || kotlin.math.abs(paidValue + discountValue - f.payable) > 0.001
-
-        CatvCard {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Field(s.paidLabel, Modifier.weight(1f)) {
-                        CatvTextField(paid, { paid = it.filter { ch -> ch.isDigit() || ch == '.' } }, "0",
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                    }
-                    Field(s.discountLabel, Modifier.weight(1f)) {
-                        CatvTextField(discount, { discount = it.filter { ch -> ch.isDigit() || ch == '.' } }, "0",
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                if (saveError != null) return@PrimaryButton
+                scope.launch {
+                    saving = true
+                    try {
+                        val r = ApiClient.service.collectBill(company, headerId, BillRequest(
+                            paid = paidValue, discount = discountValue, methodId = methodId!!, receivedById = receivedById!!,
+                            trxNo = trxNo, billMonth = billMonth.ifBlank { null }, remarks = remarks.trim(),
+                            expectedPayable = f.payable, nextBillingDate = nextBillingDate, deskSms = deskSms && f.smsReady,
+                        ))
+                        result = r
+                        if (printAfter) r.collectionId?.let { print(it) }
+                    } catch (e: Exception) {
+                        saveError = ApiClient.errorMessage(e, s.billNotSaved, s.offline)
+                    } finally {
+                        saving = false
                     }
                 }
-                Text(s.balanceAfter(Format.amount(f.payable), Format.amount(discountValue), Format.amount(paidValue), Format.amount(balance)),
-                    fontSize = 12.sp, color = if (balance < -0.001) Danger else Muted)
-                Field(s.methodLabel) { Picker(f.methods, methodId) { methodId = it } }
-                Field("Received By") { Picker(f.receivedBy, receivedById) { receivedById = it } }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Field(s.trxLabel, Modifier.weight(1f)) {
-                        CatvTextField(trxNo, { trxNo = it.filter { ch -> !ch.isWhitespace() } }, "")
-                    }
-                    Field(s.billMonth, Modifier.weight(1f)) { CatvTextField(billMonth, { billMonth = it }, "") }
-                }
-                Field(s.remarksLabel + if (remarksRequired) " *" else "") {
-                    CatvTextField(remarks, { remarks = it.take(500) }, s.remarksHint)
-                }
-                Toggle(s.smsToCustomer, deskSms, enabled = f.smsReady, hint = if (f.smsReady) null else s.smsNotReady) { deskSms = it }
-                Toggle(s.nextBillingDate, nextBillingDate) { nextBillingDate = it }
-                Toggle(s.printAfterSave, printAfter) { printAfter = it }
             }
-        }
-        Spacer(Modifier.height(12.dp))
-        saveError?.let {
-            MessageBox(it)
-            Spacer(Modifier.height(8.dp))
-        }
-        val blockedByPending = f.pending.isNotEmpty()
-        PrimaryButton(s.saveBill, enabled = !blockedByPending, loading = saving) {
-            saveError = when {
-                paidValue <= 0 && discountValue <= 0 -> s.enterAmount
-                balance < -0.001 -> s.overPayment
-                methodId == null -> s.pickMethod
-                receivedById == null -> s.pickReceivedBy
-                remarksRequired && remarks.isBlank() -> s.remarksRequired
-                else -> null
+            if (blockedByPending) {
+                Text(s.pendingBlocksHint, fontSize = 12.sp, color = Warn, modifier = Modifier.padding(top = 6.dp))
             }
-            if (saveError != null) return@PrimaryButton
-            scope.launch {
-                saving = true
-                try {
-                    val r = ApiClient.service.collectBill(company, headerId, BillRequest(
-                        paid = paidValue, discount = discountValue, methodId = methodId!!, receivedById = receivedById!!,
-                        trxNo = trxNo, billMonth = billMonth.ifBlank { null }, remarks = remarks.trim(),
-                        expectedPayable = f.payable, nextBillingDate = nextBillingDate, deskSms = deskSms && f.smsReady,
-                    ))
-                    result = r
-                    if (printAfter) r.collectionId?.let { print(it) }
-                } catch (e: Exception) {
-                    saveError = ApiClient.errorMessage(e, s.billNotSaved, s.offline)
-                } finally {
-                    saving = false
-                }
+            Spacer(Modifier.height(24.dp))
             }
-        }
-        if (blockedByPending) {
-            Text(s.pendingBlocksHint, fontSize = 12.sp, color = Warn, modifier = Modifier.padding(top = 6.dp))
-        }
-        Spacer(Modifier.height(24.dp))
     }
 }
 

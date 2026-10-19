@@ -42,9 +42,12 @@ object ApiClient {
             .build()
     }
 
+    /** The Desk API; tests point it at a local fake server before the first call. */
+    var baseUrl: String = BuildConfig.API_BASE_URL
+
     val service: ApiService by lazy {
         Retrofit.Builder()
-            .baseUrl(BuildConfig.API_BASE_URL)
+            .baseUrl(baseUrl)
             .client(httpClient)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
