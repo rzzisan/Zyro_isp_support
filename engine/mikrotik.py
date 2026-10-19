@@ -1,6 +1,7 @@
 """Minimal RouterOS API client (classic binary API, ports 8728 / 8729-TLS), no dependencies.
 
-Plain login (RouterOS 6.43+ / 7.x). Used to read identity and PPPoE sessions; nothing here changes a router.
+Plain login (RouterOS 6.43+ / 7.x). Used to read identity and PPPoE sessions; nothing here changes a router
+(engine/mikrotik_backup.py is the one place that writes: it saves backup files on the router and removes them again).
 """
 import socket
 import ssl
@@ -72,20 +73,21 @@ class RouterOS:
         data = b"".join(_enc_len(len(w.encode())) + w.encode() for w in words) + b"\x00"
         self.sock.sendall(data)
 
-    def _read_sentence(self) -> list[str]:
+    def _read_sentence(self, raw: bool = False) -> list[str]:
+        # raw: keep bytes that are not UTF-8 (binary file contents) recoverable with .encode(errors="surrogateescape")
         words = []
         while True:
             n = self._read_len()
             if n == 0:
                 return words
-            words.append(self._recv(n).decode(errors="replace"))
+            words.append(self._recv(n).decode(errors="surrogateescape" if raw else "replace"))
 
-    def talk(self, command: str, attrs: dict | None = None, query: dict | None = None) -> list[dict]:
+    def talk(self, command: str, attrs: dict | None = None, query: dict | None = None, raw: bool = False) -> list[dict]:
         words = [command] + [f"={k}={v}" for k, v in (attrs or {}).items()] + [f"?{k}={v}" for k, v in (query or {}).items()]
         self._send_sentence(words)
         rows: list[dict] = []
         while True:
-            sentence = self._read_sentence()
+            sentence = self._read_sentence(raw)
             if not sentence:
                 continue
             kind, fields = sentence[0], {}

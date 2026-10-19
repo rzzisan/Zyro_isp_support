@@ -112,6 +112,9 @@ class MikrotikResource extends Resource
                 ->after(fn (MikrotikRouter $record) => static::test($record))])
             ->recordActions([
                 Action::make('test')->label(__('পরীক্ষা'))->icon(Heroicon::OutlinedSignal)->action(fn (MikrotikRouter $record) => static::test($record)),
+                Action::make('backupNow')->label(__('এখনই ব্যাকআপ'))->icon(Heroicon::OutlinedArrowDownTray)
+                    ->requiresConfirmation()->modalDescription(__('রাউটারে export আর backup ফাইল বানিয়ে Desk-এ নামিয়ে আনবে, তারপর রাউটার থেকে ফাইল মুছে দেবে।'))
+                    ->action(fn (MikrotikRouter $record) => \App\Filament\App\Resources\MikrotikBackups\MikrotikBackupResource::backupNow($record)),
                 EditAction::make(),
                 DeleteAction::make(),
             ]);

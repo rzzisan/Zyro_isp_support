@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class Company extends Model
 {
-    protected $fillable = ['name', 'slug', 'status', 'plan_id', 'trial_ends_at', 'subscription_ends_at', 'contact_phone', 'contact_email', 'modules', 'router_port'];
+    protected $fillable = ['name', 'slug', 'status', 'plan_id', 'trial_ends_at', 'subscription_ends_at', 'contact_phone', 'contact_email', 'modules', 'router_port', 'mikrotik_backup_days'];
 
     /** Optional features a super admin turns on per company (companies.modules). */
     public const MODULES = ['onu' => 'ONU স্টক ও নতুন সংযোগ'];

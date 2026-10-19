@@ -968,6 +968,18 @@ def mikrotik_test(request: Request, company_id: int, router_id: int):
     return {**info, "billing_server": match}
 
 
+@app.post("/internal/{company_id}/mikrotik/{router_id}/backup")
+def mikrotik_backup_now(request: Request, company_id: int, router_id: int):
+    """Panel "এখনই ব্যাকআপ": export + binary backup of one router, in the background (the page polls mikrotik_backups)."""
+    if not INTERNAL_KEY or not hmac.compare_digest(request.headers.get("x-internal-key", ""), INTERNAL_KEY):
+        raise HTTPException(status_code=403)
+    from engine import mikrotik_backup
+    res = mikrotik_backup.start(company_id, router_id)
+    if res.get("error"):
+        raise HTTPException(status_code=404)
+    return res
+
+
 @app.get("/internal/{company_id}/monitor/{header_id}/{what}")
 def monitor(request: Request, company_id: int, header_id: int, what: str):
     """Client monitoring actions for the panel (read-only router commands): recheck | traffic | ping."""

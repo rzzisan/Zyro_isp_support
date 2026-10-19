@@ -1196,5 +1196,20 @@
     "নেটওয়ার্ক সেটিংস": "Network settings",
     "কাস্টমারের রাউটারের রিমোট পোর্ট": "Customer router remote port",
     "কাস্টমারের রাউটার খুলুন": "Open the customer's router",
-    "টিকিট ও ইনবক্সে কাস্টমারের IP-তে ক্লিক করলে নতুন ট্যাবে তার রাউটার খুলবে (যেমন http://IP:7863)। খালি রাখলে শুধু http://IP খুলবে।": "Clicking a customer's IP in tickets and the inbox opens their router in a new tab (like http://IP:7863). Leave empty to open just http://IP."
+    "টিকিট ও ইনবক্সে কাস্টমারের IP-তে ক্লিক করলে নতুন ট্যাবে তার রাউটার খুলবে (যেমন http://IP:7863)। খালি রাখলে শুধু http://IP খুলবে।": "Clicking a customer's IP in tickets and the inbox opens their router in a new tab (like http://IP:7863). Leave empty to open just http://IP.",
+    "MikroTik ব্যাকআপ": "MikroTik backups",
+    "প্রতি রাত ৩টায় সব MikroTik-এর ব্যাকআপ নেওয়া হয় (.rsc export পাসওয়ার্ডসহ, আর .backup)। :days দিনের পুরনো ব্যাকআপ নিজে মুছে যায় (নেটওয়ার্ক সেটিংসে বদলানো যায়)।": "Every MikroTik is backed up each night at 3 AM (.rsc export with passwords, and .backup). Backups older than :days days are deleted automatically (change it in Network settings).",
+    "হাতে নেওয়া": "Manual",
+    "অটো": "Auto",
+    "আংশিক": "Partial",
+    "হয়নি": "Failed",
+    "চলছে…": "Running…",
+    "এখনই ব্যাকআপ": "Back up now",
+    "ব্যাকআপ শুরু হয়নি": "Backup did not start",
+    "এই রাউটারের ব্যাকআপ এখন চলছে": "A backup of this router is already running",
+    "ব্যাকআপ শুরু হয়েছে: :name": "Backup started: :name",
+    "এক-দুই মিনিট লাগতে পারে। MikroTik ব্যাকআপ পেজে দেখা যাবে।": "It can take a minute or two. See it on the MikroTik backups page.",
+    "রাউটারে export আর backup ফাইল বানিয়ে Desk-এ নামিয়ে আনবে, তারপর রাউটার থেকে ফাইল মুছে দেবে।": "Creates export and backup files on the router, downloads them to Desk, then deletes them from the router.",
+    "MikroTik ব্যাকআপ কতদিন রাখা হবে (দিন)": "Keep MikroTik backups for (days)",
+    "এর চেয়ে পুরনো ব্যাকআপ প্রতি রাতে নিজে মুছে যায়।": "Older backups are deleted automatically every night."
 }

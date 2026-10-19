@@ -161,6 +161,12 @@ class Engine
         return static::call('post', "/internal/{$companyId}/mikrotik/{$routerId}/test") ?? [];
     }
 
+    /** Start a backup (.rsc export + binary .backup) of one router in the background; returns started / running. */
+    public static function backupMikrotik(int $companyId, int $routerId): array
+    {
+        return static::call('post', "/internal/{$companyId}/mikrotik/{$routerId}/backup") ?? [];
+    }
+
     /** Client monitoring action on the customer's MikroTik: recheck | traffic | ping (read-only). */
     public static function monitor(int $companyId, int $headerId, string $what): array
     {

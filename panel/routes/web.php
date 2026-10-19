@@ -134,6 +134,18 @@ Route::get('/print/{company:slug}/onu-stickers', function (\App\Models\Company $
         'settings' => \App\Models\ReceiptSetting::forCompany($company), 'autoPrint' => $request->query('print') !== '0']);
 })->middleware('web')->name('onu.stickers');
 
+// one MikroTik backup file (.rsc export holds every PPPoE password); owner/admin with the MikroTik menu only
+Route::get('/download/{company:slug}/mikrotik-backup/{backup}/{kind}', function (\App\Models\Company $company, int $backup, string $kind) {
+    $user = Auth::user();
+    abort_unless($user?->managesCompany($company) && \App\Support\Menu::allows($user, $company, 'mikrotik'), 403);
+    $b = \App\Models\MikrotikBackup::where('company_id', $company->id)->findOrFail($backup);
+    $path = $b->path($kind);
+    $disk = \Illuminate\Support\Facades\Storage::disk('local');
+    abort_unless($path && str_starts_with($path, 'mikrotik-backups/') && ! str_contains($path, '..') && $disk->exists($path), 404);
+
+    return $disk->download($path, basename($path), ['Content-Type' => 'application/octet-stream', 'Cache-Control' => 'no-store']);
+})->middleware('web')->name('mikrotik-backups.download');
+
 // all billing customers as CSV (no passwords); owner/admin of that company only
 Route::get('/export/{company:slug}/customers.csv', function (\App\Models\Company $company) {
     abort_unless(Auth::user()?->managesCompany($company), 403);
