@@ -220,3 +220,125 @@ data class DeskCollection(
 )
 
 data class CollectionList(val data: List<DeskCollection> = emptyList())
+
+// ── Inbox ──────────────────────────────────────────────────────────────────────
+
+data class LastMessage(val type: String? = null, val body: String? = null, val direction: String? = null, val sender: String? = null)
+
+data class Member(val id: Long, val name: String)
+
+/** One WhatsApp chat in the list; [waiting] = the customer spoke last and nobody has answered. */
+data class Chat(
+    val id: Long,
+    val name: String? = null,
+    val number: String = "",
+    @Json(name = "customer_id") val customerId: String? = null,
+    @Json(name = "last_message_at") val lastMessageAt: String? = null,
+    @Json(name = "last_message") val lastMessage: LastMessage? = null,
+    val waiting: Boolean = false,
+    val staff: Boolean = false,
+    val assigned: Member? = null,
+    @Json(name = "bot_paused") val botPaused: Boolean = false,
+    @Json(name = "bot_paused_until") val botPausedUntil: String? = null,
+    @Json(name = "notify_muted") val notifyMuted: Boolean = false,
+    @Json(name = "window_open") val windowOpen: Boolean = true,
+    val sending: Boolean = true,
+)
+
+data class ChatList(val data: List<Chat> = emptyList(), @Json(name = "waiting_count") val waitingCount: Int = 0)
+
+data class ChatMessage(
+    val id: Long,
+    val direction: String = "in",
+    val sender: String? = null,
+    val user: String? = null,
+    val type: String? = null,
+    val body: String? = null,
+    @Json(name = "has_media") val hasMedia: Boolean = false,
+    @Json(name = "media_mime") val mediaMime: String? = null,
+    val status: String? = null,
+    val at: String? = null,
+)
+
+data class ChatDetail(val chat: Chat, val messages: List<ChatMessage> = emptyList(), val members: List<Member> = emptyList())
+
+data class ChatResponse(val chat: Chat)
+
+data class SentMessage(val message: ChatMessage)
+
+data class ReplyRequest(val body: String, @Json(name = "pause_minutes") val pauseMinutes: Int)
+
+data class AssignRequest(@Json(name = "user_id") val userId: Any?)
+
+data class BotRequest(val paused: Boolean)
+
+data class MuteRequest(val muted: Boolean)
+
+// ── Tickets ────────────────────────────────────────────────────────────────────
+
+/** A billing ticket, the Desk's copy (pending / processing = open; solved / closed). */
+data class TicketRow(
+    val id: Long,
+    @Json(name = "complain_id") val complainId: String = "",
+    @Json(name = "customer_name") val customerName: String? = null,
+    @Json(name = "customer_id") val customerId: String? = null,
+    @Json(name = "header_id") val headerId: Long? = null,
+    val username: String? = null,
+    val mobile: String? = null,
+    @Json(name = "complain_number") val complainNumber: String? = null,
+    val zone: String? = null,
+    val subzone: String? = null,
+    val category: String? = null,
+    val priority: String? = null,
+    val state: String = "pending",
+    val person: String? = null,
+    val description: String? = null,
+    @Json(name = "created_by") val createdBy: String? = null,
+    @Json(name = "opened_at") val openedAt: String? = null,
+    @Json(name = "solved_at") val solvedAt: String? = null,
+    val duration: String? = null,
+    val open: Boolean = true,
+)
+
+data class TicketCounts(val open: Int = 0, val pending: Int = 0, val processing: Int = 0)
+
+data class TicketPage(
+    val data: List<TicketRow> = emptyList(),
+    @Json(name = "next_page") val nextPage: Int? = null,
+    val counts: TicketCounts = TicketCounts(),
+    @Json(name = "synced_at") val syncedAt: String? = null,
+)
+
+data class TicketDetail(val ticket: TicketRow, val live: LiveInfo? = null, @Json(name = "live_error") val liveError: String? = null)
+
+data class SmsSwitch(val ready: Boolean = false, val on: Boolean = false)
+
+data class TicketOptions(
+    val categories: List<Choice> = emptyList(),
+    val priorities: List<Choice> = emptyList(),
+    val departments: List<Choice> = emptyList(),
+    val employees: List<Choice> = emptyList(),
+    @Json(name = "sms_open") val smsOpen: SmsSwitch = SmsSwitch(),
+    @Json(name = "sms_solved") val smsSolved: SmsSwitch = SmsSwitch(),
+    val customer: Customer? = null,
+    @Json(name = "open_ticket") val openTicket: String? = null,
+)
+
+data class NewTicketRequest(
+    @Json(name = "header_id") val headerId: Long,
+    @Json(name = "category_id") val categoryId: String,
+    val priority: Int,
+    val mobile: String,
+    val comment: String,
+    @Json(name = "dept_id") val deptId: String?,
+    val employees: List<String>,
+    @Json(name = "sms_client") val smsClient: Boolean,
+)
+
+data class NewTicketResult(@Json(name = "complain_id") val complainId: String? = null, val message: String? = null, val sms: String? = null)
+
+data class AssignTicketRequest(val employees: List<String>, @Json(name = "dept_id") val deptId: String?)
+
+data class SolveRequest(val remark: String?, val sms: Boolean)
+
+data class SolveResult(val ok: Boolean = false, val sms: String? = null)

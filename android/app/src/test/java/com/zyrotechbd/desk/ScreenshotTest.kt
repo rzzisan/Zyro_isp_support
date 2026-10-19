@@ -18,10 +18,15 @@ import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.CompanyInfo
 import com.zyrotechbd.desk.ui.screens.BillFormScreen
+import com.zyrotechbd.desk.ui.screens.NewTicketScreen
+import com.zyrotechbd.desk.ui.screens.TicketDetailScreen
+import com.zyrotechbd.desk.ui.screens.TicketsScreen
 import com.zyrotechbd.desk.ui.screens.BillsScreen
 import com.zyrotechbd.desk.ui.screens.CustomerDetailScreen
 import com.zyrotechbd.desk.ui.screens.CustomersScreen
 import com.zyrotechbd.desk.ui.screens.DashboardScreen
+import com.zyrotechbd.desk.ui.screens.ChatScreen
+import com.zyrotechbd.desk.ui.screens.InboxScreen
 import com.zyrotechbd.desk.ui.screens.LoginScreen
 import com.zyrotechbd.desk.ui.screens.MoreScreen
 import com.zyrotechbd.desk.ui.screens.PrintersScreen
@@ -97,8 +102,13 @@ class ScreenshotTest {
         LoginScreen("z@x.com", "", false, null, {}, {}, {}, {})
     }
     @Test fun more() = shot("7-more", "Zisan") {
-        MoreScreen(SessionStore.company(), SessionStore.companies(), {}, {}, {}, {}, {})
+        MoreScreen(SessionStore.company(), SessionStore.companies(), emptyList(), {}, {}, {}, {}, {}, {})
     }
+    @Test fun inbox() = shot("9-inbox", "Rahima") { InboxScreen(rememberNavController(), "cln") }
+    @Test fun chat() = shot("10-chat", "লাইন বন্ধ") { ChatScreen("cln", 7) }
+    @Test fun tickets() = shot("11-tickets", "Rahima") { TicketsScreen(rememberNavController(), "cln") }
+    @Test fun ticket() = shot("12-ticket", "-29.4") { TicketDetailScreen(rememberNavController(), "cln", 5) }
+    @Test fun newTicket() = shot("13-new-ticket", "57231") { NewTicketScreen(rememberNavController(), "cln", 3) }
     @Test fun printers() {
         val app = rule.activity.application
         shadowOf(app).grantPermissions(*BluetoothPermissions.missingPermissions(app).toTypedArray())

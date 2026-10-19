@@ -18,8 +18,8 @@ android {
         applicationId = "com.zyrotechbd.desk"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.1.1"
+        versionCode = 5
+        versionName = "1.2.0"
         buildConfigField("String", "DESK_URL", "\"https://desk.zyrotechbd.com/\"")
         buildConfigField("String", "API_BASE_URL", "\"https://desk.zyrotechbd.com/api/v1/\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

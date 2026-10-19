@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BillController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\InboxController;
+use App\Http\Controllers\Api\TicketController;
 use App\Http\Middleware\ApiCompany;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +32,22 @@ Route::prefix('v1')->group(function () {
             Route::get('collections', [BillController::class, 'collections']);
             Route::get('receipts/collection/{collection}', [BillController::class, 'collectionReceipt'])->whereNumber('collection');
             Route::get('receipts/bill/{dailyBill}', [BillController::class, 'dailyBillReceipt'])->whereNumber('dailyBill');
+
+            Route::get('chats', [InboxController::class, 'index']);
+            Route::get('chats/{contact}', [InboxController::class, 'show'])->whereNumber('contact');
+            Route::post('chats/{contact}/reply', [InboxController::class, 'reply'])->whereNumber('contact')->middleware('throttle:30,1');
+            Route::post('chats/{contact}/assign', [InboxController::class, 'assign'])->whereNumber('contact');
+            Route::post('chats/{contact}/bot', [InboxController::class, 'bot'])->whereNumber('contact');
+            Route::post('chats/{contact}/mute', [InboxController::class, 'mute'])->whereNumber('contact');
+            Route::get('media/{message}', [InboxController::class, 'media'])->whereNumber('message');
+
+            Route::get('tickets', [TicketController::class, 'index']);
+            Route::get('ticket-customers', [TicketController::class, 'customers']);
+            Route::get('ticket-options', [TicketController::class, 'options']);
+            Route::post('tickets', [TicketController::class, 'store'])->middleware('throttle:20,1');
+            Route::get('tickets/{ticket}', [TicketController::class, 'show'])->whereNumber('ticket');
+            Route::post('tickets/{ticket}/assign', [TicketController::class, 'assign'])->whereNumber('ticket');
+            Route::post('tickets/{ticket}/solve', [TicketController::class, 'solve'])->whereNumber('ticket')->middleware('throttle:30,1');
         });
     });
 });

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.zyrotechbd.desk.BuildConfig
 import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.network.CompanyInfo
+import com.zyrotechbd.desk.ui.Tab
 import com.zyrotechbd.desk.ui.components.Danger
 import com.zyrotechbd.desk.ui.components.DeskCard
 import com.zyrotechbd.desk.ui.components.SectionTitle
@@ -54,6 +55,8 @@ import com.zyrotechbd.desk.ui.theme.PrimaryStrong
 fun MoreScreen(
     company: CompanyInfo?,
     companies: List<CompanyInfo>,
+    extra: List<Tab>,
+    onOpen: (String) -> Unit,
     onPrinters: () -> Unit,
     onSwitchCompany: (String) -> Unit,
     onOpenDesk: () -> Unit,
@@ -79,6 +82,15 @@ fun MoreScreen(
             }
         }
         Spacer(Modifier.height(16.dp))
+        if (extra.isNotEmpty()) {
+            DeskCard {
+                extra.forEachIndexed { i, t ->
+                    if (i > 0) HorizontalDivider(color = Line)
+                    MoreRow(t.label, t.icon) { onOpen(t.route) }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
         DeskCard {
             MoreRow(s.navPrinters, Icons.Filled.Print, onClick = onPrinters)
             HorizontalDivider(color = Line)

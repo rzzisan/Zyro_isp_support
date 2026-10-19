@@ -50,6 +50,9 @@ import com.zyrotechbd.desk.printing.PrinterManager
 import com.zyrotechbd.desk.printing.ReceiptRef
 import com.zyrotechbd.desk.ui.components.DeskCard
 import com.zyrotechbd.desk.ui.components.DeskTextField
+import com.zyrotechbd.desk.ui.components.Field
+import com.zyrotechbd.desk.ui.components.Picker
+import com.zyrotechbd.desk.ui.components.Toggle
 import com.zyrotechbd.desk.ui.components.CustomerAvatar
 import com.zyrotechbd.desk.ui.components.Danger
 import com.zyrotechbd.desk.ui.components.Good
@@ -280,43 +283,5 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
             }
             Spacer(Modifier.height(24.dp))
             }
-    }
-}
-
-@Composable
-private fun Field(label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Column(modifier) {
-        Text(label, fontSize = 12.sp, color = Muted, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp, bottom = 4.dp))
-        content()
-    }
-}
-
-@Composable
-private fun Picker(options: List<Choice>, selected: String?, onPick: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        DeskCard(Modifier.fillMaxWidth().clickable { open = true }) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(options.firstOrNull { it.id == selected }?.name ?: "—", fontSize = 15.sp, color = Ink, modifier = Modifier.weight(1f))
-                Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = Muted)
-            }
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            options.forEach { o ->
-                DropdownMenuItem(text = { Text(o.name) }, onClick = { onPick(o.id); open = false })
-            }
-        }
-    }
-}
-
-@Composable
-private fun Toggle(label: String, checked: Boolean, enabled: Boolean = true, hint: String? = null, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 14.sp, color = if (enabled) Ink else Muted)
-            hint?.let { Text(it, fontSize = 11.sp, color = Muted) }
-        }
-        Switch(checked = checked && enabled, onCheckedChange = onChange, enabled = enabled,
-            colors = SwitchDefaults.colors(checkedTrackColor = Primary))
     }
 }

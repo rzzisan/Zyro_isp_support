@@ -131,18 +131,13 @@ class ViewConversation extends Page
                 ->requiresConfirmation()
                 ->modalDescription(__('এই নম্বরে বট ১২ ঘণ্টা উত্তর দেবে না, তারপর নিজে থেকে আবার চালু হবে। আগেই চালু করতে চাইলে "বট চালু করুন" চাপুন।'))
                 ->action(function () {
-                    // a manual pause lasts MANUAL_PAUSE_HOURS, then the bot answers this number again on its own
-                    $this->contact()->forceFill(['bot_paused' => false, 'bot_paused_until' => now()->addHours(self::MANUAL_PAUSE_HOURS)])->save();
+                    $this->contact()->pauseBot(self::MANUAL_PAUSE_HOURS);
                     Notification::make()->success()->title(__('এই নম্বরে বট ১২ ঘণ্টার জন্য থামানো হয়েছে'))->send();
                 }),
             Action::make('resume')->label(__('বট চালু করুন'))->icon(Heroicon::OutlinedPlay)->color('success')
                 ->visible(fn () => $this->contact()->isBotPaused())
                 ->action(function () {
-                    // a customer already identified stays identified; an unfinished identification starts fresh
-                    $state = $this->contact()->ident_state;
-                    $keep = ($state['stage'] ?? null) === 'ok' || ($state['mode'] ?? null) === 'technician';
-                    $this->contact()->forceFill(['bot_paused' => false, 'bot_paused_until' => null,
-                        'ident_state' => $keep ? $state : null])->save();
+                    $this->contact()->resumeBot();
                     Notification::make()->success()->title(__('এই নম্বরে বট আবার চালু'))->send();
                 }),
         ];
