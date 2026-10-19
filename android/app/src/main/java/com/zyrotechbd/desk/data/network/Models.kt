@@ -1,0 +1,222 @@
+package com.zyrotechbd.desk.data.network
+
+import com.squareup.moshi.Json
+
+data class ApiError(val message: String? = null, val errors: Map<String, List<String>>? = null)
+
+data class OkResponse(val ok: Boolean = false)
+
+// ── Auth ───────────────────────────────────────────────────────────────────────
+
+data class LoginRequest(val email: String, val password: String, val device: String)
+
+data class UserInfo(val id: Long, val name: String, val email: String, val locale: String? = null)
+
+/** A company the user works in and the Desk menus they may open there (inbox, customers, bills, ...). */
+data class CompanyInfo(
+    val id: Long,
+    val slug: String,
+    val name: String,
+    val role: String? = null,
+    val menus: List<String> = emptyList(),
+) {
+    fun can(menu: String) = menu in menus
+}
+
+data class LoginResponse(val token: String, val user: UserInfo, val companies: List<CompanyInfo>)
+
+data class Profile(val user: UserInfo, val companies: List<CompanyInfo>)
+
+// ── Dashboard ──────────────────────────────────────────────────────────────────
+
+data class Dashboard(
+    val bills: DashBills? = null,
+    val tickets: DashTickets? = null,
+    val network: DashNetwork? = null,
+    val inbox: DashInbox? = null,
+)
+
+data class DashBills(
+    val count: Int = 0,
+    val paid: Double = 0.0,
+    val pending: Double = 0.0,
+    @Json(name = "mine_count") val mineCount: Int = 0,
+    @Json(name = "mine_paid") val minePaid: Double = 0.0,
+)
+
+data class DashTickets(
+    val open: Int = 0,
+    @Json(name = "opened_today") val openedToday: Int = 0,
+    @Json(name = "solved_today") val solvedToday: Int = 0,
+)
+
+data class DashNetwork(val online: Int = 0, @Json(name = "active_customers") val activeCustomers: Int = 0)
+
+data class DashInbox(val waiting: Int = 0)
+
+// ── Customers ──────────────────────────────────────────────────────────────────
+
+data class Customer(
+    @Json(name = "header_id") val headerId: Long,
+    @Json(name = "customer_id") val customerId: String? = null,
+    val name: String? = null,
+    val mobile: String? = null,
+    val username: String? = null,
+    val zone: String? = null,
+    val subzone: String? = null,
+    val box: String? = null,
+    val `package`: String? = null,
+    @Json(name = "monthly_bill") val monthlyBill: Double? = null,
+    val due: Double? = null,
+    val status: String? = null,
+    val disabled: Boolean? = null,
+    @Json(name = "is_left") val isLeft: Boolean? = null,
+    @Json(name = "left_on") val leftOn: String? = null,
+    @Json(name = "last_payment_date") val lastPaymentDate: String? = null,
+    @Json(name = "bill_day") val billDay: Int? = null,
+    val online: Boolean = false,
+    val address: String? = null,
+    @Json(name = "joined_on") val joinedOn: String? = null,
+    val server: String? = null,
+    @Json(name = "chat_id") val chatId: Long? = null,
+) {
+    fun place(): String = listOfNotNull(zone, subzone, box).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" / ")
+}
+
+data class CustomerPage(val data: List<Customer> = emptyList(), @Json(name = "next_page") val nextPage: Int? = null)
+
+data class ZoneList(val data: List<String> = emptyList())
+
+data class Payment(
+    val date: String? = null,
+    @Json(name = "bill_month") val billMonth: String? = null,
+    val paid: Double = 0.0,
+    val discount: Double = 0.0,
+    val due: Double = 0.0,
+    val method: String? = null,
+    @Json(name = "received_by") val receivedBy: String? = null,
+    @Json(name = "receipt_no") val receiptNo: String? = null,
+)
+
+data class Ticket(
+    @Json(name = "complain_id") val complainId: String? = null,
+    val category: String? = null,
+    val state: String? = null,
+    @Json(name = "opened_at") val openedAt: String? = null,
+    @Json(name = "assigned_to") val assignedTo: String? = null,
+    val note: String? = null,
+)
+
+data class Permissions(val bill: Boolean = false)
+
+data class CustomerDetail(
+    val customer: Customer,
+    val payments: List<Payment> = emptyList(),
+    val tickets: List<Ticket> = emptyList(),
+    val can: Permissions = Permissions(),
+)
+
+/** The live box: MikroTik now, ONU now (both free-form objects from the engine), last seen MAC. */
+data class LiveInfo(
+    val mikrotik: Map<String, Any?>? = null,
+    val onu: Map<String, Any?>? = null,
+    val mac: String? = null,
+    @Json(name = "last_seen") val lastSeen: Map<String, Any?>? = null,
+    @Json(name = "payment_status") val paymentStatus: String? = null,
+)
+
+// ── Bills ──────────────────────────────────────────────────────────────────────
+
+data class Choice(val id: String, val name: String)
+
+data class BlockedLine(val since: String? = null, val by: String? = null, val profile: String? = null, val remarks: String? = null)
+
+/** A collection of this customer still waiting for approval in billing (its due drops only after that). */
+data class PendingBill(
+    val id: Any? = null,          // billing's own JSON: numbers or strings
+    val date: Any? = null,
+    val amount: Any? = null,
+    val discount: Any? = null,
+    val method: String? = null,
+    @Json(name = "received_by") val receivedBy: String? = null,
+    @Json(name = "created_by") val createdBy: String? = null,
+)
+
+data class BillForm(
+    val username: String? = null,
+    val status: String? = null,
+    val monthly: Double? = null,
+    val payable: Double = 0.0,
+    @Json(name = "bill_month") val billMonth: String? = null,
+    @Json(name = "received_from") val receivedFrom: String? = null,
+    val methods: List<Choice> = emptyList(),
+    @Json(name = "method_default") val methodDefault: String? = null,
+    @Json(name = "received_by") val receivedBy: List<Choice> = emptyList(),
+    @Json(name = "received_by_default") val receivedByDefault: String? = null,
+    val pending: List<PendingBill> = emptyList(),
+    val blocked: BlockedLine? = null,
+    @Json(name = "sms_ready") val smsReady: Boolean = false,
+    @Json(name = "sms_default") val smsDefault: Boolean = false,
+)
+
+data class BillRequest(
+    val paid: Double,
+    val discount: Double,
+    @Json(name = "method_id") val methodId: String,
+    @Json(name = "received_by_id") val receivedById: String,
+    @Json(name = "trx_no") val trxNo: String,
+    @Json(name = "bill_month") val billMonth: String?,
+    val remarks: String,
+    @Json(name = "expected_payable") val expectedPayable: Double,
+    @Json(name = "next_billing_date") val nextBillingDate: Boolean,
+    @Json(name = "desk_sms") val deskSms: Boolean,
+)
+
+data class BillResult(
+    val message: String? = null,
+    val balance: Double? = null,
+    @Json(name = "collection_id") val collectionId: Long? = null,
+    @Json(name = "daily_bill_id") val dailyBillId: Long? = null,
+    val sms: String? = null,
+)
+
+data class DailyBill(
+    @Json(name = "daily_bill_id") val dailyBillId: Long,
+    @Json(name = "customer_header_id") val customerHeaderId: Long? = null,
+    @Json(name = "customer_id") val customerId: String? = null,
+    @Json(name = "customer_name") val customerName: String? = null,
+    val username: String? = null,
+    val mobile: String? = null,
+    @Json(name = "collected_at") val collectedAt: String? = null,
+    val paid: Double = 0.0,
+    val discount: Double = 0.0,
+    val due: Double = 0.0,
+    val method: String? = null,
+    @Json(name = "received_by") val receivedBy: String? = null,
+    @Json(name = "created_by") val createdBy: String? = null,
+    val status: String = "pending",
+    @Json(name = "receipt_no") val receiptNo: String? = null,
+)
+
+data class Totals(val count: Int = 0, val paid: Double = 0.0, val discount: Double = 0.0, val due: Double = 0.0)
+
+data class DailyBillPage(
+    val totals: Totals = Totals(),
+    val data: List<DailyBill> = emptyList(),
+    @Json(name = "next_page") val nextPage: Int? = null,
+)
+
+data class DeskCollection(
+    val id: Long,
+    @Json(name = "customer_header_id") val customerHeaderId: Long? = null,
+    @Json(name = "customer_id") val customerId: String? = null,
+    @Json(name = "customer_name") val customerName: String? = null,
+    val username: String? = null,
+    val paid: Double = 0.0,
+    val discount: Double = 0.0,
+    val method: String? = null,
+    @Json(name = "created_at") val createdAt: String? = null,
+    @Json(name = "receipt_no") val receiptNo: String? = null,
+)
+
+data class CollectionList(val data: List<DeskCollection> = emptyList())
