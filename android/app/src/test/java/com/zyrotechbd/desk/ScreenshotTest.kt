@@ -105,7 +105,7 @@ class ScreenshotTest {
         MoreScreen(SessionStore.company(), SessionStore.companies(), emptyList(), {}, {}, {}, {}, {}, {})
     }
     @Test fun inbox() = shot("9-inbox", "Rahima") { InboxScreen(rememberNavController(), "cln") }
-    @Test fun chat() = shot("10-chat", "লাইন বন্ধ") { ChatScreen("cln", 7) }
+    @Test fun chat() = shot("10-chat", "লাইন বন্ধ") { ChatScreen("cln", 7, rememberNavController()) }
     @Test fun tickets() = shot("11-tickets", "Rahima") { TicketsScreen(rememberNavController(), "cln") }
     @Test fun ticket() = shot("12-ticket", "-29.4") { TicketDetailScreen(rememberNavController(), "cln", 5) }
     @Test fun newTicket() = shot("13-new-ticket", "57231") { NewTicketScreen(rememberNavController(), "cln", 3) }

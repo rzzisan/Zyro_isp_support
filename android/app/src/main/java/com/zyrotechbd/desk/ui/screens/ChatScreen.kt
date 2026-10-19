@@ -1,6 +1,7 @@
 package com.zyrotechbd.desk.ui.screens
 
 import android.content.Context
+import android.widget.Toast
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaPlayer
@@ -28,13 +29,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.MoreVert
@@ -51,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,6 +74,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.navigation.NavHostController
+import com.zyrotechbd.desk.data.auth.SessionStore
+import com.zyrotechbd.desk.push.Push
+import com.zyrotechbd.desk.ui.navigation.Routes
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -121,7 +141,7 @@ private data class Attachment(val uri: Uri, val name: String, val mime: String)
 
 /** One WhatsApp chat: messages, reply (text or a file) with the bot kept quiet a while, and the panel's chat actions. */
 @Composable
-fun ChatScreen(company: String, chatId: Long) {
+fun ChatScreen(company: String, chatId: Long, navController: NavHostController? = null) {
     val s = LocalStrings.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -143,23 +163,53 @@ fun ChatScreen(company: String, chatId: Long) {
         if (uri != null) attachment = describe(context, uri)
     }
 
+    // while this chat is on screen its pushes show no notification; they refresh it at once instead
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(chatId, lifecycle) {
+        val obs = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_RESUME) Push.visibleChat = chatId
+            if (e == Lifecycle.Event.ON_PAUSE) Push.visibleChat = null
+        }
+        lifecycle.addObserver(obs)
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) Push.visibleChat = chatId
+        onDispose {
+            lifecycle.removeObserver(obs)
+            if (Push.visibleChat == chatId) Push.visibleChat = null
+        }
+    }
+    var unseen by remember { mutableIntStateOf(0) }
+    val atBottom by remember {
+        derivedStateOf {
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            last >= listState.layoutInfo.totalItemsCount - 2
+        }
+    }
+    LaunchedEffect(atBottom) { if (atBottom) unseen = 0 }
+
     LaunchedEffect(chatId, reload) {
+        var first = messages.isEmpty()
         while (true) {
             try {
                 val d = ApiClient.service.chat(company, chatId)
-                val grew = d.messages.size != messages.size || d.messages.lastOrNull()?.id != messages.lastOrNull()?.id
+                val known = messages.map { it.id }.toSet()
+                val added = d.messages.count { it.id !in known }
+                val changed = added > 0 || d.messages.size != messages.size ||
+                    d.messages.zip(messages).any { (a, b) -> a.status != b.status }
                 chat = d.chat
                 members = d.members
-                if (grew) {
+                if (changed) {
+                    val follow = first || atBottom
                     messages.clear()
                     messages.addAll(d.messages)
-                    if (messages.isNotEmpty()) listState.scrollToItem(messages.size - 1)
+                    if (messages.isNotEmpty() && follow) listState.scrollToItem(messages.size - 1)
+                    else if (added > 0 && !first) unseen += added
                 }
+                first = false
                 error = null
             } catch (e: Exception) {
                 error = ApiClient.errorMessage(e, s.loadFailed, s.offline)
             }
-            delay(8_000)
+            withTimeoutOrNull(8_000) { Push.events.first { it == chatId } }
         }
     }
 
@@ -212,14 +262,31 @@ fun ChatScreen(company: String, chatId: Long) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        ChatHeader(c, members, s, onTake = { act { ApiClient.service.assignChat(company, c.id, AssignRequest("me")).chat } },
+        ChatHeader(c, members, s, navController, onTake = { act { ApiClient.service.assignChat(company, c.id, AssignRequest("me")).chat } },
             onAssign = { id -> act { ApiClient.service.assignChat(company, c.id, AssignRequest(id)).chat } },
             onBot = { paused -> act { ApiClient.service.chatBot(company, c.id, BotRequest(paused)).chat } },
             onMute = { muted -> act { ApiClient.service.muteChat(company, c.id, MuteRequest(muted)).chat } })
         HorizontalDivider(color = Line)
-        LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth().background(Background),
-            contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(messages, key = { it.id }) { m -> Bubble(m, company, s, player) }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().background(Background),
+                contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(messages, key = { _, m -> m.id }) { i, m ->
+                    if (i == 0 || !Format.sameDay(messages[i - 1].at, m.at)) DayHeading(Format.dayLabel(m.at, s.today, s.yesterday))
+                    Bubble(m, company, s, player)
+                }
+            }
+            if (!atBottom && messages.isNotEmpty()) {
+                Row(Modifier.align(Alignment.BottomEnd).padding(12.dp).clip(RoundedCornerShape(20.dp)).background(Surface)
+                    .border(1.dp, Line, RoundedCornerShape(20.dp))
+                    .clickable { scope.launch { listState.animateScrollToItem(messages.size - 1) } }
+                    .padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (unseen > 0) {
+                        Text("${s.newMessagesBtn} · $unseen", fontSize = 13.sp, color = PrimaryStrong, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Icon(Icons.Filled.KeyboardArrowDown, null, tint = PrimaryStrong, modifier = Modifier.size(20.dp))
+                }
+            }
         }
         HorizontalDivider(color = Line)
         Column(Modifier.fillMaxWidth().background(Surface).padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -268,19 +335,27 @@ private fun Composer(text: String, onText: (String) -> Unit, attachment: Attachm
                 else Icon(Icons.AutoMirrored.Filled.Send, s.sendBtn, tint = Surface, modifier = Modifier.size(20.dp))
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(s.botQuietFor, fontSize = 12.sp, color = Muted)
-            Spacer(Modifier.width(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(PAUSES) { m -> Chip(pauseLabel(m, s), pause == m) { onPause(m) } }
+        Spacer(Modifier.height(4.dp))
+        var pick by remember { mutableStateOf(false) }
+        Box(Modifier.padding(start = 48.dp)) {
+            Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable { pick = true }.padding(vertical = 4.dp, horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("${s.botQuietFor}: ", fontSize = 12.sp, color = Muted)
+                Text(pauseLabel(pause, s), fontSize = 12.sp, color = PrimaryStrong, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Filled.ArrowDropDown, null, tint = PrimaryStrong, modifier = Modifier.size(18.dp))
+            }
+            DropdownMenu(expanded = pick, onDismissRequest = { pick = false }, modifier = Modifier.background(Surface)) {
+                PAUSES.forEach { m ->
+                    DropdownMenuItem(text = { Text(pauseLabel(m, s), fontWeight = if (m == pause) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (m == pause) PrimaryStrong else Ink) }, onClick = { onPause(m); pick = false })
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ChatHeader(c: Chat, members: List<Member>, s: AppStrings, onTake: () -> Unit, onAssign: (Long?) -> Unit,
+private fun ChatHeader(c: Chat, members: List<Member>, s: AppStrings, navController: NavHostController?, onTake: () -> Unit, onAssign: (Long?) -> Unit,
                        onBot: (Boolean) -> Unit, onMute: (Boolean) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
@@ -301,10 +376,27 @@ private fun ChatHeader(c: Chat, members: List<Member>, s: AppStrings, onTake: ()
                 }
             }
         }
+        val context = LocalContext.current
+        val digits = c.number.filter { it.isDigit() }
+        if (digits.length >= 10) {
+            IconButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$digits"))) }) {
+                Icon(Icons.Filled.Call, s.call, tint = PrimaryStrong)
+            }
+        }
+        val co = SessionStore.company()
+        val headerId = c.headerId
+        if (navController != null && headerId != null && (co?.can("customers") == true || co?.can("bills") == true)) {
+            IconButton(onClick = { navController.navigate(Routes.customerDetail(headerId)) }) {
+                Icon(Icons.Filled.Person, s.openCustomer, tint = PrimaryStrong)
+            }
+        }
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, s.chatActions, tint = Ink) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface)) {
                 DropdownMenuItem(text = { Text(s.takeChat) }, onClick = { menu = false; onTake() })
+                if (navController != null && headerId != null && co?.can("tickets") == true) {
+                    DropdownMenuItem(text = { Text(s.newTicket) }, onClick = { menu = false; navController.navigate(Routes.newTicket(headerId)) })
+                }
                 DropdownMenuItem(text = { Text(s.assignChat) }, onClick = { menu = false; picking = true })
                 DropdownMenuItem(text = { Text(if (c.botPaused) s.resumeBot else s.pauseBot) },
                     onClick = { menu = false; onBot(!c.botPaused) })
@@ -330,13 +422,43 @@ private fun ChatHeader(c: Chat, members: List<Member>, s: AppStrings, onTake: ()
     }
 }
 
+/** "আজ" / "গতকাল" / a date between days, like WhatsApp. */
+@Composable
+private fun DayHeading(label: String) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
+        Text(label, fontSize = 12.sp, color = Muted, fontWeight = FontWeight.Medium,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Surface).border(1.dp, Line, RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 3.dp))
+    }
+}
+
+/** WhatsApp's ticks for our messages: sent, delivered, read (blue); failed in red. */
+@Composable
+private fun Ticks(status: String?) {
+    when (status) {
+        "sent" -> Text(" ✓", fontSize = 11.sp, color = Muted)
+        "delivered" -> Text(" ✓✓", fontSize = 11.sp, color = Muted)
+        "read" -> Text(" ✓✓", fontSize = 11.sp, color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+        "failed" -> Text(" ✕", fontSize = 11.sp, color = Danger, fontWeight = FontWeight.Bold)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Bubble(m: ChatMessage, company: String, s: AppStrings, player: ChatPlayer) {
     val mine = m.direction != "in"
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
         Column(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(12.dp))
             .background(if (mine) PrimarySoft else Surface)
             .border(1.dp, if (mine) PrimarySoft else Line, RoundedCornerShape(12.dp))
+            .combinedClickable(onClick = {}, onLongClick = {
+                m.body?.takeIf { it.isNotBlank() }?.let {
+                    clipboard.setText(AnnotatedString(it))
+                    Toast.makeText(context, s.copied, Toast.LENGTH_SHORT).show()
+                }
+            })
             .padding(horizontal = 12.dp, vertical = 8.dp)) {
             if (mine) {
                 Text(if (m.sender == "bot") s.senderBot else (m.user ?: ""), fontSize = 11.sp, color = PrimaryStrong,
@@ -348,8 +470,8 @@ private fun Bubble(m: ChatMessage, company: String, s: AppStrings, player: ChatP
             }
             Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                 if (m.status == "test") Text("TEST  ", fontSize = 10.sp, color = Warn, fontWeight = FontWeight.SemiBold)
-                if (m.status == "failed") Text("✕  ", fontSize = 10.sp, color = Danger)
-                Text(Format.dateTime(m.at), fontSize = 10.sp, color = Muted)
+                Text(Format.time(m.at), fontSize = 10.sp, color = Muted)
+                if (mine) Ticks(m.status)
             }
         }
     }

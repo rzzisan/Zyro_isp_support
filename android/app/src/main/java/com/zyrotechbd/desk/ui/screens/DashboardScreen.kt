@@ -68,6 +68,8 @@ fun DashboardScreen(navController: NavHostController, company: String) {
                 val d = ApiClient.service.dashboard(company)
                 AppCache.put(cacheKey, d)
                 data = d
+                d.inbox?.let { com.zyrotechbd.desk.core.Badges.waitingChats.value = it.waiting }
+                d.tickets?.let { com.zyrotechbd.desk.core.Badges.openTickets.value = it.open }
             } catch (e: Exception) {
                 error = ApiClient.errorMessage(e, s.loadFailed, s.offline)
             } finally {

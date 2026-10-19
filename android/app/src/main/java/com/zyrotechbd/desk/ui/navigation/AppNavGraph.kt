@@ -31,7 +31,7 @@ fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: 
         composable(Routes.More) { more() }
         composable(Routes.Inbox) { InboxScreen(navController, companyKey) }
         composable(Routes.Chat, arguments = listOf(navArgument("chatId") { type = NavType.LongType })) {
-            ChatScreen(companyKey, it.arguments?.getLong("chatId") ?: 0L)
+            ChatScreen(companyKey, it.arguments?.getLong("chatId") ?: 0L, navController)
         }
         composable(Routes.Tickets) { TicketsScreen(navController, companyKey) }
         composable(Routes.Ticket, arguments = listOf(navArgument("ticketId") { type = NavType.LongType })) {

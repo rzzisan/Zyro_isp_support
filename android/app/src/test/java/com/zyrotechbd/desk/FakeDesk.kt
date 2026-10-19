@@ -53,11 +53,12 @@ class FakeDesk {
                          "last_message":{"type":"audio","direction":"in","sender":"customer"},
                          "waiting":false,"staff":true,"assigned":null,"bot_paused":false,"notify_muted":true}]}""")
                     path.endsWith("/chats/7") -> json("""{"chat":{"id":7,"name":"Bulbul Ahmed","number":"01714080210","customer_id":"0003",
-                        "waiting":true,"assigned":{"id":1,"name":"Zisan"},"bot_paused":true,"bot_paused_until":"$now","window_open":true,"sending":true},
+                        "waiting":true,"assigned":{"id":1,"name":"Zisan"},"bot_paused":true,"bot_paused_until":"$now","window_open":true,"sending":true,"header_id":3},
                         "members":[{"id":1,"name":"Zisan"},{"id":2,"name":"Arif"}],
                         "messages":[
+                        {"id":0,"direction":"in","sender":"customer","type":"text","body":"বিল দিয়েছি","at":"2026-10-12T09:00:00+06:00"},
                         {"id":1,"direction":"in","sender":"customer","type":"text","body":"লাইন বন্ধ, লাল বাতি জ্বলছে","at":"$now"},
-                        {"id":2,"direction":"out","sender":"bot","type":"text","body":"Bulbul Ahmed, আপনার ONU-তে লাল বাতি মানে ফাইবারে সমস্যা। টিকিট খুলে দিচ্ছি।","at":"$now"},
+                        {"id":2,"direction":"out","sender":"bot","type":"text","body":"Bulbul Ahmed, আপনার ONU-তে লাল বাতি মানে ফাইবারে সমস্যা। টিকিট খুলে দিচ্ছি।","status":"read","at":"$now"},
                         {"id":3,"direction":"in","sender":"customer","type":"audio","has_media":true,"media_mime":"audio/ogg","at":"$now"},
                         {"id":4,"direction":"out","sender":"staff","user":"Zisan","type":"text","body":"টেকনিশিয়ান আসছে।\n\n- Zisan","status":"sent","at":"$now"}]}""")
                     path.endsWith("/tickets") -> json("""{"counts":{"open":2,"pending":1,"processing":1},"next_page":null,"data":[$ticket,

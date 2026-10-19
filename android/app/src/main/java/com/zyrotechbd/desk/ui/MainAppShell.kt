@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +60,13 @@ import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.CompanyInfo
 import com.zyrotechbd.desk.push.Push
+import com.zyrotechbd.desk.core.Badges
+import com.zyrotechbd.desk.ui.components.Warn
+import com.zyrotechbd.desk.ui.theme.Primary
+import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.core.content.ContextCompat
 import com.zyrotechbd.desk.ui.navigation.AppNavGraph
 import com.zyrotechbd.desk.ui.navigation.Routes
@@ -134,6 +143,8 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
         }
     }
     val pushOpen by Push.open.collectAsState()
+    val waitingChats by Badges.waitingChats.collectAsState()
+    val openTickets by Badges.openTickets.collectAsState()
 
     val companyKey = company?.slug ?: ""
     key(companyKey) {
@@ -142,6 +153,18 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
         val currentRoute = backStack?.destination?.route
         val tabs = tabsFor(company, s)
         val isTab = currentRoute == null || tabs.any { it.route == currentRoute }
+
+        // tab counts: on start, every few minutes, and right after a push
+        LaunchedEffect(companyKey) {
+            while (companyKey.isNotEmpty()) {
+                runCatching { ApiClient.service.dashboard(companyKey) }.getOrNull()?.let { d ->
+                    d.inbox?.let { Badges.waitingChats.value = it.waiting }
+                    d.tickets?.let { Badges.openTickets.value = it.open }
+                }
+                withTimeoutOrNull(180_000) { Push.events.first() }
+                delay(2_000)  // let a burst of messages settle
+            }
+        }
 
         // a tapped chat notification: switch to its company first (this block then starts over), then open the chat
         LaunchedEffect(pushOpen) {
@@ -196,7 +219,17 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
                                 NavigationBarItem(
                                     selected = currentRoute == tab.route,
                                     onClick = { openTab(tab.route) },
-                                    icon = { Icon(tab.icon, contentDescription = null) },
+                                    icon = {
+                                        val count = when (tab.route) {
+                                            Routes.Inbox -> waitingChats
+                                            Routes.Tickets -> openTickets
+                                            else -> 0
+                                        }
+                                        BadgedBox(badge = {
+                                            if (count > 0) Badge(containerColor = if (tab.route == Routes.Inbox) Primary else Warn,
+                                                contentColor = Color.White) { Text(if (count > 99) "99+" else count.toString(), fontSize = 10.sp) }
+                                        }) { Icon(tab.icon, contentDescription = null) }
+                                    },
                                     label = { Text(tab.label, fontSize = 12.sp, maxLines = 1) },
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = PrimaryStrong,

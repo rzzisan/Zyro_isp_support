@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Filament\App\Resources\Conversations\Pages\ViewConversation;
 use App\Http\Controllers\Controller;
+use App\Models\BillingCustomer;
 use App\Models\Company;
 use App\Models\Technician;
 use App\Models\WaContact;
@@ -91,9 +92,12 @@ class InboxController extends Controller
         $c = $this->contact($company, $contact)->load(['lastMessage', 'assignedUser']);
         $messages = $c->messages()->with('user')->latest('id')->limit(150)->get()->reverse()->values();
         $staff = Technician::where('company_id', $company->id)->where('wa_number', $c->wa_number)->exists();
+        $cid = $c->suggestedCustomerId();  // the line this chat is about, for the app's customer and ticket buttons
+        $line = $cid ? BillingCustomer::where('company_id', $company->id)->whereNull('gone_at')->where('customer_id', $cid)->first() : null;
 
         return response()->json([
-            'chat' => self::chat($c, $staff) + ['window_open' => $c->windowOpen(), 'sending' => WhatsApp::sendingEnabled()],
+            'chat' => self::chat($c, $staff) + ['window_open' => $c->windowOpen(), 'sending' => WhatsApp::sendingEnabled(),
+                'header_id' => $line ? (int) $line->header_id : null, 'line_customer_id' => $line?->customer_id],
             'messages' => $messages->map(fn ($m) => self::message($m)),
             'members' => $company->users()->orderBy('users.name')->get(['users.id', 'users.name'])
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]),

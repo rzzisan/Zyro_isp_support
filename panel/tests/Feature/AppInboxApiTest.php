@@ -86,7 +86,12 @@ class AppInboxApiTest extends TestCase
     {
         $this->api($this->owner)->getJson($this->url('chats/'.$this->contact->id))->assertOk()
             ->assertJsonPath('chat.window_open', true)->assertJsonPath('messages.0.body', 'লাইন বন্ধ')
-            ->assertJsonPath('members.0.name', 'Zisan');
+            ->assertJsonPath('members.0.name', 'Zisan')->assertJsonPath('chat.header_id', null);
+        \App\Models\BillingCustomer::create(['company_id' => $this->company->id, 'header_id' => 15630, 'customer_id' => '0629',
+            'name' => 'Bulbul', 'username' => 'tld.bulbul', 'monthly_bill' => 525, 'due' => 0]);
+        $this->contact->update(['customer_id' => '0629']);
+        $this->api($this->owner)->getJson($this->url('chats/'.$this->contact->id))
+            ->assertJsonPath('chat.header_id', 15630)->assertJsonPath('chat.line_customer_id', '0629');
 
         $this->api($this->owner)->postJson($this->url('chats/'.$this->contact->id.'/reply'), ['body' => 'দেখছি', 'pause_minutes' => 60])
             ->assertOk()->assertJsonPath('message.status', 'test')->assertJsonPath('message.user', 'Zisan')

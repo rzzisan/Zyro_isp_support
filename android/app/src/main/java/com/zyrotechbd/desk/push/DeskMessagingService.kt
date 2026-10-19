@@ -23,6 +23,8 @@ class DeskMessagingService : FirebaseMessagingService() {
         val d = message.data
         if (d["type"] != "chat") return
         val chatId = d["chat_id"]?.toLongOrNull() ?: return
+        Push.events.tryEmit(chatId)
+        if (Push.visibleChat == chatId) return  // already reading it
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val intent = Intent(this, MainActivity::class.java)

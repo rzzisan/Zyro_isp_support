@@ -61,11 +61,21 @@ import com.zyrotechbd.desk.ui.theme.Muted
 import com.zyrotechbd.desk.ui.theme.Primary
 import com.zyrotechbd.desk.ui.theme.PrimaryStrong
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.zyrotechbd.desk.core.Badges
+import com.zyrotechbd.desk.push.Push
+import com.zyrotechbd.desk.ui.theme.Surface
 
 /** The panel's boxes, in its order. */
 private fun boxes(s: AppStrings) = listOf("all" to s.boxAll, "waiting" to s.boxWaiting, "mine" to s.boxMine,
     "paused" to s.boxPaused, "staff" to s.boxStaff, "muted" to s.boxMuted)
 
+@OptIn(ExperimentalMaterial3Api::class)
 /** WhatsApp chats, newest first, with the panel's boxes and search; refreshes itself while open. */
 @Composable
 fun InboxScreen(navController: NavHostController, company: String) {
@@ -78,23 +88,33 @@ fun InboxScreen(navController: NavHostController, company: String) {
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableIntStateOf(0) }
 
+    suspend fun load() {
+        try {
+            val res = ApiClient.service.chats(company, box.takeIf { it != "all" }, query.trim().ifBlank { null })
+            rows.clear()
+            rows.addAll(res.data)
+            waiting = res.waitingCount
+            Badges.waitingChats.value = res.waitingCount
+            error = null
+        } catch (e: Exception) {
+            error = ApiClient.errorMessage(e, s.loadFailed, s.offline)
+        } finally {
+            loading = false
+        }
+    }
+
     LaunchedEffect(box, query, reload) {
         if (query.isNotBlank()) delay(350)
         loading = rows.isEmpty()
         while (true) {
-            try {
-                val res = ApiClient.service.chats(company, box.takeIf { it != "all" }, query.trim().ifBlank { null })
-                rows.clear()
-                rows.addAll(res.data)
-                waiting = res.waitingCount
-                error = null
-            } catch (e: Exception) {
-                error = ApiClient.errorMessage(e, s.loadFailed, s.offline)
-            } finally {
-                loading = false
-            }
-            delay(15_000)  // new messages show up without pulling; push comes later with Firebase
+            load()
+            withTimeoutOrNull(15_000) { Push.events.first() }  // a push brings the new message at once
         }
+    }
+    val pull = rememberPullToRefreshState()
+    if (pull.isRefreshing) LaunchedEffect(Unit) {
+        load()
+        pull.endRefresh()
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -117,6 +137,7 @@ fun InboxScreen(navController: NavHostController, company: String) {
                 Spacer(Modifier.height(8.dp))
             }
         }
+        Box(Modifier.fillMaxSize().nestedScroll(pull.nestedScrollConnection)) {
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
             if (rows.isNotEmpty()) item {
                 DeskCard {
@@ -128,6 +149,8 @@ fun InboxScreen(navController: NavHostController, company: String) {
             }
             if (loading) item { LoadingBox() }
             if (!loading && rows.isEmpty() && error == null) item { EmptyText(s.noChats) }
+        }
+        PullToRefreshContainer(pull, Modifier.align(Alignment.TopCenter), containerColor = Surface, contentColor = Primary)
         }
     }
 }
