@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,7 +59,9 @@ import com.zyrotechbd.desk.ui.strings.LocalStrings
 import com.zyrotechbd.desk.ui.theme.InputLine
 import com.zyrotechbd.desk.ui.theme.Ink
 import com.zyrotechbd.desk.ui.theme.Muted
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Customer search (ID, PPPoE, name or mobile, like the panel's header search) and, with no search, the list with
@@ -77,6 +80,7 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(company) {
         zones = runCatching { ApiClient.service.zones(company).data }.getOrDefault(emptyList())
@@ -111,21 +115,29 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
             last >= listState.layoutInfo.totalItemsCount - 5
         }
     }
-    LaunchedEffect(nearEnd, nextPage, loading) {
-        val page = nextPage ?: return@LaunchedEffect
-        if (!nearEnd || loading || query.isNotBlank()) return@LaunchedEffect
+    // the next page runs in the screen's scope: keyed on the effect, setting [loading] would cancel its own request
+    fun loadMore() {
+        val page = nextPage ?: return
+        if (loading || query.isNotBlank()) return
         loading = true
-        try {
-            val res = ApiClient.service.customers(company, due = if (dueOnly) 1 else null, zone = zone, page = page)
-            rows.addAll(res.data)
-            nextPage = res.nextPage
-        } catch (e: Exception) {
-            error = ApiClient.errorMessage(e, s.loadFailed, s.offline)
-            nextPage = null
-        } finally {
-            loading = false
+        val filters = dueOnly to zone
+        scope.launch {
+            try {
+                val res = ApiClient.service.customers(company, due = if (dueOnly) 1 else null, zone = zone, page = page)
+                if (filters != (dueOnly to zone)) return@launch  // a filter changed meanwhile; the first page reloads
+                rows.addAll(res.data.filter { r -> rows.none { it.headerId == r.headerId } })
+                nextPage = res.nextPage
+                error = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = ApiClient.errorMessage(e, s.loadFailed, s.offline)
+            } finally {
+                loading = false
+            }
         }
     }
+    LaunchedEffect(nearEnd, nextPage) { if (nearEnd) loadMore() }
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
@@ -145,7 +157,7 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
             }
             Spacer(Modifier.height(8.dp))
             if (error != null) {
-                MessageBox(error!!, onRetry = { reload++ }, retryLabel = s.retry)
+                MessageBox(error!!, onRetry = { if (rows.isNotEmpty() && nextPage != null) loadMore() else reload++ }, retryLabel = s.retry)
                 Spacer(Modifier.height(8.dp))
             }
         }

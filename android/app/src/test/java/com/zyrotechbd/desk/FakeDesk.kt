@@ -30,10 +30,14 @@ class FakeDesk {
 
     private val now = java.time.OffsetDateTime.now().toString()
 
+    /** When set, the customer list's body for ?page= (to test paging). */
+    var customerPage: ((Int) -> String)? = null
+
     fun start(delayMs: Long = 150) {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty().removePrefix("/api/v1/").substringBefore("?")
+                val page = request.requestUrl?.queryParameter("page")?.toIntOrNull() ?: 1
                 paths += path
                 Thread.sleep(delayMs)  // data lands after the first frame, like on a phone
                 return when {
@@ -73,6 +77,7 @@ class FakeDesk {
                         "employees":[{"id":"3","name":"Maruf"},{"id":"4","name":"Rifat"}],"sms_open":{"ready":true,"on":true},
                         "sms_solved":{"ready":true,"on":false},"customer":$customer,"open_ticket":"57231"}""")
                     path.endsWith("/zones") -> json("""{"data":["Tilardi","Murma"]}""")
+                    path.endsWith("/customers") && customerPage != null -> json(customerPage!!(page))
                     path.endsWith("/customers") -> json("""{"data":[$customer,$customer2],"next_page":null}""")
                     path.endsWith("/customers/3") -> json("""{"customer":$customer,"payments":[{"date":"2026-09-10",
                         "bill_month":"September","paid":525,"discount":0,"due":0,"method":"Cash","received_by":"Arif"}],
