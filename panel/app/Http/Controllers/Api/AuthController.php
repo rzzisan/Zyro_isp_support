@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Menu;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -33,6 +34,21 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         return response()->json(static::profile($request->user()));
+    }
+
+    /** This phone's Firebase token, so the engine can push new WhatsApp messages to it (gone with the sign-in). */
+    public function pushToken(Request $request): JsonResponse
+    {
+        $data = $request->validate(['token' => ['required', 'string', 'max:512']]);
+        $access = $request->user()->currentAccessToken();
+        abort_unless($access instanceof \Laravel\Sanctum\PersonalAccessToken, 422);
+        DB::table('app_push_tokens')->where('personal_access_token_id', $access->id)->where('token', '!=', $data['token'])->delete();
+        DB::table('app_push_tokens')->updateOrInsert(['token' => $data['token']], [
+            'user_id' => $request->user()->id, 'personal_access_token_id' => $access->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return response()->json(['ok' => true]);
     }
 
     /** Sign out on this phone only (other devices keep their tokens). */

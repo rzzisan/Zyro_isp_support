@@ -19,6 +19,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('me', [AuthController::class, 'me']);
         Route::post('logout', [AuthController::class, 'logout']);
+        Route::post('push-token', [AuthController::class, 'pushToken'])->middleware('throttle:20,1');
 
         Route::prefix('c/{company:slug}')->middleware(ApiCompany::class)->group(function () {
             Route::get('dashboard', DashboardController::class);

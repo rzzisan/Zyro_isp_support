@@ -21,6 +21,9 @@ interface ApiService {
     @POST("logout")
     suspend fun logout(): OkResponse
 
+    @POST("push-token")
+    suspend fun pushToken(@Body request: PushTokenRequest): OkResponse
+
     @GET("c/{company}/dashboard")
     suspend fun dashboard(@Path("company") company: String): Dashboard
 

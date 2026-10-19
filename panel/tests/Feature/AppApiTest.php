@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\Membership;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -79,6 +80,19 @@ class AppApiTest extends TestCase
         $this->api($this->owner)->postJson('/api/v1/logout')->assertOk();
         $this->assertSame(1, $this->owner->tokens()->count());
         $this->assertSame($keep->accessToken->id, $this->owner->tokens()->value('id'));
+    }
+
+    public function test_push_token_follows_the_phones_sign_in(): void
+    {
+        $token = $this->owner->createToken('phone')->plainTextToken;
+        $call = fn (string $fcm) => $this->withToken($token)->withHeader('Accept', 'application/json')
+            ->postJson('/api/v1/push-token', ['token' => $fcm])->assertOk();
+        $call('fcm-a');
+        $call('fcm-b');  // Firebase gave the phone a new token: the old one goes
+        $this->assertSame(['fcm-b'], DB::table('app_push_tokens')->pluck('token')->all());
+
+        $this->withToken($token)->withHeader('Accept', 'application/json')->postJson('/api/v1/logout')->assertOk();
+        $this->assertSame(0, DB::table('app_push_tokens')->count());
     }
 
     public function test_another_companys_data_is_not_reachable(): void

@@ -1,4 +1,5 @@
 """Browser push (Web Push, VAPID) for new WhatsApp messages, so panel users get them with the panel tab closed.
+The same message also goes to the Desk app on phones (engine/fcm.py).
 
 The panel stores each browser's subscription in push_subscriptions (bell in the top bar); this sends to every
 subscribed member of the company who may open the inbox. The VAPID key pair lives in web_push_keys and is made
@@ -13,7 +14,7 @@ import threading
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from engine import db
+from engine import db, fcm
 
 log = logging.getLogger("zyro-engine")
 SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:support@zyrotechbd.com")
@@ -60,6 +61,11 @@ def _send_all(company_id: int, contact: dict, mtype: str | None, body: str | Non
     try:
         if (db.one("SELECT notify_muted FROM wa_contacts WHERE id = %s", (contact["id"],)) or {}).get("notify_muted"):
             return  # muted in the inbox: no push for this number
+        title = ("[স্টাফ] " if staff else "") + (contact.get("name") or _display(contact["wa_number"], contact.get("wa_username")))
+        text = (body or "").strip() or MEDIA.get(mtype or "", "নতুন মেসেজ")
+        slug = (db.one("SELECT slug FROM companies WHERE id = %s", (company_id,)) or {}).get("slug", "")
+        fcm.send(company_id, {"type": "chat", "company": slug, "chat_id": str(contact["id"]), "title": title,
+                              "body": text[:140]})  # the Desk app on phones
         subs = db.all_rows(
             """SELECT s.id, s.endpoint, s.p256dh, s.auth, c.slug FROM push_subscriptions s
                JOIN companies c ON c.id = s.company_id
@@ -71,9 +77,8 @@ def _send_all(company_id: int, contact: dict, mtype: str | None, body: str | Non
             return
         from pywebpush import WebPushException, webpush
         _, priv = keys()
-        text = (body or "").strip() or MEDIA.get(mtype or "", "নতুন মেসেজ")
         payload = json.dumps({
-            "title": ("[স্টাফ] " if staff else "") + (contact.get("name") or _display(contact["wa_number"], contact.get("wa_username"))),
+            "title": title,
             "body": text[:140],
             "tag": f"wa-{contact['id']}",
             "url": f"/app/{subs[0]['slug']}/inbox/{contact['id']}",
