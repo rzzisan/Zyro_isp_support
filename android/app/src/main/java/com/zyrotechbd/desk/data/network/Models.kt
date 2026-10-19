@@ -83,7 +83,14 @@ data class Customer(
     fun place(): String = listOfNotNull(zone, subzone, box).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" / ")
 }
 
-data class CustomerPage(val data: List<Customer> = emptyList(), @Json(name = "next_page") val nextPage: Int? = null)
+data class CustomerPage(val data: List<Customer> = emptyList(), @Json(name = "next_page") val nextPage: Int? = null,
+    val total: Int? = null)
+
+data class Place(val zone: String = "", val subzone: String = "", val box: String = "")
+
+/** Choices for the customer list's filters. */
+data class CustomerFilterChoices(val places: List<Place> = emptyList(), val packages: List<String> = emptyList(),
+    val statuses: List<String> = emptyList())
 
 data class ZoneList(val data: List<String> = emptyList())
 

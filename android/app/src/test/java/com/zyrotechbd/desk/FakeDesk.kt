@@ -76,9 +76,12 @@ class FakeDesk {
                         "priorities":[{"id":"1","name":"Low"},{"id":"2","name":"Medium"},{"id":"3","name":"High"}],"departments":[],
                         "employees":[{"id":"3","name":"Maruf"},{"id":"4","name":"Rifat"}],"sms_open":{"ready":true,"on":true},
                         "sms_solved":{"ready":true,"on":false},"customer":$customer,"open_ticket":"57231"}""")
+                    path.endsWith("/customer-filters") -> json("""{"places":[{"zone":"Tilardi","subzone":"Bazar","box":"B1"},
+                        {"zone":"Tilardi","subzone":"Ghat","box":"G1"},{"zone":"Murma","subzone":"","box":""}],
+                        "packages":["10 Mbps","15 Mbps"],"statuses":["Active","Inactive"]}""")
                     path.endsWith("/zones") -> json("""{"data":["Tilardi","Murma"]}""")
                     path.endsWith("/customers") && customerPage != null -> json(customerPage!!(page))
-                    path.endsWith("/customers") -> json("""{"data":[$customer,$customer2],"next_page":null}""")
+                    path.endsWith("/customers") -> json("""{"data":[$customer,$customer2],"next_page":null,"total":2}""")
                     path.endsWith("/customers/3") -> json("""{"customer":$customer,"payments":[{"date":"2026-09-10",
                         "bill_month":"September","paid":525,"discount":0,"due":0,"method":"Cash","received_by":"Arif"}],
                         "tickets":[],"can":{"bill":true}}""")

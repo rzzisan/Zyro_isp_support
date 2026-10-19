@@ -114,6 +114,35 @@ class AppApiTest extends TestCase
         $this->assertStringNotContainsString('pppoe_password', $page->getContent());
     }
 
+    public function test_customer_list_filters_like_the_panel(): void
+    {
+        $add = fn (int $h, array $a) => BillingCustomer::create($a + ['company_id' => $this->company->id, 'header_id' => $h,
+            'customer_id' => (string) $h, 'name' => "C$h", 'username' => "u$h", 'due' => 0, 'disabled' => false]);
+        $add(10, ['zone' => 'Tilardi', 'subzone' => 'Bazar', 'box' => 'B1', 'bill_day' => 5, 'due' => 300, 'package' => '10M']);
+        $add(11, ['zone' => 'Tilardi', 'subzone' => 'Ghat', 'box' => 'G1', 'bill_day' => 28, 'disabled' => true]);
+        $add(12, ['zone' => 'Murma', 'subzone' => 'Bazar', 'bill_day' => 2, 'status' => 'Inactive']);
+        $add(13, ['zone' => 'Tilardi', 'is_left' => true, 'bill_day' => 5]);
+        $ids = fn (string $qs) => collect($this->api($this->owner)->getJson($this->url('customers?'.$qs))->assertOk()->json('data'))
+            ->pluck('header_id')->sort()->values()->all();
+
+        $this->assertSame([10, 11], $ids('zone=Tilardi'));
+        $this->assertSame([10], $ids('zone=Tilardi&subzone=Bazar'));
+        $this->assertSame([10], $ids('box=B1'));
+        $this->assertSame([3, 10], $ids('due=1'));
+        $this->assertSame([11, 12], $ids('due=0'));
+        $this->assertSame([11], $ids('line=off'));
+        $this->assertSame([10], $ids('package=10M'));
+        $this->assertSame([12], $ids('status=Inactive'));
+        $this->assertSame([10], $ids('exp_from=4&exp_to=6'));
+        $this->assertSame([11, 12], $ids('exp_from=27&exp_to=3'));   // wraps past the month's end
+        $this->assertSame([13], $ids('list=left'));
+        $this->api($this->owner)->getJson($this->url('customers?zone=Tilardi'))->assertJsonPath('total', 2);
+
+        $f = $this->api($this->owner)->getJson($this->url('customer-filters'))->assertOk();
+        $this->assertContains(['zone' => 'Tilardi', 'subzone' => 'Ghat', 'box' => 'G1'], $f->json('places'));
+        $this->assertSame(['10M'], $f->json('packages'));
+    }
+
     public function test_agent_without_the_bills_menu_cannot_collect(): void
     {
         $this->api($this->agent)->getJson($this->url('customers/3/bill-form'))->assertStatus(403);

@@ -25,6 +25,7 @@ Route::prefix('v1')->group(function () {
             Route::get('dashboard', DashboardController::class);
             Route::get('customers', [CustomerController::class, 'index']);
             Route::get('zones', [CustomerController::class, 'zones']);
+            Route::get('customer-filters', [CustomerController::class, 'filters']);
             Route::get('customers/{headerId}', [CustomerController::class, 'show'])->whereNumber('headerId');
             Route::get('customers/{headerId}/live', [CustomerController::class, 'live'])->whereNumber('headerId');
             Route::get('customers/{headerId}/bill-form', [BillController::class, 'form'])->whereNumber('headerId');

@@ -242,6 +242,37 @@ abstract class AppStrings {
     abstract val copied: String
     abstract val newMessagesBtn: String
     abstract val copyText: String
+    abstract val fFilter: String
+    abstract val fAll: String
+    abstract val fZone: String
+    abstract val fSubzone: String
+    abstract val fBox: String
+    abstract val fPackage: String
+    abstract val fStatus: String
+    abstract val fExpire: String
+    abstract val fExpireShort: String
+    abstract val fDue: String
+    abstract val fHasDue: String
+    abstract val fNoDue: String
+    abstract val fLine: String
+    abstract val fLineOn: String
+    abstract val fLineOff: String
+    abstract val fNow: String
+    abstract val fOnline: String
+    abstract val fOffline: String
+    abstract val fList: String
+    abstract val fCurrent: String
+    abstract val fLeft: String
+    abstract val fToday: String
+    abstract val fTomorrow: String
+    abstract val fNext3: String
+    abstract val fNext7: String
+    abstract val fPast7: String
+    abstract val fDay: String
+    abstract val fClear: String
+    abstract val fApply: String
+    abstract val fTotal: String
+    abstract val fPeople: String
     abstract fun blockedFor(months: Int, days: Int): String
     abstract fun pendingWarning(amount: String, date: String, by: String): String
     abstract fun roleName(role: String?): String
@@ -496,6 +527,37 @@ object BengaliStrings : AppStrings() {
     override val copied = "কপি হয়েছে"
     override val newMessagesBtn = "নতুন মেসেজ"
     override val copyText = "কপি"
+    override val fFilter = "ফিল্টার"
+    override val fAll = "সব"
+    override val fZone = "Zone"
+    override val fSubzone = "Subzone"
+    override val fBox = "Box"
+    override val fPackage = "প্যাকেজ"
+    override val fStatus = "অবস্থা"
+    override val fExpire = "মেয়াদ শেষ (Ex.Date)"
+    override val fExpireShort = "মেয়াদ"
+    override val fDue = "বকেয়া"
+    override val fHasDue = "বকেয়া আছে"
+    override val fNoDue = "বকেয়া নেই"
+    override val fLine = "লাইন"
+    override val fLineOn = "লাইন চালু"
+    override val fLineOff = "লাইন বন্ধ"
+    override val fNow = "এখন"
+    override val fOnline = "অনলাইন"
+    override val fOffline = "অফলাইন"
+    override val fList = "তালিকা"
+    override val fCurrent = "বর্তমান কাস্টমার"
+    override val fLeft = "Left কাস্টমার"
+    override val fToday = "আজ"
+    override val fTomorrow = "কাল"
+    override val fNext3 = "আগামী ৩ দিন"
+    override val fNext7 = "আগামী ৭ দিন"
+    override val fPast7 = "গত ৭ দিনে গেছে"
+    override val fDay = "তারিখ"
+    override val fClear = "সব মুছুন"
+    override val fApply = "দেখান"
+    override val fTotal = "মোট"
+    override val fPeople = "জন কাস্টমার"
 }
 
 object EnglishStrings : AppStrings() {
@@ -747,4 +809,35 @@ object EnglishStrings : AppStrings() {
     override val copied = "Copied"
     override val newMessagesBtn = "New messages"
     override val copyText = "Copy"
+    override val fFilter = "Filter"
+    override val fAll = "All"
+    override val fZone = "Zone"
+    override val fSubzone = "Subzone"
+    override val fBox = "Box"
+    override val fPackage = "Package"
+    override val fStatus = "Status"
+    override val fExpire = "Expiry (Ex.Date)"
+    override val fExpireShort = "Expiry"
+    override val fDue = "Due"
+    override val fHasDue = "Has due"
+    override val fNoDue = "No due"
+    override val fLine = "Line"
+    override val fLineOn = "Line on"
+    override val fLineOff = "Line off"
+    override val fNow = "Now"
+    override val fOnline = "Online"
+    override val fOffline = "Offline"
+    override val fList = "List"
+    override val fCurrent = "Current customers"
+    override val fLeft = "Left customers"
+    override val fToday = "Today"
+    override val fTomorrow = "Tomorrow"
+    override val fNext3 = "Next 3 days"
+    override val fNext7 = "Next 7 days"
+    override val fPast7 = "Past 7 days"
+    override val fDay = "Day"
+    override val fClear = "Clear all"
+    override val fApply = "Show"
+    override val fTotal = "Total"
+    override val fPeople = "customers"
 }
