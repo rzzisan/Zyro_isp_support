@@ -179,3 +179,13 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier, trailing: @Composa
     }
 }
 
+
+/**
+ * A screen's content that may stop early (`return@ScreenBody` while loading or on an error). An early return straight
+ * out of an inline layout lambda such as Column's corrupts Compose's slot table on the next recomposition; out of
+ * this non-inline lambda it is safe.
+ */
+@Composable
+fun ScreenBody(content: @Composable () -> Unit) {
+    content()
+}

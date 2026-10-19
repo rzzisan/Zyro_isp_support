@@ -50,6 +50,7 @@ import com.zyrotechbd.desk.ui.components.LoadingBox
 import com.zyrotechbd.desk.ui.components.MessageBox
 import com.zyrotechbd.desk.ui.components.Pill
 import com.zyrotechbd.desk.ui.components.PrimaryButton
+import com.zyrotechbd.desk.ui.components.ScreenBody
 import com.zyrotechbd.desk.ui.components.SectionTitle
 import com.zyrotechbd.desk.ui.components.SmallAction
 import com.zyrotechbd.desk.ui.components.Warn
@@ -102,133 +103,135 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        if (error != null) {
-            MessageBox(error!!, onRetry = { load() }, retryLabel = s.retry)
-            return@Column
-        }
-        val d = detail ?: run { LoadingBox(); return@Column }
-        val c = d.customer
+        ScreenBody {
+            if (error != null) {
+                MessageBox(error!!, onRetry = { load() }, retryLabel = s.retry)
+                return@ScreenBody
+            }
+            val d = detail ?: run { LoadingBox(); return@ScreenBody }
+            val c = d.customer
 
-        CatvCard {
-            Column(Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CustomerAvatar(c.name ?: "?", c.customerId ?: c.headerId.toString(), size = 52.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(c.name ?: "", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
-                        Text("ID ${c.customerId ?: ""}" + (c.username?.let { " · $it" } ?: ""), fontSize = 13.sp, color = Muted)
-                        Spacer(Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Pill(if (c.online) s.online else s.offlineLabel, if (c.online) Good else Color(0xFF7B8496))
-                            if (c.isLeft == true) Pill("LEFT", Color(0xFF7B8496))
-                            else if (c.disabled == true) Pill(s.lineOff, Danger)
-                            c.status?.takeIf { it.isNotBlank() }?.let { Pill(it, PrimaryStrong) }
+            CatvCard {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CustomerAvatar(c.name ?: "?", c.customerId ?: c.headerId.toString(), size = 52.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(c.name ?: "", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            Text("ID ${c.customerId ?: ""}" + (c.username?.let { " · $it" } ?: ""), fontSize = 13.sp, color = Muted)
+                            Spacer(Modifier.height(4.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Pill(if (c.online) s.online else s.offlineLabel, if (c.online) Good else Color(0xFF7B8496))
+                                if (c.isLeft == true) Pill("LEFT", Color(0xFF7B8496))
+                                else if (c.disabled == true) Pill(s.lineOff, Danger)
+                                c.status?.takeIf { it.isNotBlank() }?.let { Pill(it, PrimaryStrong) }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val mobile = c.mobile?.filter { it.isDigit() || it == '+' }.orEmpty()
+                        SmallAction(s.call, Icons.Filled.Call, Modifier.weight(1f), enabled = mobile.isNotEmpty()) {
+                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$mobile")))
+                        }
+                        SmallAction("WhatsApp", Icons.Filled.Chat, Modifier.weight(1f), color = Color(0xFF128C7E),
+                            enabled = mobile.isNotEmpty()) {
+                            val digits = mobile.filter { it.isDigit() }
+                            val wa = if (digits.startsWith("0")) "88$digits" else digits
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$wa")))
                         }
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val mobile = c.mobile?.filter { it.isDigit() || it == '+' }.orEmpty()
-                    SmallAction(s.call, Icons.Filled.Call, Modifier.weight(1f), enabled = mobile.isNotEmpty()) {
-                        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$mobile")))
-                    }
-                    SmallAction("WhatsApp", Icons.Filled.Chat, Modifier.weight(1f), color = Color(0xFF128C7E),
-                        enabled = mobile.isNotEmpty()) {
-                        val digits = mobile.filter { it.isDigit() }
-                        val wa = if (digits.startsWith("0")) "88$digits" else digits
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$wa")))
-                    }
-                }
             }
-        }
-        Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
 
-        val due = c.due ?: 0.0
-        CatvCard {
-            Column(Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(s.due, fontSize = 12.sp, color = Muted)
-                        Text(Format.tk(due), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = if (due > 0) Danger else Good)
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(s.monthlyBill, fontSize = 12.sp, color = Muted)
-                        Text(Format.tk(c.monthlyBill), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    }
-                }
-                if (d.can.bill) {
-                    Spacer(Modifier.height(12.dp))
-                    PrimaryButton(s.collectBill) { navController.navigate(Routes.billForm(c.headerId)) }
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-
-        CatvCard {
-            Column(Modifier.padding(16.dp)) {
-                InfoRow(s.mobile, c.mobile)
-                InfoRow(s.packageLabel, c.`package`)
-                InfoRow(s.area, c.place())
-                InfoRow(s.address, c.address)
-                InfoRow(s.lastPayment, c.lastPaymentDate?.let { Format.date(it) })
-                InfoRow(s.billDay, c.billDay?.toString())
-                InfoRow(s.joined, c.joinedOn?.let { Format.date(it) })
-                InfoRow(s.server, c.server)
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-
-        SectionTitle(s.liveStatus) {
-            IconButton(onClick = { loadLive(true) }, enabled = !liveLoading) {
-                Icon(Icons.Filled.Refresh, contentDescription = s.refresh, tint = PrimaryStrong)
-            }
-        }
-        CatvCard {
-            Column(Modifier.padding(16.dp)) {
-                when {
-                    liveLoading && live == null -> LoadingBox()
-                    liveError != null -> MessageBox(liveError!!, color = Warn)
-                    live != null -> LiveBox(live!!)
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-
-        if (d.tickets.isNotEmpty()) {
-            SectionTitle(s.openTickets)
-            d.tickets.forEach { t ->
-                CatvCard {
-                    Column(Modifier.padding(14.dp)) {
-                        Text("#${t.complainId ?: ""} · ${t.category ?: ""}", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 14.sp)
-                        Text(listOfNotNull(Format.dateTime(t.openedAt), t.assignedTo).joinToString(" · "), fontSize = 12.sp, color = Muted)
-                        t.note?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = Ink) }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-            Spacer(Modifier.height(4.dp))
-        }
-
-        SectionTitle(s.recentPayments)
-        CatvCard {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                if (d.payments.isEmpty()) EmptyText(s.noPayments)
-                d.payments.forEachIndexed { i, p ->
-                    if (i > 0) HorizontalDivider(color = Color(0xFFF0EDE8))
-                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val due = c.due ?: 0.0
+            CatvCard {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(Format.date(p.date) + (p.billMonth?.let { " · $it" } ?: ""), fontSize = 13.sp, color = Ink)
-                            Text(listOfNotNull(p.method, p.receivedBy).joinToString(" · "), fontSize = 11.sp, color = Muted)
+                            Text(s.due, fontSize = 12.sp, color = Muted)
+                            Text(Format.tk(due), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = if (due > 0) Danger else Good)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(Format.tk(p.paid), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Good)
-                            if (p.discount > 0) Text(s.discountShort(Format.amount(p.discount)), fontSize = 11.sp, color = Muted)
+                            Text(s.monthlyBill, fontSize = 12.sp, color = Muted)
+                            Text(Format.tk(c.monthlyBill), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
+                        }
+                    }
+                    if (d.can.bill) {
+                        Spacer(Modifier.height(12.dp))
+                        PrimaryButton(s.collectBill) { navController.navigate(Routes.billForm(c.headerId)) }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+
+            CatvCard {
+                Column(Modifier.padding(16.dp)) {
+                    InfoRow(s.mobile, c.mobile)
+                    InfoRow(s.packageLabel, c.`package`)
+                    InfoRow(s.area, c.place())
+                    InfoRow(s.address, c.address)
+                    InfoRow(s.lastPayment, c.lastPaymentDate?.let { Format.date(it) })
+                    InfoRow(s.billDay, c.billDay?.toString())
+                    InfoRow(s.joined, c.joinedOn?.let { Format.date(it) })
+                    InfoRow(s.server, c.server)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+
+            SectionTitle(s.liveStatus) {
+                IconButton(onClick = { loadLive(true) }, enabled = !liveLoading) {
+                    Icon(Icons.Filled.Refresh, contentDescription = s.refresh, tint = PrimaryStrong)
+                }
+            }
+            CatvCard {
+                Column(Modifier.padding(16.dp)) {
+                    when {
+                        liveLoading && live == null -> LoadingBox()
+                        liveError != null -> MessageBox(liveError!!, color = Warn)
+                        live != null -> LiveBox(live!!)
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+
+            if (d.tickets.isNotEmpty()) {
+                SectionTitle(s.openTickets)
+                d.tickets.forEach { t ->
+                    CatvCard {
+                        Column(Modifier.padding(14.dp)) {
+                            Text("#${t.complainId ?: ""} · ${t.category ?: ""}", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 14.sp)
+                            Text(listOfNotNull(Format.dateTime(t.openedAt), t.assignedTo).joinToString(" · "), fontSize = 12.sp, color = Muted)
+                            t.note?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = Ink) }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+
+            SectionTitle(s.recentPayments)
+            CatvCard {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    if (d.payments.isEmpty()) EmptyText(s.noPayments)
+                    d.payments.forEachIndexed { i, p ->
+                        if (i > 0) HorizontalDivider(color = Color(0xFFF0EDE8))
+                        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(Format.date(p.date) + (p.billMonth?.let { " · $it" } ?: ""), fontSize = 13.sp, color = Ink)
+                                Text(listOfNotNull(p.method, p.receivedBy).joinToString(" · "), fontSize = 11.sp, color = Muted)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(Format.tk(p.paid), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Good)
+                                if (p.discount > 0) Text(s.discountShort(Format.amount(p.discount)), fontSize = 11.sp, color = Muted)
+                            }
                         }
                     }
                 }
             }
-        }
-        Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(24.dp))
+            }
     }
 }
 

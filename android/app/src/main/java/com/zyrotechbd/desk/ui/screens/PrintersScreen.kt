@@ -55,6 +55,7 @@ import com.zyrotechbd.desk.ui.components.EmptyText
 import com.zyrotechbd.desk.ui.components.Good
 import com.zyrotechbd.desk.ui.components.MessageBox
 import com.zyrotechbd.desk.ui.components.PrimaryButton
+import com.zyrotechbd.desk.ui.components.ScreenBody
 import com.zyrotechbd.desk.ui.components.SectionTitle
 import com.zyrotechbd.desk.ui.components.SmallAction
 import com.zyrotechbd.desk.ui.components.Warn
@@ -114,99 +115,101 @@ fun PrintersScreen() {
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        if (adapter == null) {
-            MessageBox(s.bluetoothNotSupported)
-            return@Column
-        }
-        val missing = remember(permissionTick) { BluetoothPermissions.missingPermissions(context) }
-        if (missing.isNotEmpty()) {
-            MessageBox(s.bluetoothPermRequired, color = Warn)
-            Spacer(Modifier.height(12.dp))
-            PrimaryButton(s.grantPermissionBtn) { permissionLauncher.launch(missing.toTypedArray()) }
-            return@Column
-        }
-        if (!adapter.isEnabled) {
-            MessageBox(s.bluetoothDisabled, color = Warn, onRetry = { permissionTick++ }, retryLabel = s.retry)
-            return@Column
-        }
-
-        SectionTitle(s.paperWidth)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(58, 80).forEach { mm ->
-                Chip("$mm mm", paper == mm) {
-                    paper = mm
-                    PrinterSettings.setPaperWidth(mm)
-                }
+        ScreenBody {
+            if (adapter == null) {
+                MessageBox(s.bluetoothNotSupported)
+                return@ScreenBody
             }
-        }
-        Text(s.paperHint, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 4.dp))
-        Spacer(Modifier.height(14.dp))
+            val missing = remember(permissionTick) { BluetoothPermissions.missingPermissions(context) }
+            if (missing.isNotEmpty()) {
+                MessageBox(s.bluetoothPermRequired, color = Warn)
+                Spacer(Modifier.height(12.dp))
+                PrimaryButton(s.grantPermissionBtn) { permissionLauncher.launch(missing.toTypedArray()) }
+                return@ScreenBody
+            }
+            if (!adapter.isEnabled) {
+                MessageBox(s.bluetoothDisabled, color = Warn, onRetry = { permissionTick++ }, retryLabel = s.retry)
+                return@ScreenBody
+            }
 
-        SectionTitle(s.printerKind)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip(s.printerClassic, printerType == PrinterType.CLASSIC) { printerType = PrinterType.CLASSIC }
-            Chip("BLE", printerType == PrinterType.BLE) { printerType = PrinterType.BLE }
-        }
-        Spacer(Modifier.height(10.dp))
-
-        CatvCard {
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
-                if (printerType == PrinterType.CLASSIC) {
-                    val devices = remember(permissionTick) { adapter.bondedDevices?.toList().orEmpty() }
-                    if (devices.isEmpty()) EmptyText(s.noPairedPrinters)
-                    else Text(s.pairedDevicesLabel, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(vertical = 6.dp))
-                    devices.forEachIndexed { i, d ->
-                        if (i > 0) HorizontalDivider(color = Color(0xFFF0EDE8))
-                        DeviceRow(d.name ?: d.address, d.address, selected == d.address && PrinterSettings.getPrinterType() == PrinterType.CLASSIC,
-                            s.printerSelect, s.printerSelected) { choose(d, PrinterType.CLASSIC) }
-                    }
-                } else {
-                    val scanner = adapter.bluetoothLeScanner
-                    if (scanner == null) {
-                        EmptyText(s.bleNotSupported)
-                    } else {
-                        Spacer(Modifier.height(6.dp))
-                        PrimaryButton(if (scanning) s.scanningLabel else s.scanBleBtn, enabled = !scanning) {
-                            scanResults.clear()
-                            runCatching { scanner.startScan(scanCallback) }
-                            scanning = true
-                        }
-                        scanResults.forEachIndexed { i, d ->
-                            if (i > 0) HorizontalDivider(color = Color(0xFFF0EDE8))
-                            DeviceRow(d.name ?: d.address, d.address, selected == d.address && PrinterSettings.getPrinterType() == PrinterType.BLE,
-                                s.printerSelect, s.printerSelected) { choose(d, PrinterType.BLE) }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Text("BLE Service UUID", fontSize = 12.sp, color = Muted)
-                        CatvTextField(bleService, { bleService = it.trim() })
-                        Spacer(Modifier.height(6.dp))
-                        Text("BLE Characteristic UUID", fontSize = 12.sp, color = Muted)
-                        CatvTextField(bleCharacteristic, { bleCharacteristic = it.trim() })
-                        Spacer(Modifier.height(8.dp))
-                        SmallAction(s.saveUuidsBtn, Icons.Filled.CheckCircle) {
-                            PrinterSettings.setBleUuids(bleService, bleCharacteristic)
-                            status = s.saved
-                        }
-                        Spacer(Modifier.height(8.dp))
+            SectionTitle(s.paperWidth)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(58, 80).forEach { mm ->
+                    Chip("$mm mm", paper == mm) {
+                        paper = mm
+                        PrinterSettings.setPaperWidth(mm)
                     }
                 }
             }
-        }
-        Spacer(Modifier.height(16.dp))
-        PrimaryButton(s.testPrint, enabled = selected != null, loading = testing) {
-            scope.launch {
-                testing = true
-                status = s.printingMsg
-                status = PrinterManager.printTest(activity, s) ?: s.printSuccessMsg
-                testing = false
+            Text(s.paperHint, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 4.dp))
+            Spacer(Modifier.height(14.dp))
+
+            SectionTitle(s.printerKind)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip(s.printerClassic, printerType == PrinterType.CLASSIC) { printerType = PrinterType.CLASSIC }
+                Chip("BLE", printerType == PrinterType.BLE) { printerType = PrinterType.BLE }
             }
-        }
-        status?.let {
             Spacer(Modifier.height(10.dp))
-            Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                color = if (it == s.printSuccessMsg || it == s.saved) Good else if (it == s.printingMsg) Ink else Warn)
-        }
-        Spacer(Modifier.height(24.dp))
+
+            CatvCard {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
+                    if (printerType == PrinterType.CLASSIC) {
+                        val devices = remember(permissionTick) { adapter.bondedDevices?.toList().orEmpty() }
+                        if (devices.isEmpty()) EmptyText(s.noPairedPrinters)
+                        else Text(s.pairedDevicesLabel, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(vertical = 6.dp))
+                        devices.forEachIndexed { i, d ->
+                            if (i > 0) HorizontalDivider(color = Color(0xFFF0EDE8))
+                            DeviceRow(d.name ?: d.address, d.address, selected == d.address && PrinterSettings.getPrinterType() == PrinterType.CLASSIC,
+                                s.printerSelect, s.printerSelected) { choose(d, PrinterType.CLASSIC) }
+                        }
+                    } else {
+                        val scanner = adapter.bluetoothLeScanner
+                        if (scanner == null) {
+                            EmptyText(s.bleNotSupported)
+                        } else {
+                            Spacer(Modifier.height(6.dp))
+                            PrimaryButton(if (scanning) s.scanningLabel else s.scanBleBtn, enabled = !scanning) {
+                                scanResults.clear()
+                                runCatching { scanner.startScan(scanCallback) }
+                                scanning = true
+                            }
+                            scanResults.forEachIndexed { i, d ->
+                                if (i > 0) HorizontalDivider(color = Color(0xFFF0EDE8))
+                                DeviceRow(d.name ?: d.address, d.address, selected == d.address && PrinterSettings.getPrinterType() == PrinterType.BLE,
+                                    s.printerSelect, s.printerSelected) { choose(d, PrinterType.BLE) }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Text("BLE Service UUID", fontSize = 12.sp, color = Muted)
+                            CatvTextField(bleService, { bleService = it.trim() })
+                            Spacer(Modifier.height(6.dp))
+                            Text("BLE Characteristic UUID", fontSize = 12.sp, color = Muted)
+                            CatvTextField(bleCharacteristic, { bleCharacteristic = it.trim() })
+                            Spacer(Modifier.height(8.dp))
+                            SmallAction(s.saveUuidsBtn, Icons.Filled.CheckCircle) {
+                                PrinterSettings.setBleUuids(bleService, bleCharacteristic)
+                                status = s.saved
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            PrimaryButton(s.testPrint, enabled = selected != null, loading = testing) {
+                scope.launch {
+                    testing = true
+                    status = s.printingMsg
+                    status = PrinterManager.printTest(activity, s) ?: s.printSuccessMsg
+                    testing = false
+                }
+            }
+            status?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (it == s.printSuccessMsg || it == s.saved) Good else if (it == s.printingMsg) Ink else Warn)
+            }
+            Spacer(Modifier.height(24.dp))
+            }
     }
 }
 
