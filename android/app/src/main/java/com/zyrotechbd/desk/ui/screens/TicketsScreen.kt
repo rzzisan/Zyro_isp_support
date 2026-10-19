@@ -62,6 +62,12 @@ import com.zyrotechbd.desk.ui.theme.Muted
 import com.zyrotechbd.desk.ui.theme.Primary
 import com.zyrotechbd.desk.ui.theme.PrimaryStrong
 import kotlinx.coroutines.delay
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.zyrotechbd.desk.core.Badges
+import com.zyrotechbd.desk.ui.theme.Surface
 import kotlinx.coroutines.launch
 
 /** The panel's ticket tabs, in its order; open = pending + processing. */
@@ -84,6 +90,7 @@ fun stateColor(state: String): Color = when (state) {
     else -> Muted
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 /** Billing tickets, newest first, with the panel's tabs and search; "+" opens a new one. */
 @Composable
 fun TicketsScreen(navController: NavHostController, company: String) {
@@ -105,6 +112,7 @@ fun TicketsScreen(navController: NavHostController, company: String) {
             if (page == 1) rows.clear()
             rows.addAll(res.data)
             counts = res.counts
+            Badges.openTickets.value = res.counts.open
             nextPage = res.nextPage
             error = null
         } catch (e: Exception) {
@@ -117,6 +125,11 @@ fun TicketsScreen(navController: NavHostController, company: String) {
     LaunchedEffect(tab, query, reload) {
         if (query.isNotBlank()) delay(350)
         fetch(1)
+    }
+    val pull = rememberPullToRefreshState()
+    if (pull.isRefreshing) LaunchedEffect(Unit) {
+        fetch(1)
+        pull.endRefresh()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -140,6 +153,7 @@ fun TicketsScreen(navController: NavHostController, company: String) {
                     Spacer(Modifier.height(8.dp))
                 }
             }
+            Box(Modifier.fillMaxSize().nestedScroll(pull.nestedScrollConnection)) {
             LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 88.dp), modifier = Modifier.fillMaxSize()) {
                 if (rows.isNotEmpty()) item {
                     DeskCard {
@@ -155,6 +169,8 @@ fun TicketsScreen(navController: NavHostController, company: String) {
                         modifier = Modifier.fillMaxWidth().clickable { scope.launch { fetch(nextPage!!) } }.padding(16.dp))
                 }
                 if (!loading && rows.isEmpty() && error == null) item { EmptyText(s.noTickets) }
+            }
+            PullToRefreshContainer(pull, Modifier.align(Alignment.TopCenter), containerColor = Surface, contentColor = Primary)
             }
         }
         ExtendedFloatingActionButton(

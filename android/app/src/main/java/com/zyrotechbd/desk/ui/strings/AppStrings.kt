@@ -238,6 +238,10 @@ abstract class AppStrings {
     abstract val loadMore: String
     abstract val cancel: String
     abstract val save: String
+    abstract val today: String
+    abstract val copied: String
+    abstract val newMessagesBtn: String
+    abstract val copyText: String
     abstract fun blockedFor(months: Int, days: Int): String
     abstract fun pendingWarning(amount: String, date: String, by: String): String
     abstract fun roleName(role: String?): String
@@ -488,6 +492,10 @@ object BengaliStrings : AppStrings() {
     override val loadMore = "আরো দেখুন"
     override val cancel = "বাতিল"
     override val save = "সেভ"
+    override val today = "আজ"
+    override val copied = "কপি হয়েছে"
+    override val newMessagesBtn = "নতুন মেসেজ"
+    override val copyText = "কপি"
 }
 
 object EnglishStrings : AppStrings() {
@@ -735,4 +743,8 @@ object EnglishStrings : AppStrings() {
     override val loadMore = "Load more"
     override val cancel = "Cancel"
     override val save = "Save"
+    override val today = "Today"
+    override val copied = "Copied"
+    override val newMessagesBtn = "New messages"
+    override val copyText = "Copy"
 }

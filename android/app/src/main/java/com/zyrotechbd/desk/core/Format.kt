@@ -35,6 +35,18 @@ object Format {
         }
     }
 
+    /** A day heading in a chat: [today], [yesterday], or "12 Oct 2026". */
+    fun dayLabel(iso: String?, today: String, yesterday: String): String {
+        val day = parse(iso)?.toLocalDate() ?: return ""
+        return when (day) {
+            today() -> today
+            today().minusDays(1) -> yesterday
+            else -> day.format(date)
+        }
+    }
+
+    fun sameDay(a: String?, b: String?): Boolean = parse(a)?.toLocalDate() == parse(b)?.toLocalDate()
+
     /** "12 Oct 2026" from "2026-10-12". */
     fun date(ymd: String?): String = runCatching { LocalDate.parse(ymd).format(date) }.getOrDefault(ymd ?: "")
 

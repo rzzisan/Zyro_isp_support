@@ -165,7 +165,7 @@ fun Pill(text: String, color: Color) {
             .border(1.dp, color.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
             .padding(horizontal = 7.dp, vertical = 1.dp)
     ) {
-        Text(text, color = color, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Text(text, color = color, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

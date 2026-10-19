@@ -14,6 +14,7 @@ import com.zyrotechbd.desk.data.network.PushTokenRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -30,6 +31,12 @@ object Push {
 
     /** Set when a notification is tapped; the app shell opens the chat and clears it. */
     val open = MutableStateFlow<OpenChat?>(null)
+
+    /** A chat that just got a message (from a push), so open lists and chats refresh at once instead of waiting. */
+    val events = MutableSharedFlow<Long>(extraBufferCapacity = 16)
+
+    /** The chat on screen right now (app in front), whose own messages need no notification. */
+    @Volatile var visibleChat: Long? = null
 
     val enabled: Boolean get() = BuildConfig.FCM_APP_ID.isNotEmpty()
 

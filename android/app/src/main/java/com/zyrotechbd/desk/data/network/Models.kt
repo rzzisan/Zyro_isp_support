@@ -242,6 +242,8 @@ data class Chat(
     @Json(name = "bot_paused_until") val botPausedUntil: String? = null,
     @Json(name = "notify_muted") val notifyMuted: Boolean = false,
     @Json(name = "window_open") val windowOpen: Boolean = true,
+    @Json(name = "header_id") val headerId: Long? = null,           // the billing line this chat is about (details only)
+    @Json(name = "line_customer_id") val lineCustomerId: String? = null,
     val sending: Boolean = true,
 )
 
