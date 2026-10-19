@@ -86,6 +86,7 @@ class RouterOS:
         words = [command] + [f"={k}={v}" for k, v in (attrs or {}).items()] + [f"?{k}={v}" for k, v in (query or {}).items()]
         self._send_sentence(words)
         rows: list[dict] = []
+        trap = None
         while True:
             sentence = self._read_sentence(raw)
             if not sentence:
@@ -97,11 +98,13 @@ class RouterOS:
                     fields[k] = v
             if kind == "!re":
                 rows.append(fields)
-            elif kind == "!trap":
-                raise RouterOSError(fields.get("message", "router refused the command"))
+            elif kind == "!trap":  # a !done still follows; read it so the next command's reply is not out of step
+                trap = trap or fields.get("message", "router refused the command")
             elif kind == "!fatal":
                 raise RouterOSError(" ".join(sentence[1:]) or "fatal error")
             elif kind == "!done":
+                if trap:
+                    raise RouterOSError(trap)
                 return rows
 
 

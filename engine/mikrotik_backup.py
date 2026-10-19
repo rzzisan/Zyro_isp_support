@@ -2,7 +2,7 @@
 
 Per router, one at a time: `/export file=… show-sensitive` (.rsc, plain text with PPP secrets) and `/system/backup/save`
 (.backup, binary, dont-encrypt so it restores without a password). Both files are read back over the same RouterOS API
-(`/file/read`, RouterOS 7.13+; FTP with the same login as a fallback), then removed from the router. Files land in the
+(`/file/read`, RouterOS 7.13+; else SFTP on the router's ssh port, then FTP, same login), then removed from the router. Files land in the
 panel's private disk (panel/storage/app/private/mikrotik-backups/{company}/{router}/{date}/), never the public one;
 mikrotik_backups keeps one row per run. After the nightly run, files older than the company's mikrotik_backup_days go.
   set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.mikrotik_backup [--router ID]
@@ -73,15 +73,33 @@ def _read_ftp(r: dict, password: str, name: str, size: int) -> bytes:
     return out.getvalue()
 
 
+def _read_sftp(api: RouterOS, r: dict, password: str, name: str, size: int) -> bytes:
+    """Routers older than 7.13 have no /file/read: SFTP on the router's own ssh port, same login (needs the ssh policy)."""
+    import paramiko
+    svc = api.talk("/ip/service/print", {".proplist": "port,disabled"}, query={"name": "ssh"})
+    if not svc or svc[0].get("disabled") == "true":
+        raise RouterOSError("ssh সার্ভিস বন্ধ")
+    with paramiko.SSHClient() as ssh:
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(r["host"], int(svc[0].get("port") or 22), r["username"], password, timeout=20, banner_timeout=20,
+                    auth_timeout=20, allow_agent=False, look_for_keys=False)
+        with ssh.open_sftp() as sftp:
+            out = io.BytesIO()
+            sftp.getfo(name, out)
+    if out.tell() != size:
+        raise RouterOSError(f"SFTP {name}: {out.tell()} of {size} bytes")
+    return out.getvalue()
+
+
 def _fetch(api: RouterOS, r: dict, password: str, name: str, size: int) -> bytes:
-    try:
-        return _read_api(api, name, size)
-    except RouterOSError as e:
-        api_error = str(e)
-    try:
-        return _read_ftp(r, password, name, size)
-    except Exception as e:
-        raise RouterOSError(f"ফাইল আনা যায়নি (API: {api_error}; FTP: {str(e)[:120] or e.__class__.__name__})")
+    errors = []
+    for how, read in (("API", lambda: _read_api(api, name, size)), ("SFTP", lambda: _read_sftp(api, r, password, name, size)),
+                      ("FTP", lambda: _read_ftp(r, password, name, size))):
+        try:
+            return read()
+        except Exception as e:
+            errors.append(f"{how}: {str(e)[:120] or e.__class__.__name__}")
+    raise RouterOSError(f"ফাইল আনা যায়নি ({'; '.join(errors)})")
 
 
 def _remove(api: RouterOS, name: str) -> None:
