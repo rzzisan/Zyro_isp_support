@@ -43,6 +43,7 @@ import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.Customer
 import com.zyrotechbd.desk.ui.components.DeskCard
 import com.zyrotechbd.desk.ui.components.DeskTextField
+import com.zyrotechbd.desk.ui.components.RefreshBox
 import com.zyrotechbd.desk.ui.components.Chip
 import com.zyrotechbd.desk.ui.components.CustomerAvatar
 import com.zyrotechbd.desk.ui.components.Danger
@@ -82,8 +83,7 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
     }
 
     // first page whenever the search or a filter changes (typing waits a moment so every key is not a request)
-    LaunchedEffect(query, dueOnly, zone, reload) {
-        if (query.isNotBlank()) delay(350)
+    suspend fun firstPage() {
         loading = true
         error = null
         try {
@@ -99,6 +99,10 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
         } finally {
             loading = false
         }
+    }
+    LaunchedEffect(query, dueOnly, zone, reload) {
+        if (query.isNotBlank()) delay(350)
+        firstPage()
     }
 
     val nearEnd by remember {
@@ -130,7 +134,7 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
                 Spacer(Modifier.height(8.dp))
             }
             DeskTextField(value = query, onValueChange = { query = it }, placeholder = s.searchCustomer,
-                modifier = Modifier.fillMaxWidth())
+                modifier = Modifier.fillMaxWidth(), clearable = true)
             if (query.isBlank()) {
                 Spacer(Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -145,6 +149,7 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
                 Spacer(Modifier.height(8.dp))
             }
         }
+        RefreshBox({ firstPage() }) {
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
@@ -158,6 +163,7 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
             }
             if (loading) item { LoadingBox() }
             if (!loading && rows.isEmpty() && error == null) item { EmptyText(s.noCustomers) }
+        }
         }
     }
 }

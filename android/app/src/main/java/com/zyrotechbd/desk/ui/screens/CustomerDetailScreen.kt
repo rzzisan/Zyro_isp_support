@@ -2,6 +2,7 @@ package com.zyrotechbd.desk.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -137,8 +138,13 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                         SmallAction(s.call, Icons.Filled.Call, Modifier.weight(1f), enabled = mobile.isNotEmpty()) {
                             context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$mobile")))
                         }
+                        val inApp = c.chatId != null && SessionStore.company()?.can("inbox") == true
                         SmallAction("WhatsApp", Icons.Filled.Chat, Modifier.weight(1f), color = Color(0xFF128C7E),
-                            enabled = mobile.isNotEmpty()) {
+                            enabled = inApp || mobile.isNotEmpty()) {
+                            if (inApp) {
+                                navController.navigate(Routes.chat(c.chatId!!))
+                                return@SmallAction
+                            }
                             val digits = mobile.filter { it.isDigit() }
                             val wa = if (digits.startsWith("0")) "88$digits" else digits
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$wa")))
@@ -207,8 +213,9 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
 
             if (d.tickets.isNotEmpty()) {
                 SectionTitle(s.openTickets)
+                val canTickets = SessionStore.company()?.can("tickets") == true
                 d.tickets.forEach { t ->
-                    DeskCard {
+                    DeskCard(if (canTickets && t.id != null) Modifier.clickable { navController.navigate(Routes.ticket(t.id)) } else Modifier) {
                         Column(Modifier.padding(14.dp)) {
                             Text("#${t.complainId ?: ""} · ${t.category ?: ""}", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 14.sp)
                             Text(listOfNotNull(Format.dateTime(t.openedAt), t.assignedTo).joinToString(" · "), fontSize = 12.sp, color = Muted)

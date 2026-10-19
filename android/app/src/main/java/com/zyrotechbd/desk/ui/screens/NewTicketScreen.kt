@@ -108,7 +108,7 @@ private fun CustomerSearch(company: String, onPick: (Customer) -> Unit) {
 
     Text(s.pickCustomer, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
     Spacer(Modifier.height(8.dp))
-    DeskTextField(query, { query = it }, placeholder = s.searchCustomer, modifier = Modifier.fillMaxWidth())
+    DeskTextField(query, { query = it }, placeholder = s.searchCustomer, modifier = Modifier.fillMaxWidth(), clearable = true)
     Spacer(Modifier.height(10.dp))
     error?.let { MessageBox(it) }
     if (rows.isNotEmpty()) {

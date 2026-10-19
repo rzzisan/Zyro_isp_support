@@ -94,7 +94,7 @@ class CustomerController extends Controller
                 'received_by' => $p->received_by, 'receipt_no' => $p->money_receipt_no]);
         $tickets = BillingTicket::where('company_id', $company->id)->where('customer_header_id', $headerId)
             ->whereIn('state', ['pending', 'processing'])->orderByDesc('opened_at')->limit(5)->get()
-            ->map(fn (BillingTicket $t) => ['complain_id' => $t->complain_id, 'category' => $t->category, 'state' => $t->state,
+            ->map(fn (BillingTicket $t) => ['id' => $t->id, 'complain_id' => $t->complain_id, 'category' => $t->category, 'state' => $t->state,
                 'opened_at' => $t->opened_at?->toIso8601String(), 'assigned_to' => $t->assigned_to, 'note' => $t->note]);
 
         return response()->json(['customer' => static::row($c, (bool) $c->onlineSession()) + [
