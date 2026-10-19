@@ -127,9 +127,13 @@ private fun DailyBillsTab(company: String) {
         fetch(1)
     }
     val nearEnd by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 } }
-    LaunchedEffect(nearEnd) {
+    // in the screen's scope, so scrolling on while a page loads does not cancel it
+    LaunchedEffect(nearEnd, nextPage) {
         val next = nextPage
-        if (next != null && !loading && nearEnd >= rows.size - 5) fetch(next)
+        if (next != null && !loading && nearEnd >= rows.size - 5) {
+            loading = true
+            scope.launch { fetch(next) }
+        }
     }
 
     fun print(b: DailyBill) {
