@@ -49,6 +49,7 @@ import com.zyrotechbd.desk.printing.PrinterManager
 import com.zyrotechbd.desk.printing.ReceiptRef
 import com.zyrotechbd.desk.ui.components.DeskCard
 import com.zyrotechbd.desk.ui.components.DeskTextField
+import com.zyrotechbd.desk.ui.components.RefreshBox
 import com.zyrotechbd.desk.ui.components.Chip
 import com.zyrotechbd.desk.ui.components.Danger
 import com.zyrotechbd.desk.ui.components.EmptyText
@@ -141,6 +142,7 @@ private fun DailyBillsTab(company: String) {
         }
     }
 
+    RefreshBox({ fetch(1) }) {
     LazyColumn(state = listState, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -150,7 +152,7 @@ private fun DailyBillsTab(company: String) {
                         date.year, date.monthValue - 1, date.dayOfMonth).show()
                 }
                 Spacer(Modifier.width(8.dp))
-                DeskTextField(query, { query = it }, s.searchCustomer, modifier = Modifier.weight(1f))
+                DeskTextField(query, { query = it }, s.searchCustomer, modifier = Modifier.weight(1f), clearable = true)
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -183,6 +185,7 @@ private fun DailyBillsTab(company: String) {
             )
         }
         if (loading) item { LoadingBox() }
+    }
     }
 }
 

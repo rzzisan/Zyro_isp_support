@@ -99,6 +99,7 @@ data class Payment(
 )
 
 data class Ticket(
+    val id: Long? = null,
     @Json(name = "complain_id") val complainId: String? = null,
     val category: String? = null,
     val state: String? = null,

@@ -40,6 +40,7 @@ import com.zyrotechbd.desk.data.network.Dashboard
 import com.zyrotechbd.desk.ui.components.LoadingBox
 import com.zyrotechbd.desk.ui.components.MessageBox
 import com.zyrotechbd.desk.ui.components.PrimaryButton
+import com.zyrotechbd.desk.ui.components.RefreshBox
 import com.zyrotechbd.desk.ui.components.SectionTitle
 import com.zyrotechbd.desk.ui.components.SmallAction
 import com.zyrotechbd.desk.ui.components.StatCard
@@ -60,8 +61,7 @@ fun DashboardScreen(navController: NavHostController, company: String) {
     var error by remember { mutableStateOf<String?>(null) }
     val info = SessionStore.company()
 
-    fun load() {
-        scope.launch {
+    suspend fun fetch() {
             loading = true
             error = null
             try {
@@ -75,10 +75,11 @@ fun DashboardScreen(navController: NavHostController, company: String) {
             } finally {
                 loading = false
             }
-        }
     }
+    fun load() { scope.launch { fetch() } }
     LaunchedEffect(company) { load() }
 
+    RefreshBox({ fetch() }) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(s.hello(SessionStore.userName()), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
         Text(s.todayAt(Format.date(Format.today())), fontSize = 13.sp, color = Muted)
@@ -92,7 +93,13 @@ fun DashboardScreen(navController: NavHostController, company: String) {
             if (info?.can("customers") == true || info?.can("bills") == true) {
                 SmallAction(s.findCustomer, Icons.Filled.Search, modifier = Modifier.weight(1f)) { navController.navigate(Routes.Customers) }
             }
-            SmallAction(s.navPrinters, Icons.Filled.Print, modifier = Modifier.weight(1f)) { navController.navigate(Routes.Printers) }
+            if (info?.can("tickets") == true) {
+                SmallAction(s.newTicket, Icons.Filled.ConfirmationNumber, modifier = Modifier.weight(1f)) {
+                    navController.navigate(Routes.newTicket())
+                }
+            } else {
+                SmallAction(s.navPrinters, Icons.Filled.Print, modifier = Modifier.weight(1f)) { navController.navigate(Routes.Printers) }
+            }
         }
         Spacer(Modifier.height(16.dp))
 
@@ -106,6 +113,7 @@ fun DashboardScreen(navController: NavHostController, company: String) {
         } else {
             DashboardStats(d, navController)
         }
+    }
     }
 }
 

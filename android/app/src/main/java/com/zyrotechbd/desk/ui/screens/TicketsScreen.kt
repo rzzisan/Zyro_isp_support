@@ -1,5 +1,6 @@
 package com.zyrotechbd.desk.ui.screens
 
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -135,7 +136,7 @@ fun TicketsScreen(navController: NavHostController, company: String) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
-                DeskTextField(value = query, onValueChange = { query = it }, placeholder = s.searchTickets, modifier = Modifier.fillMaxWidth())
+                DeskTextField(value = query, onValueChange = { query = it }, placeholder = s.searchTickets, modifier = Modifier.fillMaxWidth(), clearable = true)
                 Spacer(Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(tabs(s, counts)) { (key, label) ->
@@ -153,7 +154,7 @@ fun TicketsScreen(navController: NavHostController, company: String) {
                     Spacer(Modifier.height(8.dp))
                 }
             }
-            Box(Modifier.fillMaxSize().nestedScroll(pull.nestedScrollConnection)) {
+            Box(Modifier.fillMaxSize().clipToBounds().nestedScroll(pull.nestedScrollConnection)) {
             LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 88.dp), modifier = Modifier.fillMaxSize()) {
                 if (rows.isNotEmpty()) item {
                     DeskCard {
