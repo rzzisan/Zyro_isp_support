@@ -342,3 +342,7 @@ data class AssignTicketRequest(val employees: List<String>, @Json(name = "dept_i
 data class SolveRequest(val remark: String?, val sms: Boolean)
 
 data class SolveResult(val ok: Boolean = false, val sms: String? = null)
+
+// ── Push ───────────────────────────────────────────────────────────────────────
+
+data class PushTokenRequest(val token: String)

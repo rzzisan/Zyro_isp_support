@@ -10,3 +10,4 @@ captures/
 .cxx/
 *.iml
 .idea/
+app/google-services.json

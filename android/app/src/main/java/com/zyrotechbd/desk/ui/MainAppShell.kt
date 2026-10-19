@@ -1,6 +1,11 @@
 package com.zyrotechbd.desk.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -31,6 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +57,8 @@ import com.zyrotechbd.desk.BuildConfig
 import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.CompanyInfo
+import com.zyrotechbd.desk.push.Push
+import androidx.core.content.ContextCompat
 import com.zyrotechbd.desk.ui.navigation.AppNavGraph
 import com.zyrotechbd.desk.ui.navigation.Routes
 import com.zyrotechbd.desk.ui.screens.MoreScreen
@@ -114,7 +122,18 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
             companies = SessionStore.companies()
             company = SessionStore.company()
         }
+        Push.register()
     }
+
+    // Android 13+ asks before an app may show notifications; ask once the member is signed in
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (Push.enabled && Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    val pushOpen by Push.open.collectAsState()
 
     val companyKey = company?.slug ?: ""
     key(companyKey) {
@@ -123,6 +142,18 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
         val currentRoute = backStack?.destination?.route
         val tabs = tabsFor(company, s)
         val isTab = currentRoute == null || tabs.any { it.route == currentRoute }
+
+        // a tapped chat notification: switch to its company first (this block then starts over), then open the chat
+        LaunchedEffect(pushOpen) {
+            val p = pushOpen ?: return@LaunchedEffect
+            if (p.company.isNotEmpty() && p.company != companyKey && companies.any { it.slug == p.company }) {
+                SessionStore.selectCompany(p.company)
+                company = SessionStore.company()
+                return@LaunchedEffect
+            }
+            navController.navigate(Routes.chat(p.chatId)) { launchSingleTop = true }
+            Push.open.value = null
+        }
 
         fun openTab(route: String) {
             navController.navigate(route) {

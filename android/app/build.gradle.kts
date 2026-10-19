@@ -10,6 +10,28 @@ val localProps = Properties().apply {
     if (f.exists()) load(f.inputStream())
 }
 
+/**
+ * Firebase (phone push) settings from google-services.json, read here instead of the Google Services plugin so the
+ * file stays out of git: local.properties GOOGLE_SERVICES_JSON, /etc/zyro-desk/google-services.json on the build
+ * server, or app/google-services.json. Without it the app builds and runs, just without push.
+ */
+val firebase: Map<String, String> = run {
+    val f = listOfNotNull(localProps.getProperty("GOOGLE_SERVICES_JSON"), "/etc/zyro-desk/google-services.json", "google-services.json")
+        .map { file(it) }.firstOrNull { it.canRead() } ?: return@run emptyMap()
+    @Suppress("UNCHECKED_CAST")
+    val json = groovy.json.JsonSlurper().parse(f) as Map<String, Any?>
+    val project = json["project_info"] as Map<String, Any?>
+    val client = (json["client"] as List<Map<String, Any?>>).firstOrNull {
+        ((it["client_info"] as Map<String, Any?>)["android_client_info"] as Map<String, Any?>)["package_name"] == "com.zyrotechbd.desk"
+    } ?: return@run emptyMap()
+    mapOf(
+        "APP_ID" to (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"].toString(),
+        "API_KEY" to ((client["api_key"] as List<Map<String, Any?>>).first()["current_key"]).toString(),
+        "PROJECT_ID" to project["project_id"].toString(),
+        "SENDER_ID" to project["project_number"].toString(),
+    )
+}
+
 android {
     namespace = "com.zyrotechbd.desk"
     compileSdk = 34
@@ -18,10 +40,13 @@ android {
         applicationId = "com.zyrotechbd.desk"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.2.0"
+        versionCode = 6
+        versionName = "1.3.0"
         buildConfigField("String", "DESK_URL", "\"https://desk.zyrotechbd.com/\"")
         buildConfigField("String", "API_BASE_URL", "\"https://desk.zyrotechbd.com/api/v1/\"")
+        listOf("APP_ID", "API_KEY", "PROJECT_ID", "SENDER_ID").forEach {
+            buildConfigField("String", "FCM_$it", "\"${firebase[it] ?: ""}\"")
+        }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -94,6 +119,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation(platform("com.google.firebase:firebase-bom:32.7.4"))
+    implementation("com.google.firebase:firebase-messaging")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

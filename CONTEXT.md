@@ -371,4 +371,12 @@
 - বিল্ড: সার্ভারে `cd android && ./build-apk.sh` (claude-dev হিসেবে)। লাগে OpenJDK 17 (apt) আর Android SDK `/opt/android-sdk` (platform 34, build-tools 34.0.0)। `android/local.properties` (gitignored, 600) এ sdk.dir আর keystore-এর তথ্য; থাকলে release, না থাকলে debug বিল্ড। APK যায় `panel/public/apk/` (gitignored): `zyro-desk-<ver>-<ts>.apk` + সবসময় নতুনটা `zyro-desk.apk` + `index.html` ডাউনলোড পেজ। nginx-এ `location /apk/` (index.html) যোগ হয়েছে।
 - সাইনিং key: `/etc/zyro-desk/desk-release.jks` (PKCS12, alias `desk`, claude-dev, 700/600), পাসওয়ার্ড শুধু `/etc/zyro-desk/README` (600)-এ। পরের প্রতিটা আপডেট এই key দিয়েই sign করতে হবে, না হলে ফোনে পুরনোটার উপর ইনস্টল হবে না। key-এর ব্যাকআপ সার্ভারের বাইরে রাখা দরকার।
 - ডাউনলোড: https://desk.zyrotechbd.com/apk/ (পেজ), সরাসরি https://desk.zyrotechbd.com/apk/zyro-desk.apk। প্রথম release 1.0.0 (versionCode 1), ~২.৪ MB, 2026-10-19। নতুন সংস্করণে `app/build.gradle.kts`-এ versionCode বাড়াতে হবে।
-- ফেজ ২ (FCM পুশ নোটিফিকেশন, ইনবক্স, টিকিট) Firebase প্রজেক্ট তৈরি হওয়ার অপেক্ষায়।
+- 1.1.0: প্যানেলের মতো ডিজাইন (নিচে ট্যাব + "আরো")। 1.1.1: 58mm রসিদ ঠিক করা হয়েছে।
+- 1.2.0 (086a61e): ইনবক্স/চ্যাট (`Api/InboxController`: chats, reply টেক্সট বা ফাইল, assign, bot, mute, media) আর টিকিট (`Api/TicketController`: tabs সহ তালিকা, লাইভ লাইনসহ বিস্তারিত, ticket-options, ticket-customers, নতুন, assign, solve; কাস্টমার SMS শুধু Desk gateway থেকে যায়)। টেস্ট `AppInboxApiTest`, `AppTicketApiTest`।
+- 1.3.0: ফোনে পুশ (FCM)। Firebase project `zyro-desk`, app `com.zyrotechbd.desk`।
+  - ফোন `POST push-token` দিয়ে নিজের FCM token জমা দেয়। সেটা থাকে `app_push_tokens` টেবিলে, Sanctum token-এর সাথে বাঁধা, তাই logout করলে সেটাও মুছে যায়।
+  - Engine `engine/fcm.py` নতুন WhatsApp মেসেজে web push-এর সাথে একই সময়ে পুশ পাঠায়। মিউট করা চ্যাটে পাঠায় না। পায় শুধু যাদের ইনবক্স দেখার অনুমতি আছে।
+  - পুশ data-only। অ্যাপ নিজে নোটিফিকেশন দেখায়, আর চাপলে সেই কোম্পানির ওই চ্যাট খোলে।
+  - গোপন key: `/etc/zyro-desk/firebase-service-account.json` (600, claude-dev, git-এ নেই; অন্য জায়গায় রাখতে চাইলে `FCM_SERVICE_ACCOUNT` দিয়ে path দিতে হয়)।
+  - অ্যাপের config `/etc/zyro-desk/google-services.json`। `build.gradle.kts` বিল্ডের সময় এটা পড়ে BuildConfig.FCM_* বানায়, Google Services plugin লাগে না। ফাইলটা না থাকলেও APK হয়, শুধু পুশ থাকে না।
+  - ব্যাকআপে keystore আর এই key দুটোই রাখতে হবে।

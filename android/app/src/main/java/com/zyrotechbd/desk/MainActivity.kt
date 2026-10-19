@@ -1,6 +1,7 @@
 package com.zyrotechbd.desk
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.Window
@@ -22,6 +23,8 @@ import androidx.core.view.WindowCompat
 import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.LoginRequest
+import com.zyrotechbd.desk.push.OpenChat
+import com.zyrotechbd.desk.push.Push
 import com.zyrotechbd.desk.ui.MainAppShell
 import com.zyrotechbd.desk.ui.screens.LoginScreen
 import com.zyrotechbd.desk.ui.strings.BengaliStrings
@@ -37,10 +40,28 @@ private const val LANG_PREFS = "lang_store"
 private const val LANG_KEY = "lang_bn"
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_COMPANY = "push_company"
+        const val EXTRA_CHAT = "push_chat"
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openFromPush(intent)
+    }
+
+    /** A tapped chat notification: the app shell opens that chat (switching company if needed). */
+    private fun openFromPush(intent: Intent?) {
+        val chat = intent?.getLongExtra(EXTRA_CHAT, 0L) ?: 0L
+        if (chat > 0) Push.open.value = OpenChat(intent?.getStringExtra(EXTRA_COMPANY).orEmpty(), chat)
+        intent?.removeExtra(EXTRA_CHAT)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        openFromPush(intent)
         setContent {
             DeskTheme {
                 AppRoot()
