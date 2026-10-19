@@ -6,9 +6,22 @@ object EscPosEncoder {
     /** Rows per raster command: small bands fit the buffer of cheap printers, a long receipt prints in pieces. */
     private const val BAND = 256
 
+    private fun isDark(p: Int): Boolean =
+        ((p shr 16) and 0xFF) * 0.299 + ((p shr 8) and 0xFF) * 0.587 + (p and 0xFF) * 0.114 < 160
+
+    /** Rows down to the last one with ink, so blank space under the receipt does not come out as paper. */
+    fun inkHeight(bitmap: Bitmap): Int {
+        val pixels = IntArray(bitmap.width)
+        for (y in bitmap.height - 1 downTo 0) {
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, y, bitmap.width, 1)
+            if (pixels.any(::isDark)) return y + 1
+        }
+        return 0
+    }
+
     fun bitmapToEscPos(bitmap: Bitmap): ByteArray {
         val width = bitmap.width
-        val height = bitmap.height
+        val height = inkHeight(bitmap)
         val bytesPerRow = (width + 7) / 8
         val pixels = IntArray(width)
         val out = java.io.ByteArrayOutputStream()
@@ -24,9 +37,7 @@ object EscPosEncoder {
             for (r in 0 until rows) {
                 bitmap.getPixels(pixels, 0, width, 0, top + r, width, 1)
                 for (x in 0 until width) {
-                    val p = pixels[x]
-                    val luminance = ((p shr 16) and 0xFF) * 0.299 + ((p shr 8) and 0xFF) * 0.587 + (p and 0xFF) * 0.114
-                    if (luminance < 160) {
+                    if (isDark(pixels[x])) {
                         val i = r * bytesPerRow + x / 8
                         band[i] = (band[i].toInt() or (1 shl (7 - x % 8))).toByte()
                     }
