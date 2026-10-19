@@ -35,8 +35,11 @@ object ReceiptRenderer {
         }
         // CSS px per mm is 96 / 25.4; scale so the content box fills the paper's printable dots
         val scalePercent = dots / (contentMm(paperMm) * 96 / 25.4) * 100
-        val page = html.replace("</head>", "<style>html,body{width:auto!important;margin:0!important}" +
-            ".r{margin:0!important;padding-top:0!important}</style></head>")
+        // The WebView is a "screen", so the receipt's @media screen preview style (side padding, gray page, shadow)
+        // applies; strip it, or the content shrinks to the middle of the paper with blank bands on both sides.
+        val page = html.replace("</head>", "<style>html,body{width:auto!important;margin:0!important;" +
+            "background:#fff!important}.r{margin:0!important;padding:0!important;box-shadow:none!important;" +
+            "background:#fff!important}</style></head>")
 
         val root = activity.findViewById<ViewGroup>(android.R.id.content)
         val webView = WebView(activity).apply {
@@ -71,7 +74,7 @@ object ReceiptRenderer {
                     delay(250)
                 }
                 delay(200)
-                val heightPx = ceil((bottomCss + 4) * scalePercent / 100).toInt().coerceIn(50, 12_000)
+                val heightPx = ceil((bottomCss + 2) * scalePercent / 100).toInt().coerceIn(50, 12_000)
                 webView.layoutParams = FrameLayout.LayoutParams(dots, heightPx)
                 webView.measure(View.MeasureSpec.makeMeasureSpec(dots, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY))
