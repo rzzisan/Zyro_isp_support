@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Z letter: top bar + diagonal + bottom bar (single filled path) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 18,18 L 52,18 L 52,29 L 25,79 L 52,79 L 52,90 L 18,90 L 18,79 L 45,29 L 18,29 Z" />
+
+    <!-- D letter: rounded right side with the inside cut out -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M 56,18 L 74,18 Q 90,18 90,34 L 90,74 Q 90,90 74,90 L 56,90 Z M 66,28 L 72,28 Q 80,28 80,36 L 80,72 Q 80,80 72,80 L 66,80 Z" />
+
+</vector>
