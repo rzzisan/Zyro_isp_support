@@ -1237,5 +1237,12 @@
     "পিন করা": "Pinned",
     "পিন করলে এই এলাকার নতুন টিকিট আগে এই কর্মী পাবেন": "When pinned, new tickets in this area go to this staff first",
     "খালি রাখলে এলাকায় আগে কাজ করা কর্মী অটো পাবেন": "Leave empty to auto-assign the staff who worked this area before",
-    "অটো assign: :who": "Auto-assigned: :who"
+    "অটো assign: :who": "Auto-assigned: :who",
+    "টিমের নাম": "Team name",
+    "যেমন রিফাত-মারুফ": "e.g. Rifat-Maruf",
+    ":who আগেই \":team\" টিমে আছেন": ":who is already in team \":team\"",
+    "নতুন টিকিট অটো assign হলে বাছাই করা কর্মীর পুরো টিম পায়। এক টিকিটে একই টিমের কর্মীরা থাকতে পারেন, আলাদা টিমের কাউকে একসাথে দেওয়া যায় না।": "When a new ticket is auto-assigned, the picked staff's whole team gets it. One ticket may hold staff of one team, never staff of two different teams.",
+    "টিম যোগ করুন": "Add team",
+    "ফিল্ড টিম": "Field teams",
+    "শুধু ফিল্ড কর্মী: টেকনিশিয়ান পেজে যাদের বিলিং কর্মী যুক্ত করা আছে": "Field staff only: those linked to a billing employee on the Technicians page"
 }

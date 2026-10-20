@@ -719,10 +719,19 @@ def customer_search(request: Request, company_id: int, q: str = ""):
              "zone": r.get("ZoneName") or r.get("Zone")} for r in rows]
 
 
+def refuse_mixed_teams(company_id: int, employees) -> None:
+    """One ticket holds staff of one field team only (Desk → ফিল্ড টিম)."""
+    from engine.ticket_autoassign import check_team
+    why = check_team(company_id, employees)
+    if why:
+        raise HTTPException(status_code=400, detail=why)
+
+
 @app.post("/internal/{company_id}/tickets")
 async def new_ticket(request: Request, company_id: int, background: BackgroundTasks):
     t = internal_tenant(request, company_id)
     b = await request.json()
+    refuse_mixed_teams(company_id, b.get("employees"))
     api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
 
     def run():
@@ -753,6 +762,7 @@ async def assign(request: Request, company_id: int, complain_id: int, background
     b = await request.json()
     if not b.get("employees"):
         raise HTTPException(status_code=400, detail="অন্তত একজন কর্মী বাছাই করুন")
+    refuse_mixed_teams(company_id, b["employees"])
     api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
     await run_in_threadpool(billing_call, lambda: api.assign_ticket(complain_id, [int(e) for e in b["employees"]],
                                                                     b.get("dept_id"), bool(b.get("sms_employees"))))
@@ -773,6 +783,7 @@ async def edit_ticket(request: Request, company_id: int, complain_id: int, backg
         raise HTTPException(status_code=400, detail="সমাধান হওয়া টিকিট বিলিংয়ে এডিট করা যায় না")
     if not (b.get("category_id") and b.get("mobile") and (b.get("comment") or "").strip()):
         raise HTTPException(status_code=400, detail="সমস্যার ধরন, মোবাইল আর বিবরণ লাগবে")
+    refuse_mixed_teams(company_id, b.get("employees"))
     api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
 
     def run():

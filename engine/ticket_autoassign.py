@@ -3,8 +3,9 @@
 area_staff (kept in the desk, never emptied) holds who worked tickets in which zone / sub zone / box: refresh() folds
 every synced ticket into it (solved_by of solved tickets, assigned_to of open ones). A new ticket with no staff goes to
 the one who last worked the customer's box, else the same sub zone, else the same zone; a row pinned in the desk wins
-in its area. Names are mapped to billing employees (billing_options kind 'employees'); employees inactive in billing or
-on the company's exclude list are skipped (Desk technicians' on/off is about WhatsApp, not work, so it is not used). Staff picked by hand always stay: callers only ask here
+in its area. With field teams (staff_teams) the picked person's whole team gets it, and check_team() refuses any
+assign that mixes two teams. Names are mapped to billing employees (billing_options kind 'employees'); only field staff (linked to a
+Desk technician) get tickets, and employees inactive in billing or on the company's exclude list are skipped (Desk technicians' on/off is about WhatsApp, not work, so it is not used). Staff picked by hand always stay: callers only ask here
 when none was given. Switch: bot_settings.auto_assign.
 
     python -m engine.ticket_autoassign <company_id> <customer_id>   # shows whom a new ticket would go to
@@ -73,14 +74,44 @@ def _area(company_id: int, header_id=None, customer: dict | None = None) -> dict
     return {k: _norm(v) for k, v in area.items()}
 
 
+def field_staff(company_id: int) -> set[str]:
+    """Billing employees who work in the field: linked to a Desk technician (on or off: that switch is for WhatsApp)."""
+    return {str(r["billing_employee_id"]).strip() for r in db.all_rows(
+        """SELECT billing_employee_id FROM technicians WHERE company_id = %s
+             AND billing_employee_id IS NOT NULL AND billing_employee_id <> ''""", (company_id,))}
+
+
 def _employees(company_id: int) -> dict[str, str]:
-    """billing employee name (normalised) -> id: active in billing and not on the company's "never auto-assign" list
-    (bot_settings.auto_assign_exclude, e.g. the owner or a shared support login)."""
+    """billing employee name (normalised) -> id of those who may get a ticket: active in billing, field staff (when the
+    company has linked any technician) and not on the "never auto-assign" list (bot_settings.auto_assign_exclude)."""
     bot = db.one("SELECT auto_assign_exclude FROM bot_settings WHERE company_id = %s", (company_id,)) or {}
     off = {str(x) for x in (bot.get("auto_assign_exclude") or [])}
+    field = field_staff(company_id)
     return {_norm(r["name"]): str(r["option_id"]) for r in db.all_rows(
         "SELECT option_id, name FROM billing_options WHERE company_id = %s AND kind = 'employees' AND active",
-        (company_id,)) if str(r["option_id"]) not in off}
+        (company_id,)) if str(r["option_id"]) not in off and (not field or str(r["option_id"]) in field)}
+
+
+def teams(company_id: int) -> dict[str, tuple[int, list[str]]]:
+    """billing employee id -> (team id, all member ids of that team)."""
+    out = {}
+    for r in db.all_rows("SELECT id, members FROM staff_teams WHERE company_id = %s", (company_id,)):
+        members = [str(m) for m in (r["members"] or [])]
+        for m in members:
+            out[m] = (r["id"], members)
+    return out
+
+
+def check_team(company_id: int, employee_ids) -> str | None:
+    """Why these employees can't share a ticket (staff of two teams, or a team member with someone outside it), or None."""
+    ids = [str(e) for e in employee_ids or []]
+    if len(ids) < 2:
+        return None
+    tm = teams(company_id)
+    found = {tm[e][0] if e in tm else None for e in ids}
+    if len(found) > 1:
+        return "এক টিকিটে শুধু একই টিমের কর্মী দেওয়া যায়, আলাদা টিমের কাউকে একসাথে না"
+    return None
 
 
 def pick(company_id: int, header_id=None, customer: dict | None = None) -> dict | None:
@@ -102,12 +133,20 @@ def pick(company_id: int, header_id=None, customer: dict | None = None) -> dict 
         if not rows:
             continue
         top = rows[0]
-        # pinned: everyone pinned here; otherwise the people on that last ticket (a pair often goes together)
-        team = [r for r in rows if r["pinned"]] if top["pinned"] else \
-            [r for r in rows if not r["pinned"] and r["last_complain_id"] == top["last_complain_id"]]
-        names = list(dict.fromkeys(r["employee_name"] for r in team))
-        return {"employees": list(dict.fromkeys(staff[_norm(n)] for n in names)), "names": names, "level": level,
-                "pinned": bool(top["pinned"]), "from_ticket": top["last_complain_id"]}
+        first = staff[_norm(top["employee_name"])]
+        tm = teams(company_id)
+        if first in tm:  # the picked person's whole team (those who may get work)
+            ids = [first] + [m for m in tm[first][1] if m != first and m in staff.values()]
+        else:  # no team: the people on that same last ticket who have no team either (or everyone pinned here)
+            same = [r for r in rows if r["pinned"]] if top["pinned"] else \
+                [r for r in rows if not r["pinned"] and r["last_complain_id"] == top["last_complain_id"]]
+            ids = list(dict.fromkeys([first] + [staff[_norm(r["employee_name"])] for r in same
+                                                if staff[_norm(r["employee_name"])] not in tm]))
+        names = {str(r["option_id"]): r["name"] for r in db.all_rows(
+            "SELECT option_id, name FROM billing_options WHERE company_id = %s AND kind = 'employees' AND option_id = ANY(%s)",
+            (company_id, ids))}
+        return {"employees": ids, "names": [names.get(i, i) for i in ids],
+                "level": level, "pinned": bool(top["pinned"]), "from_ticket": top["last_complain_id"]}
     return None
 
 

@@ -3,10 +3,13 @@
 namespace Tests\Feature;
 
 use App\Filament\App\Resources\AreaStaff\Pages\ListAreaStaff;
+use App\Filament\App\Resources\StaffTeams\Pages\ManageStaffTeams;
 use App\Models\AreaStaff;
 use App\Models\BillingOption;
 use App\Models\BotSetting;
 use App\Models\Company;
+use App\Models\StaffTeam;
+use App\Models\Technician;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,5 +52,29 @@ class AreaStaffTest extends TestCase
         $this->assertFalse($s->auto_assign);
         $this->assertSame(['1'], $s->auto_assign_exclude);
         $this->assertTrue($a->fresh()->pinned);
+    }
+
+    public function test_teams_keep_each_employee_in_one_team(): void
+    {
+        $company = Company::create(['name' => 'Century Link Network']);
+        $owner = User::factory()->create();
+        $company->users()->attach($owner, ['role' => 'owner']);
+        foreach (['8' => 'Maruf', '9' => 'Rifat', '13' => 'Rubel'] as $id => $name) {
+            BillingOption::create(['company_id' => $company->id, 'kind' => 'employees', 'option_id' => $id, 'name' => $name]);
+        }
+        foreach (['8' => 'Maruf', '9' => 'Rifat'] as $id => $name) {
+            Technician::create(['company_id' => $company->id, 'name' => $name, 'billing_employee_id' => $id,
+                'billing_employee_name' => $name, 'active' => false]);
+        }
+        $this->actingAs($owner)->get("/app/{$company->slug}/staff-teams")->assertOk();
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($company);
+        Livewire::test(ManageStaffTeams::class)
+            ->callTableAction('create', data: ['name' => 'Rifat-Maruf', 'members' => ['9', '8']])->assertHasNoTableActionErrors()
+            ->callTableAction('create', data: ['name' => 'Rifat-2', 'members' => ['9']])->assertHasTableActionErrors(['members']);
+        Livewire::test(ManageStaffTeams::class)  // not field staff
+            ->callTableAction('create', data: ['name' => 'Rubel', 'members' => ['13']])->assertHasTableActionErrors();
+        $team = StaffTeam::where('company_id', $company->id)->sole();
+        $this->assertSame(['9', '8'], $team->members);
     }
 }
