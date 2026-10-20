@@ -389,3 +389,8 @@
 - যাচাই: `python -m engine.ticket_autoassign <company_id> <customer_id>` দেখায় নতুন টিকিট কে পাবে।
 - ফিল্ড কর্মী = কোনো ফিল্ড টিমে আছেন, অথবা টেকনিশিয়ান পেজে বিলিং কর্মী যুক্ত (on/off যাই হোক)। কোম্পানিতে এমন কেউ থাকলে অটো assign শুধু তাদের মধ্যে (Zisan-এর নির্দেশ: সব কর্মী ফিল্ডের নয়)।
 - ফিল্ড টিম (`staff_teams`, সাপোর্ট → "ফিল্ড টিম", owner/admin): বিলিংয়ের যেকোনো কর্মী (টিমে দিলেই ফিল্ড কর্মী), একজন একটাই টিমে; পেজে "বিলিং থেকে কর্মী লিস্ট আনুন" বোতাম। অটো assign বাছাই করা কর্মীর পুরো টিম দেয়; engine-এর new/assign/edit টিকিট endpoint আলাদা টিমের কর্মী একসাথে দিলে 400 দেয় (`check_team`; টিমহীন কর্মী শুধু টিমহীনদের সাথে)।
+
+## নিজের পাসওয়ার্ড বদলানো (2026-10-20, লাইভ)
+- প্যানেল: কোম্পানি প্যানেলে `MyProfile` পেজ (`/app/{company}/profile`), সুপার প্যানেলে `EditProfile`; বর্তমান পাসওয়ার্ড দিয়ে নতুন পাসওয়ার্ড সেট। অ্যাপ: `POST /api/v1/password` (Sanctum; টোকেন ছাড়া 401), অ্যাপ 1.8.0-এ "আরো" → পাসওয়ার্ড বদলান। টেস্ট `ChangePasswordTest`।
+- Deployed 2026-10-20 12:04 UTC (82d2bcb, PR #17): migration/engine restart লাগেনি; config:cache (claude-dev, chgrp www-data, 640) → route/filament/view cache (www-data), fpm reload। যাচাই: profile 302 → login, `POST /api/v1/password` টোকেন ছাড়া 401, laravel.log-এ নতুন এরর নেই।
+- APK 1.8.0 (versionCode 12) 12:08 UTC-তে /apk/-এ প্রকাশিত, একই release key দিয়ে sign করা (cert a232f5ba…)।
