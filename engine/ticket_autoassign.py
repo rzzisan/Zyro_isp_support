@@ -4,8 +4,8 @@ area_staff (kept in the desk, never emptied) holds who worked tickets in which z
 every synced ticket into it (solved_by of solved tickets, assigned_to of open ones). A new ticket with no staff goes to
 the one who last worked the customer's box, else the same sub zone, else the same zone; a row pinned in the desk wins
 in its area. With field teams (staff_teams) the picked person's whole team gets it, and check_team() refuses any
-assign that mixes two teams. Names are mapped to billing employees (billing_options kind 'employees'); only field staff (linked to a
-Desk technician) get tickets, and employees inactive in billing or on the company's exclude list are skipped (Desk technicians' on/off is about WhatsApp, not work, so it is not used). Staff picked by hand always stay: callers only ask here
+assign that mixes two teams. Names are mapped to billing employees (billing_options kind 'employees'); only field staff (in a field team or linked
+to a Desk technician) get tickets, and employees inactive in billing or on the company's exclude list are skipped (Desk technicians' on/off is about WhatsApp, not work, so it is not used). Staff picked by hand always stay: callers only ask here
 when none was given. Switch: bot_settings.auto_assign.
 
     python -m engine.ticket_autoassign <company_id> <customer_id>   # shows whom a new ticket would go to
@@ -75,10 +75,12 @@ def _area(company_id: int, header_id=None, customer: dict | None = None) -> dict
 
 
 def field_staff(company_id: int) -> set[str]:
-    """Billing employees who work in the field: linked to a Desk technician (on or off: that switch is for WhatsApp)."""
-    return {str(r["billing_employee_id"]).strip() for r in db.all_rows(
+    """Billing employees who work in the field: in a field team, or linked to a Desk technician (on or off: that switch
+    is for WhatsApp)."""
+    linked = {str(r["billing_employee_id"]).strip() for r in db.all_rows(
         """SELECT billing_employee_id FROM technicians WHERE company_id = %s
              AND billing_employee_id IS NOT NULL AND billing_employee_id <> ''""", (company_id,))}
+    return linked | set(teams(company_id))
 
 
 def _employees(company_id: int) -> dict[str, str]:

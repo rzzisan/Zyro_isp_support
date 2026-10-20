@@ -1244,5 +1244,7 @@
     "নতুন টিকিট অটো assign হলে বাছাই করা কর্মীর পুরো টিম পায়। এক টিকিটে একই টিমের কর্মীরা থাকতে পারেন, আলাদা টিমের কাউকে একসাথে দেওয়া যায় না।": "When a new ticket is auto-assigned, the picked staff's whole team gets it. One ticket may hold staff of one team, never staff of two different teams.",
     "টিম যোগ করুন": "Add team",
     "ফিল্ড টিম": "Field teams",
-    "শুধু ফিল্ড কর্মী: টেকনিশিয়ান পেজে যাদের বিলিং কর্মী যুক্ত করা আছে": "Field staff only: those linked to a billing employee on the Technicians page"
+    "বিলিংয়ের কর্মী; টিমে থাকলে তিনি ফিল্ড কর্মী হিসেবে অটো assign পাবেন। নতুন কর্মী না দেখালে উপরের \"বিলিং থেকে কর্মী লিস্ট আনুন\" চাপুন": "Billing employees; team members count as field staff for auto-assign. If a new employee is missing, press \"Fetch staff list from billing\" above",
+    "বিলিং থেকে কর্মী লিস্ট আনুন": "Fetch staff list from billing",
+    "কর্মী লিস্ট বিলিং থেকে আনা হয়েছে": "Staff list fetched from billing"
 }
