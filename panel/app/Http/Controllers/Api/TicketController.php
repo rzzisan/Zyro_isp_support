@@ -163,7 +163,8 @@ class TicketController extends Controller
             'status' => 'খোলা', 'employees' => $employees,
         ], $company->id) : null;
 
-        return response()->json(['complain_id' => $res['complain_id'] ?? null, 'message' => $res['message'] ?? null, 'sms' => $sms]);
+        return response()->json(['complain_id' => $res['complain_id'] ?? null, 'message' => $res['message'] ?? null, 'sms' => $sms,
+            'auto_assigned' => $res['auto_assigned'] ?? null]);
     }
 
     /** Give an open ticket to billing employees (and optionally a department). */

@@ -36,7 +36,7 @@ class SidebarTest extends TestCase
     {
         $this->assertSame([
             'ড্যাশবোর্ড',
-            '# সাপোর্ট: ইনবক্স টিকিট',
+            '# সাপোর্ট: ইনবক্স টিকিট এলাকার কর্মী',
             '# কাস্টমার ও বিল: কাস্টমার বিল কালেকশন লাইন চালু/বন্ধের রেকর্ড',
             '# SMS: SMS পাঠান SMS লগ SMS টেমপ্লেট',
             '# নেটওয়ার্ক: MikroTik MikroTik ব্যাকআপ OLT নেটওয়ার্ক সেটিংস',
@@ -52,6 +52,6 @@ class SidebarTest extends TestCase
         foreach (['বিলিং কনফিগারেশন', 'MikroTik', 'AI খরচ', 'টিম'] as $adminOnly) {
             $this->assertStringNotContainsString($adminOnly, $sidebar);
         }
-        $this->assertStringContainsString('# সাপোর্ট: ইনবক্স টিকিট', $sidebar);
+        $this->assertStringContainsString('# সাপোর্ট: ইনবক্স টিকিট এলাকার কর্মী', $sidebar);
     }
 }

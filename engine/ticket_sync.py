@@ -107,6 +107,32 @@ def fill_descriptions(api, company_id: int) -> int:
     return n
 
 
+def auto_assign_new(t, api, new_rows: list[dict]) -> list[str]:
+    """Tickets opened straight in the billing software (first seen now, a short while old) with nobody on them yet get
+    the staff who last worked in the customer's area (engine/ticket_autoassign.py). Returns the ticket numbers."""
+    from engine.ticket_autoassign import assign, enabled, refresh
+    if not new_rows or not enabled(t):
+        return []
+    refresh(t.company_id)
+    done = []
+    recent = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)  # parse_time gives naive UTC
+    for r in new_rows:
+        opened = parse_time(r.get("CreationDate"))
+        if names(r.get("SolvedBy")) or not opened or opened < recent:
+            continue
+        cid = str(r.get("ComplainId"))
+        try:
+            p = assign(t, api, cid, r.get("CustomerHeaderId"))
+        except Exception:
+            log.exception("auto-assign failed for ticket %s", cid)
+            continue
+        if p:
+            db.execute("UPDATE billing_tickets SET assigned_to = %s WHERE company_id = %s AND complain_id = %s",
+                       (", ".join(p["names"]), t.company_id, cid))
+            done.append(cid)
+    return done
+
+
 def sync_company(t, days: int) -> dict:
     # the billing lists (employees, categories, ...) are no longer refreshed here: only the desk's Sync buttons
     # update them (engine/billing_config.py)
@@ -117,12 +143,16 @@ def sync_company(t, days: int) -> dict:
     before = {r["complain_id"]: r["assigned_to"] for r in db.all_rows(
         "SELECT complain_id, assigned_to FROM billing_tickets WHERE company_id = %s AND state IN ('pending', 'processing')",
         (t.company_id,))}
+    known = {r["complain_id"] for r in db.all_rows(
+        "SELECT complain_id FROM billing_tickets WHERE company_id = %s AND complain_id = ANY(%s)",
+        (t.company_id, [str(r.get("ComplainId")) for r in open_rows]))}
     for r in open_rows:
         upsert(t.company_id, r, "processing" if str(r.get("ComplainId")) in processing else "pending")
     described = fill_descriptions(api, t.company_id)
+    auto = auto_assign_new(t, api, [r for r in open_rows if str(r.get("ComplainId")) not in known])
     # staff changed (new ticket with staff, assigned, re-assigned): tell the linked technicians on WhatsApp
     reassigned = [str(r.get("ComplainId")) for r in open_rows
-                  if names(r.get("SolvedBy")) and names(r.get("SolvedBy")) != before.get(str(r.get("ComplainId")))]
+                  if names(r.get("SolvedBy")) and names(r.get("SolvedBy")) != before.get(str(r.get("ComplainId")))] + auto
     try:
         from engine.ticket_notify import notify
         notified = notify(t, api, reassigned)
@@ -136,6 +166,12 @@ def sync_company(t, days: int) -> dict:
         "solvedBy": "", "problemCategory": "", "zone": "", "orderBy": "", "permissionId": "1"})
     for r in solved:
         upsert(t.company_id, r, "solved")
+    try:  # who worked where, for auto-assign
+        from engine.ticket_autoassign import refresh
+        area_staff = refresh(t.company_id)
+    except Exception:
+        log.exception("area staff refresh failed for company %s", t.company_id)
+        area_staff = 0
 
     # open here but gone from the billing open list and not seen as solved: closed some other way
     open_ids = [str(r.get("ComplainId")) for r in open_rows]
@@ -145,7 +181,7 @@ def sync_company(t, days: int) -> dict:
                       RETURNING 1)
            SELECT count(*) AS n FROM u""", (t.company_id, open_ids))
     return {"open": len(open_rows), "processing": len(processing), "solved": len(solved), "closed": gone["n"], "described": described,
-            "reassigned": len(reassigned), "notified": notified}
+            "auto_assigned": len(auto), "area_staff": area_staff, "reassigned": len(reassigned), "notified": notified}
 
 
 def companies(only: int | None) -> list:
