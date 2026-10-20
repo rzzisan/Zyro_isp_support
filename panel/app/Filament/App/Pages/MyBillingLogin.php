@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Pages;
 
+use App\Filament\App\Resources\Memberships\MembershipResource;
 use App\Models\Company;
 use App\Models\Membership;
 use App\Services\IspDigitalClient;
@@ -9,16 +10,16 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
 use Throwable;
 
 /**
- * Every member's own billing-software login. Tickets a member opens or assigns from the panel are made
- * with it, so the billing software shows who did it. The bot and the sync keep using the company login.
+ * The member's billing-software login, shown read-only: the owner sets every member's login on the team page.
+ * Bills and line on/off are made with it (and need it); tickets too, so billing shows who did it.
  */
 class MyBillingLogin extends CompanySettingsPage
 {
@@ -38,7 +39,7 @@ class MyBillingLogin extends CompanySettingsPage
 
     protected static ?int $navigationSort = 1;
 
-    /** Everyone in the company has their own. */
+    /** Everyone in the company can see theirs. */
     public static function canAccess(): bool
     {
         $company = Filament::getTenant();
@@ -53,12 +54,12 @@ class MyBillingLogin extends CompanySettingsPage
 
     protected function fillData(Model $record): array
     {
-        return ['billing_username' => $record->billing_username, 'billing_password' => null];
+        return [];
     }
 
     public function getSubheading(): ?string
     {
-        return __('প্যানেল থেকে আপনি যে টিকিট খুলবেন বা assign করবেন, সেটা বিলিং সফটওয়্যারে আপনার নামেই হবে। বট আর টিকিট sync চলে কোম্পানির (owner-এর দেওয়া) লগইনে।');
+        return __('প্রতিটি সদস্যের বিলিং লগইন শুধু Owner টিম পেজ থেকে দেন। এই লগইন ছাড়া বিল নেওয়া আর লাইন চালু/বন্ধ করা যায় না। টিকিটও এই লগইনে আপনার নামে হয়।');
     }
 
     public function form(Schema $schema): Schema
@@ -67,11 +68,8 @@ class MyBillingLogin extends CompanySettingsPage
         $m = $this->record(Filament::getTenant());
 
         return $schema->components([
-            TextInput::make('billing_username')->label(__('বিলিং সফটওয়্যারের ইউজারনেম'))->required()
-                ->helperText(__('বিলিং সফটওয়্যারে আপনি যে ইউজারনেমে লগইন করেন')),
-            TextInput::make('billing_password')->label(__('পাসওয়ার্ড'))->password()->revealable()
-                ->required(! filled($m->billing_password))
-                ->helperText(filled($m->billing_password) ? __('এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে, কেউ দেখতে পাবে না')),
+            Placeholder::make('username')->label(__('বিলিং সফটওয়্যারের ইউজারনেম'))
+                ->content($m->hasBillingLogin() ? $m->billing_username : __('দেওয়া নেই — বিল নিতে বা লাইন চালু/বন্ধ করতে পারবেন না। Owner-কে টিম পেজ থেকে দিতে বলুন।')),
             Placeholder::make('status')->label(__('শেষ পরীক্ষা'))
                 ->content(fn () => $m->billing_checked_at
                     ? ($m->billing_check_ok ? __('✅ লগইন ঠিক আছে') : __('❌ লগইন হয়নি')).' · '.$m->billing_checked_at->diffForHumans()
@@ -79,25 +77,26 @@ class MyBillingLogin extends CompanySettingsPage
         ]);
     }
 
-    protected function beforeSaving(array $data, Model $record): array
+    /** Read only: no save button. */
+    public function content(Schema $schema): Schema
     {
-        if (blank($data['billing_password'] ?? null)) {
-            unset($data['billing_password']);
-        }
-
-        return ['billing_username' => trim($data['billing_username'])] + $data;
+        return $schema->components([EmbeddedSchema::make('form')]);
     }
 
-    protected function afterSaved(Model $record): void
+    public function save(): void
     {
-        $this->testLogin();
+        abort(403);
     }
 
     protected function getHeaderActions(): array
     {
         return [
             Action::make('test')->label(__('লগইন পরীক্ষা করুন'))->icon(Heroicon::OutlinedSignal)
+                ->visible(fn () => $this->record(Filament::getTenant())->hasBillingLogin())
                 ->action(fn () => $this->testLogin()),
+            Action::make('team')->label(__('টিম পেজে লগইন দিন'))->icon(Heroicon::OutlinedUserGroup)->color('gray')
+                ->visible(fn () => MembershipResource::isOwner() && MembershipResource::canAccess())
+                ->url(fn () => MembershipResource::getUrl('index')),
         ];
     }
 
@@ -107,7 +106,7 @@ class MyBillingLogin extends CompanySettingsPage
         $m = $this->record(Filament::getTenant());
         $conn = Filament::getTenant()->billingConnection;
         if (! $m->hasBillingLogin() || ! $conn) {
-            Notification::make()->warning()->title($conn ? __('আগে ইউজারনেম আর পাসওয়ার্ড সেভ করুন') : __('কোম্পানির বিলিং সংযোগ এখনো সেট করা হয়নি'))->send();
+            Notification::make()->warning()->title($conn ? __('বিলিং লগইন দেওয়া নেই') : __('কোম্পানির বিলিং সংযোগ এখনো সেট করা হয়নি'))->send();
 
             return;
         }

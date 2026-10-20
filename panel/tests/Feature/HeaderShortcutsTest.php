@@ -56,7 +56,9 @@ class HeaderShortcutsTest extends TestCase
 
     public function test_links_open_the_bill_and_ticket_forms(): void
     {
-        $this->actingAs($this->member('owner'));
+        $owner = $this->member('owner');
+        \App\Models\Membership::where('user_id', $owner->id)->update(['billing_username' => 'zisan54', 'billing_password' => encrypt('pw', false)]);
+        $this->actingAs($owner);
         Filament::setCurrentPanel('app');
         Filament::setTenant($this->company);
         // the page opens ?action=<name> on load; here: the action exists on that page and opens

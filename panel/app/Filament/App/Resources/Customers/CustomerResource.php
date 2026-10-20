@@ -93,7 +93,7 @@ class CustomerResource extends Resource
     /** Line on/off from the list: the member needs the line_switch permission; Left / gone customers can't be switched. */
     public static function canSwitch(BillingCustomer $r): bool
     {
-        return ! $r->gone_at && ! $r->is_left && Menu::can('line_switch');
+        return ! $r->gone_at && ! $r->is_left && Menu::can('line_switch') && \App\Models\Membership::mayUseBilling();
     }
 
     /** This month's VAT from the billing row, when billing sends one. */

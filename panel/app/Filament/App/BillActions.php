@@ -134,6 +134,9 @@ class BillActions
 
         return Action::make($forRecord ? 'payBill' : 'receiveBill')->label(__('বিল নিন'))->icon(Heroicon::OutlinedBanknotes)
             ->visible(fn () => Menu::can('bills'))
+            // bills are made with the member's own billing login, which only the owner sets on the team page
+            ->disabled(fn () => ! \App\Models\Membership::mayUseBilling())
+            ->tooltip(fn () => \App\Models\Membership::mayUseBilling() ? null : __('আপনার বিলিং লগইন দেওয়া নেই। Owner টিম পেজ থেকে আপনার বিলিং লগইন দিলে বিল নিতে আর লাইন চালু/বন্ধ করতে পারবেন।'))
             ->modalHeading(fn (?BillingCustomer $record = null) => ($c = $customer ?? ($forRecord ? $record : null))
                 ? "{$c->name} (ID {$c->customer_id}): ".__('বিল নিন') : __('বিল নিন'))
             ->modalWidth('3xl')->stickyModalHeader()->stickyModalFooter()

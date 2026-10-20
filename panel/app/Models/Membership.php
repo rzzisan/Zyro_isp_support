@@ -19,6 +19,26 @@ class Membership extends Model
         return ['permissions' => 'array', 'bill_view_employees' => 'array', 'billing_password' => 'encrypted', 'billing_checked_at' => 'datetime', 'billing_check_ok' => 'boolean'];
     }
 
+    /** The signed-in member of the current Desk company. */
+    public static function current(): ?self
+    {
+        $company = \Filament\Facades\Filament::getTenant();
+
+        return $company ? static::where('company_id', $company->getKey())->where('user_id', auth()->id())->first() : null;
+    }
+
+    /** Bills and line on/off need the member's own billing login (set by the owner on the team page). */
+    public static function mayUseBilling(?\App\Models\User $user = null, ?\App\Models\Company $company = null): bool
+    {
+        $company ??= \Filament\Facades\Filament::getTenant();
+        $user ??= auth()->user();
+        if (! $company || ! $user) {
+            return false;
+        }
+
+        return (bool) static::where('company_id', $company->getKey())->where('user_id', $user->getKey())->first()?->hasBillingLogin();
+    }
+
     public function hasBillingLogin(): bool
     {
         return filled($this->billing_username) && filled($this->billing_password);

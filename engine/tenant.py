@@ -83,9 +83,10 @@ class NoBillingLogin(RuntimeError):
     pass
 
 
-def billing_for_user(t: Tenant, user_id: int) -> ISPDigital:
+def billing_for_user(t: Tenant, user_id: int, owner_fallback: bool = True) -> ISPDigital:
     """The member's own billing login (tickets they open/assign show their name in the billing software).
-    An owner without a personal login falls back to the company login they configured."""
+    An owner without a personal login falls back to the company login they configured, except for money and line
+    actions (owner_fallback=False): bills and line on/off need the member's own login, which only the owner sets."""
     if not t.billing:
         raise RuntimeError("billing connection not set up for this company")
     row = db.one("SELECT role, billing_username, billing_password FROM company_user WHERE company_id = %s AND user_id = %s",
@@ -93,9 +94,9 @@ def billing_for_user(t: Tenant, user_id: int) -> ISPDigital:
     if not row:
         raise NoBillingLogin("আপনি এই কোম্পানির সদস্য নন")
     if not (row["billing_username"] and row["billing_password"]):
-        if row["role"] == "owner":
+        if row["role"] == "owner" and owner_fallback:
             return billing(t)
-        raise NoBillingLogin("আপনার বিলিং সফটওয়্যারের লগইন দেওয়া নেই। সেটিংস → \"আমার বিলিং লগইন\" পেজে দিন।")
+        raise NoBillingLogin("আপনার বিলিং লগইন দেওয়া নেই। Owner টিম পেজ থেকে আপনার বিলিং লগইন দিলে বিল নিতে আর লাইন চালু/বন্ধ করতে পারবেন।")
     creds = (t.billing[0], row["billing_username"], db.decrypt(row["billing_password"]))
     with _lock:
         hit = _user_clients.get((t.company_id, user_id))

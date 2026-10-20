@@ -62,6 +62,12 @@ class MembershipResource extends Resource
         return $roles;
     }
 
+    /** Billing logins of members are set by the owner only. */
+    public static function isOwner(): bool
+    {
+        return auth()->user()?->roleIn(Filament::getTenant()) === 'owner';
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -71,10 +77,12 @@ class MembershipResource extends Resource
             TextInput::make('password')->label(__('পাসওয়ার্ড'))->password()->revealable()->minLength(10)->visibleOn('create')
                 ->helperText(__('নতুন ইউজার হলে লাগবে')),
             Select::make('role')->label(__('রোল'))->options(fn () => self::roleOptions())->required()->default('agent'),
-            TextInput::make('billing_username')->label(__('বিলিং সফটওয়্যারের ইউজারনেম (ঐচ্ছিক)'))->visibleOn('edit')
-                ->helperText(__('এই সদস্য প্যানেল থেকে টিকিট খুললে বা assign করলে এই লগইনে হবে। সদস্য নিজেও "আমার বিলিং লগইন" পেজে দিতে পারেন।')),
+            TextInput::make('billing_username')->label(__('বিলিং সফটওয়্যারের ইউজারনেম'))->visibleOn('edit')
+                ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
+                ->helperText(__('শুধু Owner দিতে পারেন। এই লগইন ছাড়া সদস্য বিল নিতে বা লাইন চালু/বন্ধ করতে পারবেন না; টিকিট এই লগইনে তাঁর নামে হবে।')),
             TextInput::make('billing_password')->label(__('বিলিং পাসওয়ার্ড'))->password()->revealable()->visibleOn('edit')
-                ->dehydrated(fn ($state) => filled($state))
+                ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
+                ->dehydrated(fn ($state) => filled($state) && self::isOwner())
                 ->helperText(__('বদলাতে না চাইলে খালি রাখুন')),
             \Filament\Forms\Components\CheckboxList::make('permissions')->label(__('কোন কোন মেনু দেখবেন'))->visibleOn('edit')
                 ->options(\App\Support\Menu::options())

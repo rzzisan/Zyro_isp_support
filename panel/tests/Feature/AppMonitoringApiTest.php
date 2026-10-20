@@ -107,6 +107,10 @@ class AppMonitoringApiTest extends TestCase
         $this->api($this->agent)->getJson($this->url('customers/4'))->assertOk()->assertJsonPath('can.line', false);
         $this->api($this->agent)->postJson($this->url('customers/4/line'), ['on' => true])->assertForbidden();
 
+        // the owner without their own billing login can't switch either
+        $this->api($this->owner)->getJson($this->url('customers/4'))->assertJsonPath('can.line', false);
+        $this->api($this->owner)->postJson($this->url('customers/4/line'), ['on' => true])->assertForbidden();
+        \App\Models\Membership::where('company_id', $this->company->id)->where('user_id', $this->owner->id)->first()->update(['billing_username' => 'zisan54', 'billing_password' => 'pw']);
         $this->api($this->owner)->getJson($this->url('customers/4'))->assertJsonPath('can.line', true);
         $this->api($this->owner)->postJson($this->url('customers/4/line'), ['on' => true])->assertOk()
             ->assertJsonPath('customer.disabled', false);

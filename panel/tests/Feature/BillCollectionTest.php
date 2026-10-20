@@ -40,6 +40,7 @@ class BillCollectionTest extends TestCase
         $this->agent = User::factory()->create();
         $this->company->users()->attach($this->owner, ['role' => 'owner']);
         $this->company->users()->attach($this->agent, ['role' => 'agent']);
+        \App\Models\Membership::where('company_id', $this->company->id)->where('user_id', $this->owner->id)->first()->update(['billing_username' => 'zisan54', 'billing_password' => 'pw']);
         $this->customer = BillingCustomer::create(['company_id' => $this->company->id, 'header_id' => 3, 'customer_id' => '0003',
             'name' => 'Bulbul', 'username' => 'en.enamul', 'mobile' => '01714080210', 'monthly_bill' => 525, 'due' => 525,
             'status' => 'Left']);
@@ -168,6 +169,16 @@ class BillCollectionTest extends TestCase
             ->mountAction('receiveBill')->fillForm(['header_id' => '3'])
             ->assertSchemaStateSet(['paid' => 525.0, 'method_id' => '71', 'received_by_id' => '1'], 'mountedActionSchema0')
             ->fillForm(['paid' => 500, 'discount' => 25]);
+    }
+
+    public function test_no_billing_login_no_bills(): void
+    {
+        $this->fakeEngine();
+        // the owner too: bills need the member's own login (set by the owner on the team page)
+        \App\Models\Membership::where('user_id', $this->owner->id)->update(['billing_username' => null, 'billing_password' => null]);
+        $this->as($this->owner);
+        Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])->assertActionVisible('receiveBill')->assertActionDisabled('receiveBill');
+        Http::assertNothingSent();
     }
 
     public function test_partial_payment_needs_a_note(): void

@@ -36,6 +36,8 @@ class AppApiTest extends TestCase
         $this->agent = User::factory()->create();
         $this->company->users()->attach($this->owner, ['role' => 'owner']);
         $this->company->users()->attach($this->agent, ['role' => 'agent']);
+        \App\Models\Membership::where('company_id', $this->company->id)->where('user_id', $this->owner->id)->first()->update(['billing_username' => 'zisan54', 'billing_password' => 'pw']);
+        \App\Models\Membership::where('company_id', $this->company->id)->where('user_id', $this->agent->id)->first()->update(['billing_username' => 'arif', 'billing_password' => 'pw']);
         BillingCustomer::create(['company_id' => $this->company->id, 'header_id' => 3, 'customer_id' => '0003',
             'name' => 'Bulbul', 'username' => 'en.enamul', 'mobile' => '01714080210', 'mobile_normalized' => '8801714080210',
             'monthly_bill' => 525, 'due' => 525, 'status' => 'Active', 'pppoe_password' => 'never-shown']);
@@ -175,6 +177,16 @@ class AppApiTest extends TestCase
             ->assertOk()->assertJsonPath('collection_id', 41)->assertJsonPath('balance', 0);
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/customers/3/bill') && $r['user_id'] === $this->agent->id
             && $r['paid'] === 525.0 && $r['sms'] === false && $r['method_id'] === '71');
+    }
+
+    public function test_no_billing_login_no_bill_form_or_collection(): void
+    {
+        \App\Models\Membership::where('user_id', $this->owner->id)->update(['billing_username' => null, 'billing_password' => null]);
+        Http::fake();
+        $this->api($this->owner)->getJson($this->url('customers/3'))->assertOk()->assertJsonPath('can.bill', false);
+        $this->api($this->owner)->getJson($this->url('customers/3/bill-form'))->assertForbidden();
+        $this->api($this->owner)->postJson($this->url('customers/3/bills'), ['paid' => 525, 'method_id' => '71', 'received_by_id' => '1'])->assertForbidden();
+        Http::assertNothingSent();
     }
 
     public function test_engine_refusal_comes_back_as_a_message(): void

@@ -1256,5 +1256,11 @@
     "নতুন পাসওয়ার্ড আবার লিখুন": "Repeat new password",
     "বর্তমান পাসওয়ার্ড": "Current password",
     "পাসওয়ার্ড বদলাতে বর্তমান পাসওয়ার্ড দিন": "Enter your current password to change it",
-    "বর্তমান পাসওয়ার্ড ভুল": "The current password is wrong"
+    "বর্তমান পাসওয়ার্ড ভুল": "The current password is wrong",
+    "আপনার বিলিং লগইন দেওয়া নেই। Owner টিম পেজ থেকে আপনার বিলিং লগইন দিলে বিল নিতে আর লাইন চালু/বন্ধ করতে পারবেন।": "You have no billing login. Once the owner sets your billing login on the Team page, you can collect bills and switch lines on/off.",
+    "শুধু Owner দিতে পারেন। এই লগইন ছাড়া সদস্য বিল নিতে বা লাইন চালু/বন্ধ করতে পারবেন না; টিকিট এই লগইনে তাঁর নামে হবে।": "Only the owner can set this. Without it the member can't collect bills or switch lines on/off; tickets are made under this login in their name.",
+    "প্রতিটি সদস্যের বিলিং লগইন শুধু Owner টিম পেজ থেকে দেন। এই লগইন ছাড়া বিল নেওয়া আর লাইন চালু/বন্ধ করা যায় না। টিকিটও এই লগইনে আপনার নামে হয়।": "Every member's billing login is set by the owner on the Team page. Without it you can't collect bills or switch lines on/off. Tickets are also made under this login in your name.",
+    "দেওয়া নেই — বিল নিতে বা লাইন চালু/বন্ধ করতে পারবেন না। Owner-কে টিম পেজ থেকে দিতে বলুন।": "Not set — you can't collect bills or switch lines. Ask the owner to set it on the Team page.",
+    "বিলিং লগইন দেওয়া নেই": "No billing login set",
+    "টিম পেজে লগইন দিন": "Set logins on the Team page"
 }

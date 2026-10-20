@@ -1059,7 +1059,7 @@ def bill_form(request: Request, company_id: int, header_id: int, user_id: int = 
     """Receive Bill form data (with the member's own billing login, so Received By defaults to them)."""
     t = internal_tenant(request, company_id)
     from engine import bills
-    api = billing_call(lambda: tenants.billing_for_user(t, user_id))
+    api = billing_call(lambda: tenants.billing_for_user(t, user_id, owner_fallback=False))
     info = billing_call(lambda: bills.form_info(api, header_id))
     info["blocked"] = blocked_since(api, company_id, header_id)
     return info
@@ -1094,7 +1094,7 @@ async def bill_receive(request: Request, company_id: int, header_id: int):
     b = await request.json()
     from engine import bills
     user_id = int(b.get("user_id") or 0)
-    api = billing_call(lambda: tenants.billing_for_user(t, user_id))
+    api = billing_call(lambda: tenants.billing_for_user(t, user_id, owner_fallback=False))
     return billing_call(lambda: bills.collect(company_id, user_id, api, header_id, b))
 
 
@@ -1111,7 +1111,7 @@ async def line_switch(request: Request, company_id: int, header_id: int):
     if not c:
         raise HTTPException(status_code=404, detail="কাস্টমার পাওয়া যায়নি")
     from engine.ispdigital import find_customer_by_text
-    api = billing_call(lambda: tenants.billing_for_user(t, user_id))
+    api = billing_call(lambda: tenants.billing_for_user(t, user_id, owner_fallback=False))
     result, error = ("enabled" if on else "disabled"), None
     try:
         (api.enable_customer if on else api.disable_customer)(header_id)

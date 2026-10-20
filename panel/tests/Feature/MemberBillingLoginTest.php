@@ -47,27 +47,26 @@ class MemberBillingLoginTest extends TestCase
         Filament::setTenant($this->company);
     }
 
-    public function test_agent_saves_own_login_encrypted_and_it_is_checked(): void
+    public function test_member_page_is_read_only(): void
     {
-        Http::fake([
-            'isp.example/Account/Login' => Http::response('<input name="__RequestVerificationToken" type="hidden" value="tok" />'),
-            'isp.example/Account/LoginChecker' => Http::response('', 302, ['Location' => '/EmployeeDashboard/Index']),
-            'isp.example/EmployeeDashboard/Index' => Http::response('ok'),
-        ]);
-        $this->actingAs($this->agent)->get("/app/{$this->company->slug}/my-billing-login")->assertOk();
+        $this->actingAs($this->agent)->get("/app/{$this->company->slug}/my-billing-login")->assertOk()
+            ->assertSee('দেওয়া নেই')->assertDontSee('সেভ করুন');
         $this->as($this->agent);
-        Livewire::test(MyBillingLogin::class)
-            ->fillForm(['billing_username' => 'rezaul', 'billing_password' => 's3cret'])
-            ->call('save')->assertHasNoFormErrors();
-        $m = Membership::where('user_id', $this->agent->id)->sole();
-        $this->assertSame('rezaul', $m->billing_username);
-        $this->assertSame('s3cret', $m->billing_password);
-        $this->assertNotSame('s3cret', DB::table('company_user')->where('user_id', $this->agent->id)->value('billing_password'));
-        $this->assertTrue($m->fresh()->billing_check_ok);
-        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/Account/LoginChecker') && $r['Username'] === 'rezaul');
+        Livewire::test(MyBillingLogin::class)->call('save')->assertForbidden();
+        $this->assertNull(Membership::where('user_id', $this->agent->id)->value('billing_username'));
+    }
 
-        // another member's login is untouched
-        $this->assertNull(Membership::where('user_id', $this->owner->id)->value('billing_username'));
+    public function test_only_the_owner_sets_billing_logins(): void
+    {
+        $admin = User::factory()->create();
+        $this->company->users()->attach($admin, ['role' => 'admin']);
+        $this->as($admin);
+        $m = Membership::where('user_id', $this->agent->id)->sole();
+        Livewire::test(ManageMemberships::class)
+            ->callAction(TestAction::make('edit')->table($m), ['role' => 'agent', 'billing_username' => 'arif', 'billing_password' => 'pw1'])
+            ->assertHasNoFormErrors();
+        $this->assertNull($m->fresh()->billing_username);
+        $this->assertNull($m->fresh()->billing_password);
     }
 
     public function test_owner_sets_member_login_on_team_page(): void

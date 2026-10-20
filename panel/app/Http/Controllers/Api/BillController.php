@@ -38,6 +38,9 @@ class BillController extends Controller
     public function form(Request $request, Company $company, int $headerId): JsonResponse
     {
         $this->allow($request, $company);
+        if (! \App\Models\Membership::mayUseBilling($request->user(), $company)) {
+            return response()->json(['message' => __('আপনার বিলিং লগইন দেওয়া নেই। Owner টিম পেজ থেকে আপনার বিলিং লগইন দিলে বিল নিতে আর লাইন চালু/বন্ধ করতে পারবেন।')], 403);
+        }
         $key = static::formKey($company, $request, $headerId);
         Cache::forget($key);
         try {
@@ -58,6 +61,9 @@ class BillController extends Controller
     public function store(Request $request, Company $company, int $headerId): JsonResponse
     {
         $this->allow($request, $company);
+        if (! \App\Models\Membership::mayUseBilling($request->user(), $company)) {
+            return response()->json(['message' => __('আপনার বিলিং লগইন দেওয়া নেই। Owner টিম পেজ থেকে আপনার বিলিং লগইন দিলে বিল নিতে আর লাইন চালু/বন্ধ করতে পারবেন।')], 403);
+        }
         $data = $request->validate([
             'paid' => 'required|numeric|min:0', 'discount' => 'nullable|numeric|min:0', 'method_id' => 'required|string|max:20',
             'received_by_id' => 'required|string|max:20', 'trx_no' => ['nullable', 'string', 'max:100', 'regex:/^\S*$/'],

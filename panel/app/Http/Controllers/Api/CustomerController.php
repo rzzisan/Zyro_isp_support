@@ -175,7 +175,8 @@ class CustomerController extends Controller
             'line_logs' => BillingCustomerLineLog::where('company_id', $company->id)->where('customer_header_id', $headerId)
                 ->orderByDesc('changed_at')->orderByDesc('id')->limit(15)->get()
                 ->map(fn ($l) => ['at' => $l->changed_at?->toIso8601String(), 'action' => $l->action, 'remarks' => $l->remarks, 'by' => $l->changed_by]),
-            'can' => ['bill' => Menu::allows($request->user(), $company, 'bills'), 'line' => $this->canSwitch($request, $company, $c)]]);
+            'can' => ['bill' => Menu::allows($request->user(), $company, 'bills') && \App\Models\Membership::mayUseBilling($request->user(), $company),
+                'line' => $this->canSwitch($request, $company, $c)]]);
     }
 
     /** Copy billing's details and history for this customer now (the panel's customer page does this on open); runs in the background. */
@@ -205,7 +206,8 @@ class CustomerController extends Controller
 
     private function canSwitch(Request $request, Company $company, BillingCustomer $c): bool
     {
-        return ! $c->gone_at && ! $c->is_left && Menu::allows($request->user(), $company, 'line_switch');
+        return ! $c->gone_at && ! $c->is_left && Menu::allows($request->user(), $company, 'line_switch')
+            && \App\Models\Membership::mayUseBilling($request->user(), $company);
     }
 
     /** Line on/off in billing, like the panel list's M.Status switch (needs the line_switch permission); body: on=true|false. */
