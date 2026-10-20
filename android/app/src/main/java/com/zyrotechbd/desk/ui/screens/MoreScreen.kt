@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,7 +51,7 @@ import com.zyrotechbd.desk.ui.theme.Primary
 import com.zyrotechbd.desk.ui.theme.PrimarySoft
 import com.zyrotechbd.desk.ui.theme.PrimaryStrong
 
-/** The account tab: who is signed in, printers, company switch, language, the panel in a browser, sign out. */
+/** The account tab: who is signed in, printers, own password, company switch, language, the panel in a browser, sign out. */
 @Composable
 fun MoreScreen(
     company: CompanyInfo?,
@@ -58,6 +59,7 @@ fun MoreScreen(
     extra: List<Tab>,
     onOpen: (String) -> Unit,
     onPrinters: () -> Unit,
+    onPassword: () -> Unit,
     onSwitchCompany: (String) -> Unit,
     onOpenDesk: () -> Unit,
     onToggleLang: () -> Unit,
@@ -93,6 +95,8 @@ fun MoreScreen(
         }
         DeskCard {
             MoreRow(s.navPrinters, Icons.Filled.Print, onClick = onPrinters)
+            HorizontalDivider(color = Line)
+            MoreRow(s.changePassword, Icons.Filled.Lock, onClick = onPassword)
             HorizontalDivider(color = Line)
             MoreRow(s.language, Icons.Filled.Language, value = s.langToggleLabel, onClick = onToggleLang)
             HorizontalDivider(color = Line)

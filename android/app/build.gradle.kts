@@ -40,8 +40,8 @@ android {
         applicationId = "com.zyrotechbd.desk"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.7.0"
+        versionCode = 12
+        versionName = "1.8.0"
         buildConfigField("String", "DESK_URL", "\"https://desk.zyrotechbd.com/\"")
         buildConfigField("String", "API_BASE_URL", "\"https://desk.zyrotechbd.com/api/v1/\"")
         listOf("APP_ID", "API_KEY", "PROJECT_ID", "SENDER_ID").forEach {

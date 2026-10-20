@@ -110,7 +110,7 @@ class ScreenshotTest {
         LoginScreen("z@x.com", "", false, null, {}, {}, {}, {})
     }
     @Test fun more() = shot("7-more", "Zisan") {
-        MoreScreen(SessionStore.company(), SessionStore.companies(), emptyList(), {}, {}, {}, {}, {}, {})
+        MoreScreen(SessionStore.company(), SessionStore.companies(), emptyList(), {}, {}, {}, {}, {}, {}, {})
     }
     @Test fun inbox() = shot("9-inbox", "Rahima") { InboxScreen(rememberNavController(), "cln") }
     @Test fun chat() = shot("10-chat", "লাইন বন্ধ") { ChatScreen("cln", 7, rememberNavController()) }

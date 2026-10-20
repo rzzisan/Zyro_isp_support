@@ -20,6 +20,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('me', [AuthController::class, 'me']);
         Route::post('logout', [AuthController::class, 'logout']);
+        Route::post('password', [AuthController::class, 'password'])->middleware('throttle:5,1');
         Route::post('push-token', [AuthController::class, 'pushToken'])->middleware('throttle:20,1');
 
         Route::prefix('c/{company:slug}')->middleware(ApiCompany::class)->group(function () {
