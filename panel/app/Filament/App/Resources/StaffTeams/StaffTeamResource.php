@@ -5,22 +5,25 @@ namespace App\Filament\App\Resources\StaffTeams;
 use App\Filament\App\Resources\StaffTeams\Pages\ManageStaffTeams;
 use App\Filament\App\TicketActions;
 use App\Models\StaffTeam;
-use App\Models\Technician;
 use BackedEnum;
+use App\Services\Engine;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use RuntimeException;
 
-/** Field teams (Rifat + Maruf, ...): auto-assign gives the whole team, and one ticket never mixes two teams. */
+/** Field teams (Rifat + Maruf, ...): members count as field staff; auto-assign gives the whole team, and one ticket never mixes two teams. */
 class StaffTeamResource extends Resource
 {
     protected static ?string $model = StaffTeam::class;
@@ -73,23 +76,13 @@ class StaffTeamResource extends Resource
         return static::manages();
     }
 
-    /** Field staff only: billing employees linked to a technician (Desk → টেকনিশিয়ান → বিলিংয়ে কোন কর্মী). */
-    public static function fieldStaff(): array
-    {
-        $linked = Technician::where('company_id', Filament::getTenant()->getKey())->whereNotNull('billing_employee_id')
-            ->where('billing_employee_id', '<>', '')->pluck('billing_employee_name', 'billing_employee_id')->all();
-        $names = TicketActions::options('employees');
-
-        return collect($linked)->mapWithKeys(fn ($name, $id) => [(string) $id => $names[$id] ?? $name ?? (string) $id])->sort()->all();
-    }
-
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
             TextInput::make('name')->label(__('টিমের নাম'))->required()->maxLength(100)->placeholder(__('যেমন রিফাত-মারুফ')),
             Select::make('members')->label(__('কর্মী'))->multiple()->searchable()->required()
-                ->options(fn () => static::fieldStaff())
-                ->helperText(__('শুধু ফিল্ড কর্মী: টেকনিশিয়ান পেজে যাদের বিলিং কর্মী যুক্ত করা আছে'))
+                ->options(fn () => TicketActions::options('employees'))
+                ->helperText(__('বিলিংয়ের কর্মী; টিমে থাকলে তিনি ফিল্ড কর্মী হিসেবে অটো assign পাবেন। নতুন কর্মী না দেখালে উপরের "বিলিং থেকে কর্মী লিস্ট আনুন" চাপুন'))
                 ->rule(fn (?StaffTeam $record) => function (string $attribute, $value, \Closure $fail) use ($record) {
                     $taken = [];  // employee id => team name (ids are numeric strings: no flatMap, it renumbers keys)
                     foreach (StaffTeam::where('company_id', Filament::getTenant()->getKey())
@@ -118,8 +111,19 @@ class StaffTeamResource extends Resource
                 TextColumn::make('members')->label(__('কর্মী'))->badge()
                     ->formatStateUsing(fn ($state) => TicketActions::options('employees')[$state] ?? $state),
             ])
-            ->headerActions([CreateAction::make()->label(__('টিম যোগ করুন'))
-                ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => Filament::getTenant()->getKey()])])
+            ->headerActions([
+                Action::make('syncEmployees')->label(__('বিলিং থেকে কর্মী লিস্ট আনুন'))->icon(Heroicon::OutlinedArrowPath)->color('gray')
+                    ->action(function () {
+                        try {
+                            Engine::syncBillingConfig((int) Filament::getTenant()->getKey(), 'employees');
+                            Notification::make()->success()->title(__('কর্মী লিস্ট বিলিং থেকে আনা হয়েছে'))->send();
+                        } catch (RuntimeException $e) {
+                            Notification::make()->danger()->title(__('বিলিং থেকে আনা যায়নি'))->body($e->getMessage())->send();
+                        }
+                    }),
+                CreateAction::make()->label(__('টিম যোগ করুন'))
+                    ->mutateDataUsing(fn (array $data) => [...$data, 'company_id' => Filament::getTenant()->getKey()]),
+            ])
             ->recordActions([EditAction::make(), DeleteAction::make()]);
     }
 

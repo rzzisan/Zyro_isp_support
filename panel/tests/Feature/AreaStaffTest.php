@@ -72,9 +72,10 @@ class AreaStaffTest extends TestCase
         Livewire::test(ManageStaffTeams::class)
             ->callTableAction('create', data: ['name' => 'Rifat-Maruf', 'members' => ['9', '8']])->assertHasNoTableActionErrors()
             ->callTableAction('create', data: ['name' => 'Rifat-2', 'members' => ['9']])->assertHasTableActionErrors(['members']);
-        Livewire::test(ManageStaffTeams::class)  // not field staff
-            ->callTableAction('create', data: ['name' => 'Rubel', 'members' => ['13']])->assertHasTableActionErrors();
-        $team = StaffTeam::where('company_id', $company->id)->sole();
-        $this->assertSame(['9', '8'], $team->members);
+        Livewire::test(ManageStaffTeams::class)  // any billing employee, not only linked technicians
+            ->callTableAction('create', data: ['name' => 'Rubel', 'members' => ['13']])->assertHasNoTableActionErrors();
+        Livewire::test(ManageStaffTeams::class)  // not a billing employee
+            ->callTableAction('create', data: ['name' => 'X', 'members' => ['99']])->assertHasTableActionErrors();
+        $this->assertSame([['9', '8'], ['13']], StaffTeam::where('company_id', $company->id)->orderBy('id')->pluck('members')->all());
     }
 }
