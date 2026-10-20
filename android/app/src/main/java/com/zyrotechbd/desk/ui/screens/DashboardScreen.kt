@@ -144,7 +144,8 @@ private fun DashboardStats(d: Dashboard, navController: NavHostController) {
             }
             d.network?.let { n ->
                 StatCard(s.onlineNow, n.online.toString(), Icons.Filled.Wifi, Modifier.weight(1f),
-                    sub = s.activeCustomers(n.activeCustomers))
+                    sub = s.activeCustomers(n.activeCustomers),
+                    onClick = if (SessionStore.company()?.can("monitoring") == true) ({ navController.navigate(Routes.Monitoring) }) else null)
             }
         }
         d.inbox?.let { i ->

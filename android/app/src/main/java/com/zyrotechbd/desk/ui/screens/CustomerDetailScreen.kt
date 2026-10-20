@@ -63,7 +63,12 @@ import com.zyrotechbd.desk.ui.theme.Line
 import com.zyrotechbd.desk.ui.theme.Ink
 import com.zyrotechbd.desk.ui.theme.Muted
 import com.zyrotechbd.desk.ui.theme.PrimaryStrong
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.zyrotechbd.desk.ui.components.Chip
 
 @Composable
 fun CustomerDetailScreen(navController: NavHostController, company: String, headerId: Long) {
@@ -75,6 +80,8 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
     var live by remember { mutableStateOf<LiveInfo?>(null) }
     var liveError by remember { mutableStateOf<String?>(null) }
     var liveLoading by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf("service") }
 
     fun loadLive(fresh: Boolean) {
         scope.launch {
@@ -101,9 +108,24 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
         }
     }
 
+    // like the panel's customer page: billing's details and history are re-read in the background, then shown
+    fun refreshFromBilling() {
+        scope.launch {
+            refreshing = runCatching { ApiClient.service.refreshCustomer(company, headerId).running }.getOrDefault(false)
+            var tries = 0
+            while (refreshing && tries++ < 40) {
+                delay(3_000)
+                refreshing = runCatching { ApiClient.service.customerRefreshing(company, headerId).running }.getOrDefault(false)
+                if (!refreshing) runCatching { ApiClient.service.customer(company, headerId) }.onSuccess { detail = it }
+            }
+            refreshing = false
+        }
+    }
+
     LaunchedEffect(headerId) {
         load()
         loadLive(false)
+        refreshFromBilling()
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -148,6 +170,18 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                             val digits = mobile.filter { it.isDigit() }
                             val wa = if (digits.startsWith("0")) "88$digits" else digits
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$wa")))
+                        }
+                    }
+                    if (d.can.line) {
+                        Spacer(Modifier.height(8.dp))
+                        HorizontalDivider(color = Line)
+                        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (c.disabled == true) s.lineOff else s.lineOnLabel, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                                color = if (c.disabled == true) Danger else Good, modifier = Modifier.weight(1f))
+                            LineSwitch(company, c) { updated ->
+                                detail = d.copy(customer = c.copy(disabled = updated.disabled, status = updated.status))
+                                load()
+                            }
                         }
                     }
                 }
@@ -227,25 +261,78 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                 Spacer(Modifier.height(4.dp))
             }
 
-            SectionTitle(s.recentPayments)
-            DeskCard {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    if (d.payments.isEmpty()) EmptyText(s.noPayments)
-                    d.payments.forEachIndexed { i, p ->
-                        if (i > 0) HorizontalDivider(color = Line)
-                        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(Format.date(p.date) + (p.billMonth?.let { " · $it" } ?: ""), fontSize = 13.sp, color = Ink)
-                                Text(listOfNotNull(p.method, p.receivedBy).joinToString(" · "), fontSize = 11.sp, color = Muted)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(Format.tk(p.paid), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Good)
-                                if (p.discount > 0) Text(s.discountShort(Format.amount(p.discount)), fontSize = 11.sp, color = Muted)
+            // billing's customer details, as the panel's tabs
+            val tabs = listOf("service" to s.tService, "network" to s.tNetwork, "personal" to s.tPersonal, "payments" to s.tPayments,
+                "complains" to s.tComplains, "line" to s.tLineLog)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(tabs) { (key, label) -> Chip(label, tab == key) { tab = key } }
+            }
+            Spacer(Modifier.height(10.dp))
+            when (tab) {
+                "payments" -> PaymentsCard(d)
+                "complains" -> DeskCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        if (d.history.isEmpty()) EmptyText(s.noTickets)
+                        val canTickets = SessionStore.company()?.can("tickets") == true
+                        d.history.forEachIndexed { i, t ->
+                            if (i > 0) HorizontalDivider(color = Line)
+                            Row(Modifier.fillMaxWidth()
+                                .then(if (canTickets && t.id != null) Modifier.clickable { navController.navigate(Routes.ticket(t.id)) } else Modifier)
+                                .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("#${t.complainId ?: ""} · ${t.category ?: ""}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                                    Text(listOfNotNull(Format.dateTime(t.openedAt).ifEmpty { null }, t.solvedBy?.takeIf { it.isNotBlank() })
+                                        .joinToString(" · "), fontSize = 12.sp, color = Muted)
+                                }
+                                t.state?.let { Pill(stateLabel(it, s), stateColor(it)) }
                             }
                         }
                     }
                 }
+                "line" -> DeskCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        if (d.lineLogs.isEmpty()) EmptyText(s.noRecords)
+                        d.lineLogs.forEachIndexed { i, l ->
+                            if (i > 0) HorizontalDivider(color = Line)
+                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(Format.dateTime(l.at), fontSize = 13.sp, color = Ink)
+                                    Text(listOfNotNull(l.by, l.remarks?.takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 12.sp, color = Muted)
+                                }
+                                val on = l.action == "enable"
+                                Pill(if (on) s.lineOnAction else s.lineOffAction, if (on) Good else Danger)
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    d.sections.filter { it.tab == tab }.forEach { sec ->
+                        DeskCard {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(sec.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Ink)
+                                Spacer(Modifier.height(6.dp))
+                                sec.rows.forEach { r ->
+                                    if (r.map && r.value != null) {
+                                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                                            Text(r.label, fontSize = 13.sp, color = Muted, modifier = Modifier.width(118.dp))
+                                            Text("${r.value} · ${s.openMap}", fontSize = 13.sp, color = PrimaryStrong,
+                                                modifier = Modifier.weight(1f).clickable {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=${Uri.encode(r.value)}")))
+                                                })
+                                        }
+                                    } else InfoRow(r.label, r.value ?: "—")
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
             }
+            Text(when {
+                refreshing -> s.fetching
+                d.detailsFetchedAt != null -> "${s.fetchedFrom}: ${Format.dateTime(d.detailsFetchedAt)}"
+                else -> s.notFetched
+            }, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 6.dp))
             Spacer(Modifier.height(24.dp))
             }
     }
@@ -293,5 +380,28 @@ fun LiveBox(info: LiveInfo) {
     info.paymentStatus?.takeIf { it.isNotBlank() }?.let {
         Spacer(Modifier.height(6.dp))
         InfoRow(s.billingState, it)
+    }
+}
+
+@Composable
+private fun PaymentsCard(d: CustomerDetail) {
+    val s = LocalStrings.current
+    DeskCard {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            if (d.payments.isEmpty()) EmptyText(s.noPayments)
+            d.payments.forEachIndexed { i, p ->
+                if (i > 0) HorizontalDivider(color = Line)
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(Format.date(p.date) + (p.billMonth?.let { " · $it" } ?: ""), fontSize = 13.sp, color = Ink)
+                        Text(listOfNotNull(p.method, p.receivedBy).joinToString(" · "), fontSize = 11.sp, color = Muted)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(Format.tk(p.paid), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Good)
+                        if (p.discount > 0) Text(s.discountShort(Format.amount(p.discount)), fontSize = 11.sp, color = Muted)
+                    }
+                }
+            }
+        }
     }
 }

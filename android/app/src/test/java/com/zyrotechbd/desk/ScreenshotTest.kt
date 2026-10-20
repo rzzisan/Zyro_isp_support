@@ -24,6 +24,7 @@ import com.zyrotechbd.desk.ui.screens.TicketsScreen
 import com.zyrotechbd.desk.ui.screens.BillsScreen
 import com.zyrotechbd.desk.ui.screens.CustomerDetailScreen
 import com.zyrotechbd.desk.ui.screens.CustomersScreen
+import com.zyrotechbd.desk.ui.screens.MonitoringScreen
 import com.zyrotechbd.desk.ui.screens.CustomerFilter
 import com.zyrotechbd.desk.ui.screens.CustomerFilterForm
 import com.zyrotechbd.desk.ui.screens.DashboardScreen
@@ -100,6 +101,7 @@ class ScreenshotTest {
         CustomerFilterForm(CustomerFilter(zone = "Tilardi", due = true, exp = "next7"),
             com.zyrotechbd.desk.data.network.CustomerFilterChoices(statuses = listOf("Active")), BengaliStrings) {}
     }
+    @Test fun monitoring() = shot("14-monitoring", "Rahima") { MonitoringScreen(rememberNavController(), "cln") }
     @Test fun customers() = shot("2-customers", "Rahima") { CustomersScreen(rememberNavController(), "cln", collect = false) }
     @Test fun customer() = shot("3-customer", "-21.5") { CustomerDetailScreen(rememberNavController(), "cln", 3) }
     @Test fun billForm() = shot("4-bill-form", "en.enamul") { BillFormScreen(rememberNavController(), "cln", 3) }

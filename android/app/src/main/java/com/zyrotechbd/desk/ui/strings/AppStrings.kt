@@ -273,6 +273,50 @@ abstract class AppStrings {
     abstract val fApply: String
     abstract val fTotal: String
     abstract val fPeople: String
+    abstract val navMonitoring: String
+    abstract val mSearch: String
+    abstract val mSync: String
+    abstract val mSynced: String
+    abstract val mUpdated: String
+    abstract val mDays: String
+    abstract val mLastOnline: String
+    abstract val mNeverSeen: String
+    abstract val mRecheck: String
+    abstract val mTraffic: String
+    abstract val mPing: String
+    abstract val mDetails: String
+    abstract val mTicket: String
+    abstract val mNoAnswer: String
+    abstract val mDown: String
+    abstract val mUp: String
+    abstract val mReceived: String
+    abstract val mAvg: String
+    abstract val mPingNoReply: String
+    abstract val mBlockedHint: String
+    abstract val mNobody: String
+    abstract val mChecking: String
+    abstract val tService: String
+    abstract val tNetwork: String
+    abstract val tPersonal: String
+    abstract val tPayments: String
+    abstract val tComplains: String
+    abstract val tLineLog: String
+    abstract val fetchedFrom: String
+    abstract val notFetched: String
+    abstract val fetching: String
+    abstract val noRecords: String
+    abstract val openMap: String
+    abstract val lineOnAsk: String
+    abstract val lineOffAsk: String
+    abstract val lineOnHint: String
+    abstract val lineOffHint: String
+    abstract val turnOn: String
+    abstract val turnOff: String
+    abstract val lineTurnedOn: String
+    abstract val lineTurnedOff: String
+    abstract val lineOnLabel: String
+    abstract val lineOffAction: String
+    abstract val lineOnAction: String
     abstract fun blockedFor(months: Int, days: Int): String
     abstract fun pendingWarning(amount: String, date: String, by: String): String
     abstract fun roleName(role: String?): String
@@ -558,6 +602,50 @@ object BengaliStrings : AppStrings() {
     override val fApply = "দেখান"
     override val fTotal = "মোট"
     override val fPeople = "জন কাস্টমার"
+    override val navMonitoring = "অনলাইন মনিটরিং"
+    override val mSearch = "ID, নাম, PPPoE বা মোবাইল"
+    override val mSync = "এখনই Sync"
+    override val mSynced = "MikroTik থেকে আপডেট হয়েছে"
+    override val mUpdated = "শেষ আপডেট"
+    override val mDays = "দিন"
+    override val mLastOnline = "শেষ অনলাইন"
+    override val mNeverSeen = "কখনো দেখা যায়নি"
+    override val mRecheck = "রি-চেক"
+    override val mTraffic = "ট্রাফিক"
+    override val mPing = "পিং"
+    override val mDetails = "বিস্তারিত"
+    override val mTicket = "টিকিট"
+    override val mNoAnswer = "রাউটার থেকে উত্তর আসেনি"
+    override val mDown = "ডাউনলোড"
+    override val mUp = "আপলোড"
+    override val mReceived = "এসেছে"
+    override val mAvg = "গড়"
+    override val mPingNoReply = "কাস্টমারের ডিভাইস উত্তর দেয়নি (অনেক রাউটার পিং বন্ধ রাখে)"
+    override val mBlockedHint = "কানেক্ট আছে, ইন্টারনেট নেই"
+    override val mNobody = "কেউ নেই"
+    override val mChecking = "রাউটারে দেখছি…"
+    override val tService = "সার্ভিস"
+    override val tNetwork = "নেটওয়ার্ক"
+    override val tPersonal = "ব্যক্তিগত"
+    override val tPayments = "পেমেন্ট"
+    override val tComplains = "অভিযোগ"
+    override val tLineLog = "লাইন লগ"
+    override val fetchedFrom = "বিলিং থেকে আনা হয়েছে"
+    override val notFetched = "বিলিং থেকে এখনো আনা হয়নি; কিছু ঘর ফাঁকা থাকতে পারে"
+    override val fetching = "বিলিং থেকে নতুন তথ্য আনা হচ্ছে…"
+    override val noRecords = "কোনো রেকর্ড নেই"
+    override val openMap = "ম্যাপে দেখুন"
+    override val lineOnAsk = "লাইন চালু করবেন?"
+    override val lineOffAsk = "লাইন বন্ধ করবেন?"
+    override val lineOnHint = "বিলিং-এ লাইন Enable হবে।"
+    override val lineOffHint = "বিলিং-এ লাইন Disable হবে, কাস্টমারের ইন্টারনেট বন্ধ হয়ে যাবে।"
+    override val turnOn = "চালু করুন"
+    override val turnOff = "বন্ধ করুন"
+    override val lineTurnedOn = "লাইন চালু করা হয়েছে"
+    override val lineTurnedOff = "লাইন বন্ধ করা হয়েছে"
+    override val lineOnLabel = "লাইন চালু"
+    override val lineOffAction = "বন্ধ"
+    override val lineOnAction = "চালু"
 }
 
 object EnglishStrings : AppStrings() {
@@ -840,4 +928,48 @@ object EnglishStrings : AppStrings() {
     override val fApply = "Show"
     override val fTotal = "Total"
     override val fPeople = "customers"
+    override val navMonitoring = "Online monitoring"
+    override val mSearch = "ID, name, PPPoE or mobile"
+    override val mSync = "Sync now"
+    override val mSynced = "Updated from MikroTik"
+    override val mUpdated = "Last update"
+    override val mDays = "d"
+    override val mLastOnline = "Last online"
+    override val mNeverSeen = "Never seen"
+    override val mRecheck = "Re-check"
+    override val mTraffic = "Traffic"
+    override val mPing = "Ping"
+    override val mDetails = "Details"
+    override val mTicket = "Ticket"
+    override val mNoAnswer = "No answer from the router"
+    override val mDown = "Download"
+    override val mUp = "Upload"
+    override val mReceived = "received"
+    override val mAvg = "avg"
+    override val mPingNoReply = "The customer's device did not answer (many routers block ping)"
+    override val mBlockedHint = "Connected, no internet"
+    override val mNobody = "Nobody here"
+    override val mChecking = "Asking the router…"
+    override val tService = "Service"
+    override val tNetwork = "Network"
+    override val tPersonal = "Personal"
+    override val tPayments = "Payments"
+    override val tComplains = "Complaints"
+    override val tLineLog = "Line log"
+    override val fetchedFrom = "From billing"
+    override val notFetched = "Not fetched from billing yet; some fields may be empty"
+    override val fetching = "Fetching new details from billing…"
+    override val noRecords = "No records"
+    override val openMap = "Open map"
+    override val lineOnAsk = "Turn the line on?"
+    override val lineOffAsk = "Turn the line off?"
+    override val lineOnHint = "The line will be enabled in billing."
+    override val lineOffHint = "The line will be disabled in billing; the customer's internet stops."
+    override val turnOn = "Turn on"
+    override val turnOff = "Turn off"
+    override val lineTurnedOn = "Line turned on"
+    override val lineTurnedOff = "Line turned off"
+    override val lineOnLabel = "Line on"
+    override val lineOffAction = "Off"
+    override val lineOnAction = "On"
 }

@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\BillController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\InboxController;
+use App\Http\Controllers\Api\MonitoringController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Middleware\ApiCompany;
 use Illuminate\Support\Facades\Route;
@@ -28,6 +29,9 @@ Route::prefix('v1')->group(function () {
             Route::get('customer-filters', [CustomerController::class, 'filters']);
             Route::get('customers/{headerId}', [CustomerController::class, 'show'])->whereNumber('headerId');
             Route::get('customers/{headerId}/live', [CustomerController::class, 'live'])->whereNumber('headerId');
+            Route::post('customers/{headerId}/refresh', [CustomerController::class, 'refresh'])->whereNumber('headerId')->middleware('throttle:30,1');
+            Route::get('customers/{headerId}/refresh', [CustomerController::class, 'historyStatus'])->whereNumber('headerId');
+            Route::post('customers/{headerId}/line', [CustomerController::class, 'line'])->whereNumber('headerId')->middleware('throttle:20,1');
             Route::get('customers/{headerId}/bill-form', [BillController::class, 'form'])->whereNumber('headerId');
             Route::post('customers/{headerId}/bills', [BillController::class, 'store'])->whereNumber('headerId')->middleware('throttle:30,1');
             Route::get('daily-bills', [BillController::class, 'dailyBills']);
@@ -42,6 +46,10 @@ Route::prefix('v1')->group(function () {
             Route::post('chats/{contact}/bot', [InboxController::class, 'bot'])->whereNumber('contact');
             Route::post('chats/{contact}/mute', [InboxController::class, 'mute'])->whereNumber('contact');
             Route::get('media/{message}', [InboxController::class, 'media'])->whereNumber('message');
+
+            Route::get('monitoring', [MonitoringController::class, 'index']);
+            Route::post('monitoring/sync', [MonitoringController::class, 'sync'])->middleware('throttle:10,1');
+            Route::post('monitoring/{headerId}/{what}', [MonitoringController::class, 'check'])->whereNumber('headerId')->middleware('throttle:60,1');
 
             Route::get('tickets', [TicketController::class, 'index']);
             Route::get('ticket-customers', [TicketController::class, 'customers']);

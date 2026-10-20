@@ -54,6 +54,30 @@ interface ApiService {
     @GET("c/{company}/customers/{headerId}")
     suspend fun customer(@Path("company") company: String, @Path("headerId") headerId: Long): CustomerDetail
 
+    @POST("c/{company}/customers/{headerId}/refresh")
+    suspend fun refreshCustomer(@Path("company") company: String, @Path("headerId") headerId: Long): Running
+
+    @GET("c/{company}/customers/{headerId}/refresh")
+    suspend fun customerRefreshing(@Path("company") company: String, @Path("headerId") headerId: Long): Running
+
+    @POST("c/{company}/customers/{headerId}/line")
+    suspend fun switchLine(@Path("company") company: String, @Path("headerId") headerId: Long, @Body request: LineRequest): LineResult
+
+    @GET("c/{company}/monitoring")
+    suspend fun monitoring(
+        @Path("company") company: String,
+        @Query("state") state: String? = null,
+        @Query("server") server: String? = null,
+        @Query("q") query: String? = null,
+        @Query("page") page: Int? = null,
+    ): MonitorPage
+
+    @POST("c/{company}/monitoring/{headerId}/{what}")
+    suspend fun monitorCheck(@Path("company") company: String, @Path("headerId") headerId: Long, @Path("what") what: String): MonitorCheck
+
+    @POST("c/{company}/monitoring/sync")
+    suspend fun monitorSync(@Path("company") company: String): SyncResult
+
     @GET("c/{company}/customers/{headerId}/live")
     suspend fun customerLive(
         @Path("company") company: String,
