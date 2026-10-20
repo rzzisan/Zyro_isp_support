@@ -113,16 +113,73 @@ data class Ticket(
     @Json(name = "opened_at") val openedAt: String? = null,
     @Json(name = "assigned_to") val assignedTo: String? = null,
     val note: String? = null,
+    @Json(name = "solved_at") val solvedAt: String? = null,
+    @Json(name = "solved_by") val solvedBy: String? = null,
 )
 
-data class Permissions(val bill: Boolean = false)
+data class Permissions(val bill: Boolean = false, val line: Boolean = false)
+
+/** One card of billing's customer details (service, network or personal tab). */
+data class ProfileSection(val tab: String, val title: String, val rows: List<ProfileRow> = emptyList())
+
+data class ProfileRow(val label: String, val value: String? = null, val map: Boolean = false)
+
+data class LineLog(val at: String? = null, val action: String? = null, val remarks: String? = null, val by: String? = null)
 
 data class CustomerDetail(
     val customer: Customer,
     val payments: List<Payment> = emptyList(),
     val tickets: List<Ticket> = emptyList(),
     val can: Permissions = Permissions(),
+    val sections: List<ProfileSection> = emptyList(),
+    @Json(name = "details_fetched_at") val detailsFetchedAt: String? = null,
+    val history: List<Ticket> = emptyList(),
+    @Json(name = "line_logs") val lineLogs: List<LineLog> = emptyList(),
 )
+
+data class LineRequest(val on: Boolean)
+
+data class LineResult(val customer: Customer)
+
+data class Running(val running: Boolean = false)
+
+/** One line on the monitoring list: the customer plus their PPPoE session now. */
+data class MonitorRow(
+    @Json(name = "header_id") val headerId: Long,
+    @Json(name = "customer_id") val customerId: String? = null,
+    val name: String? = null,
+    val mobile: String? = null,
+    val username: String? = null,
+    val zone: String? = null,
+    val subzone: String? = null,
+    val box: String? = null,
+    val `package`: String? = null,
+    val server: String? = null,
+    val state: String = "offline",      // online | offline | blocked
+    val ip: String? = null,
+    val mac: String? = null,
+    val uptime: String? = null,
+    val profile: String? = null,
+    @Json(name = "seen_at") val seenAt: String? = null,
+) {
+    fun place(): String = listOfNotNull(zone, subzone, box).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" / ")
+}
+
+data class ServerCount(val server: String = "", val total: Int = 0, val online: Int = 0, val blocked: Int = 0)
+
+data class MonitorPage(
+    val data: List<MonitorRow> = emptyList(),
+    @Json(name = "next_page") val nextPage: Int? = null,
+    val servers: List<ServerCount>? = null,
+    @Json(name = "updated_at") val updatedAt: String? = null,
+)
+
+/** A router check (recheck, traffic or ping): free-form fields from the engine. */
+data class MonitorCheck(val result: Map<String, Any?> = emptyMap())
+
+data class RouterSync(val ok: Boolean = false, val router: String? = null, val online: Int? = null)
+
+data class SyncResult(val routers: List<RouterSync> = emptyList())
 
 /** The live box: MikroTik now, ONU now (both free-form objects from the engine), last seen MAC. */
 data class LiveInfo(

@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -190,7 +191,10 @@ fun CustomersScreen(navController: NavHostController, company: String, collect: 
             modifier = Modifier.fillMaxSize()
         ) {
             items(rows, key = { it.headerId }) { c ->
-                CustomerRow(c, s) {
+                CustomerRow(c, s, switchIn = if (!collect && canSwitchLine(c)) company else null, onLine = { updated ->
+                    val i = rows.indexOfFirst { it.headerId == updated.headerId }
+                    if (i >= 0) rows[i] = rows[i].copy(disabled = updated.disabled, status = updated.status)
+                }) {
                     navController.navigate(if (collect) Routes.billForm(c.headerId) else Routes.customerDetail(c.headerId))
                 }
             }
@@ -209,7 +213,8 @@ private suspend fun fetchPage(company: String, f: CustomerFilter, page: Int) = f
 }
 
 @Composable
-private fun CustomerRow(c: Customer, s: AppStrings, onClick: () -> Unit) {
+private fun CustomerRow(c: Customer, s: AppStrings, switchIn: String? = null,
+                        onLine: (Customer) -> Unit = {}, onClick: () -> Unit) {
     DeskCard(modifier = Modifier.clickable { onClick() }) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box {
@@ -244,6 +249,8 @@ private fun CustomerRow(c: Customer, s: AppStrings, onClick: () -> Unit) {
                 Text(if (due > 0) Format.tk(due) else s.noDue, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                     color = if (due > 0) Danger else Good)
                 if (c.monthlyBill != null) Text(s.perMonth(Format.amount(c.monthlyBill)), fontSize = 11.sp, color = Muted)
+                // the line on/off switch (only for members who may switch lines)
+                switchIn?.let { Box(Modifier.height(30.dp), contentAlignment = Alignment.CenterEnd) { LineSwitch(it, c, Modifier.scale(0.75f), onLine) } }
             }
         }
     }

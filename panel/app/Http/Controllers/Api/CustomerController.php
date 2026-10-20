@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Http\Controllers\Controller;
 use App\Models\BillingCustomer;
+use App\Models\BillingCustomerLineLog;
 use App\Models\BillingCustomerPayment;
 use App\Models\BillingTicket;
 use App\Models\Company;
 use App\Models\PppSession;
 use App\Services\Engine;
+use App\Support\CustomerProfile;
 use App\Support\Menu;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -147,16 +149,79 @@ class CustomerController extends Controller
             ->map(fn ($p) => ['date' => $p->received_on?->format('Y-m-d'), 'bill_month' => $p->bill_month, 'paid' => (float) $p->paid,
                 'discount' => (float) $p->discount, 'due' => (float) $p->balance_due, 'method' => $p->method,
                 'received_by' => $p->received_by, 'receipt_no' => $p->money_receipt_no]);
+        $ticket = fn (BillingTicket $t) => ['id' => $t->id, 'complain_id' => $t->complain_id, 'category' => $t->category, 'state' => $t->state,
+            'opened_at' => $t->opened_at?->toIso8601String(), 'assigned_to' => $t->assigned_to, 'note' => $t->note,
+            'solved_at' => $t->solved_at?->toIso8601String(), 'solved_by' => $t->solved_by];
         $tickets = BillingTicket::where('company_id', $company->id)->where('customer_header_id', $headerId)
-            ->whereIn('state', ['pending', 'processing'])->orderByDesc('opened_at')->limit(5)->get()
-            ->map(fn (BillingTicket $t) => ['id' => $t->id, 'complain_id' => $t->complain_id, 'category' => $t->category, 'state' => $t->state,
-                'opened_at' => $t->opened_at?->toIso8601String(), 'assigned_to' => $t->assigned_to, 'note' => $t->note]);
+            ->whereIn('state', ['pending', 'processing'])->orderByDesc('opened_at')->limit(5)->get()->map($ticket);
+        // billing's details tabs, as the panel's customer page shows them (filled by the history refresh below)
+        $sections = [];
+        foreach (['service', 'network', 'personal'] as $tab) {
+            foreach (CustomerProfile::sections($c, $tab) as $title => $fields) {
+                $sections[] = ['tab' => $tab, 'title' => $title, 'rows' => collect($fields)->map(fn ($v, $label) => [
+                    'label' => $label, 'value' => is_array($v) ? $v[CustomerProfile::LOCATION] : (filled($v) ? (string) $v : null),
+                    'map' => is_array($v),
+                ])->values()];
+            }
+        }
 
         return response()->json(['customer' => static::row($c, (bool) $c->onlineSession()) + [
             'address' => $c->address, 'joined_on' => $c->joined_on?->format('Y-m-d'), 'server' => $c->server,
             'chat_id' => $c->chat()?->id,
-        ], 'payments' => $payments, 'tickets' => $tickets,
-            'can' => ['bill' => Menu::allows($request->user(), $company, 'bills')]]);
+        ], 'payments' => $payments, 'tickets' => $tickets, 'sections' => $sections,
+            'details_fetched_at' => $c->details_fetched_at?->toIso8601String(),
+            'history' => BillingTicket::where('company_id', $company->id)->where('customer_header_id', $headerId)
+                ->orderByDesc('opened_at')->limit(20)->get()->map($ticket),
+            'line_logs' => BillingCustomerLineLog::where('company_id', $company->id)->where('customer_header_id', $headerId)
+                ->orderByDesc('changed_at')->orderByDesc('id')->limit(15)->get()
+                ->map(fn ($l) => ['at' => $l->changed_at?->toIso8601String(), 'action' => $l->action, 'remarks' => $l->remarks, 'by' => $l->changed_by]),
+            'can' => ['bill' => Menu::allows($request->user(), $company, 'bills'), 'line' => $this->canSwitch($request, $company, $c)]]);
+    }
+
+    /** Copy billing's details and history for this customer now (the panel's customer page does this on open); runs in the background. */
+    public function refresh(Request $request, Company $company, int $headerId): JsonResponse
+    {
+        $this->allow($request, $company);
+        $c = BillingCustomer::where('company_id', $company->id)->where('header_id', $headerId)->firstOrFail();
+        try {
+            $running = (bool) (Engine::refreshCustomerHistory($company->id, (int) $c->header_id)['running'] ?? false);
+        } catch (\Exception) {
+            return response()->json(['message' => __('বিলিং থেকে আনা যায়নি')], 502);
+        }
+
+        return response()->json(['running' => $running]);
+    }
+
+    public function historyStatus(Request $request, Company $company, int $headerId): JsonResponse
+    {
+        $this->allow($request, $company);
+
+        try {
+            return response()->json(['running' => Engine::customerHistoryRunning($company->id, $headerId)]);
+        } catch (\Exception) {
+            return response()->json(['running' => false]);
+        }
+    }
+
+    private function canSwitch(Request $request, Company $company, BillingCustomer $c): bool
+    {
+        return ! $c->gone_at && ! $c->is_left && Menu::allows($request->user(), $company, 'line_switch');
+    }
+
+    /** Line on/off in billing, like the panel list's M.Status switch (needs the line_switch permission); body: on=true|false. */
+    public function line(Request $request, Company $company, int $headerId): JsonResponse
+    {
+        $this->allow($request, $company);
+        $data = $request->validate(['on' => ['required', 'boolean']]);
+        $c = BillingCustomer::where('company_id', $company->id)->where('header_id', $headerId)->firstOrFail();
+        abort_unless($this->canSwitch($request, $company, $c), 403);
+        try {
+            Engine::switchLine($company->id, $headerId, (bool) $data['on']);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['customer' => static::row($c->refresh(), (bool) $c->onlineSession())]);
     }
 
     /** The live box of the customer page: MikroTik now, OLT/ONU now, billing state (same as the ticket form's). */

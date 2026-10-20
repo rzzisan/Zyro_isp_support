@@ -7,6 +7,7 @@ object Routes {
     const val Bills = "bills"
     const val Printers = "printers"
     const val Inbox = "inbox"
+    const val Monitoring = "monitoring"
     const val More = "more"                  // printers, company, language, sign out
 
     const val CustomerDetail = "customers/{headerId}"

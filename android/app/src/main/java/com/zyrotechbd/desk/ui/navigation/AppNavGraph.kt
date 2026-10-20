@@ -14,6 +14,7 @@ import com.zyrotechbd.desk.ui.screens.CustomerDetailScreen
 import com.zyrotechbd.desk.ui.screens.CustomersScreen
 import com.zyrotechbd.desk.ui.screens.DashboardScreen
 import com.zyrotechbd.desk.ui.screens.InboxScreen
+import com.zyrotechbd.desk.ui.screens.MonitoringScreen
 import com.zyrotechbd.desk.ui.screens.NewTicketScreen
 import com.zyrotechbd.desk.ui.screens.PrintersScreen
 import com.zyrotechbd.desk.ui.screens.TicketDetailScreen
@@ -30,6 +31,7 @@ fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: 
         composable(Routes.Printers) { PrintersScreen() }
         composable(Routes.More) { more() }
         composable(Routes.Inbox) { InboxScreen(navController, companyKey) }
+        composable(Routes.Monitoring) { MonitoringScreen(navController, companyKey) }
         composable(Routes.Chat, arguments = listOf(navArgument("chatId") { type = NavType.LongType })) {
             ChatScreen(companyKey, it.arguments?.getLong("chatId") ?: 0L, navController)
         }

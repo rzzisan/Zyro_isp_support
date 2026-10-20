@@ -11,7 +11,7 @@ class FakeDesk {
     private val server get() = shared
 
     val company = """{"id":1,"slug":"cln","name":"Century Link Network","role":"owner",
-        "menus":["inbox","customers","bills","tickets","monitoring"]}"""
+        "menus":["inbox","customers","bills","tickets","monitoring","line_switch"]}"""
     private val customer = """{"header_id":3,"customer_id":"0003","name":"Bulbul Ahmed","mobile":"01714080210",
         "username":"en.enamul","zone":"Tilardi","subzone":"Bazar","package":"10 Mbps","monthly_bill":525,"due":525,
         "status":"Active","disabled":false,"is_left":false,"online":true,"last_payment_date":"2026-09-10"}"""
@@ -82,9 +82,23 @@ class FakeDesk {
                     path.endsWith("/zones") -> json("""{"data":["Tilardi","Murma"]}""")
                     path.endsWith("/customers") && customerPage != null -> json(customerPage!!(page))
                     path.endsWith("/customers") -> json("""{"data":[$customer,$customer2],"next_page":null,"total":2}""")
+                    path.endsWith("/customers/3/refresh") -> json("""{"running":false}""")
+                    path.endsWith("/monitoring") -> json("""{"next_page":null,"updated_at":"$now",
+                        "servers":[{"server":"","total":4800,"online":900,"blocked":12},{"server":"CLN-3","total":2600,"online":540,"blocked":5},
+                        {"server":"CLNBD","total":2200,"online":360,"blocked":7}],"data":[
+                        {"header_id":3,"customer_id":"0003","name":"Bulbul Ahmed","username":"en.enamul","zone":"Tilardi","subzone":"Bazar",
+                         "server":"CLN-3","state":"online","ip":"10.0.0.3","mac":"AA:BB:CC:DD:EE:FF","uptime":"3d 4h","seen_at":"$now"},
+                        {"header_id":4,"customer_id":"0004","name":"Rahima Khatun","username":"rahima","zone":"Murma","server":"CLNBD",
+                         "state":"offline","seen_at":"${java.time.OffsetDateTime.now().minusHours(26).minusMinutes(12)}"},
+                        {"header_id":5,"customer_id":"0005","name":"Karim","username":"karim","zone":"Murma","server":"CLNBD",
+                         "state":"blocked","ip":"10.0.0.5","profile":"block","seen_at":"$now"}]}""")
                     path.endsWith("/customers/3") -> json("""{"customer":$customer,"payments":[{"date":"2026-09-10",
                         "bill_month":"September","paid":525,"discount":0,"due":0,"method":"Cash","received_by":"Arif"}],
-                        "tickets":[],"can":{"bill":true}}""")
+                        "tickets":[],"can":{"bill":true,"line":true},"details_fetched_at":"$now",
+                        "sections":[{"tab":"service","title":"ইন্টারনেট সার্ভিস","rows":[{"label":"প্যাকেজ","value":"10 Mbps"},
+                        {"label":"PPPoE ID","value":"en.enamul"},{"label":"মেয়াদ (প্রতি মাসের)","value":"5 তারিখ"},{"label":"রেফারেন্স","value":null}]},
+                        {"tab":"network","title":"নেটওয়ার্ক ও ডিভাইস","rows":[{"label":"লোকেশন","value":"23.7, 90.4","map":true}]}],
+                        "history":[$ticket],"line_logs":[{"at":"$now","action":"disable","by":"Zisan"}]}""")
                     path.endsWith("/live") -> json("""{"mikrotik":{"online":true,"uptime":"3d 4h","address":"10.0.0.3",
                         "profile":"10M","router":"CLN-3"},"onu":{"OpticalPower":"-21.5","OnuStatus":"Online","OLTName":"CLN-VSOL-42",
                         "OLTPort":"PON 2"},"mac":"AA:BB:CC:DD:EE:FF"}""")
