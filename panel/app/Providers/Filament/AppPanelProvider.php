@@ -11,6 +11,7 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Navigation\NavigationGroup;
 use App\Filament\App\Pages\Dashboard;
+use App\Filament\App\Pages\MyProfile;
 use App\Filament\App\Resources\Conversations\Pages\ViewConversation;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -47,7 +48,7 @@ class AppPanelProvider extends PanelProvider
             // sidebar order: daily work first, setup last (items set their group in $navigationGroup, by the Bangla
             // name used as the key here; the label shown is translated)
             ->navigationGroups(collect(self::NAV_GROUPS)->mapWithKeys(fn (string $g) => [$g => NavigationGroup::make()->label(fn () => __($g))])->all())
-            ->userMenuItems([Locale::menuItem()])
+            ->userMenuItems([MyProfile::menuItem(), Locale::menuItem()])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString('<link rel="stylesheet" href="'.asset('css/zyro-theme.css').'?v='.filemtime(public_path('css/zyro-theme.css')).'">'.Locale::jsScript()))
             ->renderHook(PanelsRenderHook::BODY_END, fn () => new HtmlString('<script src="'.asset('js/zyro-page-info.js').'?v='.filemtime(public_path('js/zyro-page-info.js')).'"></script>'))
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn () => view('filament.notify-bell'))

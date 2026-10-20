@@ -32,6 +32,7 @@ class SuperPanelProvider extends PanelProvider
             ->id('super')
             ->path('super')
             ->login()
+            ->profile(\App\Filament\Pages\EditProfile::class, isSimple: false)
             ->brandName('Zyro Support · Super Admin')
             ->brandLogo(fn () => view('filament.brand', ['sub' => __('প্ল্যাটফর্ম অ্যাডমিন')]))
             ->brandLogoHeight('2.5rem')

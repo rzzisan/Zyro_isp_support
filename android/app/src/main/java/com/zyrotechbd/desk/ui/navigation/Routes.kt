@@ -6,6 +6,7 @@ object Routes {
     const val Collect = "collect"            // customer search that goes straight to the bill form
     const val Bills = "bills"
     const val Printers = "printers"
+    const val Password = "password"
     const val Inbox = "inbox"
     const val Monitoring = "monitoring"
     const val More = "more"                  // printers, company, language, sign out

@@ -320,6 +320,15 @@ abstract class AppStrings {
     abstract fun blockedFor(months: Int, days: Int): String
     abstract fun pendingWarning(amount: String, date: String, by: String): String
     abstract fun roleName(role: String?): String
+    abstract val changePassword: String
+    abstract val currentPassword: String
+    abstract val newPassword: String
+    abstract val confirmPassword: String
+    abstract val passwordHint: String
+    abstract val passwordMismatch: String
+    abstract val passwordTooShort: String
+    abstract val passwordChanged: String
+    abstract val passwordFailed: String
 }
 
 object BengaliStrings : AppStrings() {
@@ -646,6 +655,15 @@ object BengaliStrings : AppStrings() {
     override val lineOnLabel = "লাইন চালু"
     override val lineOffAction = "বন্ধ"
     override val lineOnAction = "চালু"
+    override val changePassword = "পাসওয়ার্ড বদলান"
+    override val currentPassword = "বর্তমান পাসওয়ার্ড"
+    override val newPassword = "নতুন পাসওয়ার্ড"
+    override val confirmPassword = "নতুন পাসওয়ার্ড আবার লিখুন"
+    override val passwordHint = "অন্তত ৮ অক্ষর। বদলালে অন্য সব ফোন আর ব্রাউজার থেকে লগআউট হবে, এই ফোনে লগইন থাকবে।"
+    override val passwordMismatch = "দুটো নতুন পাসওয়ার্ড মেলেনি"
+    override val passwordTooShort = "নতুন পাসওয়ার্ড অন্তত ৮ অক্ষরের দিন"
+    override val passwordChanged = "পাসওয়ার্ড বদলানো হয়েছে"
+    override val passwordFailed = "পাসওয়ার্ড বদলানো যায়নি"
 }
 
 object EnglishStrings : AppStrings() {
@@ -972,4 +990,13 @@ object EnglishStrings : AppStrings() {
     override val lineOnLabel = "Line on"
     override val lineOffAction = "Off"
     override val lineOnAction = "On"
+    override val changePassword = "Change password"
+    override val currentPassword = "Current password"
+    override val newPassword = "New password"
+    override val confirmPassword = "Repeat new password"
+    override val passwordHint = "At least 8 characters. Other phones and browsers are signed out; this phone stays signed in."
+    override val passwordMismatch = "The two new passwords do not match"
+    override val passwordTooShort = "Use at least 8 characters"
+    override val passwordChanged = "Password changed"
+    override val passwordFailed = "Could not change the password"
 }

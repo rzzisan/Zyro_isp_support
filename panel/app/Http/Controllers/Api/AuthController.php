@@ -51,6 +51,22 @@ class AuthController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** Change one's own password: needs the current one; every other phone is signed out (browsers too, via AuthenticateSession), this phone stays. */
+    public function password(Request $request): JsonResponse
+    {
+        $data = $request->validate(['current_password' => 'required|string|max:255',
+            'password' => 'required|string|min:8|max:255|confirmed|different:current_password']);
+        $user = $request->user();
+        if (! Hash::check($data['current_password'], $user->password)) {
+            throw ValidationException::withMessages(['current_password' => __('বর্তমান পাসওয়ার্ড ভুল')]);
+        }
+        $user->forceFill(['password' => $data['password'], 'remember_token' => null])->save();
+        $current = $user->currentAccessToken();
+        $user->tokens()->when($current instanceof \Laravel\Sanctum\PersonalAccessToken, fn ($q) => $q->where('id', '!=', $current->id))->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
     /** Sign out on this phone only (other devices keep their tokens). */
     public function logout(Request $request): JsonResponse
     {

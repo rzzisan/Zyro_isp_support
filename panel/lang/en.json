@@ -1246,5 +1246,15 @@
     "ফিল্ড টিম": "Field teams",
     "বিলিংয়ের কর্মী; টিমে থাকলে তিনি ফিল্ড কর্মী হিসেবে অটো assign পাবেন। নতুন কর্মী না দেখালে উপরের \"বিলিং থেকে কর্মী লিস্ট আনুন\" চাপুন": "Billing employees; team members count as field staff for auto-assign. If a new employee is missing, press \"Fetch staff list from billing\" above",
     "বিলিং থেকে কর্মী লিস্ট আনুন": "Fetch staff list from billing",
-    "কর্মী লিস্ট বিলিং থেকে আনা হয়েছে": "Staff list fetched from billing"
+    "কর্মী লিস্ট বিলিং থেকে আনা হয়েছে": "Staff list fetched from billing",
+    "অন্তত ৮ অক্ষর। বদলাতে না চাইলে খালি রাখুন": "At least 8 characters. Leave empty to keep the current one",
+    "আমার পাসওয়ার্ড": "My password",
+    "আমার প্রোফাইল ও পাসওয়ার্ড": "My profile & password",
+    "ইমেইল (লগইন)": "Email (login)",
+    "ইমেইল বদলাতে কোম্পানির Owner/Admin-কে বলুন": "Ask the company Owner/Admin to change the email",
+    "নতুন পাসওয়ার্ড": "New password",
+    "নতুন পাসওয়ার্ড আবার লিখুন": "Repeat new password",
+    "বর্তমান পাসওয়ার্ড": "Current password",
+    "পাসওয়ার্ড বদলাতে বর্তমান পাসওয়ার্ড দিন": "Enter your current password to change it",
+    "বর্তমান পাসওয়ার্ড ভুল": "The current password is wrong"
 }

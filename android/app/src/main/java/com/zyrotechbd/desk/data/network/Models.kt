@@ -8,6 +8,12 @@ data class OkResponse(val ok: Boolean = false)
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
 
+data class PasswordRequest(
+    @Json(name = "current_password") val currentPassword: String,
+    val password: String,
+    @Json(name = "password_confirmation") val passwordConfirmation: String,
+)
+
 data class LoginRequest(val email: String, val password: String, val device: String)
 
 data class UserInfo(val id: Long, val name: String, val email: String, val locale: String? = null)

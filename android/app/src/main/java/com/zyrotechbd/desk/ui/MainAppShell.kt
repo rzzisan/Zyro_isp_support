@@ -108,6 +108,7 @@ private fun titleFor(route: String?, s: AppStrings): String? = when (route) {
     Routes.Collect -> s.navCollect
     Routes.Bills -> s.navBills
     Routes.Printers -> s.navPrinters
+    Routes.Password -> s.changePassword
     Routes.More -> s.navMore
     Routes.Inbox -> s.navInbox
     Routes.Monitoring -> s.navMonitoring
@@ -256,6 +257,7 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
                         extra = screensFor(company, s).drop(4),
                         onOpen = { navController.navigate(it) },
                         onPrinters = { navController.navigate(Routes.Printers) },
+                        onPassword = { navController.navigate(Routes.Password) },
                         onSwitchCompany = { slug ->
                             SessionStore.selectCompany(slug)
                             company = SessionStore.company()

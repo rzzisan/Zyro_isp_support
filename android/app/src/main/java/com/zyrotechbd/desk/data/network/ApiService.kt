@@ -21,6 +21,9 @@ interface ApiService {
     @POST("logout")
     suspend fun logout(): OkResponse
 
+    @POST("password")
+    suspend fun changePassword(@Body request: PasswordRequest): OkResponse
+
     @POST("push-token")
     suspend fun pushToken(@Body request: PushTokenRequest): OkResponse
 

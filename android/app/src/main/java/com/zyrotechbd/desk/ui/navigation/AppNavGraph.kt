@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.zyrotechbd.desk.ui.screens.BillFormScreen
+import com.zyrotechbd.desk.ui.screens.ChangePasswordScreen
 import com.zyrotechbd.desk.ui.screens.BillsScreen
 import com.zyrotechbd.desk.ui.screens.ChatScreen
 import com.zyrotechbd.desk.ui.screens.CustomerDetailScreen
@@ -29,6 +30,7 @@ fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: 
         composable(Routes.Collect) { CustomersScreen(navController, companyKey, collect = true) }
         composable(Routes.Bills) { BillsScreen(companyKey) }
         composable(Routes.Printers) { PrintersScreen() }
+        composable(Routes.Password) { ChangePasswordScreen(navController) }
         composable(Routes.More) { more() }
         composable(Routes.Inbox) { InboxScreen(navController, companyKey) }
         composable(Routes.Monitoring) { MonitoringScreen(navController, companyKey) }
