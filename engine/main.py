@@ -466,7 +466,14 @@ def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str
         api.create_ticket(customer["CustomerHeaderId"], cid, 2, mobile, (f"[WhatsApp: {requested_by}] {detail}\nWhatsApp: {wa}" if requested_by else f"[WhatsApp বট] {detail}\nকাস্টমার WhatsApp: {wa}"))
         created = api.open_tickets_for(customer.get("UserName") or "")
         no = created[0].get("ComplainId") if created else None
-        return f"{note} → টিকেট খোলা হয়েছে #{no or '?'}", (f"আপনার অভিযোগ নম্বর: {no}" if no else None)
+        staff = ""
+        try:
+            from engine.ticket_autoassign import assign, label
+            staff = label(assign(t, api, no, customer.get("CustomerHeaderId"), customer))
+        except Exception:
+            log.exception("ticket %s auto-assign failed", no)
+        return (f"{note} → টিকেট খোলা হয়েছে #{no or '?'}" + (f", দায়িত্বে {staff}" if staff else ""),
+                (f"আপনার অভিযোগ নম্বর: {no}" if no else None))
     except Exception as e:
         log.exception("ticket failed")
         return f"{note} → টিকেট খোলা যায়নি: {str(e)[:200]}", None
@@ -724,9 +731,16 @@ async def new_ticket(request: Request, company_id: int, background: BackgroundTa
                                 b.get("comment") or "", send_sms=False)  # the customer's SMS goes from the Desk
         created = api.open_tickets_for(b.get("username") or "") if b.get("username") else []
         complain_id = created[0].get("ComplainId") if created else None
+        auto = None
         if complain_id and b.get("employees"):
             api.assign_ticket(int(complain_id), [int(e) for e in b["employees"]], b.get("dept_id"), bool(b.get("sms_employees")))
-        return {"message": msg, "complain_id": complain_id}
+        elif complain_id:  # no staff picked: the one who last worked in the customer's area
+            try:
+                from engine.ticket_autoassign import assign, label
+                auto = label(assign(t, api, complain_id, b["header_id"]))
+            except Exception:
+                log.exception("ticket %s auto-assign failed", complain_id)
+        return {"message": msg, "complain_id": complain_id, "auto_assigned": auto or None}
 
     res = await run_in_threadpool(billing_call, run)
     background.add_task(refresh_tickets, t)

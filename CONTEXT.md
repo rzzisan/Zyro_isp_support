@@ -380,3 +380,10 @@
   - গোপন key: `/etc/zyro-desk/firebase-service-account.json` (600, claude-dev, git-এ নেই; অন্য জায়গায় রাখতে চাইলে `FCM_SERVICE_ACCOUNT` দিয়ে path দিতে হয়)।
   - অ্যাপের config `/etc/zyro-desk/google-services.json`। `build.gradle.kts` বিল্ডের সময় এটা পড়ে BuildConfig.FCM_* বানায়, Google Services plugin লাগে না। ফাইলটা না থাকলেও APK হয়, শুধু পুশ থাকে না।
   - ব্যাকআপে keystore আর এই key দুটোই রাখতে হবে।
+
+## টিকিট অটো assign: এলাকার আগের কর্মী (2026-10-20)
+- টেবিল `area_staff` (Desk-এর নিজের, কখনো মোছা হয় না): কোন জোন/সাব-জোন/বক্সে কোন কর্মী কতগুলো টিকিটে কাজ করেছেন, শেষ টিকিট আর শেষ সময়। `engine/ticket_autoassign.py refresh()` প্রতি টিকিট sync-এ `billing_tickets` থেকে ভরে (সমাধান হলে solved_by, খোলা হলে assigned_to; নামের "(10-20-26)" তারিখ বাদ)।
+- নতুন টিকিটে কর্মী না বাছলে `pick()`: আগে একই বক্স (জোন+সাব-জোন+বক্স), না পেলে একই সাব-জোন, তারপর একই জোন; সেই ধাপে সবশেষ কাজ করা কর্মী (শেষ টিকিটে দুজন থাকলে দুজনই)। পিন করা কর্মী আগে। বিলিংয়ে নিষ্ক্রিয় কর্মী আর `bot_settings.auto_assign_exclude`-এর কর্মী বাদ। Desk টেকনিশিয়ানের on/off ব্যবহার হয় না (ওটা WhatsApp-এর জন্য; Arif/Rifat/Maruf সেখানে off কিন্তু কাজ করেন)।
+- কোথায় চলে: প্যানেল/অ্যাপের নতুন টিকিট (engine `/internal/{c}/tickets`, উত্তরে `auto_assigned`), বট/টেকনিশিয়ানের `[[TICKET]]` (`main.open_ticket`), আর বিলিংয়ে সরাসরি খোলা টিকিট (`ticket_sync.auto_assign_new`: sync-এ প্রথম দেখা, কর্মী নেই, ১ ঘণ্টার কম পুরনো)। assign হলে আগের মতোই টেকনিশিয়ানকে WhatsApp যায় (ticket_notify)।
+- প্যানেল: সাপোর্ট → "এলাকার কর্মী" (টিকিট পারমিশন), পিন টগল আর "অটো assign সেটিং" (চালু/বন্ধ, কখনো না-পাওয়া কর্মী; owner/admin)।
+- যাচাই: `python -m engine.ticket_autoassign <company_id> <customer_id>` দেখায় নতুন টিকিট কে পাবে।

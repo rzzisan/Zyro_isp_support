@@ -176,7 +176,8 @@ class TicketActions
                     Grid::make(2)->schema([
                         Select::make('dept_id')->label(__('ডিপার্টমেন্ট (ঐচ্ছিক)'))->options(fn () => static::options('departments')),
                         Select::make('employees')->label(__('কর্মী assign (ঐচ্ছিক)'))->multiple()->searchable()
-                            ->options(fn () => static::options('employees')),
+                            ->options(fn () => static::options('employees'))
+                            ->helperText(__('খালি রাখলে এলাকায় আগে কাজ করা কর্মী অটো পাবেন')),
                     ]),
                     Grid::make(2)->schema([
                         // the customer's SMS goes from the Desk gateway (template "টিকিট খোলা"), never billing's
@@ -214,7 +215,7 @@ class TicketActions
                 ]) : null;
                 Notification::make()->success()
                     ->title(($res['complain_id'] ? __('টিকিট #:id খোলা হয়েছে', ['id' => $res['complain_id']]) : __('টিকিট খোলা হয়েছে')).($smsNote ? ' · '.$smsNote : ''))
-                    ->body($res['message'] ?? null)->send();
+                    ->body(trim(($res['message'] ?? '').(! empty($res['auto_assigned']) ? "\n".__('অটো assign: :who', ['who' => $res['auto_assigned']]) : '')) ?: null)->send();
             });
     }
 

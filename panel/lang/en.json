@@ -1220,5 +1220,22 @@
     "এই সদস্য এই কোম্পানিতে নেই": "This member is not in this company",
     "টিকিটটা আর খোলা নেই": "This ticket is no longer open",
     "কোনো MikroTik রাউটার যোগ করা নেই": "No MikroTik router added",
-    "বিলিং থেকে আনা যায়নি": "Could not fetch from billing"
+    "বিলিং থেকে আনা যায়নি": "Could not fetch from billing",
+    "এলাকার কর্মী": "Area staff",
+    "অটো assign চালু": "Auto-assign on",
+    "অটো assign বন্ধ": "Auto-assign off",
+    "কোন জোন/সাব-জোন/বক্সে কোন কর্মী টিকিটের কাজ করেছেন। নতুন টিকিটে কর্মী না বাছলে আগে একই বক্স, না পেলে একই সাব-জোন, তারপর একই জোনে সবশেষ কাজ করা কর্মী পান; পিন করা কর্মী আগে।": "Which staff worked tickets in which zone / sub zone / box. A new ticket without staff goes to whoever last worked the same box, else the same sub zone, else the same zone; pinned staff come first.",
+    "অটো assign সেটিং": "Auto-assign settings",
+    "নতুন টিকিট এলাকার আগের কর্মীকে অটো assign হবে": "Auto-assign new tickets to the staff who worked the area before",
+    "এই কর্মীরা কখনো অটো assign পাবেন না": "Never auto-assign these staff",
+    "যেমন মালিক বা অফিসের কমন লগইন; তাঁরা বাদ গেলে ওই এলাকার পরের কর্মী পাবেন": "For example the owner or a shared office login; the next staff of that area gets the ticket instead",
+    "জোন": "Zone",
+    "সাব-জোন": "Sub zone",
+    "বক্স": "Box",
+    "শেষ কাজ": "Last worked",
+    "পিন": "Pin",
+    "পিন করা": "Pinned",
+    "পিন করলে এই এলাকার নতুন টিকিট আগে এই কর্মী পাবেন": "When pinned, new tickets in this area go to this staff first",
+    "খালি রাখলে এলাকায় আগে কাজ করা কর্মী অটো পাবেন": "Leave empty to auto-assign the staff who worked this area before",
+    "অটো assign: :who": "Auto-assigned: :who"
 }
