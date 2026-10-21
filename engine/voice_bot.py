@@ -47,12 +47,25 @@ VOICE_RULES = (
     "- à¦¶à§à¦§à§ à¦¬à¦¾à¦‚à¦²à¦¾à¦¯à¦¼, à¦›à§‹à¦Ÿ à¦›à§‹à¦Ÿ à¦¬à¦¾à¦•à§à¦¯à§‡, à¦¸à§à¦¬à¦¾à¦­à¦¾à¦¬à¦¿à¦• à¦­à¦¦à§à¦° à¦—à¦²à¦¾à¦¯à¦¼ à¦•à¦¥à¦¾ à¦¬à¦²à§‹à¥¤ à¦à¦•à¦¬à¦¾à¦°à§‡ à¦¦à§à¦‡-à¦¤à¦¿à¦¨ à¦¬à¦¾à¦•à§à¦¯à§‡à¦° à¦¬à§‡à¦¶à¦¿ à¦¨à¦¾à¥¤\n"
     "- à¦²à¦¿à¦‚à¦•, à¦®à¦¾à¦°à§à¦•à¦¡à¦¾à¦‰à¦¨, à¦‡à¦®à§‹à¦œà¦¿, à¦¤à¦¾à¦²à¦¿à¦•à¦¾ à¦šà¦¿à¦¹à§à¦¨ à¦¬à¦²à¦¬à§‡ à¦¨à¦¾à¥¤ à¦Ÿà¦¾à¦•à¦¾à¦° à¦…à¦™à§à¦• à¦“ à¦¤à¦¾à¦°à¦¿à¦– à¦®à§à¦–à§‡ à¦¬à¦²à¦¾à¦° à¦®à¦¤à§‹ à¦•à¦°à§‡ à¦¬à¦²à§‹à¥¤\n"
     "- à¦¨à¦¿à¦šà§‡à¦° à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦¤à¦¥à§à¦¯ à¦à¦‡ à¦•à¦²à¦¾à¦°à§‡à¦° à¦®à§‹à¦¬à¦¾à¦‡à¦² à¦¨à¦®à§à¦¬à¦° à¦®à¦¿à¦²à¦¿à¦¯à¦¼à§‡ à¦ªà¦¾à¦“à¦¯à¦¼à¦¾; à¦à¦° à¦¬à¦¾à¦‡à¦°à§‡ à¦•à¦¿à¦›à§ à¦¬à¦¾à¦¨à¦¿à¦¯à¦¼à§‡ à¦¬à¦²à¦¬à§‡ à¦¨à¦¾à¥¤\n"
+    "- à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦¬à¦¾à¦‚à¦²à¦¾à¦¦à§‡à¦¶à¦¿, à¦¬à¦¾à¦‚à¦²à¦¾à¦¯à¦¼ (à¦•à¦–à¦¨à§‹ à¦†à¦žà§à¦šà¦²à¦¿à¦• à¦Ÿà¦¾à¦¨à§‡) à¦•à¦¥à¦¾ à¦¬à¦²à§‡à¦¨; à¦¤à¦¾à¦à¦° à¦•à¦¥à¦¾ à¦¬à¦¾à¦‚à¦²à¦¾ à¦¹à¦¿à¦¸à§‡à¦¬à§‡à¦‡ à¦¬à§à¦à¦¬à§‡, à¦¹à¦¿à¦¨à§à¦¦à¦¿ à¦¨à¦¾à¥¤\n"
     "- à¦à¦•à¦‡ à¦¨à¦®à§à¦¬à¦°à§‡ à¦•à¦¯à¦¼à§‡à¦•à¦Ÿà¦¾ à¦¸à¦‚à¦¯à§‹à¦— à¦¥à¦¾à¦•à¦²à§‡ à¦•à§‹à¦¨à¦Ÿà¦¾à¦° à¦•à¦¥à¦¾ à¦œà¦¿à¦œà§à¦žà§‡à¦¸ à¦•à¦°à¦›à§‡ à¦†à¦—à§‡ à¦œà§‡à¦¨à§‡ à¦¨à¦¾à¦“à¥¤\n"
-    "- à¦¸à¦®à¦¾à¦§à¦¾à¦¨ à¦¨à¦¾ à¦¹à¦²à§‡ à¦¬à¦¾ à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦®à¦¾à¦¨à§à¦·à§‡à¦° à¦¸à¦¾à¦¥à§‡ à¦•à¦¥à¦¾ à¦¬à¦²à¦¤à§‡ à¦šà¦¾à¦‡à¦²à§‡ request_callback à¦¦à¦¿à¦¯à¦¼à§‡ à¦•à¦¾à¦°à¦£ à¦²à¦¿à¦–à§‡ à¦°à¦¾à¦–à§‹ à¦à¦¬à¦‚ à¦¬à¦²à§‹ "
-    "à¦†à¦®à¦¾à¦¦à§‡à¦° à¦ªà§à¦°à¦¤à¦¿à¦¨à¦¿à¦§à¦¿ à¦¶à¦¿à¦—à¦—à¦¿à¦°à¦‡ à¦•à¦² à¦¬à§à¦¯à¦¾à¦• à¦•à¦°à¦¬à§‡à¦¨à¥¤\n"
+    "- à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦…à¦¨à§à¦¯ à¦•à§‹à¦¨à§‹ à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦†à¦‡à¦¡à¦¿ à¦¬à¦¾ à¦®à§‹à¦¬à¦¾à¦‡à¦² à¦¨à¦®à§à¦¬à¦° à¦¬à¦²à¦²à§‡ à¦†à¦—à§‡ \"à¦à¦•à¦Ÿà§ à¦¦à§‡à¦–à¦›à¦¿\" à¦¬à¦²à§‡ lookup_customer à¦¡à¦¾à¦•à§‹, à¦¤à¦¾à¦°à¦ªà¦° "
+    "à¦¸à§‡à¦‡ à¦«à¦²à¦¾à¦«à¦² à¦¥à§‡à¦•à§‡à¦‡ à¦¬à¦²à§‹à¥¤ à¦†à¦‡à¦¡à¦¿ à¦¬à¦¾ à¦¤à¦¥à§à¦¯ à¦•à¦–à¦¨à§‹ à¦…à¦¨à§à¦®à¦¾à¦¨ à¦•à¦°à¦¬à§‡ à¦¨à¦¾, à¦¨à¦¿à¦œà§‡à¦° à¦•à¦¾à¦›à§‡ à¦¥à¦¾à¦•à¦¾ à¦…à¦¨à§à¦¯ à¦¸à¦‚à¦¯à§‹à¦—à§‡à¦° à¦¤à¦¥à§à¦¯ à¦¬à¦²à¦¬à§‡ à¦¨à¦¾à¥¤\n"
+    "- à¦²à¦¾à¦‡à¦¨ à¦¬à¦¾ à¦…à¦¨à§à¦¯ à¦¸à¦®à¦¸à§à¦¯à¦¾à¦° à¦…à¦­à¦¿à¦¯à§‹à¦— à¦²à¦¿à¦–à§‡ à¦°à¦¾à¦–à¦¤à§‡ à¦¬à¦²à¦²à§‡ à¦¬à¦¾ à¦¸à¦®à¦¾à¦§à¦¾à¦¨ à¦¨à¦¾ à¦¹à¦²à§‡ create_complaint à¦¦à¦¿à¦¯à¦¼à§‡ à¦¬à¦¿à¦²à¦¿à¦‚à¦¯à¦¼à§‡ à¦Ÿà¦¿à¦•à¦¿à¦Ÿ à¦–à§‹à¦²à§‹, "
+    "à¦¤à¦¾à¦°à¦ªà¦° à¦…à¦­à¦¿à¦¯à§‹à¦— à¦¨à¦®à§à¦¬à¦° à¦œà¦¾à¦¨à¦¾à¦“à¥¤\n"
+    "- à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦®à¦¾à¦¨à§à¦·à§‡à¦° à¦¸à¦¾à¦¥à§‡ à¦•à¦¥à¦¾ à¦¬à¦²à¦¤à§‡ à¦šà¦¾à¦‡à¦²à§‡ request_callback à¦¦à¦¿à¦¯à¦¼à§‡ à¦•à¦¾à¦°à¦£ à¦²à¦¿à¦–à§‡ à¦°à¦¾à¦–à§‹ à¦à¦¬à¦‚ à¦¬à¦²à§‹ à¦†à¦®à¦¾à¦¦à§‡à¦° à¦ªà§à¦°à¦¤à¦¿à¦¨à¦¿à¦§à¦¿ "
+    "à¦¶à¦¿à¦—à¦—à¦¿à¦°à¦‡ à¦•à¦² à¦¬à§à¦¯à¦¾à¦• à¦•à¦°à¦¬à§‡à¦¨à¥¤\n"
     "- à¦•à¦¥à¦¾ à¦¶à§‡à¦· à¦¹à¦²à§‡ à¦¬à¦¿à¦¦à¦¾à¦¯à¦¼ à¦œà¦¾à¦¨à¦¿à¦¯à¦¼à§‡ end_call à¦¡à¦¾à¦•à§‹à¥¤"
 )
 TOOLS = [{"functionDeclarations": [
+    {"name": "lookup_customer", "description": "Find a line by customer ID or mobile number: bill, due, line status, open tickets.",
+     "parameters": {"type": "OBJECT", "properties": {"id_or_mobile": {"type": "STRING", "description": "digits only"}},
+                    "required": ["id_or_mobile"]}},
+    {"name": "create_complaint", "description": "Open a complaint ticket in the billing software for a customer's line.",
+     "parameters": {"type": "OBJECT", "properties": {
+         "customer_id": {"type": "STRING", "description": "the line's customer ID"},
+         "problem": {"type": "STRING", "description": "the problem in short Bangla"}},
+         "required": ["customer_id", "problem"]}},
     {"name": "request_callback", "description": "Record that a human agent must call this customer back, with the reason.",
      "parameters": {"type": "OBJECT", "properties": {"reason": {"type": "STRING", "description": "short reason in Bangla"}},
                     "required": ["reason"]}},
@@ -159,26 +172,80 @@ def safe_view(context: dict) -> dict:
     return ctx
 
 
+def line_context(t, api, row: dict) -> dict:
+    """The WhatsApp bot's view of one line: bill, due, MikroTik/ONU status, open tickets."""
+    from engine import customers
+    from engine.ispdigital import diagnose
+    from engine.ticket_actions import open_tickets
+    ctx = customers.add_online(t, diagnose(api, customers.fresh(api, row)), row)
+    ctx["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
+                           for x in open_tickets(t, row.get("CustomerId"))]
+    return safe_view(ctx)
+
+
+def lookup_customer(t, id_or_mobile: str) -> dict:
+    """Tool: any line by customer ID or mobile (Zisan 2026-10-11: whoever gives an ID or number gets full support)."""
+    from engine import customers
+    from engine import tenant as tenants
+    if not t:
+        return {"error": "billing not connected"}
+    api = tenants.billing(t)
+    q = "".join(ch for ch in str(id_or_mobile) if ch.isdigit())
+    number = normalize(q)
+    row = customers.by_whatsapp(t, api, number) if number else customers.by_id(t, api, q)
+    if not row:
+        return {"found": False, "note": "à¦à¦‡ à¦†à¦‡à¦¡à¦¿ à¦¬à¦¾ à¦¨à¦®à§à¦¬à¦°à§‡ à¦•à§‹à¦¨à§‹ à¦¸à¦‚à¦¯à§‹à¦— à¦ªà¦¾à¦“à¦¯à¦¼à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿; à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦°à¦•à§‡ à¦†à¦¬à¦¾à¦° à¦†à¦‡à¦¡à¦¿à¦Ÿà¦¾ à¦¬à¦²à¦¤à§‡ à¦¬à¦²à§‹"}
+    return {"found": True, **line_context(t, api, row)}
+
+
+def create_complaint(t, caller: str, customer_id: str, problem: str) -> dict:
+    """Tool: a ticket in the billing software, like the WhatsApp bot's (one open ticket per line)."""
+    from engine import customers
+    from engine import tenant as tenants
+    from engine.ispdigital import normalize_bd_mobile
+    if not t:
+        return {"error": "billing not connected"}
+    if not t.bot.get("auto_ticket", True):
+        return {"ok": False, "note": "à¦¬à¦Ÿ à¦¦à¦¿à¦¯à¦¼à§‡ à¦Ÿà¦¿à¦•à¦¿à¦Ÿ à¦–à§‹à¦²à¦¾ à¦¬à¦¨à§à¦§; request_callback à¦¦à¦¾à¦“"}
+    api = tenants.billing(t)
+    row = customers.by_id(t, api, "".join(ch for ch in str(customer_id) if ch.isdigit()))
+    if not row:
+        return {"ok": False, "note": "à¦à¦‡ à¦†à¦‡à¦¡à¦¿à¦¤à§‡ à¦¸à¦‚à¦¯à§‹à¦— à¦ªà¦¾à¦“à¦¯à¦¼à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿"}
+    existing = api.open_tickets_for(row.get("UserName") or "")
+    if existing:
+        return {"ok": True, "already_open": True, "ticket_no": existing[0].get("ComplainId")}
+    _, cats = api.ticket_form()
+    cid = next((v for k, v in cats.items() if any(w in k.lower() for w in ("internet", "line", "net"))), None) \
+        or cats.get("Others Support") or next(iter(cats.values()))
+    mobile = normalize_bd_mobile(row.get("MobileNumber") or "") or normalize(caller) or caller
+    api.create_ticket(row["CustomerHeaderId"], cid, 2, mobile, f"[à¦«à§‹à¦¨ à¦¬à¦Ÿ] {problem}\nà¦•à¦²à¦¾à¦°: {caller}")
+    created = api.open_tickets_for(row.get("UserName") or "")
+    no = created[0].get("ComplainId") if created else None
+    try:
+        from engine.ticket_autoassign import assign
+        assign(t, api, no, row.get("CustomerHeaderId"), row)
+    except Exception:
+        log.exception("ticket %s auto-assign failed", no)
+    return {"ok": True, "ticket_no": no}
+
+
 def prepare(company_id: int, caller: str) -> dict:
     """System prompt and voice, built while the call rings (billing lookups take a few seconds)."""
     from engine import agent, customers
-    from engine.ispdigital import diagnose
     t = tenant_for(company_id)
     company = db.one("select name from companies where id = %s", (company_id,)) or {"name": ""}
-    prompt = (agent.system_prompt(t) if t else f"à¦¤à§à¦®à¦¿ {company['name']} (à¦à¦•à¦Ÿà¦¿ ISP)-à¦à¦° à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿà¥¤") + VOICE_RULES
+    # the WhatsApp rules without the photo rule (no photos on a call)
+    prompt = (agent.system_prompt(t).replace(agent.IMAGE_RULE, "") if t
+              else f"à¦¤à§à¦®à¦¿ {company['name']} (à¦à¦•à¦Ÿà¦¿ ISP)-à¦à¦° à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿà¥¤") + VOICE_RULES
     number = normalize(caller)
-    info = "à¦•à¦²à¦¾à¦°à§‡à¦° à¦¨à¦®à§à¦¬à¦° à¦†à¦®à¦¾à¦¦à§‡à¦° à¦•à§‹à¦¨à§‹ à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦°à§‡à¦° à¦¸à¦¾à¦¥à§‡ à¦®à§‡à¦²à§‡à¦¨à¦¿; à¦¦à¦°à¦•à¦¾à¦° à¦¹à¦²à§‡ à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦†à¦‡à¦¡à¦¿ à¦œà¦¿à¦œà§à¦žà§‡à¦¸ à¦•à¦°à§‹à¥¤"
+    info = "à¦•à¦²à¦¾à¦°à§‡à¦° à¦¨à¦®à§à¦¬à¦° à¦†à¦®à¦¾à¦¦à§‡à¦° à¦•à§‹à¦¨à§‹ à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦°à§‡à¦° à¦¸à¦¾à¦¥à§‡ à¦®à§‡à¦²à§‡à¦¨à¦¿; à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦†à¦‡à¦¡à¦¿ à¦œà¦¿à¦œà§à¦žà§‡à¦¸ à¦•à¦°à§‡ lookup_customer à¦¦à¦¿à¦¯à¦¼à§‡ à¦–à§‹à¦à¦œà§‹à¥¤"
     if t and number:
         try:
             from engine import tenant as tenants
             api = tenants.billing(t)
             row = customers.by_whatsapp(t, api, number)
             if row:
-                ctx = customers.add_online(t, diagnose(api, customers.fresh(api, row)), row)
-                from engine.ticket_actions import open_tickets
-                ctx["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
-                                       for x in open_tickets(t, row.get("CustomerId"))]
-                info = "à¦à¦‡ à¦•à¦²à¦¾à¦°à§‡à¦° à¦¤à¦¥à§à¦¯ (JSON):\n" + json.dumps(safe_view(ctx), ensure_ascii=False)
+                info = "à¦•à¦²à¦¾à¦°à§‡à¦° à¦¨à¦®à§à¦¬à¦°à§‡ à¦®à§‡à¦²à¦¾ à¦¸à¦‚à¦¯à§‹à¦—à§‡à¦° à¦¤à¦¥à§à¦¯ (JSON):\n" + json.dumps(line_context(t, api, row), ensure_ascii=False)
         except Exception:
             log.exception("company %s: customer lookup for %s failed", company_id, caller)
     others = db.all_rows("select customer_id, name, zone, due, is_left from billing_customers"
@@ -306,12 +373,28 @@ class Call:
                 self.usage["input"] += int(u.get("promptTokenCount") or 0)
                 self.usage["output"] += int(u.get("responseTokenCount") or u.get("candidatesTokenCount") or 0)
             for fc in (m.get("toolCall") or {}).get("functionCalls", []):
-                if fc.get("name") == "request_callback":
-                    self.callback = ((fc.get("args") or {}).get("reason") or "à¦•à¦² à¦¬à§à¦¯à¦¾à¦• à¦šà§‡à¦¯à¦¼à§‡à¦›à§‡à¦¨")[:300]
-                elif fc.get("name") == "end_call":
-                    self.hangup_after_drain = True
+                name, args, result = fc.get("name"), fc.get("args") or {}, {"ok": True}
+                t = (self.info.get("prep_result") or {}).get("tenant")
+                loop = asyncio.get_running_loop()
+                try:
+                    if name == "request_callback":
+                        self.callback = (args.get("reason") or "à¦•à¦² à¦¬à§à¦¯à¦¾à¦• à¦šà§‡à¦¯à¦¼à§‡à¦›à§‡à¦¨")[:300]
+                    elif name == "end_call":
+                        self.hangup_after_drain = True
+                    elif name == "lookup_customer":
+                        result = await loop.run_in_executor(pool, lookup_customer, t, args.get("id_or_mobile", ""))
+                    elif name == "create_complaint":
+                        result = await loop.run_in_executor(pool, create_complaint, t, self.info["caller"],
+                                                            args.get("customer_id", ""), args.get("problem", ""))
+                        if result.get("ticket_no"):
+                            self.say("bot", f" [à¦Ÿà¦¿à¦•à¦¿à¦Ÿ #{result['ticket_no']}]")
+                except Exception as e:
+                    log.exception("tool %s", name)
+                    result = {"error": str(e)[:200]}
+                log.info("call %s tool %s -> %s", self.uid, name, str(result)[:120])
                 await ws.send(json.dumps({"toolResponse": {"functionResponses": [
-                    {"id": fc.get("id"), "name": fc.get("name"), "response": {"ok": True}}]}}))
+                    {"id": fc.get("id"), "name": name, "response": json.loads(json.dumps(result, default=str))}]}},
+                    ensure_ascii=False))
         self.done.set()
 
 
@@ -326,7 +409,8 @@ async def open_live(company_id: int, model: str, prep: dict):
                                           max_size=None, open_timeout=8)
             await ws.send(json.dumps({"setup": {
                 "model": f"models/{model}",
-                "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
+                # languageCode: the caller's speech is heard as Bangla (without it some turns came out as Hindi)
+                "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {"languageCode": "bn-IN",
                     "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": prep["voice"]}}}},
                 "systemInstruction": {"parts": [{"text": prep["prompt"]}]},
                 "tools": TOOLS,
