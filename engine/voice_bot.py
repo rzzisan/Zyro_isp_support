@@ -409,13 +409,16 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         await ws.send(json.dumps({"clientContent": {"turns": [{"role": "user", "parts": [{"text":
             "(à¦•à¦² à¦§à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡à¥¤ à¦ªà§à¦°à¦¥à¦®à§‡ à¦•à§‹à¦®à§à¦ªà¦¾à¦¨à¦¿à¦° à¦¨à¦¾à¦® à¦¬à¦²à§‡ à¦¶à§à¦­à§‡à¦šà§à¦›à¦¾ à¦œà¦¾à¦¨à¦¾à¦“, à¦œà¦¾à¦¨à¦¾à¦“ à¦¯à§‡ à¦•à¦²à¦Ÿà¦¿ à¦°à§‡à¦•à¦°à§à¦¡ à¦•à¦°à¦¾ à¦¹à¦šà§à¦›à§‡, à¦¤à¦¾à¦°à¦ªà¦° à¦œà¦¿à¦œà§à¦žà§‡à¦¸ à¦•à¦°à§‹ à¦•à§€à¦­à¦¾à¦¬à§‡ à¦¸à¦¾à¦¹à¦¾à¦¯à§à¦¯ à¦•à¦°à¦¤à§‡ à¦ªà¦¾à¦°à§‹à¥¤)"}]}],
             "turnComplete": True}}))
-        tasks = [asyncio.create_task(c) for c in (call.from_caller(ws), call.to_caller(), call.from_gemini(ws))]
-        try:
-            await asyncio.wait_for(call.done.wait(), MAX_CALL)
-        except asyncio.TimeoutError:
+        # Asterisk usually just closes the socket on hangup (no 0x00 frame): whichever side stops first ends the call
+        tasks = [asyncio.create_task(c) for c in (call.from_caller(ws), call.to_caller(), call.from_gemini(ws),
+                                                    call.done.wait())]
+        finished, _ = await asyncio.wait(tasks, timeout=MAX_CALL, return_when=asyncio.FIRST_COMPLETED)
+        if not finished:
             error = "max call length"
+        call.done.set()
         for t in tasks:
             t.cancel()
+        log.info("call %s from %s: %ss with the bot", uid, info["caller"], int(time.time() - call.started))
     except (asyncio.IncompleteReadError, ConnectionError):
         pass
     except Exception as e:
