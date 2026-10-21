@@ -137,6 +137,23 @@ class WaCampaignTest extends TestCase
         $this->assertSame(0, $campaign->messages()->where('status', 'queued')->count());
     }
 
+    public function test_subzones_follow_the_zone_and_boxes_follow_the_subzone(): void
+    {
+        $this->as($this->owner);
+        $mk = fn (int $h, string $zone, string $sub, string $box) => BillingCustomer::create([
+            'company_id' => $this->company->id, 'header_id' => $h, 'customer_id' => (string) $h, 'name' => 'x'.$h,
+            'mobile' => '0171100'.str_pad((string) $h, 4, '0', STR_PAD_LEFT), 'zone' => $zone, 'subzone' => $sub, 'box' => $box]);
+        $mk(101, 'Binodpur', 'Kazla', 'K-1');
+        $mk(102, 'Binodpur', 'Mirzapur', 'M-1');
+        $mk(103, 'Zisan', 'Talaimari', 'T-1');
+        \App\Models\BillingOption::create(['company_id' => $this->company->id, 'kind' => 'subzones', 'option_id' => '9001', 'name' => 'Kazla East',
+            'parent_name' => 'Binodpur', 'active' => true]);
+        $this->assertSame([], \App\Filament\App\SmsActions::subzones([]));
+        $this->assertSame(['Kazla', 'Kazla East', 'Mirzapur'], array_keys(\App\Filament\App\SmsActions::subzones(['Binodpur'])));
+        $this->assertSame(['K-1'], array_keys(\App\Filament\App\SmsActions::boxes(['Binodpur'], ['Kazla'])));
+        $this->assertSame([], \App\Filament\App\SmsActions::boxes(['Binodpur'], []));
+    }
+
     public function test_pages_need_the_permission(): void
     {
         $this->as($this->agent);

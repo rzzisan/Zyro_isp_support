@@ -1355,5 +1355,7 @@
     "সীমার চেয়ে বেশি জন; সীমার বাইরের মেসেজ Meta ফিরিয়ে দিতে পারে। ভাগ করে কয়েক দিনে পাঠান।": "More customers than the limit; Meta may refuse the messages over it. Send in parts over a few days.",
     "হেডারে ভেরিয়েবল এখনো চলে না": "Variables in the header are not supported yet",
     "হ্যাঁ, এই সবাইকে WhatsApp মেসেজ পাঠাতে চাই (Meta চার্জ করবে)": "Yes, send the WhatsApp message to all of them (Meta will charge)",
-    "SMS ও WhatsApp": "SMS & WhatsApp"
+    "SMS ও WhatsApp": "SMS & WhatsApp",
+    "আগে Zone বাছুন": "Pick a zone first",
+    "আগে Subzone বাছুন": "Pick a subzone first"
 }

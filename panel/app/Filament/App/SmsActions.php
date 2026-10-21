@@ -62,6 +62,54 @@ class SmsActions
         return BillingOption::names(static::company(), $kind, $used);
     }
 
+    /** Sub zones under the chosen zones: those our customers have there, plus the billing list's (parent = zone). */
+    public static function subzones(array $zones): array
+    {
+        if (! $zones) {
+            return [];
+        }
+        $used = BillingCustomer::where('company_id', static::company())->whereNull('gone_at')->whereIn('zone', $zones)
+            ->whereNotNull('subzone')->distinct()->pluck('subzone');
+
+        return static::childOptions('subzones', $zones, $used);
+    }
+
+    /** Boxes under the chosen sub zones (and zones). */
+    public static function boxes(array $zones, array $subzones): array
+    {
+        if (! $subzones) {
+            return [];
+        }
+        $used = BillingCustomer::where('company_id', static::company())->whereNull('gone_at')
+            ->when($zones, fn ($q) => $q->whereIn('zone', $zones))->whereIn('subzone', $subzones)
+            ->whereNotNull('box')->distinct()->pluck('box');
+
+        return static::childOptions('boxes', $subzones, $used);
+    }
+
+    private static function childOptions(string $kind, array $parents, iterable $used): array
+    {
+        $out = [];
+        $listed = BillingOption::where('company_id', static::company())->where('kind', $kind)->where('active', true)
+            ->whereIn('parent_name', $parents)->pluck('name');
+        foreach ([...$listed, ...$used] as $n) {
+            if ($n !== null && $n !== '') {
+                $out[$n] = $n;
+            }
+        }
+        uksort($out, 'strnatcasecmp');
+
+        return $out;
+    }
+
+    /** A zone / sub zone was taken out: drop the sub zones and boxes that are no longer under the choice. */
+    private static function prune(callable $get, callable $set): void
+    {
+        $sub = array_values(array_intersect((array) $get('subzone'), array_keys(static::subzones((array) $get('zone')))));
+        $set('subzone', $sub);
+        $set('box', array_values(array_intersect((array) $get('box'), array_keys(static::boxes((array) $get('zone'), $sub)))));
+    }
+
     public static function filters(array $data): array
     {
         return array_filter(array_intersect_key($data, array_flip(['list', 'zone', 'subzone', 'box', 'package',
@@ -193,11 +241,15 @@ class SmsActions
                 Select::make('list')->label(__('তালিকা'))->selectablePlaceholder(false)->live()
                     ->options(['current' => __('বর্তমান কাস্টমার'), 'left' => __('Left কাস্টমার'), 'all' => __('সব')]),
                 Select::make('zone')->label('Zone')->multiple()->searchable()->live()
-                    ->options(fn () => static::listOptions('zones', 'zone')),
+                    ->options(fn () => static::listOptions('zones', 'zone'))
+                    ->afterStateUpdated(fn ($get, callable $set) => static::prune($get, $set)),
                 Select::make('subzone')->label('Subzone')->multiple()->searchable()->live()
-                    ->options(fn () => static::listOptions('subzones', 'subzone')),
+                    ->disabled(fn ($get) => empty($get('zone')))->placeholder(fn ($get) => empty($get('zone')) ? __('আগে Zone বাছুন') : null)
+                    ->options(fn ($get) => static::subzones((array) $get('zone')))
+                    ->afterStateUpdated(fn ($get, callable $set) => static::prune($get, $set)),
                 Select::make('box')->label('Box')->multiple()->searchable()->live()
-                    ->options(fn () => static::listOptions('boxes', 'box')),
+                    ->disabled(fn ($get) => empty($get('subzone')))->placeholder(fn ($get) => empty($get('subzone')) ? __('আগে Subzone বাছুন') : null)
+                    ->options(fn ($get) => static::boxes((array) $get('zone'), (array) $get('subzone'))),
                 Select::make('package')->label(__('প্যাকেজ'))->multiple()->searchable()->live()
                     ->options(fn () => static::listOptions('packages', 'package')),
                 Select::make('connection_type')->label('Connection Type')->multiple()->live()
