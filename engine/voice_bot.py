@@ -346,8 +346,11 @@ async def open_live(company_id: int, model: str, prep: dict):
 def save_call(call: Call, company_id: int, caller: str, model: str, key_id: int | None, error: str | None) -> None:
     """MP3 of both sides, transcript and the outcome on the call_logs row (the one the popup made, or a new one)."""
     number = normalize(caller)
-    row = db.one("select id from call_logs where company_id = %s and caller = %s and started_at > now() - interval '15 minutes'"
-                 " order by started_at desc limit 1", (company_id, caller[:80]))
+    # the popup's row for this very call: same caller, started when /mode was asked (not just the caller's latest call)
+    rang = (calls.get(call.uid) or {}).get("at") or call.started
+    row = db.one("select id from call_logs where company_id = %s and caller = %s and not bot_answered"
+                 " and abs(extract(epoch from started_at) - %s) < 90"
+                 " order by abs(extract(epoch from started_at) - %s) limit 1", (company_id, caller[:80], rang, rang))
     if not row:
         row = db.execute("insert into call_logs (company_id, call_ref, caller, caller_normalized, status, started_at, created_at, updated_at)"
                          " values (%s, %s, %s, %s, 'ended', now() - make_interval(secs => %s), now(), now()) returning id",
