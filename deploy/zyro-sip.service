@@ -1,0 +1,18 @@
+[Unit]
+Description=Zyro Desk hotline caller ID (baresip rings the companies' SIP extensions, never answers)
+After=network.target postgresql.service
+
+[Service]
+User=claude-dev
+WorkingDirectory=/var/www/zyro_isp_support
+EnvironmentFile=/var/www/zyro_isp_support/engine/.env
+Environment=PYTHONPATH=/var/www/zyro_isp_support
+Environment=SIP_DIR=/var/lib/zyro-sip
+StateDirectory=zyro-sip
+StateDirectoryMode=0700
+ExecStart=/var/www/zyro_isp_support/.venv/bin/python -m engine.sip_calls
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

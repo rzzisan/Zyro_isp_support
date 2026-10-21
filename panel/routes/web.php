@@ -195,3 +195,26 @@ Route::post('/notify/{company:slug}/push/delete', function (\App\Models\Company 
 
     return response()->json(['ok' => true]);
 })->middleware('web')->name('notify.push.delete');
+
+// hotline calls ringing now (public/js/zyro-calls.js): the caller and their customer profile; customers menu users only
+Route::get('/calls/{company:slug}/poll', function (\App\Models\Company $company) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'customers'), 403);
+    $items = \App\Models\CallLog::recent($company->id)->latest('started_at')->limit(5)->get()
+        ->map(fn (\App\Models\CallLog $c) => [
+            'id' => $c->id,
+            'caller' => $c->caller_normalized ? '0'.substr($c->caller_normalized, 3) : $c->caller,
+            'ringing' => $c->status === 'ringing',
+            'at' => $c->started_at->timezone('Asia/Dhaka')->format('g:i A'),
+            'customers' => $c->customers()->map(fn (\App\Models\BillingCustomer $b) => [
+                'name' => $b->name,
+                'id' => $b->customer_id,
+                'place' => collect([$b->zone, $b->subzone])->filter()->implode(', '),
+                'due' => $b->due !== null ? number_format((float) $b->due) : null,
+                'left' => (bool) $b->is_left,
+                'url' => \App\Filament\App\Resources\Customers\CustomerResource::getUrl('view', ['record' => $b], panel: 'app', tenant: $company),
+            ])->values(),
+        ])->values();
+
+    return response()->json(['items' => $items])->header('Cache-Control', 'no-store');
+})->middleware('web')->name('calls.poll');
