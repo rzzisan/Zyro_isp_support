@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -249,7 +251,8 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
                 }
             }
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
+            // the app draws edge to edge, so adjustResize does not shrink it: make room for the keyboard here
+            Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
                 AppNavGraph(navController = navController, companyKey = companyKey, modifier = Modifier.fillMaxSize()) {
                     MoreScreen(
                         company = company,

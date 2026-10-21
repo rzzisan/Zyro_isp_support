@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -60,6 +62,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -185,6 +188,11 @@ fun ChatScreen(company: String, chatId: Long, navController: NavHostController? 
         }
     }
     LaunchedEffect(atBottom) { if (atBottom) unseen = 0 }
+    // the keyboard shrinks the list: keep the latest message in view while replying
+    val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    LaunchedEffect(keyboardOpen) {
+        if (keyboardOpen && messages.isNotEmpty()) listState.scrollToItem(messages.size - 1)
+    }
 
     LaunchedEffect(chatId, reload) {
         var first = messages.isEmpty()
