@@ -72,7 +72,23 @@ VOICE_RULES = (
     "- সমাধান করতে না পারলে request_callback (flag unsolved) দিয়ে একই কথা বলে end_call।\n"
     "- কথা শেষ হলে বিদায় জানিয়ে end_call ডাকো।"
 )
+STAFF_RULES = (
+    "তুমি {company}-এর অফিস সাপোর্ট ডেস্ক, ফোনে কথা বলছ কোম্পানির স্টাফ/টেকনিশিয়ান {tech}-এর সাথে (তিনি কাস্টমার নন)। "
+    "WhatsApp-এ স্টাফরা যা পান, ফোনেও তাই দেবে:\n"
+    "- কথ্য বাংলায়, খুব সংক্ষেপে, শুধু যা জানতে চেয়েছেন। সম্বোধন \"জি ভাই\"। ভূমিকা বা লম্বা বিদায় নয়।\n"
+    "- যেকোনো কাস্টমারের তথ্য দেওয়া যাবে: নাম, ID, PPPoE ID, লাইন অনলাইন কিনা, uptime, IP, MAC, ONU অবস্থা ও "
+    "অপটিক্যাল পাওয়ার, OLT, জোন/বক্স, বিল ও বকেয়া, খোলা টিকিট। পাসওয়ার্ড কখনো না। আগে \"একটু দেখছি\" বলে "
+    "lookup_customer ডাকো; ID, মোবাইল বা PPPoE ID দিয়ে খোঁজা যায়। ফলাফলের বাইরে কিছু বানাবে না।\n"
+    "- \"mikrotik\" এই মুহূর্তের রাউটারের অবস্থা; অনলাইন কিনা বলতে এটাই আগে দেখবে। blocked মানে বিলিং থেকে ব্লক।\n"
+    "- টিকিট খুলতে বললে create_complaint (ক্যাটাগরিসহ), সমাধান করতে বললে solve_ticket, লাইন চালু/বন্ধ করতে বললে "
+    "switch_line। স্পষ্ট করে না বললে এগুলো ডাকবে না। ফল এলে তবেই জানাবে, আগে নয়।\n"
+    "- কাজ শেষ হলে \"ঠিক আছে ভাই\" বলে end_call।\n"
+    "- টাকার অঙ্ক, ID, নম্বর মুখে বলার মতো করে স্পষ্ট বলো।"
+)
 FLAGS = {"off_topic", "wants_person", "unsolved", "time_up"}
+CATEGORIES = ["Speed Slow", "Line Off", "Line Not Stable", "অনু লাল বাতি", "অনু বাতি জলে না(ONU Power OFF)", "অনু চার্জার নষ্ট",
+              "ফাইবার তার ছিড়া", "Optical Power Low", "রাউটার নষ্ট", "রাউটার কনফিগার", "Password change",
+              "Cable problem/Change", "Others Support"]
 WRAP_UP = ("(কলের সময় প্রায় শেষ। এখনই এক বাক্যে বলো \"আমাদের একজন স্টাফ আপনার সাথে যোগাযোগ করবেন, ধন্যবাদ\", "
            "দরকার হলে request_callback (flag time_up) দাও, তারপর end_call।)")
 TOOLS = [{"functionDeclarations": [
@@ -82,7 +98,8 @@ TOOLS = [{"functionDeclarations": [
     {"name": "create_complaint", "description": "Open a complaint ticket in the billing software for a customer's line.",
      "parameters": {"type": "OBJECT", "properties": {
          "customer_id": {"type": "STRING", "description": "the line's customer ID"},
-         "problem": {"type": "STRING", "description": "the problem in short Bangla"}},
+         "problem": {"type": "STRING", "description": "the problem in short Bangla"},
+         "category": {"type": "STRING", "enum": CATEGORIES}},
          "required": ["customer_id", "problem"]}},
     {"name": "request_callback", "description": "Record that a staff member must contact this customer, with the reason; flags the call in the call log.",
      "parameters": {"type": "OBJECT", "properties": {
@@ -90,6 +107,17 @@ TOOLS = [{"functionDeclarations": [
          "flag": {"type": "STRING", "enum": sorted(FLAGS), "description": "why the bot stops here"}},
          "required": ["reason", "flag"]}},
     {"name": "end_call", "description": "Hang up after saying goodbye, when the conversation is over."},
+]}]
+# staff (the panel's technicians, by their number) also get what the WhatsApp staff desk does
+STAFF_TOOLS = [{"functionDeclarations": [f for f in TOOLS[0]["functionDeclarations"] if f["name"] != "request_callback"] + [
+    {"name": "solve_ticket", "description": "Solve the customer's open tickets (only while the line is online).",
+     "parameters": {"type": "OBJECT", "properties": {
+         "customer_id": {"type": "STRING"}, "remark": {"type": "STRING", "description": "what was done, short Bangla"}},
+         "required": ["customer_id"]}},
+    {"name": "switch_line", "description": "Turn the customer's line on (enable) or off (disable) in billing, if this staff member may.",
+     "parameters": {"type": "OBJECT", "properties": {
+         "customer_id": {"type": "STRING"}, "action": {"type": "STRING", "enum": ["enable", "disable"]}},
+         "required": ["customer_id", "action"]}},
 ]}]
 
 
@@ -206,33 +234,63 @@ class _NoBillingOnu:
         return None
 
 
-def line_context(t, api, row: dict) -> dict:
-    """The WhatsApp bot's view of one line: bill, due, MikroTik/ONU status, open tickets."""
+def line_context(t, api, row: dict, staff: bool = False) -> dict:
+    """The WhatsApp bot's view of one line: bill, due, MikroTik/ONU status, open tickets.
+    Staff see everything (PPPoE IP, MAC) like on the WhatsApp staff desk."""
     from engine import customers
     from engine.ispdigital import diagnose
     from engine.ticket_actions import open_tickets
     ctx = customers.add_online(t, diagnose(_NoBillingOnu(api), customers.fresh(api, row)), row)
     ctx["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
                            for x in open_tickets(t, row.get("CustomerId"))]
+    if staff:
+        ctx = json.loads(json.dumps(ctx, ensure_ascii=False, default=str))
+        ctx["customer"]["zone"] = ctx["customer"].get("zone") or row.get("ZoneName")
+        return ctx
     return safe_view(ctx)
 
 
-def lookup_customer(t, id_or_mobile: str) -> dict:
-    """Tool: any line by customer ID or mobile (Zisan 2026-10-11: whoever gives an ID or number gets full support)."""
+def find_line(t, api, query: str) -> dict | None:
+    """A line by customer ID, mobile or (staff) PPPoE ID."""
     from engine import customers
+    q = "".join(ch for ch in str(query) if ch.isdigit())
+    number = normalize(q)
+    if number:
+        return customers.by_whatsapp(t, api, number)
+    if q and q == str(query).strip():
+        return customers.by_id(t, api, q)
+    return customers.by_text(t, api, str(query).strip(), allow_bare_id=True)
+
+
+def lookup_customer(t, id_or_mobile: str, staff: bool = False) -> dict:
+    """Tool: any line by customer ID or mobile (Zisan 2026-10-11: whoever gives an ID or number gets full support)."""
     from engine import tenant as tenants
     if not t:
         return {"error": "billing not connected"}
     api = tenants.billing(t)
-    q = "".join(ch for ch in str(id_or_mobile) if ch.isdigit())
-    number = normalize(q)
-    row = customers.by_whatsapp(t, api, number) if number else customers.by_id(t, api, q)
+    row = find_line(t, api, id_or_mobile)
     if not row:
-        return {"found": False, "note": "এই আইডি বা নম্বরে কোনো সংযোগ পাওয়া যায়নি; কাস্টমারকে আবার আইডিটা বলতে বলো"}
-    return {"found": True, **line_context(t, api, row)}
+        return {"found": False, "note": "এই আইডি বা নম্বরে কোনো সংযোগ পাওয়া যায়নি; আবার আইডিটা বলতে বলো"}
+    return {"found": True, **line_context(t, api, row, staff)}
 
 
-def create_complaint(t, caller: str, customer_id: str, problem: str) -> dict:
+def staff_action(t, tech: dict, name: str, args: dict) -> dict:
+    """Tools only staff have, done exactly as the WhatsApp staff desk does them (same checks and logs)."""
+    from engine import tenant as tenants
+    api = tenants.billing(t)
+    row = find_line(t, api, args.get("customer_id", ""))
+    if not row:
+        return {"ok": False, "note": "এই আইডিতে সংযোগ পাওয়া যায়নি"}
+    if name == "solve_ticket":
+        from engine.ticket_actions import solve_for_customer
+        ok, msg = solve_for_customer(t, row, args.get("remark") or f"ফোনে {tech['name']}")
+        return {"ok": ok, "result": msg}
+    from engine.technician import switch_line
+    action = "enable" if args.get("action") == "enable" else "disable"
+    return {"result": switch_line(t, tech, row, f"[ফোন কল] {action} {args.get('customer_id')}", action)}
+
+
+def create_complaint(t, caller: str, customer_id: str, problem: str, category: str | None = None) -> dict:
     """Tool: a ticket in the billing software, like the WhatsApp bot's (one open ticket per line)."""
     from engine import customers
     from engine import tenant as tenants
@@ -242,14 +300,16 @@ def create_complaint(t, caller: str, customer_id: str, problem: str) -> dict:
     if not t.bot.get("auto_ticket", True):
         return {"ok": False, "note": "বট দিয়ে টিকিট খোলা বন্ধ; request_callback দাও"}
     api = tenants.billing(t)
-    row = customers.by_id(t, api, "".join(ch for ch in str(customer_id) if ch.isdigit()))
+    row = find_line(t, api, customer_id)
     if not row:
         return {"ok": False, "note": "এই আইডিতে সংযোগ পাওয়া যায়নি"}
     existing = api.open_tickets_for(row.get("UserName") or "")
     if existing:
         return {"ok": True, "already_open": True, "ticket_no": existing[0].get("ComplainId")}
     _, cats = api.ticket_form()
-    cid = next((v for k, v in cats.items() if any(w in k.lower() for w in ("internet", "line", "net"))), None) \
+    cid = (cats.get(category) if category else None) \
+        or next((v for k, v in cats.items() if category and category.lower() in k.lower()), None) \
+        or next((v for k, v in cats.items() if any(w in k.lower() for w in ("line off", "internet", "line"))), None) \
         or cats.get("Others Support") or next(iter(cats.values()))
     mobile = normalize_bd_mobile(row.get("MobileNumber") or "") or normalize(caller) or caller
     api.create_ticket(row["CustomerHeaderId"], cid, 2, mobile, f"[ফোন বট] {problem}\nকলার: {caller}")
@@ -263,11 +323,16 @@ def create_complaint(t, caller: str, customer_id: str, problem: str) -> dict:
     return {"ok": True, "ticket_no": no}
 
 
-def prepare(company_id: int, caller: str) -> dict:
+def prepare(company_id: int, caller: str, staff: dict | None = None) -> dict:
     """System prompt and voice, built while the call rings (billing lookups take a few seconds)."""
     from engine import agent, customers
     t = tenant_for(company_id)
     company = db.one("select name from companies where id = %s", (company_id,)) or {"name": ""}
+    voice = ((t.bot.get("voice_reply_voice") if t else None) or "Kore")
+    if staff:
+        block = agent.knowledge(t) if t else ""
+        prompt = STAFF_RULES.replace("{company}", company["name"]).replace("{tech}", staff["name"])
+        return {"prompt": prompt + ("\n\n" + block if block else ""), "voice": voice, "tenant": t, "staff": staff}
     # the WhatsApp rules without the photo rule (no photos on a call)
     prompt = (agent.system_prompt(t).replace(agent.IMAGE_RULE, "") if t
               else f"তুমি {company['name']} (একটি ISP)-এর কাস্টমার সাপোর্ট।") + VOICE_RULES
@@ -287,8 +352,7 @@ def prepare(company_id: int, caller: str) -> dict:
                          (company_id, number)) if number else []
     if len(others) > 1:
         info += "\nএই নম্বরে আরও সংযোগ: " + json.dumps(others, ensure_ascii=False, default=str)
-    voice = ((t.bot.get("voice_reply_voice") if t else None) or "Kore")
-    return {"prompt": prompt + "\n\n" + info, "voice": voice, "tenant": t}
+    return {"prompt": prompt + "\n\n" + info, "voice": voice, "tenant": t, "staff": None}
 
 
 # --- GET /mode (asked by the Asterisk dialplan on every incoming call) -------------------------
@@ -306,9 +370,12 @@ def decide(ep: str, caller: str) -> str:
         return "ring"   # blocked: the bot never takes these callers, the agents' phones ring as usual
     if s["bot_mode"] == "test" and number not in numbers(s.get("bot_test_numbers")):
         return "ring"
+    # the company's technicians (panel → টেকনিশিয়ান, by their WhatsApp number) get the staff desk, as on WhatsApp
+    staff = db.one("select id, name, wa_number, can_switch_lines from technicians where company_id = %s and wa_number = %s and active",
+                   (s["company_id"], number))
     uid = str(uuid.uuid4())
-    calls[uid] = {"company_id": s["company_id"], "caller": caller, "settings": s, "at": time.time(),
-                  "prep": pool.submit(prepare, s["company_id"], caller)}
+    calls[uid] = {"company_id": s["company_id"], "caller": caller, "settings": s, "at": time.time(), "staff": staff,
+                  "prep": pool.submit(prepare, s["company_id"], caller, staff)}
     return f"bot:{uid}:{int(s.get('bot_delay') or 20)}"
 
 
@@ -413,6 +480,7 @@ class Call:
             for fc in (m.get("toolCall") or {}).get("functionCalls", []):
                 name, args, result = fc.get("name"), fc.get("args") or {}, {"ok": True}
                 t = (self.info.get("prep_result") or {}).get("tenant")
+                staff = self.info.get("staff")
                 loop = asyncio.get_running_loop()
                 if name in FILLERS and fillers.get(name):
                     self.out += fillers[name]   # the caller hears "একটু অপেক্ষা করুন..." at once, not silence
@@ -423,10 +491,14 @@ class Call:
                     elif name == "end_call":
                         self.hangup_after_drain = True
                     elif name == "lookup_customer":
-                        result = await loop.run_in_executor(pool, lookup_customer, t, args.get("id_or_mobile", ""))
+                        result = await loop.run_in_executor(pool, lookup_customer, t, args.get("id_or_mobile", ""),
+                                                            bool(staff))
                     elif name == "create_complaint":
                         result = await loop.run_in_executor(pool, create_complaint, t, self.info["caller"],
-                                                            args.get("customer_id", ""), args.get("problem", ""))
+                                                            args.get("customer_id", ""), args.get("problem", ""),
+                                                            args.get("category"))
+                    elif name in ("solve_ticket", "switch_line") and staff:
+                        result = await loop.run_in_executor(pool, staff_action, t, staff, name, args)
                         if result.get("ticket_no"):
                             self.say("bot", f" [টিকিট #{result['ticket_no']}]")
                 except Exception as e:
@@ -454,7 +526,7 @@ async def open_live(company_id: int, model: str, prep: dict):
                 "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {"languageCode": "bn-IN",
                     "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": prep["voice"]}}}},
                 "systemInstruction": {"parts": [{"text": prep["prompt"]}]},
-                "tools": TOOLS,
+                "tools": STAFF_TOOLS if prep.get("staff") else TOOLS,
                 "inputAudioTranscription": {}, "outputAudioTranscription": {},
             }}))
             first = json.loads(await asyncio.wait_for(ws.recv(), 8))
@@ -535,7 +607,8 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         call = Call(uid, info, reader, writer)
         ws, key_id = await open_live(info["company_id"], model, prep)
         await ws.send(json.dumps({"clientContent": {"turns": [{"role": "user", "parts": [{"text":
-            "(কল ধরা হয়েছে। প্রথমে কোম্পানির নাম বলে শুভেচ্ছা জানাও, জানাও যে কলটি রেকর্ড করা হচ্ছে, তারপর জিজ্ঞেস করো কীভাবে সাহায্য করতে পারো।)"}]}],
+            ("(কল ধরা হয়েছে। শুধু বলো \"জি ভাই, বলুন\"।)" if prep.get("staff") else
+             "(কল ধরা হয়েছে। প্রথমে কোম্পানির নাম বলে শুভেচ্ছা জানাও, জানাও যে কলটি রেকর্ড করা হচ্ছে, তারপর জিজ্ঞেস করো কীভাবে সাহায্য করতে পারো।)")}]}],
             "turnComplete": True}}))
         # Asterisk usually just closes the socket on hangup (no 0x00 frame): whichever side stops first ends the call
         tasks = [asyncio.create_task(c) for c in (call.from_caller(ws), call.to_caller(), call.from_gemini(ws),
