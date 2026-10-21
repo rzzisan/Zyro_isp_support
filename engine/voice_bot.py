@@ -1,9 +1,9 @@
-"""Hotline voice bot. Asterisk registers each company's hotline extension (Desk â†’ à¦¸à§‡à¦Ÿà¦¿à¦‚à¦¸ â†’ à¦¹à¦Ÿà¦²à¦¾à¦‡à¦¨ (SIP)) and asks
+"""Hotline voice bot. Asterisk registers each company's hotline extension (Desk → সেটিংস → হটলাইন (SIP)) and asks
 GET /mode whether to take a call. When the bot is on for this caller ("test" = only the test numbers, "live" = all) the
 extension rings for the set seconds (the agents' phones ring at the same time) and then answers; the call audio comes
 here over AudioSocket and goes to Gemini Live, which listens and speaks Bangla. The caller's customer data (bill,
 due, line) is fetched while it rings. Both sides are recorded (MP3 in the panel's storage) with the transcript in
-call_logs, shown on the panel's à¦•à¦² à¦²à¦— page.
+call_logs, shown on the panel's কল লগ page.
 
 AudioSocket: frames of [type:1][length:2 BE][payload]; 0x01 = call UUID, 0x10 = 8 kHz 16-bit mono PCM, 0x00 = hangup.
 Gemini Live takes 16 kHz PCM in and sends 24 kHz PCM out.
@@ -40,22 +40,32 @@ FRAME = 320             # 20 ms of 8 kHz 16-bit audio
 PJSIP_FILE = os.path.join(STATE_DIR, "pjsip_zyro.conf")
 
 pool = ThreadPoolExecutor(max_workers=8)
+
+# played by us the moment the bot calls a slow tool (billing lookups take several seconds)
+FILLERS = {
+    "lookup_customer": "একটু অপেক্ষা করুন, আমি আপনার লাইনটা চেক করছি।",
+    "create_complaint": "একটু অপেক্ষা করুন, আপনার অভিযোগটা লিখে নিচ্ছি।",
+}
+fillers: dict[str, bytes] = {}   # tool name -> 8 kHz PCM
 calls: dict[str, dict] = {}   # AudioSocket UUID -> {company_id, caller, settings, prep (future)}
 
 VOICE_RULES = (
-    "\n\nà¦à¦–à¦¨ à¦¤à§à¦®à¦¿ à¦«à§‹à¦¨ à¦•à¦²à§‡ à¦•à¦¥à¦¾ à¦¬à¦²à¦›, WhatsApp-à¦ à¦¨à¦¾à¥¤ à¦¨à¦¿à¦¯à¦¼à¦®:\n"
-    "- à¦¶à§à¦§à§ à¦¬à¦¾à¦‚à¦²à¦¾à¦¯à¦¼, à¦›à§‹à¦Ÿ à¦›à§‹à¦Ÿ à¦¬à¦¾à¦•à§à¦¯à§‡, à¦¸à§à¦¬à¦¾à¦­à¦¾à¦¬à¦¿à¦• à¦­à¦¦à§à¦° à¦—à¦²à¦¾à¦¯à¦¼ à¦•à¦¥à¦¾ à¦¬à¦²à§‹à¥¤ à¦à¦•à¦¬à¦¾à¦°à§‡ à¦¦à§à¦‡-à¦¤à¦¿à¦¨ à¦¬à¦¾à¦•à§à¦¯à§‡à¦° à¦¬à§‡à¦¶à¦¿ à¦¨à¦¾à¥¤\n"
-    "- à¦²à¦¿à¦‚à¦•, à¦®à¦¾à¦°à§à¦•à¦¡à¦¾à¦‰à¦¨, à¦‡à¦®à§‹à¦œà¦¿, à¦¤à¦¾à¦²à¦¿à¦•à¦¾ à¦šà¦¿à¦¹à§à¦¨ à¦¬à¦²à¦¬à§‡ à¦¨à¦¾à¥¤ à¦Ÿà¦¾à¦•à¦¾à¦° à¦…à¦™à§à¦• à¦“ à¦¤à¦¾à¦°à¦¿à¦– à¦®à§à¦–à§‡ à¦¬à¦²à¦¾à¦° à¦®à¦¤à§‹ à¦•à¦°à§‡ à¦¬à¦²à§‹à¥¤\n"
-    "- à¦¨à¦¿à¦šà§‡à¦° à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦¤à¦¥à§à¦¯ à¦à¦‡ à¦•à¦²à¦¾à¦°à§‡à¦° à¦®à§‹à¦¬à¦¾à¦‡à¦² à¦¨à¦®à§à¦¬à¦° à¦®à¦¿à¦²à¦¿à¦¯à¦¼à§‡ à¦ªà¦¾à¦“à¦¯à¦¼à¦¾; à¦à¦° à¦¬à¦¾à¦‡à¦°à§‡ à¦•à¦¿à¦›à§ à¦¬à¦¾à¦¨à¦¿à¦¯à¦¼à§‡ à¦¬à¦²à¦¬à§‡ à¦¨à¦¾à¥¤\n"
-    "- à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦¬à¦¾à¦‚à¦²à¦¾à¦¦à§‡à¦¶à¦¿, à¦¬à¦¾à¦‚à¦²à¦¾à¦¯à¦¼ (à¦•à¦–à¦¨à§‹ à¦†à¦žà§à¦šà¦²à¦¿à¦• à¦Ÿà¦¾à¦¨à§‡) à¦•à¦¥à¦¾ à¦¬à¦²à§‡à¦¨; à¦¤à¦¾à¦à¦° à¦•à¦¥à¦¾ à¦¬à¦¾à¦‚à¦²à¦¾ à¦¹à¦¿à¦¸à§‡à¦¬à§‡à¦‡ à¦¬à§à¦à¦¬à§‡, à¦¹à¦¿à¦¨à§à¦¦à¦¿ à¦¨à¦¾à¥¤\n"
-    "- à¦à¦•à¦‡ à¦¨à¦®à§à¦¬à¦°à§‡ à¦•à¦¯à¦¼à§‡à¦•à¦Ÿà¦¾ à¦¸à¦‚à¦¯à§‹à¦— à¦¥à¦¾à¦•à¦²à§‡ à¦•à§‹à¦¨à¦Ÿà¦¾à¦° à¦•à¦¥à¦¾ à¦œà¦¿à¦œà§à¦žà§‡à¦¸ à¦•à¦°à¦›à§‡ à¦†à¦—à§‡ à¦œà§‡à¦¨à§‡ à¦¨à¦¾à¦“à¥¤\n"
-    "- à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦…à¦¨à§à¦¯ à¦•à§‹à¦¨à§‹ à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦†à¦‡à¦¡à¦¿ à¦¬à¦¾ à¦®à§‹à¦¬à¦¾à¦‡à¦² à¦¨à¦®à§à¦¬à¦° à¦¬à¦²à¦²à§‡ à¦†à¦—à§‡ \"à¦à¦•à¦Ÿà§ à¦¦à§‡à¦–à¦›à¦¿\" à¦¬à¦²à§‡ lookup_customer à¦¡à¦¾à¦•à§‹, à¦¤à¦¾à¦°à¦ªà¦° "
-    "à¦¸à§‡à¦‡ à¦«à¦²à¦¾à¦«à¦² à¦¥à§‡à¦•à§‡à¦‡ à¦¬à¦²à§‹à¥¤ à¦†à¦‡à¦¡à¦¿ à¦¬à¦¾ à¦¤à¦¥à§à¦¯ à¦•à¦–à¦¨à§‹ à¦…à¦¨à§à¦®à¦¾à¦¨ à¦•à¦°à¦¬à§‡ à¦¨à¦¾, à¦¨à¦¿à¦œà§‡à¦° à¦•à¦¾à¦›à§‡ à¦¥à¦¾à¦•à¦¾ à¦…à¦¨à§à¦¯ à¦¸à¦‚à¦¯à§‹à¦—à§‡à¦° à¦¤à¦¥à§à¦¯ à¦¬à¦²à¦¬à§‡ à¦¨à¦¾à¥¤\n"
-    "- à¦²à¦¾à¦‡à¦¨ à¦¬à¦¾ à¦…à¦¨à§à¦¯ à¦¸à¦®à¦¸à§à¦¯à¦¾à¦° à¦…à¦­à¦¿à¦¯à§‹à¦— à¦²à¦¿à¦–à§‡ à¦°à¦¾à¦–à¦¤à§‡ à¦¬à¦²à¦²à§‡ à¦¬à¦¾ à¦¸à¦®à¦¾à¦§à¦¾à¦¨ à¦¨à¦¾ à¦¹à¦²à§‡ create_complaint à¦¦à¦¿à¦¯à¦¼à§‡ à¦¬à¦¿à¦²à¦¿à¦‚à¦¯à¦¼à§‡ à¦Ÿà¦¿à¦•à¦¿à¦Ÿ à¦–à§‹à¦²à§‹, "
-    "à¦¤à¦¾à¦°à¦ªà¦° à¦…à¦­à¦¿à¦¯à§‹à¦— à¦¨à¦®à§à¦¬à¦° à¦œà¦¾à¦¨à¦¾à¦“à¥¤\n"
-    "- à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦®à¦¾à¦¨à§à¦·à§‡à¦° à¦¸à¦¾à¦¥à§‡ à¦•à¦¥à¦¾ à¦¬à¦²à¦¤à§‡ à¦šà¦¾à¦‡à¦²à§‡ request_callback à¦¦à¦¿à¦¯à¦¼à§‡ à¦•à¦¾à¦°à¦£ à¦²à¦¿à¦–à§‡ à¦°à¦¾à¦–à§‹ à¦à¦¬à¦‚ à¦¬à¦²à§‹ à¦†à¦®à¦¾à¦¦à§‡à¦° à¦ªà§à¦°à¦¤à¦¿à¦¨à¦¿à¦§à¦¿ "
-    "à¦¶à¦¿à¦—à¦—à¦¿à¦°à¦‡ à¦•à¦² à¦¬à§à¦¯à¦¾à¦• à¦•à¦°à¦¬à§‡à¦¨à¥¤\n"
-    "- à¦•à¦¥à¦¾ à¦¶à§‡à¦· à¦¹à¦²à§‡ à¦¬à¦¿à¦¦à¦¾à¦¯à¦¼ à¦œà¦¾à¦¨à¦¿à¦¯à¦¼à§‡ end_call à¦¡à¦¾à¦•à§‹à¥¤"
+    "\n\nএখন তুমি ফোন কলে কথা বলছ, WhatsApp-এ না। নিয়ম:\n"
+    "- শুধু বাংলায়, ছোট ছোট বাক্যে, স্বাভাবিক ভদ্র গলায় কথা বলো। একবারে দুই-তিন বাক্যের বেশি না।\n"
+    "- লিংক, মার্কডাউন, ইমোজি, তালিকা চিহ্ন বলবে না। টাকার অঙ্ক ও তারিখ মুখে বলার মতো করে বলো।\n"
+    "- নিচের কাস্টমার তথ্য এই কলারের মোবাইল নম্বর মিলিয়ে পাওয়া; এর বাইরে কিছু বানিয়ে বলবে না।\n"
+    "- কাস্টমার বাংলাদেশি, বাংলায় (কখনো আঞ্চলিক টানে) কথা বলেন; তাঁর কথা বাংলা হিসেবেই বুঝবে, হিন্দি না।\n"
+    "- একই নম্বরে কয়েকটা সংযোগ থাকলে কোনটার কথা জিজ্ঞেস করছে আগে জেনে নাও।\n"
+    "- কাস্টমার অন্য কোনো কাস্টমার আইডি বা মোবাইল নম্বর বললে আগে \"একটু দেখছি\" বলে lookup_customer ডাকো, তারপর "
+    "সেই ফলাফল থেকেই বলো। আইডি বা তথ্য কখনো অনুমান করবে না, নিজের কাছে থাকা অন্য সংযোগের তথ্য বলবে না।\n"
+    "- লাইন বন্ধ বা নেট নেই বললে আগে লাইনের অবস্থা দেখো (pppoe, mikrotik, onu: অনলাইন/অফলাইন, LOS, অপটিক্যাল পাওয়ার)। "
+    "বকেয়া থাকলেও বিলের শেষ তারিখ (bill_day) পার না হলে বা লাইন বিলের কারণে বন্ধ (disabled/ব্লক) না দেখালে বিলকে কারণ বলবে না।\n"
+    "- অভিযোগ নম্বর, আইডি, টাকার অঙ্ক বা কোনো তথ্য টুলের ফল আসার আগে কখনো বলবে না, অনুমানও করবে না।\n"
+    "- লাইন বা অন্য সমস্যার অভিযোগ লিখে রাখতে বললে বা সমাধান না হলে create_complaint দিয়ে বিলিংয়ে টিকিট খোলো, "
+    "তারপর অভিযোগ নম্বর জানাও।\n"
+    "- কাস্টমার মানুষের সাথে কথা বলতে চাইলে request_callback দিয়ে কারণ লিখে রাখো এবং বলো আমাদের প্রতিনিধি "
+    "শিগগিরই কল ব্যাক করবেন।\n"
+    "- কথা শেষ হলে বিদায় জানিয়ে end_call ডাকো।"
 )
 TOOLS = [{"functionDeclarations": [
     {"name": "lookup_customer", "description": "Find a line by customer ID or mobile number: bill, due, line status, open tickets.",
@@ -172,12 +182,26 @@ def safe_view(context: dict) -> dict:
     return ctx
 
 
+class _NoBillingOnu:
+    """The billing API without its ONU page, which often takes 15+ s; a caller waits on the line meanwhile.
+    add_online() puts our own OLT's ONU status in instead."""
+
+    def __init__(self, api):
+        self._api = api
+
+    def __getattr__(self, name):
+        return getattr(self._api, name)
+
+    def onu_info(self, mac):
+        return None
+
+
 def line_context(t, api, row: dict) -> dict:
     """The WhatsApp bot's view of one line: bill, due, MikroTik/ONU status, open tickets."""
     from engine import customers
     from engine.ispdigital import diagnose
     from engine.ticket_actions import open_tickets
-    ctx = customers.add_online(t, diagnose(api, customers.fresh(api, row)), row)
+    ctx = customers.add_online(t, diagnose(_NoBillingOnu(api), customers.fresh(api, row)), row)
     ctx["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
                            for x in open_tickets(t, row.get("CustomerId"))]
     return safe_view(ctx)
@@ -194,7 +218,7 @@ def lookup_customer(t, id_or_mobile: str) -> dict:
     number = normalize(q)
     row = customers.by_whatsapp(t, api, number) if number else customers.by_id(t, api, q)
     if not row:
-        return {"found": False, "note": "à¦à¦‡ à¦†à¦‡à¦¡à¦¿ à¦¬à¦¾ à¦¨à¦®à§à¦¬à¦°à§‡ à¦•à§‹à¦¨à§‹ à¦¸à¦‚à¦¯à§‹à¦— à¦ªà¦¾à¦“à¦¯à¦¼à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿; à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦°à¦•à§‡ à¦†à¦¬à¦¾à¦° à¦†à¦‡à¦¡à¦¿à¦Ÿà¦¾ à¦¬à¦²à¦¤à§‡ à¦¬à¦²à§‹"}
+        return {"found": False, "note": "এই আইডি বা নম্বরে কোনো সংযোগ পাওয়া যায়নি; কাস্টমারকে আবার আইডিটা বলতে বলো"}
     return {"found": True, **line_context(t, api, row)}
 
 
@@ -206,11 +230,11 @@ def create_complaint(t, caller: str, customer_id: str, problem: str) -> dict:
     if not t:
         return {"error": "billing not connected"}
     if not t.bot.get("auto_ticket", True):
-        return {"ok": False, "note": "à¦¬à¦Ÿ à¦¦à¦¿à¦¯à¦¼à§‡ à¦Ÿà¦¿à¦•à¦¿à¦Ÿ à¦–à§‹à¦²à¦¾ à¦¬à¦¨à§à¦§; request_callback à¦¦à¦¾à¦“"}
+        return {"ok": False, "note": "বট দিয়ে টিকিট খোলা বন্ধ; request_callback দাও"}
     api = tenants.billing(t)
     row = customers.by_id(t, api, "".join(ch for ch in str(customer_id) if ch.isdigit()))
     if not row:
-        return {"ok": False, "note": "à¦à¦‡ à¦†à¦‡à¦¡à¦¿à¦¤à§‡ à¦¸à¦‚à¦¯à§‹à¦— à¦ªà¦¾à¦“à¦¯à¦¼à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿"}
+        return {"ok": False, "note": "এই আইডিতে সংযোগ পাওয়া যায়নি"}
     existing = api.open_tickets_for(row.get("UserName") or "")
     if existing:
         return {"ok": True, "already_open": True, "ticket_no": existing[0].get("ComplainId")}
@@ -218,7 +242,7 @@ def create_complaint(t, caller: str, customer_id: str, problem: str) -> dict:
     cid = next((v for k, v in cats.items() if any(w in k.lower() for w in ("internet", "line", "net"))), None) \
         or cats.get("Others Support") or next(iter(cats.values()))
     mobile = normalize_bd_mobile(row.get("MobileNumber") or "") or normalize(caller) or caller
-    api.create_ticket(row["CustomerHeaderId"], cid, 2, mobile, f"[à¦«à§‹à¦¨ à¦¬à¦Ÿ] {problem}\nà¦•à¦²à¦¾à¦°: {caller}")
+    api.create_ticket(row["CustomerHeaderId"], cid, 2, mobile, f"[ফোন বট] {problem}\nকলার: {caller}")
     created = api.open_tickets_for(row.get("UserName") or "")
     no = created[0].get("ComplainId") if created else None
     try:
@@ -236,23 +260,23 @@ def prepare(company_id: int, caller: str) -> dict:
     company = db.one("select name from companies where id = %s", (company_id,)) or {"name": ""}
     # the WhatsApp rules without the photo rule (no photos on a call)
     prompt = (agent.system_prompt(t).replace(agent.IMAGE_RULE, "") if t
-              else f"à¦¤à§à¦®à¦¿ {company['name']} (à¦à¦•à¦Ÿà¦¿ ISP)-à¦à¦° à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿà¥¤") + VOICE_RULES
+              else f"তুমি {company['name']} (একটি ISP)-এর কাস্টমার সাপোর্ট।") + VOICE_RULES
     number = normalize(caller)
-    info = "à¦•à¦²à¦¾à¦°à§‡à¦° à¦¨à¦®à§à¦¬à¦° à¦†à¦®à¦¾à¦¦à§‡à¦° à¦•à§‹à¦¨à§‹ à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦°à§‡à¦° à¦¸à¦¾à¦¥à§‡ à¦®à§‡à¦²à§‡à¦¨à¦¿; à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦†à¦‡à¦¡à¦¿ à¦œà¦¿à¦œà§à¦žà§‡à¦¸ à¦•à¦°à§‡ lookup_customer à¦¦à¦¿à¦¯à¦¼à§‡ à¦–à§‹à¦à¦œà§‹à¥¤"
+    info = "কলারের নম্বর আমাদের কোনো কাস্টমারের সাথে মেলেনি; কাস্টমার আইডি জিজ্ঞেস করে lookup_customer দিয়ে খোঁজো।"
     if t and number:
         try:
             from engine import tenant as tenants
             api = tenants.billing(t)
             row = customers.by_whatsapp(t, api, number)
             if row:
-                info = "à¦•à¦²à¦¾à¦°à§‡à¦° à¦¨à¦®à§à¦¬à¦°à§‡ à¦®à§‡à¦²à¦¾ à¦¸à¦‚à¦¯à§‹à¦—à§‡à¦° à¦¤à¦¥à§à¦¯ (JSON):\n" + json.dumps(line_context(t, api, row), ensure_ascii=False)
+                info = "কলারের নম্বরে মেলা সংযোগের তথ্য (JSON):\n" + json.dumps(line_context(t, api, row), ensure_ascii=False)
         except Exception:
             log.exception("company %s: customer lookup for %s failed", company_id, caller)
     others = db.all_rows("select customer_id, name, zone, due, is_left from billing_customers"
                          " where company_id = %s and mobile_normalized = %s order by is_left, header_id desc limit 5",
                          (company_id, number)) if number else []
     if len(others) > 1:
-        info += "\nà¦à¦‡ à¦¨à¦®à§à¦¬à¦°à§‡ à¦†à¦°à¦“ à¦¸à¦‚à¦¯à§‹à¦—: " + json.dumps(others, ensure_ascii=False, default=str)
+        info += "\nএই নম্বরে আরও সংযোগ: " + json.dumps(others, ensure_ascii=False, default=str)
     voice = ((t.bot.get("voice_reply_voice") if t else None) or "Kore")
     return {"prompt": prompt + "\n\n" + info, "voice": voice, "tenant": t}
 
@@ -376,9 +400,11 @@ class Call:
                 name, args, result = fc.get("name"), fc.get("args") or {}, {"ok": True}
                 t = (self.info.get("prep_result") or {}).get("tenant")
                 loop = asyncio.get_running_loop()
+                if name in FILLERS and fillers.get(name):
+                    self.out += fillers[name]   # the caller hears "একটু অপেক্ষা করুন..." at once, not silence
                 try:
                     if name == "request_callback":
-                        self.callback = (args.get("reason") or "à¦•à¦² à¦¬à§à¦¯à¦¾à¦• à¦šà§‡à¦¯à¦¼à§‡à¦›à§‡à¦¨")[:300]
+                        self.callback = (args.get("reason") or "কল ব্যাক চেয়েছেন")[:300]
                     elif name == "end_call":
                         self.hangup_after_drain = True
                     elif name == "lookup_customer":
@@ -387,7 +413,7 @@ class Call:
                         result = await loop.run_in_executor(pool, create_complaint, t, self.info["caller"],
                                                             args.get("customer_id", ""), args.get("problem", ""))
                         if result.get("ticket_no"):
-                            self.say("bot", f" [à¦Ÿà¦¿à¦•à¦¿à¦Ÿ #{result['ticket_no']}]")
+                            self.say("bot", f" [টিকিট #{result['ticket_no']}]")
                 except Exception as e:
                     log.exception("tool %s", name)
                     result = {"error": str(e)[:200]}
@@ -494,7 +520,7 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         call = Call(uid, info, reader, writer)
         ws, key_id = await open_live(info["company_id"], model, prep)
         await ws.send(json.dumps({"clientContent": {"turns": [{"role": "user", "parts": [{"text":
-            "(à¦•à¦² à¦§à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡à¥¤ à¦ªà§à¦°à¦¥à¦®à§‡ à¦•à§‹à¦®à§à¦ªà¦¾à¦¨à¦¿à¦° à¦¨à¦¾à¦® à¦¬à¦²à§‡ à¦¶à§à¦­à§‡à¦šà§à¦›à¦¾ à¦œà¦¾à¦¨à¦¾à¦“, à¦œà¦¾à¦¨à¦¾à¦“ à¦¯à§‡ à¦•à¦²à¦Ÿà¦¿ à¦°à§‡à¦•à¦°à§à¦¡ à¦•à¦°à¦¾ à¦¹à¦šà§à¦›à§‡, à¦¤à¦¾à¦°à¦ªà¦° à¦œà¦¿à¦œà§à¦žà§‡à¦¸ à¦•à¦°à§‹ à¦•à§€à¦­à¦¾à¦¬à§‡ à¦¸à¦¾à¦¹à¦¾à¦¯à§à¦¯ à¦•à¦°à¦¤à§‡ à¦ªà¦¾à¦°à§‹à¥¤)"}]}],
+            "(কল ধরা হয়েছে। প্রথমে কোম্পানির নাম বলে শুভেচ্ছা জানাও, জানাও যে কলটি রেকর্ড করা হচ্ছে, তারপর জিজ্ঞেস করো কীভাবে সাহায্য করতে পারো।)"}]}],
             "turnComplete": True}}))
         # Asterisk usually just closes the socket on hangup (no 0x00 frame): whichever side stops first ends the call
         tasks = [asyncio.create_task(c) for c in (call.from_caller(ws), call.to_caller(), call.from_gemini(ws),
@@ -529,8 +555,36 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
             calls.pop(uid, None)
 
 
+def load_fillers() -> None:
+    """The filler lines as 8 kHz PCM, made once with Gemini TTS (same voice as the bot) and kept in STATE_DIR."""
+    import hashlib
+    from engine import agent
+    for name, text in FILLERS.items():
+        if fillers.get(name):
+            continue
+        path = os.path.join(STATE_DIR, f"filler-{hashlib.sha1(text.encode()).hexdigest()[:10]}.pcm")
+        if not os.path.exists(path):
+            row = db.one("select company_id from sip_settings where bot_mode in ('test', 'live') order by company_id limit 1")
+            t = tenant_for(row["company_id"]) if row else None
+            ogg = agent.speak(t, text) if t else None
+            if not ogg:
+                continue
+            pcm = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", "pipe:0", "-f", "s16le", "-ac", "1", "-ar", "8000", "pipe:1"],
+                                 input=ogg, capture_output=True, timeout=60).stdout
+            if not pcm:
+                continue
+            with open(path, "wb") as f:
+                f.write(pcm)
+        fillers[name] = open(path, "rb").read()
+        log.info("filler %s: %.1fs", name, len(fillers[name]) / 16000)
+
+
 async def housekeeping() -> None:
     while True:
+        try:
+            await asyncio.get_running_loop().run_in_executor(pool, load_fillers)
+        except Exception:
+            log.exception("fillers")
         try:
             await asyncio.get_running_loop().run_in_executor(pool, sync_asterisk)
         except Exception:
