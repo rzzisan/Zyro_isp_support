@@ -11,7 +11,7 @@ class FakeDesk {
     private val server get() = shared
 
     val company = """{"id":1,"slug":"cln","name":"Century Link Network","role":"owner",
-        "menus":["inbox","customers","bills","tickets","monitoring","line_switch"]}"""
+        "menus":["inbox","customers","bills","tickets","monitoring","line_switch","calls"]}"""
     private val customer = """{"header_id":3,"customer_id":"0003","name":"Bulbul Ahmed","mobile":"01714080210",
         "username":"en.enamul","zone":"Tilardi","subzone":"Bazar","package":"10 Mbps","monthly_bill":525,"due":525,
         "status":"Active","disabled":false,"is_left":false,"online":true,"last_payment_date":"2026-09-10"}"""
@@ -83,6 +83,19 @@ class FakeDesk {
                     path.endsWith("/customers") && customerPage != null -> json(customerPage!!(page))
                     path.endsWith("/customers") -> json("""{"data":[$customer,$customer2],"next_page":null,"total":2}""")
                     path.endsWith("/customers/3/refresh") -> json("""{"running":false}""")
+                    path.endsWith("/calls") -> json("""{"next_page":null,"data":[
+                        {"id":5,"caller":"01577077629","started_at":"$now","bot_answered":true,"bot_seconds":75,"flag":"মানুষ চেয়েছেন",
+                         "callback_reason":"বিল নিয়ে কথা বলতে চান","has_recording":true,
+                         "customer":{"header_id":3,"customer_id":"3967","name":"Rahima Begum","left":false}},
+                        {"id":4,"caller":"01711000000","started_at":"$now","ringing":true,"bot_answered":false},
+                        {"id":3,"caller":"01811222333","started_at":"$now","bot_answered":false,
+                         "customer":{"header_id":9,"customer_id":"0042","name":"Karim","left":false}}]}""")
+                    path.endsWith("/calls/5") -> json("""{"call":{"id":5,"caller":"01577077629","started_at":"$now","bot_answered":true,
+                        "bot_seconds":75,"flag":"মানুষ চেয়েছেন","callback_reason":"বিল নিয়ে কথা বলতে চান","has_recording":true,
+                        "customer":{"header_id":3,"customer_id":"3967","name":"Rahima Begum","left":false},
+                        "transcript":[{"who":"bot","text":"আসসালামু আলাইকুম, Century Link Network। বলুন কীভাবে সাহায্য করতে পারি?","at":0},
+                          {"who":"caller","text":"আমার লাইন সকাল থেকে নেই","at":6},
+                          {"who":"bot","text":"আপনার আইডি 3967, লাইন অফলাইন দেখাচ্ছে। টিকিট খুলে দিচ্ছি।","at":11}]}}""")
                     path.endsWith("/monitoring") -> json("""{"next_page":null,"updated_at":"$now",
                         "servers":[{"server":"","total":4800,"online":900,"blocked":12},{"server":"CLN-3","total":2600,"online":540,"blocked":5},
                         {"server":"CLNBD","total":2200,"online":360,"blocked":7}],"data":[

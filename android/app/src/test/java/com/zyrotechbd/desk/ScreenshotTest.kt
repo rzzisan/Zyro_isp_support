@@ -25,6 +25,8 @@ import com.zyrotechbd.desk.ui.screens.BillsScreen
 import com.zyrotechbd.desk.ui.screens.CustomerDetailScreen
 import com.zyrotechbd.desk.ui.screens.CustomersScreen
 import com.zyrotechbd.desk.ui.screens.MonitoringScreen
+import com.zyrotechbd.desk.ui.screens.CallsScreen
+import com.zyrotechbd.desk.ui.screens.CallDetailScreen
 import com.zyrotechbd.desk.ui.screens.CustomerFilter
 import com.zyrotechbd.desk.ui.screens.CustomerFilterForm
 import com.zyrotechbd.desk.ui.screens.DashboardScreen
@@ -101,6 +103,8 @@ class ScreenshotTest {
         CustomerFilterForm(CustomerFilter(zone = "Tilardi", due = true, exp = "next7"),
             com.zyrotechbd.desk.data.network.CustomerFilterChoices(statuses = listOf("Active")), BengaliStrings) {}
     }
+    @Test fun calls() = shot("15-calls", "Rahima") { CallsScreen(rememberNavController(), "cln") }
+    @Test fun call() = shot("16-call", "সকাল থেকে") { CallDetailScreen(rememberNavController(), "cln", 5) }
     @Test fun monitoring() = shot("14-monitoring", "Rahima") { MonitoringScreen(rememberNavController(), "cln") }
     @Test fun customers() = shot("2-customers", "Rahima") { CustomersScreen(rememberNavController(), "cln", collect = false) }
     @Test fun customer() = shot("3-customer", "-21.5") { CustomerDetailScreen(rememberNavController(), "cln", 3) }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -99,6 +100,7 @@ private fun screensFor(company: CompanyInfo?, s: AppStrings): List<Tab> = buildL
     }
     if (company?.can("bills") == true) add(Tab(Routes.Bills, s.navBillsShort, Icons.Filled.ReceiptLong))
     if (company?.can("monitoring") == true) add(Tab(Routes.Monitoring, s.navMonitoring, Icons.Filled.Wifi))
+    if (company?.can("calls") == true) add(Tab(Routes.Calls, s.navCalls, Icons.Filled.PhoneInTalk))
 }
 
 private fun tabsFor(company: CompanyInfo?, s: AppStrings): List<Tab> =
@@ -114,6 +116,8 @@ private fun titleFor(route: String?, s: AppStrings): String? = when (route) {
     Routes.More -> s.navMore
     Routes.Inbox -> s.navInbox
     Routes.Monitoring -> s.navMonitoring
+    Routes.Calls -> s.navCalls
+    Routes.Call -> s.titleCall
     Routes.Chat -> s.titleChat
     Routes.Tickets -> s.navTickets
     Routes.Ticket -> s.titleTicket

@@ -17,10 +17,16 @@ import java.io.IOException
 object MediaCache {
     private fun dir(context: Context) = File(context.cacheDir, "media").apply { mkdirs() }
 
-    suspend fun file(context: Context, company: String, messageId: Long, extension: String): File = withContext(Dispatchers.IO) {
-        val file = File(dir(context), "$company-$messageId.$extension")
+    suspend fun file(context: Context, company: String, messageId: Long, extension: String): File =
+        fetch(File(dir(context), "$company-$messageId.$extension"), "c/$company/media/$messageId")
+
+    /** A hotline call's recording (mp3) from /c/{company}/calls/{id}/recording. */
+    suspend fun recording(context: Context, company: String, callId: Long): File =
+        fetch(File(dir(context), "$company-call-$callId.mp3"), "c/$company/calls/$callId/recording")
+
+    private suspend fun fetch(file: File, path: String): File = withContext(Dispatchers.IO) {
         if (file.length() > 0) return@withContext file
-        val request = Request.Builder().url(ApiClient.baseUrl + "c/$company/media/$messageId").build()
+        val request = Request.Builder().url(ApiClient.baseUrl + path).build()
         ApiClient.httpClient.newCall(request).execute().use { res ->
             if (!res.isSuccessful) throw IOException("media ${res.code}")
             val tmp = File(file.path + ".part")
