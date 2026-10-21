@@ -317,6 +317,26 @@ abstract class AppStrings {
     abstract val lineOnLabel: String
     abstract val lineOffAction: String
     abstract val lineOnAction: String
+    abstract val navCalls: String
+    abstract val titleCall: String
+    abstract val cSearch: String
+    abstract val cBot: String
+    abstract val cAgent: String
+    abstract val cCallback: String
+    abstract val cRinging: String
+    abstract val cBotTalk: String
+    abstract val cCallbackLabel: String
+    abstract val cNoCalls: String
+    abstract val cRecording: String
+    abstract val cNoRecording: String
+    abstract val cTranscript: String
+    abstract val cNoTranscript: String
+    abstract val cUnknown: String
+    abstract val cWhoBot: String
+    abstract val cWhoCaller: String
+    abstract val cDial: String
+    abstract val cPlayFailed: String
+    abstract val cLoadingRec: String
     abstract fun blockedFor(months: Int, days: Int): String
     abstract fun pendingWarning(amount: String, date: String, by: String): String
     abstract fun roleName(role: String?): String
@@ -664,6 +684,26 @@ object BengaliStrings : AppStrings() {
     override val passwordTooShort = "নতুন পাসওয়ার্ড অন্তত ৮ অক্ষরের দিন"
     override val passwordChanged = "পাসওয়ার্ড বদলানো হয়েছে"
     override val passwordFailed = "পাসওয়ার্ড বদলানো যায়নি"
+    override val navCalls = "কল লগ"
+    override val titleCall = "কল"
+    override val cSearch = "নম্বর দিয়ে খুঁজুন"
+    override val cBot = "বট ধরেছে"
+    override val cAgent = "এজেন্ট / মিসড"
+    override val cCallback = "কল ব্যাক লাগবে"
+    override val cRinging = "বাজছে"
+    override val cBotTalk = "বটের সাথে কথা"
+    override val cCallbackLabel = "কল ব্যাক"
+    override val cNoCalls = "কোনো কল নেই"
+    override val cRecording = "রেকর্ডিং"
+    override val cNoRecording = "রেকর্ডিং নেই"
+    override val cTranscript = "কথোপকথন"
+    override val cNoTranscript = "লেখা রূপ নেই"
+    override val cUnknown = "অচেনা নম্বর"
+    override val cWhoBot = "বট"
+    override val cWhoCaller = "কাস্টমার"
+    override val cDial = "কল করুন"
+    override val cPlayFailed = "রেকর্ডিং চালানো যায়নি"
+    override val cLoadingRec = "রেকর্ডিং আনা হচ্ছে…"
 }
 
 object EnglishStrings : AppStrings() {
@@ -999,4 +1039,24 @@ object EnglishStrings : AppStrings() {
     override val passwordTooShort = "Use at least 8 characters"
     override val passwordChanged = "Password changed"
     override val passwordFailed = "Could not change the password"
+    override val navCalls = "Call log"
+    override val titleCall = "Call"
+    override val cSearch = "Search by number"
+    override val cBot = "Bot answered"
+    override val cAgent = "Agent / missed"
+    override val cCallback = "Needs callback"
+    override val cRinging = "Ringing"
+    override val cBotTalk = "Talked with the bot"
+    override val cCallbackLabel = "Call back"
+    override val cNoCalls = "No calls"
+    override val cRecording = "Recording"
+    override val cNoRecording = "No recording"
+    override val cTranscript = "Conversation"
+    override val cNoTranscript = "No transcript"
+    override val cUnknown = "Unknown number"
+    override val cWhoBot = "Bot"
+    override val cWhoCaller = "Caller"
+    override val cDial = "Call"
+    override val cPlayFailed = "Could not play the recording"
+    override val cLoadingRec = "Fetching the recording…"
 }

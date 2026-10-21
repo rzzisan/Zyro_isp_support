@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Membership;
+use App\Models\SipSetting;
 use App\Models\User;
 use App\Support\Menu;
 use Illuminate\Http\JsonResponse;
@@ -81,8 +82,12 @@ class AuthController extends Controller
         $companies = $user->companies()->orderBy('companies.name')->get()->map(function ($company) use ($user) {
             $role = Membership::where('company_id', $company->id)->where('user_id', $user->id)->value('role');
 
+            // the call log needs a hotline (SIP) set up, like the panel's page
+            $hotline = SipSetting::where('company_id', $company->id)->exists();
+
             return ['id' => $company->id, 'slug' => $company->slug, 'name' => $company->name, 'role' => $role,
-                'menus' => array_values(array_filter(array_keys(Menu::ITEMS), fn ($k) => Menu::allows($user, $company, $k)))];
+                'menus' => array_values(array_filter(array_keys(Menu::ITEMS),
+                    fn ($k) => Menu::allows($user, $company, $k) && ($k !== 'calls' || $hotline)))];
         })->values();
 
         return ['user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'locale' => $user->locale],

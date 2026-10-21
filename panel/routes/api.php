@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BillController;
+use App\Http\Controllers\Api\CallController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\InboxController;
@@ -51,6 +52,10 @@ Route::prefix('v1')->group(function () {
             Route::get('monitoring', [MonitoringController::class, 'index']);
             Route::post('monitoring/sync', [MonitoringController::class, 'sync'])->middleware('throttle:10,1');
             Route::post('monitoring/{headerId}/{what}', [MonitoringController::class, 'check'])->whereNumber('headerId')->middleware('throttle:60,1');
+
+            Route::get('calls', [CallController::class, 'index']);
+            Route::get('calls/{call}', [CallController::class, 'show'])->whereNumber('call');
+            Route::get('calls/{call}/recording', [CallController::class, 'recording'])->whereNumber('call');
 
             Route::get('tickets', [TicketController::class, 'index']);
             Route::get('ticket-customers', [TicketController::class, 'customers']);

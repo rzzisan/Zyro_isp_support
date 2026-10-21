@@ -419,3 +419,33 @@ data class SolveResult(val ok: Boolean = false, val sms: String? = null)
 // ── Push ───────────────────────────────────────────────────────────────────────
 
 data class PushTokenRequest(val token: String)
+
+data class CallCustomer(
+    @Json(name = "header_id") val headerId: Long,
+    @Json(name = "customer_id") val customerId: String? = null,
+    val name: String? = null,
+    val left: Boolean = false,
+)
+
+/** One hotline call (the panel's "কল লগ"); a bot-answered one may have a recording and a transcript. */
+data class CallRow(
+    val id: Long,
+    val caller: String? = null,
+    @Json(name = "started_at") val startedAt: String? = null,
+    @Json(name = "ended_at") val endedAt: String? = null,
+    val ringing: Boolean = false,
+    @Json(name = "bot_answered") val botAnswered: Boolean = false,
+    @Json(name = "bot_seconds") val botSeconds: Int? = null,
+    val flag: String? = null,
+    @Json(name = "callback_reason") val callbackReason: String? = null,
+    @Json(name = "has_recording") val hasRecording: Boolean = false,
+    val customer: CallCustomer? = null,
+    val transcript: List<CallLine>? = null,
+    @Json(name = "bot_error") val botError: String? = null,
+)
+
+data class CallLine(val who: String = "", val text: String = "", val at: Int = 0)
+
+data class CallPage(val data: List<CallRow> = emptyList(), @Json(name = "next_page") val nextPage: Int? = null)
+
+data class CallResult(val call: CallRow)

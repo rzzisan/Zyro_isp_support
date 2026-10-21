@@ -16,6 +16,8 @@ import com.zyrotechbd.desk.ui.screens.CustomersScreen
 import com.zyrotechbd.desk.ui.screens.DashboardScreen
 import com.zyrotechbd.desk.ui.screens.InboxScreen
 import com.zyrotechbd.desk.ui.screens.MonitoringScreen
+import com.zyrotechbd.desk.ui.screens.CallsScreen
+import com.zyrotechbd.desk.ui.screens.CallDetailScreen
 import com.zyrotechbd.desk.ui.screens.NewTicketScreen
 import com.zyrotechbd.desk.ui.screens.PrintersScreen
 import com.zyrotechbd.desk.ui.screens.TicketDetailScreen
@@ -34,6 +36,10 @@ fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: 
         composable(Routes.More) { more() }
         composable(Routes.Inbox) { InboxScreen(navController, companyKey) }
         composable(Routes.Monitoring) { MonitoringScreen(navController, companyKey) }
+        composable(Routes.Calls) { CallsScreen(navController, companyKey) }
+        composable(Routes.Call, arguments = listOf(navArgument("callId") { type = NavType.LongType })) {
+            CallDetailScreen(navController, companyKey, it.arguments?.getLong("callId") ?: 0L)
+        }
         composable(Routes.Chat, arguments = listOf(navArgument("chatId") { type = NavType.LongType })) {
             ChatScreen(companyKey, it.arguments?.getLong("chatId") ?: 0L, navController)
         }

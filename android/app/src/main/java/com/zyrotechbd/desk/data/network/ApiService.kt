@@ -81,6 +81,18 @@ interface ApiService {
     @POST("c/{company}/monitoring/sync")
     suspend fun monitorSync(@Path("company") company: String): SyncResult
 
+    @GET("c/{company}/calls")
+    suspend fun calls(
+        @Path("company") company: String,
+        @Query("who") who: String? = null,
+        @Query("callback") callback: Int? = null,
+        @Query("q") query: String? = null,
+        @Query("page") page: Int? = null,
+    ): CallPage
+
+    @GET("c/{company}/calls/{id}")
+    suspend fun call(@Path("company") company: String, @Path("id") id: Long): CallResult
+
     @GET("c/{company}/customers/{headerId}/live")
     suspend fun customerLive(
         @Path("company") company: String,

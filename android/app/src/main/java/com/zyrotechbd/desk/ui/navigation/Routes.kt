@@ -9,6 +9,7 @@ object Routes {
     const val Password = "password"
     const val Inbox = "inbox"
     const val Monitoring = "monitoring"
+    const val Calls = "calls"
     const val More = "more"                  // printers, company, language, sign out
 
     const val CustomerDetail = "customers/{headerId}"
@@ -19,6 +20,9 @@ object Routes {
     fun ticket(id: Long) = "tickets/$id"
     const val NewTicket = "ticket-new?headerId={headerId}"
     fun newTicket(headerId: Long? = null) = "ticket-new" + (headerId?.let { "?headerId=$it" } ?: "")
+
+    const val Call = "calls/{callId}"
+    fun call(id: Long) = "calls/$id"
 
     const val Chat = "chats/{chatId}"
     fun chat(id: Long) = "chats/$id"
