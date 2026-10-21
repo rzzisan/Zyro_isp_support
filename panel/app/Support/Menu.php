@@ -20,6 +20,7 @@ class Menu
         'customers' => ['কাস্টমার', true, false],
         'monitoring' => ['অনলাইন মনিটরিং', true, false],
         'tickets' => ['টিকিট', true, false],
+        'calls' => ['হটলাইন কল লগ (রেকর্ডিং)', true, false],
         'bills' => ['বিল কালেকশন', false, false],
         'sms' => ['SMS (পাঠানো, লগ, টেমপ্লেট)', false, false],
         'line_enables' => ['লাইন চালু/বন্ধের রেকর্ড', true, false],

@@ -218,3 +218,13 @@ Route::get('/calls/{company:slug}/poll', function (\App\Models\Company $company)
 
     return response()->json(['items' => $items])->header('Cache-Control', 'no-store');
 })->middleware('web')->name('calls.poll');
+
+// a bot-answered hotline call's recording (engine/voice_bot.py writes storage/app/call-recordings); "কল লগ" menu users only
+Route::get('/calls/{company:slug}/recording/{call}', function (\App\Models\Company $company, \App\Models\CallLog $call) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'calls') && $call->company_id === $company->id && $call->recording_path, 403);
+    $path = storage_path('app/call-recordings/'.$call->recording_path);
+    abort_unless(is_file($path) && ! str_contains($call->recording_path, '..'), 404);
+
+    return response()->file($path, ['Content-Type' => 'audio/mpeg', 'Cache-Control' => 'private, max-age=3600']);
+})->middleware('web')->name('calls.recording');

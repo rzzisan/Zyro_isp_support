@@ -78,6 +78,47 @@ class CallPopupTest extends TestCase
         $this->actingAs($this->owner)->getJson("/calls/{$other->slug}/poll")->assertForbidden();
     }
 
+    public function test_voice_bot_settings_keep_test_numbers_in_one_form(): void
+    {
+        $this->actingAs($this->owner);
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($this->company);
+
+        Livewire::test(SipSettings::class)
+            ->fillForm(['server' => 'pbx.example.net', 'port' => 8090, 'transport' => 'udp', 'username' => '106', 'password' => 'Sip-Pass_1',
+                'enabled' => true, 'bot_mode' => 'test', 'bot_delay' => 20, 'bot_test_numbers' => "+8801712345678, 01812-345678\njunk"])
+            ->call('save')->assertHasNoFormErrors();
+        $s = SipSetting::first();
+        $this->assertSame('test', $s->bot_mode);
+        $this->assertSame("01712345678\n01812345678", $s->bot_test_numbers);
+
+        Livewire::test(SipSettings::class)->fillForm(['bot_delay' => 40])->call('save')->assertHasFormErrors(['bot_delay']);
+    }
+
+    public function test_call_log_page_and_recording_are_company_only(): void
+    {
+        $slug = $this->company->slug;
+        $this->actingAs($this->owner)->get("/app/{$slug}/calls")->assertForbidden();   // no hotline set up yet
+
+        SipSetting::create(['company_id' => $this->company->id, 'server' => 'pbx.example.net', 'username' => '106', 'password' => 'x', 'enabled' => true]);
+        $call = CallLog::create(['company_id' => $this->company->id, 'call_ref' => 'b1', 'caller' => '01712345678', 'status' => 'ended',
+            'started_at' => now(), 'bot_answered' => true, 'bot_seconds' => 42, 'recording_path' => "{$this->company->id}/test.mp3",
+            'transcript' => [['who' => 'bot', 'text' => 'আসসালামু আলাইকুম', 'at' => 0]], 'callback_reason' => 'লাইন ঠিক হয়নি']);
+        $this->actingAs($this->owner)->get("/app/{$slug}/calls")->assertOk()->assertSee('লাইন ঠিক হয়নি');
+
+        $dir = storage_path("app/call-recordings/{$this->company->id}");
+        @mkdir($dir, 0775, true);
+        file_put_contents("{$dir}/test.mp3", 'ID3fake');
+        try {
+            $this->actingAs($this->owner)->get("/calls/{$slug}/recording/{$call->id}")->assertOk();
+            $other = Company::create(['name' => 'Other ISP', 'plan_id' => $this->company->plan_id]);
+            $this->actingAs($this->owner)->get("/calls/{$other->slug}/recording/{$call->id}")->assertForbidden();
+        } finally {
+            @unlink("{$dir}/test.mp3");
+            @rmdir($dir);
+        }
+    }
+
     public function test_popup_script_only_when_sip_is_on(): void
     {
         $page = "/app/{$this->company->slug}";

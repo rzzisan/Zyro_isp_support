@@ -402,3 +402,14 @@
 - `zyro-sip.service` → `engine/sip_calls.py`: সব চালু কোম্পানির এক্সটেনশন দিয়ে baresip চালায় (`/var/lib/zyro-sip`, accounts 600; SIP 5070, TLS 5071, ctrl_tcp 127.0.0.1:4455)। baresip-এ কোনো UI/অডিও মডিউল নেই, তাই শুধু 180 Ringing দেয়, কখনো কল ধরে না। ctrl_tcp ইভেন্ট: CALL_INCOMING → `call_logs` (ringing), CALL_CLOSED → ended, REGISTER_OK/FAIL → `sip_settings.status`। সেটিংস ৩০ সেকেন্ডে পড়ে, বদলালে baresip রিস্টার্ট।
 - CANCEL এলে baresip শুধু "Connection reset by peer" বলে, তাই "অন্য কেউ ধরেছে" আর "কলার কেটে দিয়েছে" আলাদা করা যায় না: status শুধু ringing/ended। আসল answered/missed জানতে PBX-এর CDR লাগবে (পোর্টালে Export আছে, API নেই)।
 - প্যানেল: `/calls/{company}/poll` (customers মেনুর অনুমতি) + `public/js/zyro-calls.js`, BODY_END হুক `filament.call-popup` (শুধু SIP চালু থাকলে)। ৩ সেকেন্ড পরপর; বাজতে থাকা কলে নিচে বাঁয়ে কার্ড: নম্বর, `mobile_normalized` মিলিয়ে কাস্টমার (৩ জন পর্যন্ত, বকেয়া, প্রোফাইল লিংক)। টেস্ট `CallPopupTest`।
+- রেজিস্ট্রেশন পোর্ট pbx.bd-তে UDP 8090 (5060 চুপ; 5080 শুধু OPTIONS-এর উত্তর দেয়; WSS 7443 বন্ধ, তাই সরাসরি WebRTC নেই)।
+
+## হটলাইন ভয়েস বট (Asterisk + Gemini Live, 2026-10-21)
+- Zisan-এর সিদ্ধান্ত: 106-ই থাকবে; বাজবে, ২০ সেকেন্ডে কেউ না ধরলে বট ধরবে; শুরুতে বলবে কল রেকর্ড হচ্ছে; ফ্রি Gemini key দিয়ে।
+- সেটিং: হটলাইন (SIP) পাতার "ভয়েস বট" অংশ: বন্ধ / শুধু টেস্ট নম্বরের কলে / সব কলে, কত সেকেন্ড পর (০-২৫), মডেল (খালি = gemini-3.1-flash-live-preview; ফ্রি key-তে প্রথম অডিও ~০.৬ সে), টেস্ট নম্বর।
+- Asterisk 20 (apt) bsol-এ: কনফিগ রিপোর `deploy/asterisk/` (মূল কপি `/etc/asterisk.dist`); শুধু PJSIP UDP 5075, chan_sip/IAX/ARI বন্ধ। `zyro-voice.service` (`engine/voice_bot.py`) চালু কোম্পানির জন্য `/var/lib/zyro-voice/pjsip_zyro.conf` লেখে (endpoint `c<company_id>`, identify_by=ip) আর `asterisk -rx "pjsip reload"` (claude-dev asterisk গ্রুপে; asterisk.conf astctl 0660)। বট বন্ধ থাকলে Asterisk রেজিস্টার করে না; পপআপ baresip (zyro-sip) দিয়েই চলে।
+- ডায়ালপ্ল্যান `zyro-in`: CURL `127.0.0.1:8997/mode` → "ring" (শুধু বাজে) বা "bot:<uuid>:<sec>" → Ringing, Wait, Answer, AudioSocket 127.0.0.1:9093। বাজার সময়েই কলারের নম্বরে কাস্টমার খুঁজে (WhatsApp বটের মতো by_whatsapp + diagnose + add_online + খোলা টিকিট) প্রম্পট তৈরি হয়।
+- অডিও: AudioSocket 8 kHz ⇄ Gemini 16 kHz ইন / 24 kHz আউট (audioop.ratecv; Python 3.13-এ audioop নেই)। কাস্টমার কথা বললে Gemini "interrupted" দেয়, তখন বাকি অডিও ফেলে দেওয়া হয়। টুল: request_callback(reason), end_call।
+- রেকর্ডিং: দুই পাশ একই ঘড়িতে মিশিয়ে MP3 `panel/storage/app/call-recordings/<company>/<call_log id>.mp3`; call_logs-এ bot_answered, bot_seconds, transcript (text JSON, টেস্ট DB SQL_ASCII বলে jsonb না), callback_reason, bot_error। খরচ ai_usage-এ purpose voice_call।
+- প্যানেল: সাপোর্ট → কল লগ (`CallLogs`, মেনু অনুমতি `calls`), "শুনুন" = অডিও + কথোপকথন; অডিও `/calls/{company}/recording/{call}`।
+- টেস্ট: ফেক AudioSocket ক্লায়েন্ট দিয়ে পুরো পথ চালানো হয়েছে (শুভেচ্ছা ~২ সে, প্রশ্নের ঠিক লেখা রূপ ও উত্তর)।

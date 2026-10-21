@@ -10,6 +10,7 @@ use Illuminate\Support\Collection;
 /**
  * One incoming hotline call, written by the engine (engine/sip_calls.py) while the company's extension rings.
  * "ended" only means it stopped ringing here: the PBX does not tell us whether someone else picked it up.
+ * When the voice bot answered (engine/voice_bot.py): bot_answered, the recording, transcript and callback reason.
  */
 class CallLog extends Model
 {
@@ -17,7 +18,7 @@ class CallLog extends Model
 
     protected function casts(): array
     {
-        return ['started_at' => 'datetime', 'ended_at' => 'datetime'];
+        return ['started_at' => 'datetime', 'ended_at' => 'datetime', 'bot_answered' => 'boolean', 'transcript' => 'array'];
     }
 
     public function company(): BelongsTo
