@@ -243,6 +243,16 @@ class Engine
         }
     }
 
+    /** New WhatsApp template messages in the queue: the engine starts sending now (its minute timer is the fallback). */
+    public static function kickWa(int $companyId): void
+    {
+        try {
+            static::http()->timeout(3)->post("/internal/{$companyId}/wa-campaigns/kick")->throw();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
     /** Test SMS: the engine sends this queued message now, even while sending is off; returns ok/status/text/error. */
     public static function sendSmsNow(int $companyId, int $messageId): array
     {

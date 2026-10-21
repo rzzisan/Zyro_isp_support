@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class WaAccount extends Model
 {
     protected $fillable = ['company_id', 'waba_id', 'phone_number_id', 'display_phone_number', 'verified_name',
-        'access_token', 'bot_enabled'];
+        'access_token', 'bot_enabled', 'utility_rate', 'marketing_rate'];
 
     protected $hidden = ['access_token'];
 

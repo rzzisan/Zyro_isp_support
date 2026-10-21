@@ -38,7 +38,7 @@ class SidebarTest extends TestCase
             'ড্যাশবোর্ড',
             '# সাপোর্ট: ইনবক্স টিকিট এলাকার কর্মী ফিল্ড টিম',
             '# কাস্টমার ও বিল: কাস্টমার বিল কালেকশন লাইন চালু/বন্ধের রেকর্ড',
-            '# SMS: SMS পাঠান SMS লগ SMS টেমপ্লেট',
+            '# SMS ও WhatsApp: SMS পাঠান SMS লগ SMS টেমপ্লেট WhatsApp পাঠান WhatsApp লগ',
             '# নেটওয়ার্ক: MikroTik MikroTik ব্যাকআপ OLT নেটওয়ার্ক সেটিংস',
             '# বিলিং কনফিগারেশন: এলাকা প্যাকেজ ও সংযোগ সাপোর্ট তালিকা',
             '# WhatsApp ও AI: WhatsApp বট সেটিংস বটের FAQ AI key AI খরচ',

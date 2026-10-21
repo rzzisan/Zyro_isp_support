@@ -31,7 +31,7 @@ use Filament\Support\Icons\Heroicon;
 class SmsActions
 {
     private const COLUMNS = ['header_id', 'customer_id', 'name', 'mobile', 'mobile_normalized', 'username', 'package',
-        'monthly_bill', 'due', 'zone'];
+        'monthly_bill', 'due', 'zone', 'bill_day'];
 
     private static function company(): int
     {
@@ -62,7 +62,7 @@ class SmsActions
         return BillingOption::names(static::company(), $kind, $used);
     }
 
-    private static function filters(array $data): array
+    public static function filters(array $data): array
     {
         return array_filter(array_intersect_key($data, array_flip(['list', 'zone', 'subzone', 'box', 'package',
             'connection_type', 'status', 'due', 'due_min', 'line', 'online'])), fn ($v) => $v !== null && $v !== '' && $v !== []);
@@ -111,47 +111,9 @@ class SmsActions
             ->fillForm(fn () => ['mode' => 'single', 'customers' => $customer ? [(string) $customer->header_id] : [],
                 'list' => 'current'])
             ->schema([
-                Radio::make('mode')->label(__('কাকে'))->inline()->live()->hidden((bool) $customer)
-                    ->partiallyRenderComponentsAfterStateUpdated(['smsBody'])
-                    ->options(['single' => __('নির্দিষ্ট কাস্টমার / নম্বর'), 'bulk' => __('ফিল্টার দিয়ে অনেককে')]),
+                static::modeField($customer),
                 Group::make([
-                    Group::make([
-                        Select::make('customers')->label(__('কাস্টমার'))->multiple()->searchable()->searchDebounce(300)->live()
-                            ->hidden((bool) $customer)
-                            ->partiallyRenderComponentsAfterStateUpdated(['summary'])
-                            ->placeholder(__('কাস্টমার ID, মোবাইল, PPPoE বা নাম লিখুন'))
-                            ->getSearchResultsUsing(fn (string $search) => static::searchCustomers($search))
-                            ->getOptionLabelsUsing(fn (array $values) => BillingCustomer::where('company_id', static::company())
-                                ->whereIn('header_id', array_map('intval', $values))->get()
-                                ->mapWithKeys(fn ($c) => [(string) $c->header_id => BillingCustomer::searchLabel($c)])->all()),
-                        Textarea::make('numbers')->label(__('অন্য নম্বর'))->rows(2)->live(debounce: 600)->hidden((bool) $customer)
-                            ->partiallyRenderComponentsAfterStateUpdated(['summary'])
-                            ->placeholder(__('01XXXXXXXXX, কমা বা নতুন লাইন দিয়ে কয়েকটা')),
-                    ])->visible(fn ($get) => $get('mode') !== 'bulk'),
-                    Grid::make(4)->visible(fn ($get) => $get('mode') === 'bulk')->schema([
-                        Select::make('list')->label(__('তালিকা'))->selectablePlaceholder(false)->live()
-                            ->options(['current' => __('বর্তমান কাস্টমার'), 'left' => __('Left কাস্টমার'), 'all' => __('সব')]),
-                        Select::make('zone')->label('Zone')->multiple()->searchable()->live()
-                            ->options(fn () => static::listOptions('zones', 'zone')),
-                        Select::make('subzone')->label('Subzone')->multiple()->searchable()->live()
-                            ->options(fn () => static::listOptions('subzones', 'subzone')),
-                        Select::make('box')->label('Box')->multiple()->searchable()->live()
-                            ->options(fn () => static::listOptions('boxes', 'box')),
-                        Select::make('package')->label(__('প্যাকেজ'))->multiple()->searchable()->live()
-                            ->options(fn () => static::listOptions('packages', 'package')),
-                        Select::make('connection_type')->label('Connection Type')->multiple()->live()
-                            ->options(fn () => static::listOptions('connection_types', 'connection_type')),
-                        Select::make('status')->label(__('অবস্থা'))->multiple()->live()
-                            ->options(fn () => static::listOptions('customer_statuses', 'status')),
-                        Select::make('line')->label(__('লাইন'))->live()->placeholder(__('সব'))
-                            ->options(['on' => __('চালু'), 'off' => __('বন্ধ')]),
-                        Select::make('due')->label(__('বকেয়া'))->live()->placeholder(__('সব'))
-                            ->options(['due' => __('বকেয়া আছে'), 'paid' => __('বকেয়া নেই')]),
-                        TextInput::make('due_min')->label(__('বকেয়া কমপক্ষে'))->numeric()->minValue(0)->suffix(__('টাকা'))
-                            ->live(debounce: 600),
-                        Select::make('online')->label(__('এখন'))->live()->placeholder(__('সব'))
-                            ->options(['online' => __('অনলাইন'), 'offline' => __('অফলাইন')]),
-                    ]),
+                    ...static::recipientFields($customer),
                     Select::make('template')->label(__('টেমপ্লেট'))->placeholder(__('টেমপ্লেট বাছুন (ঐচ্ছিক)'))->live()
                         ->options(fn () => SmsTemplate::where('company_id', static::company())->where('type', 'general')
                             ->orderBy('sort')->orderBy('name')->pluck('name', 'id'))
@@ -199,15 +161,77 @@ class SmsActions
             });
     }
 
-    /** What the summary box under the text shows (count, parts, cost, preview, gateway state). */
-    public static function summary(callable $get): array
+    /**
+     * "কাকে": picked customers / typed numbers or filters. Changing it re-renders the group keyed 'smsBody' (the
+     * form's body under it), shared by the WhatsApp template form.
+     */
+    public static function modeField(?BillingCustomer $customer = null): Radio
+    {
+        return Radio::make('mode')->label(__('কাকে'))->inline()->live()->hidden((bool) $customer)
+            ->partiallyRenderComponentsAfterStateUpdated(['smsBody'])
+            ->options(['single' => __('নির্দিষ্ট কাস্টমার / নম্বর'), 'bulk' => __('ফিল্টার দিয়ে অনেককে')]);
+    }
+
+    /** The customer / number pickers and the bulk filters; changes re-render the component keyed 'summary'. */
+    public static function recipientFields(?BillingCustomer $customer = null): array
+    {
+        return [
+            Group::make([
+                Select::make('customers')->label(__('কাস্টমার'))->multiple()->searchable()->searchDebounce(300)->live()
+                    ->hidden((bool) $customer)
+                    ->partiallyRenderComponentsAfterStateUpdated(['summary'])
+                    ->placeholder(__('কাস্টমার ID, মোবাইল, PPPoE বা নাম লিখুন'))
+                    ->getSearchResultsUsing(fn (string $search) => static::searchCustomers($search))
+                    ->getOptionLabelsUsing(fn (array $values) => BillingCustomer::where('company_id', static::company())
+                        ->whereIn('header_id', array_map('intval', $values))->get()
+                        ->mapWithKeys(fn ($c) => [(string) $c->header_id => BillingCustomer::searchLabel($c)])->all()),
+                Textarea::make('numbers')->label(__('অন্য নম্বর'))->rows(2)->live(debounce: 600)->hidden((bool) $customer)
+                    ->partiallyRenderComponentsAfterStateUpdated(['summary'])
+                    ->placeholder(__('01XXXXXXXXX, কমা বা নতুন লাইন দিয়ে কয়েকটা')),
+            ])->visible(fn ($get) => $get('mode') !== 'bulk'),
+            Grid::make(4)->visible(fn ($get) => $get('mode') === 'bulk')->schema([
+                Select::make('list')->label(__('তালিকা'))->selectablePlaceholder(false)->live()
+                    ->options(['current' => __('বর্তমান কাস্টমার'), 'left' => __('Left কাস্টমার'), 'all' => __('সব')]),
+                Select::make('zone')->label('Zone')->multiple()->searchable()->live()
+                    ->options(fn () => static::listOptions('zones', 'zone')),
+                Select::make('subzone')->label('Subzone')->multiple()->searchable()->live()
+                    ->options(fn () => static::listOptions('subzones', 'subzone')),
+                Select::make('box')->label('Box')->multiple()->searchable()->live()
+                    ->options(fn () => static::listOptions('boxes', 'box')),
+                Select::make('package')->label(__('প্যাকেজ'))->multiple()->searchable()->live()
+                    ->options(fn () => static::listOptions('packages', 'package')),
+                Select::make('connection_type')->label('Connection Type')->multiple()->live()
+                    ->options(fn () => static::listOptions('connection_types', 'connection_type')),
+                Select::make('status')->label(__('অবস্থা'))->multiple()->live()
+                    ->options(fn () => static::listOptions('customer_statuses', 'status')),
+                Select::make('line')->label(__('লাইন'))->live()->placeholder(__('সব'))
+                    ->options(['on' => __('চালু'), 'off' => __('বন্ধ')]),
+                Select::make('due')->label(__('বকেয়া'))->live()->placeholder(__('সব'))
+                    ->options(['due' => __('বকেয়া আছে'), 'paid' => __('বকেয়া নেই')]),
+                TextInput::make('due_min')->label(__('বকেয়া কমপক্ষে'))->numeric()->minValue(0)->suffix(__('টাকা'))
+                    ->live(debounce: 600),
+                Select::make('online')->label(__('এখন'))->live()->placeholder(__('সব'))
+                    ->options(['online' => __('অনলাইন'), 'offline' => __('অফলাইন')]),
+            ]),
+        ];
+    }
+
+    /** The recipient part of the form state (for resolve()) while it is being filled. */
+    public static function formData(callable $get): array
     {
         $data = ['mode' => $get('mode') ?? 'single', 'customers' => $get('customers') ?? [], 'numbers' => $get('numbers')];
         foreach (['list', 'zone', 'subzone', 'box', 'package', 'connection_type', 'status', 'due', 'due_min', 'line', 'online'] as $k) {
             $data[$k] = $get($k);
         }
+
+        return $data;
+    }
+
+    /** What the summary box under the text shows (count, parts, cost, preview, gateway state). */
+    public static function summary(callable $get): array
+    {
         $body = (string) $get('body');
-        $r = static::resolve($data);
+        $r = static::resolve(static::formData($get));
         $est = Sms::estimate(static::company(), $body, $r['customers'], $r['numbers']);
         $preview = [];
         $extra = ['company' => Sms::companyName(static::company())];

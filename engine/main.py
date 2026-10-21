@@ -19,7 +19,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 
-from engine import customers, db, tenant as tenants, webpush
+from engine import customers, db, tenant as tenants, wa_campaign, webpush
 from engine.agent import UNRELATED_PHOTO
 from engine.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
 from engine.tenant import Tenant
@@ -184,6 +184,10 @@ async def receive(request: Request):
                 for s in value.get("statuses", []):
                     db.execute("UPDATE wa_messages SET status = %s WHERE wa_message_id = %s AND company_id = %s",
                                (s.get("status"), s.get("id"), t.company_id))
+                    try:
+                        wa_campaign.on_status(t.company_id, s)  # a "WhatsApp পাঠান" message
+                    except Exception:
+                        log.exception("campaign status failed")
             if change.get("field") not in ("messages", "smb_message_echoes"):
                 continue
             echo = change.get("field") == "smb_message_echoes"
@@ -192,6 +196,8 @@ async def receive(request: Request):
                 if not (phone or uid):
                     continue
                 c = contact_for(t, phone, name, uid, username)
+                if not echo:
+                    wa_campaign.attach(t.company_id, c)  # templates we sent before this chat existed
                 wa = c["wa_number"]
                 mtype = m.get("type")
                 media = m.get(mtype) if mtype in MEDIA_TYPES else None
@@ -1221,6 +1227,13 @@ def sms_kick(request: Request, company_id: int):
     internal_key(request)
     from engine import sms
     return {"started": sms.kick(company_id)}
+
+
+@app.post("/internal/{company_id}/wa-campaigns/kick")
+def wa_campaign_kick(request: Request, company_id: int):
+    """WhatsApp template messages queued from the panel ("WhatsApp পাঠান"): send them now in a background thread."""
+    internal_key(request)
+    return {"started": wa_campaign.kick(company_id)}
 
 
 @app.post("/internal/{company_id}/sms/messages/{message_id}/send")

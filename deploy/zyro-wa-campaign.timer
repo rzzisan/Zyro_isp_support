@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Desk WhatsApp template sender every minute (the panel also wakes the engine right after queueing)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Unit=zyro-wa-campaign.service
+
+[Install]
+WantedBy=timers.target

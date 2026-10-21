@@ -8,6 +8,7 @@ use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Filament\App\Resources\Customers\Widgets\CustomerHistoryStatus;
 use App\Filament\App\Resources\Customers\Widgets\CustomerLiveInfo;
 use App\Filament\App\SmsActions;
+use App\Filament\App\WaCampaignActions;
 use App\Filament\App\TicketActions;
 use App\Models\BillingCustomer;
 use App\Services\Engine;
@@ -61,6 +62,7 @@ class ViewCustomer extends ViewRecord
             BillActions::receive($c),
             TicketActions::newTicket($c->customer_id)->label(__('টিকিট খুলুন'))->color('gray'),
             SmsActions::send($c)->label('SMS')->color('gray'),
+            WaCampaignActions::send($c)->label('WhatsApp')->color('gray'),
             Action::make('chat')->label(__('চ্যাট'))->icon(Heroicon::OutlinedChatBubbleLeftRight)->color('gray')
                 ->visible((bool) $chat)
                 ->url(fn () => $chat ? ConversationResource::getUrl('view', ['record' => $chat]) : null),

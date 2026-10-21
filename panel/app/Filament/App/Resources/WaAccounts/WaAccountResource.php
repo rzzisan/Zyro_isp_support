@@ -65,6 +65,9 @@ class WaAccountResource extends Resource
                 ->dehydrated(fn ($state) => filled($state))
                 ->helperText(fn (string $operation) => $operation === 'edit' ? __('বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে')),
             Toggle::make('bot_enabled')->label(__('এই নম্বরে বট চালু'))->default(true),
+            TextInput::make('utility_rate')->label(__('Utility মেসেজের রেট'))->numeric()->minValue(0)->suffix(__('টাকা'))
+                ->helperText(__('শুধু "WhatsApp পাঠান"-এ আনুমানিক খরচ দেখাতে; Meta কার্ডে আসল চার্জ করে')),
+            TextInput::make('marketing_rate')->label(__('Marketing মেসেজের রেট'))->numeric()->minValue(0)->suffix(__('টাকা')),
         ]);
     }
 

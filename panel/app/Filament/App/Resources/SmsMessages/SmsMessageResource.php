@@ -41,7 +41,7 @@ class SmsMessageResource extends Resource
 
     protected static ?string $slug = 'sms-log';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'SMS';
+    protected static string|\UnitEnum|null $navigationGroup = 'SMS ও WhatsApp';
 
     protected static ?int $navigationSort = 2;
 

@@ -38,7 +38,7 @@ class SmsCampaignResource extends Resource
 
     protected static ?string $slug = 'sms';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'SMS';
+    protected static string|\UnitEnum|null $navigationGroup = 'SMS ও WhatsApp';
 
     protected static ?int $navigationSort = 1;
 
