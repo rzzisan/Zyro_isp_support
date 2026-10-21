@@ -54,7 +54,8 @@ class SipSettings extends CompanySettingsPage
         return ['server' => $record->server, 'port' => $record->port ?? 5060, 'transport' => $record->transport ?? 'udp',
             'username' => $record->username, 'auth_user' => $record->auth_user, 'password' => null, 'enabled' => $record->enabled,
             'bot_mode' => $record->bot_mode ?? 'off', 'bot_delay' => $record->bot_delay ?? 20, 'bot_model' => $record->bot_model,
-            'bot_test_numbers' => $record->bot_test_numbers];
+            'bot_test_numbers' => $record->bot_test_numbers, 'bot_blocked_numbers' => $record->bot_blocked_numbers,
+            'bot_max_seconds' => $record->bot_max_seconds ?? 240];
     }
 
     public function form(Schema $schema): Schema
@@ -92,9 +93,14 @@ class SipSettings extends CompanySettingsPage
                         ->suffix(__('সেকেন্ড'))->helperText(__('রিং গ্রুপের টাইমআউটের চেয়ে কম রাখুন')),
                     TextInput::make('bot_model')->label(__('Gemini Live মডেল'))->maxLength(80)->placeholder('gemini-3.1-flash-live-preview')
                         ->rule('regex:/^[a-z0-9.\-]+$/'),
+                    TextInput::make('bot_max_seconds')->label(__('একটা কলে বট সর্বোচ্চ কত সেকেন্ড'))->required()->integer()
+                        ->minValue(60)->maxValue(600)->suffix(__('সেকেন্ড'))
+                        ->helperText(__('সময় শেষের আগে বট "আমাদের একজন স্টাফ যোগাযোগ করবেন" বলে কল শেষ করে, কল লগে ফ্লাগ থাকে')),
                     Textarea::make('bot_test_numbers')->label(__('টেস্ট নম্বর'))->rows(2)->columnSpanFull()
                         ->visible(fn ($get) => $get('bot_mode') === 'test')->required(fn ($get) => $get('bot_mode') === 'test')
                         ->placeholder('01712345678, 01812345678')->helperText(__('কমা বা নতুন লাইনে কয়েকটা মোবাইল নম্বর')),
+                    Textarea::make('bot_blocked_numbers')->label(__('ব্লক করা নম্বর'))->rows(2)->columnSpanFull()
+                        ->placeholder('01712345678')->helperText(__('এই নম্বরের কল বট কখনো ধরবে না, শুধু এজেন্টদের ফোনে বাজবে')),
                 ]),
             Placeholder::make('status')->label(__('অবস্থা'))
                 ->content(fn () => $s->status_at
@@ -113,8 +119,10 @@ class SipSettings extends CompanySettingsPage
         $data['auth_user'] = filled($data['auth_user'] ?? null) ? trim($data['auth_user']) : null;
         $data['bot_model'] = filled($data['bot_model'] ?? null) ? trim($data['bot_model']) : null;
         // one number per line in the 01XXXXXXXXX form the engine compares with
-        $data['bot_test_numbers'] = collect(preg_split('/[\s,]+/', (string) ($data['bot_test_numbers'] ?? '')))
-            ->map(fn ($n) => \App\Support\Sms::mobile($n))->filter()->map(fn ($n) => '0'.substr($n, 3))->unique()->implode("\n") ?: null;
+        foreach (['bot_test_numbers', 'bot_blocked_numbers'] as $k) {
+            $data[$k] = collect(preg_split('/[\s,]+/', (string) ($data[$k] ?? '')))
+                ->map(fn ($n) => \App\Support\Sms::mobile($n))->filter()->map(fn ($n) => '0'.substr($n, 3))->unique()->implode("\n") ?: null;
+        }
         $data['company_id'] = Filament::getTenant()->id;
         // the engine re-registers within a minute; the old status no longer applies
         $data['status'] = null;

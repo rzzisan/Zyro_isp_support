@@ -1302,5 +1302,14 @@
     "কল: :n": "Call: :n",
     "রেকর্ডিং নেই": "No recording",
     "লেখা রূপ নেই": "No transcript",
-    "হটলাইন কল লগ (রেকর্ডিং)": "Hotline call log (recordings)"
+    "হটলাইন কল লগ (রেকর্ডিং)": "Hotline call log (recordings)",
+    "একটা কলে বট সর্বোচ্চ কত সেকেন্ড": "Longest bot call",
+    "সময় শেষের আগে বট \"আমাদের একজন স্টাফ যোগাযোগ করবেন\" বলে কল শেষ করে, কল লগে ফ্লাগ থাকে": "Before the time is up the bot says \"one of our staff will contact you\" and ends the call; it is flagged in the call log",
+    "ব্লক করা নম্বর": "Blocked numbers",
+    "এই নম্বরের কল বট কখনো ধরবে না, শুধু এজেন্টদের ফোনে বাজবে": "The bot never takes calls from these numbers; they only ring the agents' phones",
+    "ফ্লাগ": "Flag",
+    "অপ্রাসঙ্গিক কথা": "Off-topic",
+    "মানুষ চেয়েছেন": "Wants a person",
+    "সমাধান হয়নি": "Not solved",
+    "সময় শেষ": "Time up"
 }

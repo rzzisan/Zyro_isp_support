@@ -92,6 +92,11 @@ class CallPopupTest extends TestCase
         $this->assertSame('test', $s->bot_mode);
         $this->assertSame("01712345678\n01812345678", $s->bot_test_numbers);
 
+        Livewire::test(SipSettings::class)->fillForm(['bot_blocked_numbers' => '8801912345678', 'bot_max_seconds' => 180])
+            ->call('save')->assertHasNoFormErrors();
+        $this->assertSame('01912345678', SipSetting::first()->bot_blocked_numbers);
+        $this->assertSame(180, (int) SipSetting::first()->bot_max_seconds);
+
         Livewire::test(SipSettings::class)->fillForm(['bot_delay' => 40])->call('save')->assertHasFormErrors(['bot_delay']);
     }
 

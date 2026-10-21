@@ -46,6 +46,14 @@ class CallLogs extends Page implements HasTable
 
     protected string $view = 'filament.app.call-logs';
 
+    /** why the bot handed the call over (engine/voice_bot.py FLAGS) */
+    public const FLAGS = [
+        'off_topic' => 'অপ্রাসঙ্গিক কথা',
+        'wants_person' => 'মানুষ চেয়েছেন',
+        'unsolved' => 'সমাধান হয়নি',
+        'time_up' => 'সময় শেষ',
+    ];
+
     public static function canAccess(): bool
     {
         $company = Filament::getTenant();
@@ -80,6 +88,8 @@ class CallLogs extends Page implements HasTable
                     ->color(fn ($state) => $state ? 'info' : 'gray'),
                 TextColumn::make('bot_seconds')->label(__('বটের সাথে কথা'))
                     ->formatStateUsing(fn ($state) => $state ? gmdate($state >= 3600 ? 'G:i:s' : 'i:s', (int) $state) : ''),
+                TextColumn::make('bot_flag')->label(__('ফ্লাগ'))->badge()->color('danger')
+                    ->formatStateUsing(fn ($state) => __(self::FLAGS[$state] ?? $state)),
                 TextColumn::make('callback_reason')->label(__('কল ব্যাক'))->wrap()->color('warning')->limit(80),
             ])
             ->filters([

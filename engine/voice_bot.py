@@ -63,10 +63,18 @@ VOICE_RULES = (
     "- অভিযোগ নম্বর, আইডি, টাকার অঙ্ক বা কোনো তথ্য টুলের ফল আসার আগে কখনো বলবে না, অনুমানও করবে না।\n"
     "- লাইন বা অন্য সমস্যার অভিযোগ লিখে রাখতে বললে বা সমাধান না হলে create_complaint দিয়ে বিলিংয়ে টিকিট খোলো, "
     "তারপর অভিযোগ নম্বর জানাও।\n"
-    "- কাস্টমার মানুষের সাথে কথা বলতে চাইলে request_callback দিয়ে কারণ লিখে রাখো এবং বলো আমাদের প্রতিনিধি "
-    "শিগগিরই কল ব্যাক করবেন।\n"
+    "- কাস্টমার মানুষের সাথে কথা বলতে চাইলে request_callback (flag wants_person) দিয়ে কারণ লিখে রাখো এবং বলো "
+    "আমাদের একজন স্টাফ শিগগিরই যোগাযোগ করবেন, তারপর end_call।\n"
+    "- কল ছোট রাখো: কাজের কথা শেষ হলেই বিদায়। একই কথা বারবার বলবে না।\n"
+    "- কাস্টমার ইন্টারনেট, লাইন, বিল বা সংযোগের বাইরের কথা বললে একবার ভদ্রভাবে বিষয়ে ফিরিয়ে আনো। আবারও অপ্রাসঙ্গিক বা "
+    "আবোল-তাবোল কথা বললে আর এগোবে না: বলো \"আমাদের একজন স্টাফ আপনার সাথে যোগাযোগ করবেন, ধন্যবাদ\", "
+    "request_callback (flag off_topic) দাও, তারপর end_call।\n"
+    "- সমাধান করতে না পারলে request_callback (flag unsolved) দিয়ে একই কথা বলে end_call।\n"
     "- কথা শেষ হলে বিদায় জানিয়ে end_call ডাকো।"
 )
+FLAGS = {"off_topic", "wants_person", "unsolved", "time_up"}
+WRAP_UP = ("(কলের সময় প্রায় শেষ। এখনই এক বাক্যে বলো \"আমাদের একজন স্টাফ আপনার সাথে যোগাযোগ করবেন, ধন্যবাদ\", "
+           "দরকার হলে request_callback (flag time_up) দাও, তারপর end_call।)")
 TOOLS = [{"functionDeclarations": [
     {"name": "lookup_customer", "description": "Find a line by customer ID or mobile number: bill, due, line status, open tickets.",
      "parameters": {"type": "OBJECT", "properties": {"id_or_mobile": {"type": "STRING", "description": "digits only"}},
@@ -76,9 +84,11 @@ TOOLS = [{"functionDeclarations": [
          "customer_id": {"type": "STRING", "description": "the line's customer ID"},
          "problem": {"type": "STRING", "description": "the problem in short Bangla"}},
          "required": ["customer_id", "problem"]}},
-    {"name": "request_callback", "description": "Record that a human agent must call this customer back, with the reason.",
-     "parameters": {"type": "OBJECT", "properties": {"reason": {"type": "STRING", "description": "short reason in Bangla"}},
-                    "required": ["reason"]}},
+    {"name": "request_callback", "description": "Record that a staff member must contact this customer, with the reason; flags the call in the call log.",
+     "parameters": {"type": "OBJECT", "properties": {
+         "reason": {"type": "STRING", "description": "short reason in Bangla"},
+         "flag": {"type": "STRING", "enum": sorted(FLAGS), "description": "why the bot stops here"}},
+         "required": ["reason", "flag"]}},
     {"name": "end_call", "description": "Hang up after saying goodbye, when the conversation is over."},
 ]}]
 
@@ -289,10 +299,13 @@ def decide(ep: str, caller: str) -> str:
     if not s or s["bot_mode"] not in ("test", "live"):
         return "ring"
     number = normalize(caller) or caller
-    if s["bot_mode"] == "test":
-        tests = {normalize(x) or x.strip() for x in (s.get("bot_test_numbers") or "").replace("\n", ",").split(",") if x.strip()}
-        if number not in tests:
-            return "ring"
+
+    def numbers(text):
+        return {normalize(x) or x.strip() for x in (text or "").replace("\n", ",").split(",") if x.strip()}
+    if number in numbers(s.get("bot_blocked_numbers")):
+        return "ring"   # blocked: the bot never takes these callers, the agents' phones ring as usual
+    if s["bot_mode"] == "test" and number not in numbers(s.get("bot_test_numbers")):
+        return "ring"
     uid = str(uuid.uuid4())
     calls[uid] = {"company_id": s["company_id"], "caller": caller, "settings": s, "at": time.time(),
                   "prep": pool.submit(prepare, s["company_id"], caller)}
@@ -328,6 +341,7 @@ class Call:
         self.bot_track = bytearray()      # what we played, same clock
         self.turns: list[dict] = []
         self.callback: str | None = None
+        self.flag: str | None = None
         self.hangup_after_drain = False
         self.done = asyncio.Event()
         self.up_state = self.down_state = None
@@ -405,6 +419,7 @@ class Call:
                 try:
                     if name == "request_callback":
                         self.callback = (args.get("reason") or "কল ব্যাক চেয়েছেন")[:300]
+                        self.flag = args.get("flag") if args.get("flag") in FLAGS else "unsolved"
                     elif name == "end_call":
                         self.hangup_after_drain = True
                     elif name == "lookup_customer":
@@ -486,10 +501,10 @@ def save_call(call: Call, company_id: int, caller: str, model: str, key_id: int 
             log.error("ffmpeg: %s", r.stderr[:300])
             rel = None
     db.execute("""update call_logs set status = 'ended', ended_at = coalesce(ended_at, now()), bot_answered = true,
-                    bot_seconds = %s, recording_path = %s, transcript = %s, callback_reason = %s, bot_error = %s,
-                    updated_at = now() where id = %s""",
+                    bot_seconds = %s, recording_path = %s, transcript = %s, callback_reason = %s, bot_flag = %s,
+                    bot_error = %s, updated_at = now() where id = %s""",
                (int(time.time() - call.started), rel, json.dumps(call.turns, ensure_ascii=False), call.callback,
-                (error or "")[:300] or None, row["id"]))
+                call.flag, (error or "")[:300] or None, row["id"]))
     try:
         from engine import agent
         info = calls.get(call.uid) or {}
@@ -525,9 +540,16 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         # Asterisk usually just closes the socket on hangup (no 0x00 frame): whichever side stops first ends the call
         tasks = [asyncio.create_task(c) for c in (call.from_caller(ws), call.to_caller(), call.from_gemini(ws),
                                                     call.done.wait())]
-        finished, _ = await asyncio.wait(tasks, timeout=MAX_CALL, return_when=asyncio.FIRST_COMPLETED)
+        limit = min(int(info["settings"].get("bot_max_seconds") or 240), MAX_CALL)
+        finished, _ = await asyncio.wait(tasks, timeout=max(limit - 25, 10), return_when=asyncio.FIRST_COMPLETED)
         if not finished:
-            error = "max call length"
+            # time is nearly up: the bot says a staff member will call and hangs up itself; cut it 45 s later at most
+            call.flag = call.flag or "time_up"
+            await ws.send(json.dumps({"clientContent": {"turns": [{"role": "user", "parts": [{"text": WRAP_UP}]}],
+                                      "turnComplete": True}}, ensure_ascii=False))
+            finished, _ = await asyncio.wait(tasks, timeout=45, return_when=asyncio.FIRST_COMPLETED)
+            if not finished:
+                error = "max call length"
         call.done.set()
         for t in tasks:
             t.cancel()
