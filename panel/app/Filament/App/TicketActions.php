@@ -177,7 +177,7 @@ class TicketActions
                         Select::make('dept_id')->label(__('ডিপার্টমেন্ট (ঐচ্ছিক)'))->options(fn () => static::options('departments')),
                         Select::make('employees')->label(__('কর্মী assign (ঐচ্ছিক)'))->multiple()->searchable()
                             ->options(fn () => static::options('employees'))
-                            ->helperText(__('খালি রাখলে এলাকায় আগে কাজ করা কর্মী অটো পাবেন')),
+                            ->helperText(__('খালি রাখলে অটো assign সেটিং অনুযায়ী কর্মী পাবেন (ক্যাটাগরি দেখে)')),
                     ]),
                     Grid::make(2)->schema([
                         // the customer's SMS goes from the Desk gateway (template "টিকিট খোলা"), never billing's

@@ -44,13 +44,21 @@ class AreaStaffTest extends TestCase
             ->assertActionHidden('settings');
 
         BillingOption::create(['company_id' => $company->id, 'kind' => 'employees', 'option_id' => '1', 'name' => 'Zisan Ahammed']);
+        BillingOption::create(['company_id' => $company->id, 'kind' => 'categories', 'option_id' => '5', 'name' => 'Line Off']);
+        BillingOption::create(['company_id' => $company->id, 'kind' => 'categories', 'option_id' => '7', 'name' => 'Password change']);
         $this->actingAs($owner);
         Livewire::test(ListAreaStaff::class)
             ->call('updateTableColumnState', 'pinned', (string) $a->getKey(), true)
-            ->callAction('settings', ['auto_assign' => false, 'auto_assign_exclude' => ['1']])->assertHasNoActionErrors();
+            ->callAction('settings', ['auto_assign' => false, 'auto_assign_exclude' => ['1'], 'auto_assign_area_categories' => ['5'],
+                'auto_assign_category_staff' => [['category_id' => '5', 'employees' => ['1']]]])->assertHasActionErrors();
+        Livewire::test(ListAreaStaff::class)
+            ->callAction('settings', ['auto_assign' => false, 'auto_assign_exclude' => ['1'], 'auto_assign_area_categories' => ['5'],
+                'auto_assign_category_staff' => [['category_id' => '7', 'employees' => ['1']]]])->assertHasNoActionErrors();
         $s = BotSetting::where('company_id', $company->id)->first();
         $this->assertFalse($s->auto_assign);
         $this->assertSame(['1'], $s->auto_assign_exclude);
+        $this->assertSame(['5'], $s->auto_assign_area_categories);
+        $this->assertSame([['category_id' => '7', 'employees' => ['1']]], $s->auto_assign_category_staff);
         $this->assertTrue($a->fresh()->pinned);
     }
 
