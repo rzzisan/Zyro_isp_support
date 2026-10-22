@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Filament\App\Resources\Memberships\Pages\ManageMemberships;
+use App\Filament\App\Resources\PermissionGroups\Pages\ManagePermissionGroups;
 use App\Models\Company;
 use App\Models\Membership;
+use App\Models\PermissionGroup;
 use App\Models\User;
 use App\Support\Menu;
 use Filament\Actions\Testing\TestAction;
@@ -56,5 +58,69 @@ class MenuPermissionTest extends TestCase
         $this->actingAs($admin)->get("/app/{$slug}/technicians")->assertForbidden();
         $this->actingAs($admin)->get("/app/{$slug}/inbox")->assertOk();
         $this->assertTrue(Menu::allows($owner, $company, 'technicians'));
+    }
+
+    public function test_group_menus_reach_every_member_of_the_group(): void
+    {
+        $company = Company::create(['name' => 'Century Link Network']);
+        $other = Company::create(['name' => 'Other ISP']);
+        $owner = User::factory()->create();
+        $tech = User::factory()->create();
+        $tech2 = User::factory()->create();
+        $mixed = User::factory()->create();
+        $company->users()->attach($owner, ['role' => 'owner']);
+        foreach ([$tech, $tech2, $mixed] as $u) {
+            $company->users()->attach($u, ['role' => 'agent']);
+        }
+        $slug = $company->slug;
+        // own list of a member keeps working and adds to the group's menus
+        Membership::where('user_id', $mixed->id)->update(['permissions' => json_encode(['inbox'])]);
+
+        $this->actingAs($owner);
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($company);
+        $ids = Membership::whereIn('user_id', [$tech->id, $tech2->id, $mixed->id])->pluck('id')->all();
+        Livewire::test(ManagePermissionGroups::class)
+            ->callAction(TestAction::make('create')->table(), ['name' => 'টেকনিশিয়ান', 'permissions' => ['tickets', 'onus'], 'memberships' => $ids])
+            ->assertHasNoFormErrors();
+        $group = PermissionGroup::sole();
+        $this->assertSame($company->id, $group->company_id);
+        $this->assertCount(3, $group->memberships);
+
+        // in a group with no own list: only the group's menus, not the agent defaults
+        $this->actingAs($tech)->get("/app/{$slug}/tickets")->assertOk();
+        $this->actingAs($tech)->get("/app/{$slug}/customers")->assertForbidden();
+        $this->actingAs($tech)->get("/app/{$slug}/inbox")->assertForbidden();
+        $this->actingAs($mixed)->get("/app/{$slug}/inbox")->assertOk();
+        $this->actingAs($mixed)->get("/app/{$slug}/tickets")->assertOk();
+        $this->assertSame(['inbox', 'tickets', 'onus'], Menu::keys(Membership::where('user_id', $mixed->id)->sole()));
+
+        // the app API sees the same menus
+        $menus = $this->actingAs($tech2, 'sanctum')->getJson('/api/v1/me')->assertOk()->json('companies.0.menus');
+        $this->assertSame(['tickets', 'onus'], $menus);
+
+        // changing the group changes it for everyone; another company never sees it
+        $group->update(['permissions' => ['customers']]);
+        $this->actingAs($tech)->get("/app/{$slug}/customers")->assertOk();
+        $this->actingAs($tech2)->get("/app/{$slug}/tickets")->assertForbidden();
+        $other->users()->attach($owner, ['role' => 'owner']);
+        Filament::setTenant($other);
+        $this->actingAs($owner);
+        Livewire::test(ManagePermissionGroups::class)->assertCanNotSeeTableRecords([$group]);
+
+        // team page: the edit form shows the groups; saving with no own ticks keeps the own list unset
+        Filament::setTenant($company);
+        $m = Membership::where('user_id', $tech->id)->sole();
+        Livewire::test(ManageMemberships::class)
+            ->mountAction(TestAction::make('edit')->table($m))
+            ->assertSchemaStateSet(['groups' => [(string) $group->id], 'permissions' => []], 'mountedActionSchema0')
+            ->callMountedAction()->assertHasNoFormErrors();
+        $this->assertNull($m->fresh()->permissions);
+        // leaving the group with own ticks: just those
+        Livewire::test(ManageMemberships::class)
+            ->callAction(TestAction::make('edit')->table($m), ['role' => 'agent', 'groups' => [], 'permissions' => ['inbox']])
+            ->assertHasNoFormErrors();
+        $this->assertCount(0, $m->fresh()->groups);
+        $this->assertSame(['inbox'], Menu::keys($m->fresh()));
     }
 }

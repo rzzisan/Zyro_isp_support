@@ -1365,5 +1365,15 @@
     ":cat একবারই দেওয়া যায় (এলাকা অনুযায়ী অথবা নির্দিষ্ট কর্মী)": ":cat can be set only once (by area or fixed staff)",
     ":cat: এক টিকিটে শুধু একই টিমের কর্মী দেওয়া যায়": ":cat: one ticket may only hold staff of one team",
     "কোন জোন/সাব-জোন/বক্সে কোন কর্মী টিকিটের কাজ করেছেন। সেটিংয়ে বাছাই করা ক্যাটাগরির নতুন টিকিটে কর্মী না বাছলে আগে একই বক্স, না পেলে একই সাব-জোন, তারপর একই জোনে সবশেষ কাজ করা কর্মী পান; পিন করা কর্মী আগে।": "Which staff worked tickets in which zone / sub zone / box. A new ticket of a category chosen in the settings, with no staff picked, goes to whoever last worked the same box, else sub zone, else zone; pinned staff first.",
-    "খালি রাখলে অটো assign সেটিং অনুযায়ী কর্মী পাবেন (ক্যাটাগরি দেখে)": "Leave empty to assign by the auto-assign settings (by category)"
+    "খালি রাখলে অটো assign সেটিং অনুযায়ী কর্মী পাবেন (ক্যাটাগরি দেখে)": "Leave empty to assign by the auto-assign settings (by category)",
+    "Owner সব মেনু এমনিতেই দেখেন, তাই তালিকায় নেই। একজন সদস্য একাধিক গ্রুপে থাকতে পারেন; সব গ্রুপের মেনু আর টিম পেজে তাঁর নিজের টিক দেওয়া মেনু মিলিয়ে দেখবেন।": "Owners see every menu anyway, so they are not listed. A member may be in several groups and sees the menus of all their groups plus the menus ticked for them on the team page.",
+    "এই গ্রুপের সদস্যরা কোন কোন মেনু দেখবেন": "Menus the members of this group see",
+    "গ্রুপ": "Group",
+    "গ্রুপ যোগ করুন": "Add group",
+    "গ্রুপে মেনু টিক দিন, তারপর সদস্য যোগ করুন: গ্রুপের সব সদস্য সেই মেনুগুলো পাবেন। গ্রুপের মেনু বদলালে সবার জন্য একসাথে বদলায়।": "Tick menus for a group, then add members: every member of the group gets those menus. Changing a group's menus changes them for everyone in it.",
+    "গ্রুপের নাম": "Group name",
+    "গ্রুপের সব মেনু পাবেন, সাথে নিচে নিজের টিক দেওয়া মেনুও। গ্রুপ বানাতে বা বদলাতে \"পারমিশন গ্রুপ\" পেজ।": "Gets every menu of the groups, plus the menus ticked below. Create or change groups on the \"Permission groups\" page.",
+    "পারমিশন গ্রুপ": "Permission groups",
+    "যেমন টেকনিশিয়ান, অফিস স্টাফ": "e.g. Technicians, Office staff",
+    "সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin সদস্যের জন্য কাজ করে।": "Settings menus (WhatsApp, Billing connection, MikroTik, Bot, AI key, Team, Technicians) only work for Admin members."
 }
