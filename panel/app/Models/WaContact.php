@@ -26,6 +26,46 @@ class WaContact extends Model
         ];
     }
 
+    /** PPPoE username of the line this chat is about, filled by withLineNames() (not a column). */
+    public ?string $linePppoe = null;
+
+    /**
+     * Fill linePppoe for a list of chats in two queries: the agent's or bot's customer ID, else the only current
+     * line on the number (same rule as suggestedCustomerId()).
+     */
+    public static function withLineNames(iterable $chats): void
+    {
+        $chats = collect($chats);
+        if ($chats->isEmpty()) {
+            return;
+        }
+        $companyId = $chats->first()->company_id;
+        $ids = $chats->pluck('customer_id')->filter()->unique()->values();
+        $byId = $ids->isEmpty() ? collect() : BillingCustomer::where('company_id', $companyId)->whereNull('gone_at')
+            ->whereIn('customer_id', $ids)->pluck('username', 'customer_id');
+        $numbers = $chats->filter(fn ($c) => ! $c->customer_id && ! $c->hidesNumber())->pluck('wa_number')->unique()->values();
+        $byNumber = $numbers->isEmpty() ? collect() : BillingCustomer::where('company_id', $companyId)->whereNull('gone_at')
+            ->where('is_left', false)->whereIn('mobile_normalized', $numbers)->get(['mobile_normalized', 'username'])
+            ->groupBy('mobile_normalized')->filter(fn ($g) => $g->count() === 1)->map(fn ($g) => $g->first()->username);
+        foreach ($chats as $c) {
+            $u = $c->customer_id ? $byId->get($c->customer_id) : $byNumber->get($c->wa_number);
+            $c->linePppoe = trim((string) $u) ?: null;
+        }
+    }
+
+    /** "mp.sharmin(Sharmi…)" for a known customer (first 6 letters, so it fits one line), else the WhatsApp name or number. */
+    public function listName(): string
+    {
+        $name = trim((string) $this->name);
+        if ($this->linePppoe) {
+            $short = mb_strlen($name) > 6 ? rtrim(mb_substr($name, 0, 6)).'…' : $name;
+
+            return $short !== '' ? "{$this->linePppoe}({$short})" : $this->linePppoe;
+        }
+
+        return $name !== '' ? $name : $this->displayNumber();
+    }
+
     /**
      * The inbox list (panel and app): a company's chats, newest first, filtered by box (all, waiting, mine, paused,
      * staff, muted) and a search on name, customer ID or number.
@@ -36,7 +76,9 @@ class WaContact extends Model
             ->orderByDesc('last_message_at');
         if (($s = trim($search)) !== '') {
             $digits = preg_replace('/\D/', '', $s);
-            $q->where(fn ($w) => $w->where('name', 'ilike', "%{$s}%")->orWhere('customer_id', $s)
+            $pppoe = BillingCustomer::select('customer_id')->whereColumn('billing_customers.company_id', 'wa_contacts.company_id')
+                ->where('username', 'ilike', "%{$s}%");
+            $q->where(fn ($w) => $w->where('name', 'ilike', "%{$s}%")->orWhere('customer_id', $s)->orWhereIn('customer_id', $pppoe)
                 ->when(strlen($digits) >= 4, fn ($x) => $x->orWhere('wa_number', 'like', '%'.ltrim($digits, '0').'%')));
         }
         $lastDir = "(SELECT m.direction FROM wa_messages m WHERE m.contact_id = wa_contacts.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1)";
