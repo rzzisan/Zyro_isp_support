@@ -22,6 +22,12 @@ class CallLog extends Model
         return ['started_at' => 'datetime', 'ended_at' => 'datetime', 'bot_answered' => 'boolean', 'transcript' => 'array'];
     }
 
+    /** The staff member who talked (took a WhatsApp call, or called the customer out). */
+    public function answeredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'answered_by');
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

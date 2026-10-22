@@ -3,6 +3,8 @@ package com.zyrotechbd.desk.push
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -27,6 +29,7 @@ data class OpenChat(val company: String, val chatId: Long)
  */
 object Push {
     const val CHANNEL = "chats"
+    const val CALL_CHANNEL = "calls"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Set when a notification is tapped; the app shell opens the chat and clears it. */
@@ -34,6 +37,9 @@ object Push {
 
     /** A chat that just got a message (from a push), so open lists and chats refresh at once instead of waiting. */
     val events = MutableSharedFlow<Long>(extraBufferCapacity = 16)
+
+    /** A WhatsApp call (uid) that stopped ringing: someone took it, the bot answered or the caller hung up. */
+    val callTaken = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
     /** The chat on screen right now (app in front), whose own messages need no notification. */
     @Volatile var visibleChat: Long? = null
@@ -52,6 +58,13 @@ object Push {
         }
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, channelName, NotificationManager.IMPORTANCE_HIGH))
+        // WhatsApp calls ring with the phone's ringtone
+        nm.createNotificationChannel(NotificationChannel(CALL_CHANNEL, "WhatsApp কল", NotificationManager.IMPORTANCE_HIGH).apply {
+            setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            enableVibration(true)
+        })
     }
 
     /** Tell the Desk this phone's token (after sign-in, on each start, and when Firebase rotates it). */

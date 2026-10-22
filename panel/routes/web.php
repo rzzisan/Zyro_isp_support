@@ -200,11 +200,16 @@ Route::post('/notify/{company:slug}/push/delete', function (\App\Models\Company 
 Route::get('/calls/{company:slug}/poll', function (\App\Models\Company $company) {
     $user = Auth::user();
     abort_unless($user && \App\Support\Menu::allows($user, $company, 'customers'), 403);
-    $items = \App\Models\CallLog::recent($company->id)->latest('started_at')->limit(5)->get()
+    $phone = \App\Support\Menu::allows($user, $company, 'phone');
+    $items = \App\Models\CallLog::recent($company->id)->where('direction', 'in')->latest('started_at')->limit(5)->get()
         ->map(fn (\App\Models\CallLog $c) => [
             'id' => $c->id,
             'caller' => $c->caller_normalized ? '0'.substr($c->caller_normalized, 3) : $c->caller,
             'ringing' => $c->status === 'ringing',
+            'channel' => $c->channel ?? 'hotline',
+            // a ringing WhatsApp call can be taken from the softphone by members allowed "phone"
+            'take' => $c->channel === 'whatsapp' && $c->status === 'ringing' && $phone ? substr($c->call_ref, 3) : null,
+            'answered_by' => $c->answeredBy?->name,
             'at' => $c->started_at->timezone('Asia/Dhaka')->format('g:i A'),
             'customers' => $c->customers()->map(fn (\App\Models\BillingCustomer $b) => [
                 'name' => $b->name,
@@ -218,6 +223,16 @@ Route::get('/calls/{company:slug}/poll', function (\App\Models\Company $company)
 
     return response()->json(['items' => $items])->header('Cache-Control', 'no-store');
 })->middleware('web')->name('calls.poll');
+
+// Desk softphone login for public/softphone/phone.html opened from the panel (same session); "phone" members only
+Route::get('/softphone/{company:slug}/config', function (\App\Models\Company $company) {
+    $user = Auth::user();
+    abort_unless($user, 401);
+    $cfg = \App\Support\Softphone::config($user, $company);
+    abort_unless($cfg, 403);
+
+    return response()->json($cfg)->header('Cache-Control', 'no-store');
+})->middleware('web')->name('softphone.config');
 
 // a bot-answered hotline call's recording (engine/voice_bot.py writes storage/app/call-recordings); "কল লগ" menu users only
 Route::get('/calls/{company:slug}/recording/{call}', function (\App\Models\Company $company, \App\Models\CallLog $call) {

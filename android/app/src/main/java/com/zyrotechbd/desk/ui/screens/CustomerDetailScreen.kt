@@ -1,6 +1,7 @@
 package com.zyrotechbd.desk.ui.screens
 
 import android.content.Intent
+import com.zyrotechbd.desk.call.Phone
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -158,7 +159,7 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val mobile = c.mobile?.filter { it.isDigit() || it == '+' }.orEmpty()
                         SmallAction(s.call, Icons.Filled.Call, Modifier.weight(1f), enabled = mobile.isNotEmpty()) {
-                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$mobile")))
+                            Phone.dial(context, mobile, "${c.name ?: ""} (ID ${c.customerId ?: ""})")
                         }
                         val inApp = c.chatId != null && SessionStore.company()?.can("inbox") == true
                         SmallAction("WhatsApp", Icons.Filled.Chat, Modifier.weight(1f), color = Color(0xFF128C7E),

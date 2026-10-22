@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CallLog;
 use App\Models\Company;
 use App\Support\Menu;
+use App\Support\Softphone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -30,6 +31,9 @@ class CallController extends Controller
             'started_at' => $c->started_at?->toIso8601String(),
             'ended_at' => $c->ended_at?->toIso8601String(),
             'channel' => $c->channel ?? 'hotline',
+            'direction' => $c->direction ?? 'in',
+            'answered_by' => $c->answeredBy?->name,
+            'agent_seconds' => $c->agent_seconds === null ? null : (int) $c->agent_seconds,
             'ringing' => $c->status === 'ringing',
             'bot_answered' => (bool) $c->bot_answered,
             'bot_seconds' => $c->bot_seconds === null ? null : (int) $c->bot_seconds,
@@ -76,6 +80,15 @@ class CallController extends Controller
                 'at' => (int) ($t['at'] ?? 0)])->values(),
             'bot_error' => $c->bot_error,
         ]]);
+    }
+
+    /** Desk softphone login for the app's call screen (WebView of public/softphone/phone.html). */
+    public function softphone(Request $request, Company $company): JsonResponse
+    {
+        $cfg = Softphone::config($request->user(), $company);
+        abort_unless($cfg, 403);
+
+        return response()->json($cfg)->header('Cache-Control', 'no-store');
     }
 
     /** The recording (both sides, mp3), written by the engine's voice bot under storage/app/call-recordings. */

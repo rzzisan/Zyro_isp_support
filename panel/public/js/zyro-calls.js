@@ -1,5 +1,7 @@
-// Hotline caller popup: polls the calls the company's SIP extension saw ringing (engine/sip_calls.py) and shows the
-// caller with their customer profile in a card at the bottom corner. A ringing card stays; an ended one fades after a while.
+// Caller popup: polls the hotline calls the company's SIP extension saw ringing (engine/sip_calls.py) and the WhatsApp
+// calls ringing for staff (engine/voice_bot.py), and shows the caller with their customer profile in a card at the bottom
+// corner. A ringing WhatsApp call has "ধরুন" for members allowed "phone": it opens the Desk softphone, which takes it.
+// A ringing card stays; an ended one fades after a while.
 (function () {
     const cfg = window.ZyroCalls;
     if (!cfg) return;
@@ -33,6 +35,17 @@
 
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 
+    function take(c) {
+        const url = cfg.phone + '?c=' + encodeURIComponent(cfg.company) + '&take=' + encodeURIComponent(c.take)
+            + '&name=' + encodeURIComponent(c.caller + (c.customers[0] ? ' · ' + c.customers[0].name : ''));
+        window.open(url, 'zyrophone', 'width=380,height=600');
+    }
+
+    function label(c) {
+        if (c.ringing) return '📞 ' + (c.channel === 'whatsapp' ? T.wa_ringing : T.ringing);
+        return c.answered_by ? T.answered + ' ' + c.answered_by : T.ended;
+    }
+
     function render(c) {
         const people = c.customers.length
             ? c.customers.map(p => `<a href="${esc(p.url)}" style="display:block;padding:6px 0;border-top:1px solid rgba(128,128,128,.25);color:inherit;text-decoration:none">
@@ -40,9 +53,10 @@
                 <span style="opacity:.75;font-size:12px">${esc(p.place)}${p.due ? ' · ' + esc(T.due) + ' ' + esc(p.due) : ''}</span></a>`).join('')
             : `<div style="padding:6px 0;border-top:1px solid rgba(128,128,128,.25);opacity:.75">${esc(T.unknown)}</div>`;
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-                <span style="font-size:12px;opacity:.8">${c.ringing ? '📞 ' + esc(T.ringing) : esc(T.ended)} · ${esc(c.at)}</span>
+                <span style="font-size:12px;opacity:.8">${esc(label(c))} · ${esc(c.at)}</span>
                 <button type="button" data-close aria-label="${esc(T.close)}" style="border:0;background:none;color:inherit;font-size:18px;line-height:1;cursor:pointer">×</button></div>
-            <div style="font-size:20px;font-weight:600;letter-spacing:.5px;margin:2px 0 4px">${esc(c.caller)}</div>${people}`;
+            <div style="font-size:20px;font-weight:600;letter-spacing:.5px;margin:2px 0 4px">${esc(c.caller)}</div>${people}
+            ${c.take ? `<button type="button" data-take style="margin-top:8px;width:100%;padding:8px;border:0;border-radius:8px;background:#16a34a;color:#fff;font-weight:600;cursor:pointer">${esc(T.take)}</button>` : ''}`;
     }
 
     function show(c) {
@@ -55,6 +69,7 @@
             el.className = 'fi-section';
             el.style.cssText = 'padding:12px 14px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .4s';
             el.addEventListener('click', e => {
+                if (e.target.closest('[data-take]') && card.c && card.c.take) { take(card.c); return; }
                 if (!e.target.closest('[data-close]')) return;
                 closed.add(id); store.set('zyroCalls:closed', [...closed].slice(-50).join(','));
                 el.remove(); cards.delete(id);
@@ -64,7 +79,9 @@
             cards.set(id, card);
             ring();
         }
-        if (card.ringing !== c.ringing || !card.el.innerHTML) card.el.innerHTML = render(c);
+        const key = label(c) + '|' + (c.take || '');
+        if (card.key !== key) { card.el.innerHTML = render(c); card.key = key; }
+        card.c = c;
         if (card.ringing && !c.ringing) card.endedAt = Date.now();
         card.ringing = c.ringing;
         card.el.style.opacity = c.ringing ? '1' : '.75';

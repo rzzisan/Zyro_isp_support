@@ -74,14 +74,15 @@ class WaAccountResource extends Resource
                 ->helperText(__('শুধু "WhatsApp পাঠান"-এ আনুমানিক খরচ দেখাতে; Meta কার্ডে আসল চার্জ করে')),
             TextInput::make('marketing_rate')->label(__('Marketing মেসেজের রেট'))->numeric()->minValue(0)->suffix(__('টাকা')),
             Section::make(__('WhatsApp কল'))->collapsible()
-                ->description(__('কাস্টমার WhatsApp-এ কল করলে বট ধরে (হটলাইনের ভয়েস বটের মতো), রেকর্ড আর কল লগে থাকে। Meta-তে কলিং চালু থাকতে হবে।'))
+                ->description(__('কাস্টমার WhatsApp-এ কল করলে আগে "ফোন" অনুমতির স্টাফদের অ্যাপে ও Desk-এ বাজে, কেউ না ধরলে বট ধরে। সব কল রেকর্ড হয়ে কল লগে থাকে। Meta-তে কলিং চালু থাকতে হবে।'))
                 ->schema([
                     Select::make('calling_mode')->label(__('কল ধরবে'))->default('off')->selectablePlaceholder(false)
                         ->options(['off' => __('বন্ধ (কলারকে ব্যস্ত দেখাবে)'), 'test' => __('শুধু টেস্ট নম্বরের কল'), 'live' => __('সব কল')]),
                     Textarea::make('calling_test_numbers')->label(__('টেস্ট নম্বর'))->rows(2)
                         ->helperText(__('কমা বা নতুন লাইনে, যেমন 01711000000')),
                     TextInput::make('calling_bot_delay')->label(__('কত সেকেন্ড বাজার পর বট ধরবে'))->numeric()
-                        ->minValue(0)->maxValue(25)->default(3)->suffix(__('সেকেন্ড')),
+                        ->minValue(0)->maxValue(45)->default(20)->suffix(__('সেকেন্ড'))
+                        ->helperText(__('এই সময় "ফোন" অনুমতি থাকা স্টাফদের অ্যাপে ও Desk-এ কল বাজে, কেউ ধরলে বট ধরে না। ০ দিলে বট সাথে সাথে ধরে।')),
                 ]),
         ]);
     }

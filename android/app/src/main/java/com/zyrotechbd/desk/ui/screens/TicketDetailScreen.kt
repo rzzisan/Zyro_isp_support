@@ -1,7 +1,6 @@
 package com.zyrotechbd.desk.ui.screens
 
-import android.content.Intent
-import android.net.Uri
+import com.zyrotechbd.desk.call.Phone
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -170,7 +169,7 @@ fun TicketDetailScreen(navController: NavHostController, company: String, ticket
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val mobile = t.mobile?.filter { it.isDigit() || it == '+' }.orEmpty()
                         SmallAction(s.call, Icons.Filled.Call, Modifier.weight(1f), enabled = mobile.isNotEmpty()) {
-                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$mobile")))
+                            Phone.dial(context, mobile, t.customerName ?: mobile)
                         }
                         val company0 = SessionStore.company()
                         val canOpen = t.headerId != null && (company0?.can("customers") == true || company0?.can("bills") == true)

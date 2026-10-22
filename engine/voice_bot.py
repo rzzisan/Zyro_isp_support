@@ -9,6 +9,12 @@ WhatsApp calls (Meta Calling API over SIP, TLS 15061 + DTLS-SRTP) land on the sa
 context zyro-wa, which asks GET /mode?wa=<business number>; the company's WhatsApp number settings (calling_mode
 off/test/live, calling_test_numbers, calling_bot_delay) decide, and the same bot answers. call_logs.channel = whatsapp.
 
+Staff take calls themselves (Desk softphone: panel/public/softphone/phone.html in the browser or the Android app, WebRTC
+over wss://<desk>/sip-ws to endpoints "a<sip_agents.id>"). While a WhatsApp call rings, the members allowed "phone" get
+an app push and the panel popup; the first to dial take-<uid> gets it (GET /take, the dialplan bridges the two), and
+when nobody has before the ring seconds run out the bot answers (GET /bot). Staff also call customers' mobiles out
+through the company's hotline extension (GET /out). Hangups come to GET /ended; staff calls are recorded by MixMonitor.
+
 AudioSocket: frames of [type:1][length:2 BE][payload]; 0x01 = call UUID, 0x10 = 8 kHz 16-bit mono PCM, 0x00 = hangup.
 Gemini Live takes 16 kHz PCM in and sends 24 kHz PCM out.
 """
@@ -41,6 +47,7 @@ MODE_PORT, AUDIO_PORT = 8997, 9093
 LIVE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
 DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
 MAX_CALL = 600          # seconds
+REC_SPOOL = os.environ.get("VOICE_REC_SPOOL", "/var/spool/asterisk/zyro-rec")   # MixMonitor WAVs of staff calls
 FRAME = 320             # 20 ms of 8 kHz 16-bit audio
 PJSIP_FILE = os.path.join(STATE_DIR, "pjsip_zyro.conf")
 # WhatsApp calls: codecs offered to Meta (opus only when Asterisk has codec_opus; Meta takes G.711 since 2026-03)
@@ -53,6 +60,7 @@ META_NETS = os.environ.get("WA_SIP_NETS", ",".join([
     "185.60.216.0/22", "185.89.216.0/22", "204.15.20.0/22"])).split(",")
 
 pool = ThreadPoolExecutor(max_workers=8)
+lock = __import__("threading").Lock()   # who takes a ringing WhatsApp call: staff (/take) or the bot (/bot)
 
 # played by us the moment the bot calls a slow tool (billing lookups take several seconds)
 FILLERS = {
@@ -136,7 +144,8 @@ STAFF_TOOLS = [{"functionDeclarations": [f for f in TOOLS[0]["functionDeclaratio
 
 # --- settings and Asterisk config ------------------------------------------------------------
 def settings_rows() -> list[dict]:
-    return db.all_rows("select * from sip_settings where enabled and bot_mode in ('test', 'live')"
+    """Every enabled hotline extension: the bot answers through it and staff call customers out through it."""
+    return db.all_rows("select * from sip_settings where enabled"
                        " and server is not null and username is not null and password is not null order by company_id")
 
 
@@ -224,8 +233,44 @@ endpoint=meta-wa
 """ + "".join(f"match={n.strip()}\n" for n in META_NETS if n.strip())
 
 
+def agents_config() -> str:
+    """One WebRTC endpoint per Desk softphone user (sip_agents, made by the panel when the user first opens it).
+    Browsers and the app connect over WSS (nginx /sip-ws → Asterisk's http server) and never register: they only
+    place calls (take-<uid>, or a customer's mobile) into context zyro-agent."""
+    out = []
+    for r in db.all_rows("select id, password from sip_agents order by id"):
+        pw = db.decrypt(r["password"])
+        if not pw:
+            continue
+        a = f"a{r['id']}"
+        out.append(f"""
+[{a}-auth]
+type=auth
+auth_type=userpass
+username={a}
+password={pw}
+
+[{a}]
+type=aor
+max_contacts=5
+remove_existing=yes
+
+[{a}]
+type=endpoint
+transport=transport-ws
+context=zyro-agent
+disallow=all
+allow=opus,ulaw,alaw
+webrtc=yes
+direct_media=no
+auth={a}-auth
+aors={a}
+""")
+    return "".join(out)
+
+
 def sync_asterisk() -> None:
-    text = pjsip_config(settings_rows()) + wa_config()
+    text = pjsip_config(settings_rows()) + wa_config() + agents_config()
     try:
         old = open(PJSIP_FILE).read()
     except OSError:
@@ -406,9 +451,168 @@ def start(company_id: int, caller: str, settings: dict, delay: int, channel: str
     staff = db.one("select id, name, wa_number, can_switch_lines from technicians where company_id = %s and wa_number = %s and active",
                    (company_id, number))
     uid = str(uuid.uuid4())
-    calls[uid] = {"company_id": company_id, "caller": caller, "settings": settings, "at": time.time(), "staff": staff,
-                  "channel": channel, "prep": pool.submit(prepare, company_id, caller, staff, channel)}
+    info = {"company_id": company_id, "caller": caller, "settings": settings, "at": time.time(), "staff": staff,
+            "channel": channel, "state": "waiting", "prep": pool.submit(prepare, company_id, caller, staff, channel)}
+    calls[uid] = info
+    if channel == "whatsapp":
+        # rings in Desk (panel popup, app push) for the staff allowed to take calls; the bot answers after `delay`
+        row = db.execute("insert into call_logs (company_id, call_ref, caller, caller_normalized, status, started_at,"
+                         " channel, direction, created_at, updated_at)"
+                         " values (%s, %s, %s, %s, 'ringing', now(), 'whatsapp', 'in', now(), now()) returning id",
+                         (company_id, "wa-" + uid, caller[:80], normalize(caller)))
+        info["row_id"] = row["id"]
+        if delay > 0:
+            notify_staff(company_id, {"type": "call", "uid": uid, "caller": display_number(caller),
+                                      "name": caller_name(company_id, caller), "channel": "whatsapp"})
     return f"bot:{uid}:{delay}"
+
+
+def display_number(raw: str) -> str:
+    n = normalize(raw)
+    return "0" + n[3:] if n else raw
+
+
+def caller_name(company_id: int, caller: str) -> str:
+    n = normalize(caller)
+    row = db.one("select name, customer_id from billing_customers where company_id = %s and mobile_normalized = %s"
+                 " order by is_left, header_id desc limit 1", (company_id, n)) if n else None
+    return f"{row['name']} (ID {row['customer_id']})" if row else ""
+
+
+PHONE_USERS = """select cu.user_id from company_user cu where cu.company_id = %s and (
+    cu.role = 'owner' or cu.permissions ? 'phone'
+    or exists (select 1 from membership_permission_group mpg join permission_groups g on g.id = mpg.permission_group_id
+               where mpg.membership_id = cu.id and g.permissions ? 'phone')
+    or (cu.permissions is null and cu.role = 'admin'
+        and not exists (select 1 from membership_permission_group mpg where mpg.membership_id = cu.id)))"""
+
+
+def phone_allowed(company_id: int, user_id: int) -> bool:
+    """The panel's Menu::allows(user, company, 'phone') in SQL (owner; own list; groups; admin defaults)."""
+    return bool(db.one(PHONE_USERS + " and cu.user_id = %s", (company_id, user_id)))
+
+
+def notify_staff(company_id: int, data: dict) -> None:
+    """App push (engine/fcm.py) to the phones of the members allowed to take calls."""
+    try:
+        from engine import fcm
+        users = [r["user_id"] for r in db.all_rows(PHONE_USERS, (company_id,))]
+        company = db.one("select slug from companies where id = %s", (company_id,)) or {}
+        if users:
+            fcm.send_users(company_id, users, {"company": company.get("slug") or "", **{k: str(v) for k, v in data.items()}})
+    except Exception:
+        log.exception("call push")
+
+
+def agent_row(ep: str) -> dict | None:
+    if not ep.startswith("a") or not ep[1:].isdigit():
+        return None
+    return db.one("select a.id, a.company_id, a.user_id, u.name from sip_agents a join users u on u.id = a.user_id"
+                  " where a.id = %s", (int(ep[1:]),))
+
+
+def take(uid: str, ep: str) -> str:
+    """A staff softphone dialed take-<uid>: "ok" for the first allowed member while the call still rings."""
+    info, agent = calls.get(uid), agent_row(ep)
+    if not info or not agent or agent["company_id"] != info["company_id"] \
+            or not phone_allowed(agent["company_id"], agent["user_id"]):
+        return "no"
+    with lock:
+        if info.get("state") != "waiting":
+            return "gone"
+        info.update(state="taken", agent=agent, taken_at=time.time())
+    db.execute("update call_logs set status = 'answered', answered_by = %s, updated_at = now() where id = %s",
+               (agent["user_id"], info.get("row_id")))
+    notify_staff(info["company_id"], {"type": "call_taken", "uid": uid, "by": agent["name"]})
+    log.info("call %s taken by %s", uid, agent["name"])
+    return "ok"
+
+
+def bot_turn(uid: str) -> str:
+    """The ring seconds ran out: "ok" when the bot may answer (nobody took the call)."""
+    info = calls.get(uid)
+    if not info:
+        return "no"
+    with lock:
+        # taken, but the member's phone never got bridged (dropped while connecting): the bot answers after all
+        stale = info.get("state") == "taken" and time.time() - info.get("taken_at", 0) > 25
+        if info.get("state") != "waiting" and not stale:
+            return "no"
+        info["state"] = "bot"
+    if info.get("channel") == "whatsapp":
+        notify_staff(info["company_id"], {"type": "call_taken", "uid": uid, "by": "bot"})
+    return "ok"
+
+
+def call_out(ep: str, to: str) -> str:
+    """A staff softphone dialed a mobile: "ok:<uid>:c<company>:<number>" through the company's hotline extension."""
+    agent = agent_row(ep)
+    number = normalize(to)
+    if not agent or not number or not phone_allowed(agent["company_id"], agent["user_id"]):
+        return "no"
+    if not db.one("select 1 as x from sip_settings where company_id = %s and enabled and password is not null",
+                  (agent["company_id"],)):
+        return "no"
+    uid = str(uuid.uuid4())
+    row = db.execute("insert into call_logs (company_id, call_ref, caller, caller_normalized, status, started_at, channel,"
+                     " direction, answered_by, created_at, updated_at)"
+                     " values (%s, %s, %s, %s, 'ringing', now(), 'hotline', 'out', %s, now(), now()) returning id",
+                     (agent["company_id"], "out-" + uid, "0" + number[3:], number, agent["user_id"]))
+    calls[uid] = {"company_id": agent["company_id"], "caller": number, "at": time.time(), "state": "out",
+                  "channel": "hotline", "row_id": row["id"], "agent": agent}
+    log.info("call out %s by %s", number, agent["name"])
+    return f"ok:{uid}:c{agent['company_id']}:0{number[3:]}"
+
+
+def ended(uid: str, secs: str = "") -> str:
+    """Asterisk hangup handler of a WhatsApp or outgoing call. Bot calls are saved by save_call instead."""
+    info = calls.get(uid)
+    if not info:
+        return "no"
+    with lock:
+        state = info.get("state")
+        if state == "waiting":
+            info["state"] = "missed"
+    if state == "waiting":   # the caller hung up while it rang
+        db.execute("update call_logs set status = 'ended', ended_at = now(), updated_at = now() where id = %s",
+                   (info.get("row_id"),))
+        notify_staff(info["company_id"], {"type": "call_taken", "uid": uid, "by": ""})
+        calls.pop(uid, None)
+    elif state in ("taken", "out"):
+        talk = int(float(secs)) if secs.replace(".", "").isdigit() else \
+            (int(time.time() - info["taken_at"]) if info.get("taken_at") else 0)
+        db.execute("update call_logs set status = 'ended', ended_at = now(), agent_seconds = %s, updated_at = now()"
+                   " where id = %s", (talk, info.get("row_id")))
+        pool.submit(save_recording, uid, info)
+    return "ok"
+
+
+def save_recording(uid: str, info: dict) -> None:
+    """The MixMonitor WAV of a staff call → MP3 next to the bot's recordings, linked on the call_logs row."""
+    wav = os.path.join(REC_SPOOL, f"{uid}.wav")
+    for _ in range(10):   # MixMonitor closes the file as the channel goes away
+        time.sleep(2)
+        if os.path.exists(wav) and os.path.getsize(wav) > 44:
+            break
+    try:
+        if os.path.exists(wav) and os.path.getsize(wav) > 8000:
+            company = info["company_id"]
+            os.makedirs(os.path.join(REC_DIR, str(company)), exist_ok=True)
+            rel = f"{company}/{info['row_id']}.mp3"
+            r = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", wav, "-ac", "1", "-b:a", "32k",
+                                os.path.join(REC_DIR, rel)], capture_output=True, text=True, timeout=300)
+            if r.returncode == 0:
+                db.execute("update call_logs set recording_path = %s, updated_at = now() where id = %s", (rel, info["row_id"]))
+            else:
+                log.error("ffmpeg %s: %s", uid, r.stderr[:300])
+    except Exception:
+        log.exception("recording %s", uid)
+    finally:
+        try:
+            os.unlink(wav)
+        except OSError:
+            pass
+        calls.pop(uid, None)
 
 
 def decide(ep: str, caller: str) -> str:
@@ -442,7 +646,7 @@ def decide_wa(to: str, caller: str) -> str:
     s = db.one("select * from sip_settings where company_id = %s", (acc["company_id"],)) or {}
     if number in numbers(s.get("bot_blocked_numbers")):
         return "busy"
-    return start(acc["company_id"], caller, s, min(int(acc["calling_bot_delay"] or 0), 25), "whatsapp")
+    return start(acc["company_id"], caller, s, min(int(acc["calling_bot_delay"] or 0), 45), "whatsapp")
 
 
 async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -450,16 +654,29 @@ async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         line = (await asyncio.wait_for(reader.readline(), 5)).decode(errors="replace")
         while (await reader.readline()) not in (b"\r\n", b"\n", b""):
             pass
-        q = parse_qs(urlparse(line.split(" ")[1] if " " in line else "/").query)
-        ep, caller, wa = q.get("ep", [""])[0], q.get("caller", [""])[0], q.get("wa", [None])[0]
+        url = urlparse(line.split(" ")[1] if " " in line else "/")
+        q = {k: v[0] for k, v in parse_qs(url.query).items()}
+        ep, caller, wa = q.get("ep", ""), q.get("caller", ""), q.get("wa")
         loop = asyncio.get_running_loop()
-        try:
-            body = await (loop.run_in_executor(pool, decide_wa, wa, caller) if wa is not None
-                          else loop.run_in_executor(pool, decide, ep, caller))
-        except Exception:
-            log.exception("mode")
-            body = "ring" if wa is None else "busy"
-        log.info("mode %s %s -> %s", f"wa {wa}" if wa is not None else ep, caller, body.split(":")[0])
+        # everything but /mode comes from the Asterisk dialplan for staff calls (and the panel for /sync)
+        routes = {"/take": (take, q.get("uid", ""), q.get("agent", "")), "/bot": (bot_turn, q.get("uid", "")),
+                  "/out": (call_out, q.get("agent", ""), q.get("to", "")),
+                  "/ended": (ended, q.get("uid", ""), q.get("secs", "")), "/sync": (lambda: sync_asterisk() or "ok",)}
+        if url.path in routes:
+            fn, *args = routes[url.path]
+            try:
+                body = await loop.run_in_executor(pool, fn, *args)
+            except Exception:
+                log.exception(url.path)
+                body = "no"
+        else:
+            try:
+                body = await (loop.run_in_executor(pool, decide_wa, wa, caller) if wa is not None
+                              else loop.run_in_executor(pool, decide, ep, caller))
+            except Exception:
+                log.exception("mode")
+                body = "ring" if wa is None else "busy"
+            log.info("mode %s %s -> %s", f"wa {wa}" if wa is not None else ep, caller, body.split(":")[0])
         writer.write(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n{body}".encode())
         await writer.drain()
     finally:
@@ -614,7 +831,8 @@ def save_call(call: Call, company_id: int, caller: str, model: str, key_id: int 
     # the popup's row for this very call: same caller, started when /mode was asked (not just the caller's latest call);
     # WhatsApp calls have no popup row
     rang = (calls.get(call.uid) or {}).get("at") or call.started
-    row = db.one("select id from call_logs where company_id = %s and caller = %s and not bot_answered and channel = 'hotline'"
+    row_id = (calls.get(call.uid) or {}).get("row_id")
+    row = {"id": row_id} if row_id else db.one("select id from call_logs where company_id = %s and caller = %s and not bot_answered and channel = 'hotline'"
                  " and abs(extract(epoch from started_at) - %s) < 90"
                  " order by abs(extract(epoch from started_at) - %s) limit 1",
                  (company_id, caller[:80], rang, rang)) if channel == "hotline" else None
@@ -757,7 +975,8 @@ async def housekeeping() -> None:
         except Exception:
             log.exception("asterisk sync")
         for uid, c in list(calls.items()):
-            if time.time() - c["at"] > MAX_CALL + 300:
+            # staff calls can run long; their /ended still needs the entry
+            if time.time() - c["at"] > (4 * 3600 if c.get("state") in ("taken", "out") else MAX_CALL + 300):
                 calls.pop(uid, None)
         await asyncio.sleep(30)
 

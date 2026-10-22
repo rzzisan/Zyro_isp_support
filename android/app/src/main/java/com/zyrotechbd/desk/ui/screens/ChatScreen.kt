@@ -1,6 +1,7 @@
 package com.zyrotechbd.desk.ui.screens
 
 import android.content.Context
+import com.zyrotechbd.desk.call.Phone
 import android.widget.Toast
 import android.content.Intent
 import android.graphics.Bitmap
@@ -398,7 +399,7 @@ private fun ChatHeader(c: Chat, members: List<Member>, s: AppStrings, navControl
         val context = LocalContext.current
         val digits = c.number.filter { it.isDigit() }
         if (digits.length >= 10) {
-            IconButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$digits"))) }) {
+            IconButton(onClick = { Phone.dial(context, digits, c.name ?: digits) }) {
                 Icon(Icons.Filled.Call, s.call, tint = PrimaryStrong)
             }
         }
