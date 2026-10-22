@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 /** A named set of menus; every member in the group may open them (App\Support\Menu::keys). */
 class PermissionGroup extends Model
 {
-    protected $fillable = ['company_id', 'name', 'permissions'];
+    protected $fillable = ['company_id', 'name', 'permissions', 'bill_view_employees'];
 
     protected function casts(): array
     {
-        return ['permissions' => 'array'];
+        return ['permissions' => 'array', 'bill_view_employees' => 'array'];
     }
 
     public function company(): BelongsTo

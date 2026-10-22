@@ -4,16 +4,18 @@ namespace Tests\Feature;
 
 use App\Filament\App\Resources\DailyBills\Pages\ListDailyBills;
 use App\Filament\App\Resources\Memberships\Pages\ManageMemberships;
+use App\Filament\App\Resources\PermissionGroups\Pages\ManagePermissionGroups;
 use App\Filament\App\Widgets\DailyBillStats;
-use App\Models\BillCollection;
 use App\Models\BillingDailyBill;
 use App\Models\Company;
 use App\Models\Membership;
+use App\Models\PermissionGroup;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -114,10 +116,25 @@ class DailyBillTest extends TestCase
             ->assertCanSeeTableRecords([$this->b['jobbar'], $this->b['minto']])->assertCanNotSeeTableRecords([$this->b['zisan']]);
     }
 
+    public function test_group_gives_its_members_the_collectors_bills(): void
+    {
+        $this->panel($this->owner);
+        $m = Membership::where('user_id', $this->agent->id)->sole();
+        Livewire::test(ManagePermissionGroups::class)
+            ->callAction(TestAction::make('create')->table(), ['name' => 'কালেক্টর', 'permissions' => ['bills'], 'bill_view_employees' => ['5'], 'memberships' => [$m->id]])
+            ->assertHasNoFormErrors();
+        $this->assertSame([5], PermissionGroup::sole()->bill_view_employees);
+
+        // group's collectors plus their own entries
+        $this->panel($this->agent);
+        Livewire::test(ListDailyBills::class)
+            ->assertCanSeeTableRecords([$this->b['jobbar'], $this->b['minto']])->assertCanNotSeeTableRecords([$this->b['zisan']]);
+    }
+
     public function test_live_check_returns_the_engine_version(): void
     {
         config(['services.engine.url' => 'http://engine.test', 'services.engine.key' => 'k']);
-        \Illuminate\Support\Facades\Http::fake(["engine.test/internal/{$this->company->id}/daily-bills/live" => \Illuminate\Support\Facades\Http::sequence()
+        Http::fake(["engine.test/internal/{$this->company->id}/daily-bills/live" => Http::sequence()
             ->push(['ran' => true, 'version' => '170300:5:4:1'])->push(['detail' => 'down'], 500)]);
         $url = "/live/{$this->company->slug}/daily-bills";
         $this->actingAs($this->owner)->getJson($url)->assertOk()->assertExactJson(['version' => '170300:5:4:1']);
@@ -154,7 +171,7 @@ class DailyBillTest extends TestCase
     public function test_receipt_of_a_billing_bill(): void
     {
         config(['services.engine.url' => 'http://engine.test', 'services.engine.key' => 'k']);
-        \Illuminate\Support\Facades\Http::fake(["engine.test/internal/{$this->company->id}/daily-bills/1/receipt-no" => \Illuminate\Support\Facades\Http::response(['receipt_no' => '0001-202610-1119-abcRV'])]);
+        Http::fake(["engine.test/internal/{$this->company->id}/daily-bills/1/receipt-no" => Http::response(['receipt_no' => '0001-202610-1119-abcRV'])]);
         $slug = $this->company->slug;
         // approved: billing's number, total = paid + discount + due
         $this->actingAs($this->owner)->get("/print/{$slug}/bill/1?print=0")->assertOk()
@@ -163,7 +180,7 @@ class DailyBillTest extends TestCase
         // pending: its own number, no engine call needed
         $this->actingAs($this->owner)->get("/print/{$slug}/bill/2?print=0")->assertOk()
             ->assertSee('B-2')->assertDontSee('approve বাকি')->assertSee('500.00')->assertSee('25.00')->assertSee('Abdul Jobbar');
-        \Illuminate\Support\Facades\Http::assertSentCount(1);
+        Http::assertSentCount(1);
         // deleted and other companies' bills don't print
         $this->actingAs($this->owner)->get("/print/{$slug}/bill/4")->assertNotFound();
         // an agent only prints bills they may see
