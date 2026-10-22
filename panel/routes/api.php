@@ -47,6 +47,7 @@ Route::prefix('v1')->group(function () {
             Route::post('chats/{contact}/assign', [InboxController::class, 'assign'])->whereNumber('contact');
             Route::post('chats/{contact}/bot', [InboxController::class, 'bot'])->whereNumber('contact');
             Route::post('chats/{contact}/mute', [InboxController::class, 'mute'])->whereNumber('contact');
+            Route::delete('chats/{contact}/messages/{message}', [InboxController::class, 'deleteMessage'])->whereNumber(['contact', 'message']);
             Route::get('media/{message}', [InboxController::class, 'media'])->whereNumber('message');
 
             Route::get('monitoring', [MonitoringController::class, 'index']);

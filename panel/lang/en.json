@@ -1479,5 +1479,12 @@
     "৫. কী কী নেবে": "5. What goes in",
     "৬. অ্যালার্ট (WhatsApp)": "6. Alerts (WhatsApp)",
     "৮ ঘণ্টা": "8 hours",
-    "রিকভারি কী এখনো লিখে রাখা হয়নি, তাই অটো ব্যাকআপ বন্ধ।": "The recovery key has not been confirmed as saved yet, so automatic backups are off."
+    "রিকভারি কী এখনো লিখে রাখা হয়নি, তাই অটো ব্যাকআপ বন্ধ।": "The recovery key has not been confirmed as saved yet, so automatic backups are off.",
+    "মেসেজ Desk থেকে ডিলিট হয়েছে": "Message deleted from Desk",
+    "কাস্টমারের WhatsApp-এ মেসেজটা থেকে যাবে (Meta আনসেন্ড করতে দেয় না)।": "It stays in the customer's WhatsApp (Meta has no unsend).",
+    "Desk থেকে ডিলিট": "Delete from Desk",
+    "মেসেজটা Desk থেকে ডিলিট করবেন? কাস্টমারের WhatsApp-এ থেকে যাবে (Meta আনসেন্ড করতে দেয় না)।": "Delete this message from Desk? It stays in the customer's WhatsApp (Meta has no unsend).",
+    "শুধু Owner পাঠানো মেসেজ ডিলিট করতে পারেন": "Only the owner can delete sent messages",
+    "WhatsApp মেসেজের নিচে নাম দেখাবে": "Show name under WhatsApp messages",
+    "চালু থাকলে এই সদস্যের পাঠানো প্রতিটা WhatsApp উত্তরের নিচে \"- নাম\" যাবে। শুধু Owner বদলাতে পারেন।": "When on, \"- Name\" goes under every WhatsApp reply this member sends. Only the owner can change it."
 }

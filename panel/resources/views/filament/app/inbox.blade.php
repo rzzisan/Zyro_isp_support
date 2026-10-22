@@ -134,6 +134,11 @@
                                                 @case('failed') <span class="zi-tick bad" title="{{ __('যায়নি') }}">⚠</span> @break
                                                 @case('test') <span class="zi-tick" title="{{ __('টেস্ট মোড, কাস্টমারের কাছে যায়নি') }}">{{ __('টেস্ট') }}</span> @break
                                             @endswitch
+                                            @if ($canDelete ?? false)
+                                                <button type="button" class="zi-del" title="{{ __('Desk থেকে ডিলিট') }}"
+                                                        wire:click="deleteMessage({{ $m->id }})"
+                                                        wire:confirm="{{ __('মেসেজটা Desk থেকে ডিলিট করবেন? কাস্টমারের WhatsApp-এ থেকে যাবে (Meta আনসেন্ড করতে দেয় না)।') }}">🗑</button>
+                                            @endif
                                         @endif
                                     </div>
                                 </div>

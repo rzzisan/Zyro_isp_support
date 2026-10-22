@@ -4,6 +4,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
@@ -156,6 +157,10 @@ interface ApiService {
 
     @POST("c/{company}/chats/{id}/mute")
     suspend fun muteChat(@Path("company") company: String, @Path("id") id: Long, @Body request: MuteRequest): ChatResponse
+
+    /** Owner only: hides a sent message in Desk (Meta can't unsend it). */
+    @DELETE("c/{company}/chats/{id}/messages/{message}")
+    suspend fun deleteMessage(@Path("company") company: String, @Path("id") id: Long, @Path("message") message: Long): Unit
 
     @GET("c/{company}/tickets")
     suspend fun tickets(

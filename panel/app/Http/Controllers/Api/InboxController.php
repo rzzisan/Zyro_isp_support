@@ -98,7 +98,8 @@ class InboxController extends Controller
 
         return response()->json([
             'chat' => self::chat($c, $staff) + ['window_open' => $c->windowOpen(), 'sending' => WhatsApp::sendingEnabled(),
-                'header_id' => $line ? (int) $line->header_id : null, 'line_customer_id' => $line?->customer_id],
+                'header_id' => $line ? (int) $line->header_id : null, 'line_customer_id' => $line?->customer_id,
+                'can_delete' => $request->user()->roleIn($company) === 'owner'],
             'messages' => $messages->map(fn ($m) => self::message($m)),
             'members' => $company->users()->orderBy('users.name')->get(['users.id', 'users.name'])
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]),
@@ -166,6 +167,17 @@ class InboxController extends Controller
         $c->forceFill(['notify_muted' => $request->boolean('muted')])->save();
 
         return $this->chatResponse($c);
+    }
+
+    /** Owner only: hide a sent message in Desk; Meta can't unsend, so the customer keeps it. */
+    public function deleteMessage(Request $request, Company $company, int $contact, int $message): JsonResponse
+    {
+        $this->allow($request, $company);
+        $m = $this->contact($company, $contact)->messages()->findOrFail($message);
+        abort_unless($m->deletableBy($request->user()), 403, __('শুধু Owner পাঠানো মেসেজ ডিলিট করতে পারেন'));
+        $m->softDelete($request->user());
+
+        return response()->json(['deleted' => $m->id]);
     }
 
     /** Voice, image or file of a message, fetched from Meta once and kept on the server. */

@@ -175,4 +175,34 @@ class AppInboxApiTest extends TestCase
         Membership::where('user_id', $agent->id)->update(['permissions' => json_encode(['customers'])]);
         $this->api($agent)->getJson($this->url('chats'))->assertForbidden();
     }
+
+    public function test_owner_deletes_a_sent_message_in_desk_only(): void
+    {
+        $agent = User::factory()->create();
+        $this->company->users()->attach($agent, ['role' => 'admin']);
+        $out = WaMessage::create(['company_id' => $this->company->id, 'contact_id' => $this->contact->id,
+            'direction' => 'out', 'sender' => 'staff', 'user_id' => $agent->id, 'body' => 'ভুল মেসেজ', 'status' => 'sent']);
+        $in = $this->contact->messages()->where('direction', 'in')->first();
+        $url = $this->url("chats/{$this->contact->id}/messages/");
+
+        $this->api($this->owner)->getJson($this->url("chats/{$this->contact->id}"))->assertJsonPath('chat.can_delete', true);
+        $this->api($agent)->getJson($this->url("chats/{$this->contact->id}"))->assertJsonPath('chat.can_delete', false);
+        $this->api($agent)->deleteJson($url.$out->id)->assertForbidden();
+        $this->api($this->owner)->deleteJson($url.$in->id)->assertForbidden();  // only messages we sent
+        $this->api($this->owner)->deleteJson($url.$out->id)->assertOk();
+
+        $this->assertSoftDeleted($out);
+        $this->assertSame($this->owner->id, WaMessage::withTrashed()->find($out->id)->deleted_by);
+        $ids = collect($this->api($this->owner)->getJson($this->url("chats/{$this->contact->id}"))->json('messages'))->pluck('id');
+        $this->assertNotContains($out->id, $ids);
+        $this->assertContains($in->id, $ids);
+        $this->api($this->owner)->deleteJson($url.$out->id)->assertNotFound();
+    }
+
+    public function test_owner_turns_off_a_members_name_under_replies(): void
+    {
+        Membership::where('company_id', $this->company->id)->where('user_id', $this->owner->id)->update(['wa_signature' => false]);
+        $this->api($this->owner)->postJson($this->url("chats/{$this->contact->id}/reply"), ['body' => 'ঠিক আছে'])->assertOk();
+        $this->assertSame('ঠিক আছে', $this->contact->messages()->latest('id')->first()->body);
+    }
 }

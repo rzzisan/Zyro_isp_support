@@ -15,6 +15,7 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -90,6 +91,10 @@ class MembershipResource extends Resource
                 ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
                 ->dehydrated(fn ($state) => filled($state) && self::isOwner())
                 ->helperText(__('বদলাতে না চাইলে খালি রাখুন')),
+            Toggle::make('wa_signature')->label(__('WhatsApp মেসেজের নিচে নাম দেখাবে'))->default(true)
+                ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
+                ->dehydrated(fn () => self::isOwner())
+                ->helperText(__('চালু থাকলে এই সদস্যের পাঠানো প্রতিটা WhatsApp উত্তরের নিচে "- নাম" যাবে। শুধু Owner বদলাতে পারেন।')),
             Select::make('groups')->label(__('পারমিশন গ্রুপ'))->visibleOn('edit')->multiple()->preload()->live()
                 ->visible(fn ($get) => $get('role') !== 'owner')
                 ->relationship('groups', 'name', fn (Builder $query) => $query->where('permission_groups.company_id', Filament::getTenant()->getKey()))

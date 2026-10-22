@@ -220,6 +220,16 @@ class ViewConversation extends Page
             ->send();
     }
 
+    /** Owner only: hide a sent message in Desk (Meta can't unsend, so the customer keeps it). */
+    public function deleteMessage(int $id): void
+    {
+        $m = $this->contact()->messages()->findOrFail($id);
+        abort_unless($m->deletableBy(auth()->user()), 403);
+        $m->softDelete(auth()->user());
+        Notification::make()->success()->title(__('মেসেজ Desk থেকে ডিলিট হয়েছে'))
+            ->body(__('কাস্টমারের WhatsApp-এ মেসেজটা থেকে যাবে (Meta আনসেন্ড করতে দেয় না)।'))->send();
+    }
+
     /** Copy a bot draft into the reply box so a person can check, edit and send it. */
     public function useDraft(int $id): void
     {
@@ -246,6 +256,7 @@ class ViewConversation extends Page
             'messageCount' => $c->messages()->count(),
             'sending' => WhatsApp::sendingEnabled(),
             'company' => Filament::getTenant(),
+            'canDelete' => auth()->user()?->roleIn(Filament::getTenant()) === 'owner',
         ];
     }
 

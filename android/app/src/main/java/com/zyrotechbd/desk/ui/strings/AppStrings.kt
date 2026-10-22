@@ -242,6 +242,9 @@ abstract class AppStrings {
     abstract val copied: String
     abstract val newMessagesBtn: String
     abstract val copyText: String
+    abstract val deleteMessage: String
+    abstract val deleteMessageAsk: String
+    abstract val messageDeleted: String
     abstract val fFilter: String
     abstract val fAll: String
     abstract val fZone: String
@@ -600,6 +603,9 @@ object BengaliStrings : AppStrings() {
     override val copied = "কপি হয়েছে"
     override val newMessagesBtn = "নতুন মেসেজ"
     override val copyText = "কপি"
+    override val deleteMessage = "ডিলিট"
+    override val deleteMessageAsk = "মেসেজটা Desk থেকে ডিলিট করবেন? কাস্টমারের WhatsApp-এ থেকে যাবে (Meta আনসেন্ড করতে দেয় না)।"
+    override val messageDeleted = "Desk থেকে ডিলিট হয়েছে"
     override val fFilter = "ফিল্টার"
     override val fAll = "সব"
     override val fZone = "Zone"
@@ -955,6 +961,9 @@ object EnglishStrings : AppStrings() {
     override val copied = "Copied"
     override val newMessagesBtn = "New messages"
     override val copyText = "Copy"
+    override val deleteMessage = "Delete"
+    override val deleteMessageAsk = "Delete this message from Desk? It stays in the customer's WhatsApp (Meta has no unsend)."
+    override val messageDeleted = "Deleted from Desk"
     override val fFilter = "Filter"
     override val fAll = "All"
     override val fZone = "Zone"

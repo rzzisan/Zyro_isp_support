@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Membership;
 use App\Models\User;
 use App\Models\WaAccount;
 use App\Models\WaContact;
@@ -51,7 +52,7 @@ class WhatsApp
         if (! $contact->windowOpen()) {
             throw new RuntimeException(__('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই সাধারণ মেসেজ যাবে না; অনুমোদিত template লাগবে।'));
         }
-        $body = static::signed($body, $user);
+        $body = static::signed($body, $user, $contact->company_id);
         $account = static::accountFor($contact);
         $waId = null;
         $status = 'test';
@@ -89,10 +90,16 @@ class WhatsApp
         return $message;
     }
 
-    /** The agent's name under the reply, so the customer knows who answered ("- Rezaul"). */
-    public static function signed(string $text, User $user): string
+    /**
+     * The agent's name under the reply, so the customer knows who answered ("- Rezaul"), unless the owner turned it
+     * off for this member on the Team page (company_user.wa_signature).
+     */
+    public static function signed(string $text, User $user, ?int $companyId = null): string
     {
         $text = trim($text);
+        if ($companyId && Membership::where('company_id', $companyId)->where('user_id', $user->id)->first()?->wa_signature === false) {
+            return $text;
+        }
         $sig = '- '.trim($user->name);
 
         return $text === '' ? $sig : (str_ends_with($text, $sig) ? $text : $text."\n\n".$sig);
@@ -114,7 +121,7 @@ class WhatsApp
         if (! $contact->windowOpen()) {
             throw new RuntimeException(__('কাস্টমারের শেষ মেসেজ ২৪ ঘণ্টার বেশি আগে, তাই এখন কিছু পাঠানো যাবে না; অনুমোদিত template লাগবে।'));
         }
-        $caption = $type === 'audio' ? null : static::signed((string) $caption, $user);
+        $caption = $type === 'audio' ? null : (static::signed((string) $caption, $user, $contact->company_id) ?: null);
         $account = static::accountFor($contact);
         $waId = null;
         $mediaId = null;
