@@ -20,6 +20,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** Every SMS send from the Desk with its progress; "SMS পাঠান" opens the form. */
 class SmsCampaignResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = SmsCampaign::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftEllipsis;

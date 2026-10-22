@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Model;
 /** Header, QR and footer of the money receipt printed from the বিল কালেকশন page. */
 class ReceiptSettings extends CompanySettingsPage
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedReceiptPercent;
 
     public static function getNavigationLabel(): string

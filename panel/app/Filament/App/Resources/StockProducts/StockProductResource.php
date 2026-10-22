@@ -27,6 +27,8 @@ use Illuminate\Validation\Rules\Unique;
 /** Other stock items (splitter, patch cord, …): count, stock in, hand out to a technician. */
 class StockProductResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = StockProduct::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSquares2x2;

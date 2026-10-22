@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class SipSettings extends CompanySettingsPage
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPhone;
 
     public static function getNavigationLabel(): string

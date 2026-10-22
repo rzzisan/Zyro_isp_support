@@ -15,6 +15,8 @@ use Filament\Support\Icons\Heroicon;
  */
 class MyProfile extends EditProfile
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static bool $isDiscovered = true;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedKey;

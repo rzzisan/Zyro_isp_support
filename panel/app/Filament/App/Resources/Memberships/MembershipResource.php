@@ -27,6 +27,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** Team: who works in this company and with which role. Owner/Admin only; owners can't be removed here. */
 class MembershipResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = Membership::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;

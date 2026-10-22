@@ -17,6 +17,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** Who worked tickets in which zone / sub zone / box, as the ticket sync keeps it. Only "pinned" is edited here. */
 class AreaStaffResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = AreaStaff::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMapPin;

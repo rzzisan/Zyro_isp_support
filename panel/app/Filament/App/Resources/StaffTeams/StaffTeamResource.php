@@ -26,6 +26,8 @@ use RuntimeException;
 /** Field teams (Rifat + Maruf, ...): members count as field staff; auto-assign gives the whole team, and one ticket never mixes two teams. */
 class StaffTeamResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = StaffTeam::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;

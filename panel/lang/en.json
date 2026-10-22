@@ -1377,5 +1377,7 @@
     "পারমিশন গ্রুপ": "Permission groups",
     "যেমন টেকনিশিয়ান, অফিস স্টাফ": "e.g. Technicians, Office staff",
     "সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin সদস্যের জন্য কাজ করে।": "Settings menus (WhatsApp, Billing connection, MikroTik, Bot, AI key, Team, Technicians) only work for Admin members.",
-    "বিলিং-এর Received By (যিনি টাকা নিয়েছেন)। গ্রুপের Agent সদস্যরা এঁদের নেওয়া বিল দেখবেন, সাথে নিজের এন্ট্রি দেওয়া বিল আর টিম পেজে তাঁর জন্য বাছা কর্মীদের বিল। Owner/Admin সবার বিল দেখেন।": "Billing's Received By (who took the money). Agent members of the group see bills taken by these people, plus bills they entered themselves and the collectors picked for them on the team page. Owners/Admins see every bill."
+    "বিলিং-এর Received By (যিনি টাকা নিয়েছেন)। গ্রুপের Agent সদস্যরা এঁদের নেওয়া বিল দেখবেন, সাথে নিজের এন্ট্রি দেওয়া বিল আর টিম পেজে তাঁর জন্য বাছা কর্মীদের বিল। Owner/Admin সবার বিল দেখেন।": "Billing's Received By (who took the money). Agent members of the group see bills taken by these people, plus bills they entered themselves and the collectors picked for them on the team page. Owners/Admins see every bill.",
+    "সাইডবারের উপরে কুইক অ্যাক্সেসে যে মেনুগুলো থাকবে": "Menus shown in Quick access at the top of the sidebar",
+    "টিক দেওয়া মেনু নিজের গ্রুপ থেকে কুইক অ্যাক্সেসে চলে যাবে। যার যে মেনুর অনুমতি নেই, সে সেটা কুইক অ্যাক্সেসেও দেখবে না।": "A ticked menu moves from its own group into Quick access. Members without permission for a menu will not see it there either."
 }

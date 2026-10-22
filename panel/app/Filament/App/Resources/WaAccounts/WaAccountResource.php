@@ -26,6 +26,8 @@ use Throwable;
 /** The company's WhatsApp business number(s): Meta ids, access token, bot on/off. Owner/Admin only. */
 class WaAccountResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = WaAccount::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDevicePhoneMobile;

@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\DB;
 /** Every ONU on our OLTs with live-ish status and light levels, and the customer behind it. Read-only. */
 class OnuResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = Onu::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWifi;

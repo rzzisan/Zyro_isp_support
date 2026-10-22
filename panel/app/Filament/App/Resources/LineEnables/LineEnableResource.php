@@ -19,6 +19,8 @@ use Illuminate\Support\Carbon;
 /** Log: which technician asked the bot to turn on which customer's line, and the result. Read-only. */
 class LineEnableResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = LineEnable::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPower;

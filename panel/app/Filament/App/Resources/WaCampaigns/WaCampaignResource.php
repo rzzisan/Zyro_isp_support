@@ -21,6 +21,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** Every WhatsApp template send from the Desk with its progress; "WhatsApp পাঠান" opens the form. */
 class WaCampaignResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = WaCampaign::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPaperAirplane;

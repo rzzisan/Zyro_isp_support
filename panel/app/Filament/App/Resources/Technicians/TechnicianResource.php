@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** Field technicians: messages from these WhatsApp numbers get the staff assistant, not the customer bot. */
 class TechnicianResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = Technician::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;

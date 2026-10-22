@@ -26,6 +26,8 @@ use Illuminate\Validation\Rules\Unique;
 /** Permission groups: menus given to a whole group of members at once (who manages the team page manages these). */
 class PermissionGroupResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = PermissionGroup::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;

@@ -28,6 +28,8 @@ use RuntimeException;
 /** The company's OLTs, read over SNMP (read-only community) for ONU status and power. Owner/Admin only. */
 class OltResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = Olt::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCpuChip;

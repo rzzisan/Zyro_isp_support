@@ -40,6 +40,8 @@ use Illuminate\Support\Carbon;
 /** ONUs handed out: customer (or "other"), brand, MAC, purpose, who fitted it; New Connection also records the sale. */
 class OnuAssignmentResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = OnuAssignment::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSignal;

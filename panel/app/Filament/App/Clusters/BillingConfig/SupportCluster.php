@@ -10,6 +10,8 @@ use Filament\Support\Icons\Heroicon;
 /** বিলিং কনফিগারেশন menu item with its lists as tabs: কর্মী, ডিপার্টমেন্ট, সমস্যার ধরন, Priority. */
 class SupportCluster extends Cluster
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     public static function getNavigationLabel(): string
     {
         return __('সাপোর্ট তালিকা');

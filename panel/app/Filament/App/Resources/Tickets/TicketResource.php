@@ -25,6 +25,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** Billing software support tickets, synced every 5 minutes. Open ones can be edited, assigned and solved (in billing). */
 class TicketResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = BillingTicket::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
@@ -46,7 +48,7 @@ class TicketResource extends Resource
 
     protected static ?string $slug = 'tickets';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'কুইক অ্যাক্সেস';
+    protected static string|\UnitEnum|null $navigationGroup = 'সাপোর্ট';
 
     protected static ?int $navigationSort = 2;
 

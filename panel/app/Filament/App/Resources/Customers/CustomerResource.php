@@ -36,6 +36,8 @@ use RuntimeException;
 /** All billing customers from our own copy (synced nightly). Everyone can look; passwords and CSV are owner/admin. */
 class CustomerResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = BillingCustomer::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
@@ -57,9 +59,9 @@ class CustomerResource extends Resource
 
     protected static ?string $slug = 'customers';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'কুইক অ্যাক্সেস';
+    protected static string|\UnitEnum|null $navigationGroup = 'কাস্টমার ও বিল';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 1;
 
     public static function canAccess(): bool
     {

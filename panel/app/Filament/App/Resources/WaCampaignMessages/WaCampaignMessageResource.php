@@ -23,6 +23,8 @@ use Illuminate\Support\Carbon;
 /** Every WhatsApp template message sent from the Desk, one row per number, with Meta's status. Read-only. */
 class WaCampaignMessageResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = WaCampaignMessage::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQueueList;

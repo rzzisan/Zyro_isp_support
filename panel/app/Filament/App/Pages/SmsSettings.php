@@ -27,6 +27,8 @@ use RuntimeException;
 /** The company's SMS gateway (Khudebarta). Keys are stored encrypted and never shown again. Owner/Admin only. */
 class SmsSettings extends CompanySettingsPage
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSignal;
 
     public static function getNavigationLabel(): string

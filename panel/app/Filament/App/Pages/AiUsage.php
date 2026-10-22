@@ -20,6 +20,8 @@ use Illuminate\Support\Facades\DB;
  */
 class AiUsage extends Page
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
     public static function getNavigationLabel(): string

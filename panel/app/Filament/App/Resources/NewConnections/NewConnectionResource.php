@@ -35,6 +35,8 @@ use Illuminate\Support\HtmlString;
 /** New lines and fiber conversions sold: price, deposit, due, who took the order and who holds the money. */
 class NewConnectionResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = NewConnection::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserPlus;

@@ -26,6 +26,8 @@ use Illuminate\Support\Carbon;
  */
 class DailyBillResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = BillingDailyBill::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
@@ -47,9 +49,9 @@ class DailyBillResource extends Resource
 
     protected static ?string $slug = 'daily-bills';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'কুইক অ্যাক্সেস';
+    protected static string|\UnitEnum|null $navigationGroup = 'কাস্টমার ও বিল';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 2;
 
     public const STATUSES = ['active' => 'approve + pending', 'approved' => 'Approved', 'pending' => 'Pending (approve বাকি)', 'deleted' => 'Deleted'];
 

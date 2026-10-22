@@ -21,6 +21,8 @@ use Throwable;
 
 class BotSettings extends CompanySettingsPage
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
     public static function getNavigationLabel(): string

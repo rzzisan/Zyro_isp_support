@@ -24,6 +24,8 @@ use Throwable;
 /** The company's own AI keys (each company pays its provider). Owner/Admin only. */
 class AiKeyResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = AiKey::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedKey;

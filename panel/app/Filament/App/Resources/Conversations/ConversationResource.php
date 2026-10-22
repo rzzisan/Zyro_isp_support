@@ -19,6 +19,8 @@ use Illuminate\Support\Str;
 /** The inbox: every customer number that wrote to the company. All members (agents too) work here. */
 class ConversationResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = WaContact::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
@@ -40,7 +42,7 @@ class ConversationResource extends Resource
 
     protected static ?string $slug = 'inbox';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'কুইক অ্যাক্সেস';
+    protected static string|\UnitEnum|null $navigationGroup = 'সাপোর্ট';
 
     protected static ?int $navigationSort = 1;
 

@@ -25,6 +25,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** ONUs bought: brand, quantity, purchase date. */
 class OnuStockEntryResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = OnuStockEntry::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBoxArrowDown;

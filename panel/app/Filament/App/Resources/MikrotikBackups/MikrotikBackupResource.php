@@ -23,6 +23,8 @@ use RuntimeException;
 /** Nightly + on-demand MikroTik backups (.rsc with PPP secrets, binary .backup). Owner/Admin only. */
 class MikrotikBackupResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = MikrotikBackup::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;

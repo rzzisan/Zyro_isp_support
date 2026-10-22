@@ -23,6 +23,8 @@ use Illuminate\Validation\Rules\Unique;
 /** ONU brands with price and stock: bought (stock entries) − handed out (assignments) = left. */
 class OnuBrandResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = OnuBrand::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;

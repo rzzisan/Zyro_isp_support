@@ -25,6 +25,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** Ready SMS texts for the SMS form (Desk's own; billing's templates are not used). */
 class SmsTemplateResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = SmsTemplate::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentDuplicate;

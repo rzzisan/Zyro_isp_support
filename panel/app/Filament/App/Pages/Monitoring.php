@@ -34,6 +34,8 @@ use RuntimeException;
  */
 class Monitoring extends Page implements HasTable
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     use InteractsWithTable;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSignal;

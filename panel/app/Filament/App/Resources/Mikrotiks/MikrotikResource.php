@@ -28,6 +28,8 @@ use RuntimeException;
 /** MikroTik routers (RouterOS API) to see if a customer is online. Owner/Admin only. */
 class MikrotikResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = MikrotikRouter::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedServerStack;

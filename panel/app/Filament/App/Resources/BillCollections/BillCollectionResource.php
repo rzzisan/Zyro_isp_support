@@ -20,6 +20,8 @@ use Illuminate\Support\Carbon;
 /** Bills collected from the Desk (and refused attempts). Approval happens in the billing software. Read-only. */
 class BillCollectionResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = BillCollection::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;

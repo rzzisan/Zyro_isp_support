@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Model;
 /** Company-wide network options: the port of the customers' routers (IP links in tickets and the inbox), MikroTik backup retention. */
 class NetworkSettings extends CompanySettingsPage
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGlobeAlt;
 
     protected static string|\UnitEnum|null $navigationGroup = 'নেটওয়ার্ক';

@@ -11,14 +11,14 @@ use Illuminate\Support\Str;
 
 class Company extends Model
 {
-    protected $fillable = ['name', 'slug', 'status', 'plan_id', 'trial_ends_at', 'subscription_ends_at', 'contact_phone', 'contact_email', 'modules', 'router_port', 'mikrotik_backup_days'];
+    protected $fillable = ['name', 'slug', 'status', 'plan_id', 'trial_ends_at', 'subscription_ends_at', 'contact_phone', 'contact_email', 'modules', 'router_port', 'mikrotik_backup_days', 'quick_access'];
 
     /** Optional features a super admin turns on per company (companies.modules). */
     public const MODULES = ['onu' => 'ONU স্টক ও নতুন সংযোগ'];
 
     protected function casts(): array
     {
-        return ['trial_ends_at' => 'datetime', 'subscription_ends_at' => 'datetime', 'modules' => 'array'];
+        return ['trial_ends_at' => 'datetime', 'subscription_ends_at' => 'datetime', 'modules' => 'array', 'quick_access' => 'array'];
     }
 
     /** Web page of a customer's own router: http://IP:router_port (no port set = plain http://IP). Null for anything that is not an IP. */

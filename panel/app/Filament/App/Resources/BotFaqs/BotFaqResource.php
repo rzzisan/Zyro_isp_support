@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** The company's FAQ: every active row goes into the bot's instructions (customer bot and technician desk). */
 class BotFaqResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = BotFaq::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQuestionMarkCircle;

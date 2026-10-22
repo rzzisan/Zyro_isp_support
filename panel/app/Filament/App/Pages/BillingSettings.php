@@ -19,6 +19,8 @@ use Throwable;
 
 class BillingSettings extends CompanySettingsPage
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
 
     public static function getNavigationLabel(): string

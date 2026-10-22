@@ -10,6 +10,8 @@ use Filament\Support\Icons\Heroicon;
 /** বিলিং কনফিগারেশন menu item with its lists as tabs: Package, Connection Type, Client Type, Protocol Type, Customer Status. */
 class ServiceCluster extends Cluster
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     public static function getNavigationLabel(): string
     {
         return __('প্যাকেজ ও সংযোগ');

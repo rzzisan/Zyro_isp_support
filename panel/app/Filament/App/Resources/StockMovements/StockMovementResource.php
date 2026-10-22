@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Builder;
 /** Log of other-stock movements (in / handed out). Deleting one puts the count back. */
 class StockMovementResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = StockMovement::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowsRightLeft;

@@ -23,6 +23,8 @@ use Illuminate\Support\Carbon;
 /** Every SMS sent from the Desk, one row per number, with the gateway's answer and delivery status. Read-only. */
 class SmsMessageResource extends Resource
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static ?string $model = SmsMessage::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedInboxStack;

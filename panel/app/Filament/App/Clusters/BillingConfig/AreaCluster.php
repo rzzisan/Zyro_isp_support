@@ -10,6 +10,8 @@ use Filament\Support\Icons\Heroicon;
 /** বিলিং কনফিগারেশন menu item with its lists as tabs: Zone, Sub Zone, Box, District, Upazila. */
 class AreaCluster extends Cluster
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     public static function getNavigationLabel(): string
     {
         return __('এলাকা');

@@ -23,6 +23,8 @@ use Throwable;
  */
 class MyBillingLogin extends CompanySettingsPage
 {
+    use \App\Filament\App\Concerns\QuickAccessible;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedLockClosed;
 
     public static function getNavigationLabel(): string
