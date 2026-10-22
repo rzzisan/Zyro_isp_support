@@ -7,6 +7,7 @@ use App\Models\Membership;
 use App\Models\CallLog;
 use App\Models\User;
 use App\Support\Menu;
+use App\Support\Softphone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -87,7 +88,8 @@ class AuthController extends Controller
 
             return ['id' => $company->id, 'slug' => $company->slug, 'name' => $company->name, 'role' => $role,
                 'menus' => array_values(array_filter(array_keys(Menu::ITEMS),
-                    fn ($k) => Menu::allows($user, $company, $k) && ($k !== 'calls' || $hotline)))];
+                    fn ($k) => Menu::allows($user, $company, $k) && ($k !== 'calls' || $hotline)
+                        && ($k !== 'phone' || Softphone::available($company))))];
         })->values();
 
         return ['user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'locale' => $user->locale],

@@ -22,6 +22,7 @@ class Menu
         'monitoring' => ['অনলাইন মনিটরিং', true, false],
         'tickets' => ['টিকিট', true, false],
         'calls' => ['হটলাইন কল লগ (রেকর্ডিং)', true, false],
+        'phone' => ['ফোন: WhatsApp কল ধরা ও কাস্টমারকে কল', false, false],
         'bills' => ['বিল কালেকশন', false, false],
         'sms' => ['SMS (পাঠানো, লগ, টেমপ্লেট)', false, false],
         'wa_campaign' => ['WhatsApp টেমপ্লেট পাঠানো ও লগ', false, false],

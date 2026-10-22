@@ -66,24 +66,34 @@ def send(company_id: int, data: dict[str, str]) -> None:
     threading.Thread(target=_send_all, args=(company_id, data), daemon=True).start()
 
 
-def _send_all(company_id: int, data: dict[str, str]) -> None:
+def send_users(company_id: int, user_ids: list[int], data: dict[str, str]) -> None:
+    """Push [data] to these users' phones (an incoming call for the members allowed to take calls)."""
+    threading.Thread(target=_send_all, args=(company_id, data, user_ids), daemon=True).start()
+
+
+def _send_all(company_id: int, data: dict[str, str], user_ids: list[int] | None = None) -> None:
     try:
         acc = account()
         if not acc:
             return
-        rows = db.all_rows(
-            """SELECT p.id, p.token FROM app_push_tokens p
-               JOIN company_user cu ON cu.company_id = %s AND cu.user_id = p.user_id
-               WHERE cu.role = 'owner' OR cu.permissions IS NULL OR cu.permissions ? 'inbox'""",
-            (company_id,))
+        if user_ids is not None:
+            rows = db.all_rows("SELECT id, token FROM app_push_tokens WHERE user_id = ANY(%s)", (list(user_ids),))
+        else:
+            rows = db.all_rows(
+                """SELECT p.id, p.token FROM app_push_tokens p
+                   JOIN company_user cu ON cu.company_id = %s AND cu.user_id = p.user_id
+                   WHERE cu.role = 'owner' OR cu.permissions IS NULL OR cu.permissions ? 'inbox'""",
+                (company_id,))
         if not rows:
             return
         url = f"https://fcm.googleapis.com/v1/projects/{acc['project_id']}/messages:send"
         headers = {"Authorization": f"Bearer {_access_token(acc)}"}
         with httpx.Client(timeout=10) as client:
             for row in rows:
+                # a ringing call is useless a minute later
+                ttl = "60s" if data.get("type", "").startswith("call") else "3600s"
                 msg = {"message": {"token": row["token"], "data": data,
-                                   "android": {"priority": "high", "ttl": "3600s"}}}
+                                   "android": {"priority": "high", "ttl": ttl}}}
                 r = client.post(url, json=msg, headers=headers)
                 if r.status_code == 404 or (r.status_code == 400 and "registration token" in r.text.lower()):
                     db.execute("DELETE FROM app_push_tokens WHERE id = %s", (row["id"],))  # app removed or token rotated

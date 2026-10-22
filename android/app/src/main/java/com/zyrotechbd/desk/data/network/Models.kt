@@ -450,3 +450,13 @@ data class CallLine(val who: String = "", val text: String = "", val at: Int = 0
 data class CallPage(val data: List<CallRow> = emptyList(), @Json(name = "next_page") val nextPage: Int? = null)
 
 data class CallResult(val call: CallRow)
+
+/** The member's Desk phone login (call/CallActivity hands it to the softphone page). */
+data class SoftphoneConfig(
+    val ws: String,
+    val domain: String,
+    val user: String,
+    val password: String,
+    val name: String = "",
+    @Json(name = "can_call_out") val canCallOut: Boolean = false,
+)

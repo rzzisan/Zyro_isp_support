@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desk ফোন</title>
+<!--
+Desk softphone: WebRTC (JsSIP) over wss://<desk>/sip-ws into Asterisk (deploy/asterisk, engine/voice_bot.py).
+Opened by the panel (zyro-calls.js "ধরুন", customer page "কল") as phone.html?c=<company>&take=<uuid>|dial=<number>&name=..,
+it reads the login from /softphone/<company>/config with the panel session. Inside the Android app (CallActivity) the
+page gets everything from window.ZyroApp.config() instead and reports its state back to ZyroApp.state().
+take-<uuid> takes a WhatsApp call while it rings; a number calls the customer through the hotline extension.
+-->
+<style>
+:root { --bg:#f9fafb; --card:#fff; --fg:#111827; --muted:#6b7280; --line:#e5e7eb; --red:#dc2626; --green:#16a34a; --btn:#f3f4f6 }
+@media (prefers-color-scheme: dark) { :root { --bg:#0b0f14; --card:#111827; --fg:#f3f4f6; --muted:#9ca3af; --line:#1f2937; --btn:#1f2937 } }
+* { box-sizing: border-box }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font-family: system-ui, "Hind Siliguri", "Noto Sans Bengali", sans-serif }
+main { min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:40px 16px 32px; text-align:center }
+.who { font-size:26px; font-weight:700; word-break:break-word }
+.sub { margin-top:6px; color:var(--muted); font-size:15px }
+.state { margin-top:24px; font-size:17px }
+.timer { margin-top:6px; font-size:32px; font-variant-numeric:tabular-nums; letter-spacing:1px }
+.row { display:flex; gap:28px; justify-content:center; align-items:center }
+button { border:0; border-radius:999px; width:68px; height:68px; font-size:26px; cursor:pointer; background:var(--btn); color:var(--fg) }
+button.on { background:var(--fg); color:var(--bg) }
+button.end { background:var(--red); color:#fff; width:76px; height:76px }
+.lbl { font-size:12px; color:var(--muted); margin-top:6px }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <div class="who" id="who">…</div>
+    <div class="sub" id="sub"></div>
+    <div class="state" id="state">সংযোগ হচ্ছে…</div>
+    <div class="timer" id="timer"></div>
+  </div>
+  <div class="row">
+    <div><button id="mute" aria-label="মিউট">🎙️</button><div class="lbl">মিউট</div></div>
+    <div><button id="hang" class="end" aria-label="কেটে দিন">✆</button><div class="lbl">কেটে দিন</div></div>
+  </div>
+</main>
+<audio id="remote" autoplay></audio>
+<script src="jssip.min.js"></script>
+<script>
+(function () {
+    const $ = id => document.getElementById(id);
+    const app = window.ZyroApp || null;
+    const q = new URLSearchParams(location.search);
+    let session = null, ua = null, started = 0, tick = null, done = false;
+
+    function state(text, code) {
+        $('state').textContent = text;
+        try { app && app.state(code || ''); } catch (e) {}
+    }
+    function finish(text) {
+        if (done) return;
+        done = true;
+        clearInterval(tick);
+        state(text, 'ended');
+        try { ua && ua.stop(); } catch (e) {}
+        if (!app) setTimeout(() => window.close(), 2500);
+    }
+    function timer() {
+        started = Date.now();
+        tick = setInterval(() => {
+            const s = Math.floor((Date.now() - started) / 1000);
+            $('timer').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+        }, 500);
+    }
+
+    async function config() {
+        if (app) return JSON.parse(app.config());
+        const r = await fetch('/softphone/' + encodeURIComponent(q.get('c') || '') + '/config',
+            {credentials: 'same-origin', headers: {Accept: 'application/json'}});
+        if (!r.ok) throw new Error(r.status === 403 ? 'এই কাজের অনুমতি নেই' : 'লগইন পাওয়া যায়নি (' + r.status + ')');
+        const cfg = await r.json();
+        cfg.target = q.get('take') ? 'take-' + q.get('take') : (q.get('dial') || '').replace(/[^0-9+]/g, '');
+        cfg.title = q.get('name') || q.get('dial') || '';
+        return cfg;
+    }
+
+    async function start() {
+        let cfg;
+        try { cfg = await config(); } catch (e) { $('who').textContent = 'Desk ফোন'; return finish(e.message); }
+        const taking = cfg.target.startsWith('take-');
+        $('who').textContent = cfg.title || cfg.target;
+        $('sub').textContent = taking ? 'WhatsApp কল' : 'হটলাইন থেকে কল';
+        if (!cfg.target) return finish('নম্বর নেই');
+
+        ua = new JsSIP.UA({
+            sockets: [new JsSIP.WebSocketInterface(cfg.ws)],
+            uri: 'sip:' + cfg.user + '@' + cfg.domain,
+            password: cfg.password,
+            display_name: cfg.name,
+            register: false,
+            session_timers: false,
+            user_agent: 'ZyroDesk softphone',
+        });
+        ua.on('disconnected', () => { if (!session) finish('সার্ভারে সংযোগ হয়নি'); });
+        ua.on('connected', () => {
+            if (session) return;
+            state(taking ? 'কল ধরা হচ্ছে…' : 'কল যাচ্ছে…', 'calling');
+            session = ua.call('sip:' + cfg.target + '@' + cfg.domain, {
+                mediaConstraints: {audio: true, video: false},
+                pcConfig: {iceServers: [{urls: 'stun:stun.l.google.com:19302'}]},
+                rtcOfferConstraints: {offerToReceiveAudio: true, offerToReceiveVideo: false},
+            });
+            // the server has a public address: no need to wait for every ICE candidate
+            let iceTimer = null;
+            session.on('icecandidate', e => {
+                if (e.candidate.type === 'srflx') e.ready();
+                else if (!iceTimer) iceTimer = setTimeout(() => e.ready(), 1500);
+            });
+            session.connection.addEventListener('track', e => { $('remote').srcObject = e.streams[0]; });
+            session.on('progress', () => state(taking ? 'কল ধরা হচ্ছে…' : 'বাজছে…', 'ringing'));
+            session.on('confirmed', () => { state('কথা চলছে', 'talking'); timer(); });
+            session.on('ended', () => finish('কল শেষ'));
+            session.on('failed', e => finish(
+                taking ? 'কলটা আর নেই: অন্য কেউ ধরেছেন বা কলার কেটে দিয়েছেন'
+                    : e.cause === JsSIP.C.causes.BUSY ? 'ব্যস্ত' : e.cause === JsSIP.C.causes.NO_ANSWER || e.cause === JsSIP.C.causes.CANCELED ? 'কেউ ধরেনি'
+                    : 'কল যায়নি (' + e.cause + ')'));
+        });
+        ua.start();
+    }
+
+    $('hang').onclick = () => { try { session ? session.terminate() : null; } catch (e) {} finish('কল শেষ'); };
+    $('mute').onclick = () => {
+        if (!session) return;
+        const m = session.isMuted().audio;
+        m ? session.unmute({audio: true}) : session.mute({audio: true});
+        $('mute').classList.toggle('on', !m);
+    };
+    window.zyroHangup = () => $('hang').onclick();
+    window.addEventListener('beforeunload', () => { try { session && session.terminate(); } catch (e) {} });
+    start();
+})();
+</script>
+</body>
+</html>

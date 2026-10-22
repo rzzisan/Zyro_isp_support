@@ -1,10 +1,13 @@
-{{-- Hotline caller popup (public/js/zyro-calls.js): only when the company's SIP extension is on, for customers menu users. --}}
+{{-- Caller popup (public/js/zyro-calls.js): hotline (SIP extension on) and WhatsApp calls, for customers menu users. --}}
 @php($company = \Filament\Facades\Filament::getTenant())
-@if ($company && \App\Support\Menu::allows(auth()->user(), $company, 'customers') && \App\Models\SipSetting::live($company->id))
+@if ($company && \App\Support\Menu::allows(auth()->user(), $company, 'customers') && \App\Support\Softphone::available($company))
     <script>
         window.ZyroCalls = {
             poll: @js(route('calls.poll', $company)),
-            t: @js(['ringing' => __('হটলাইনে কল আসছে'), 'ended' => __('কল শেষ'), 'unknown' => __('এই নম্বরে কোনো কাস্টমার নেই'),
+            phone: @js(asset('softphone/phone.html')),
+            company: @js($company->slug),
+            t: @js(['ringing' => __('হটলাইনে কল আসছে'), 'wa_ringing' => __('WhatsApp কল আসছে'), 'ended' => __('কল শেষ'),
+                'answered' => __('ধরেছেন:'), 'take' => __('ধরুন'), 'unknown' => __('এই নম্বরে কোনো কাস্টমার নেই'),
                 'due' => __('বকেয়া'), 'left' => __('Left'), 'close' => __('বন্ধ করুন')]),
         };
     </script>

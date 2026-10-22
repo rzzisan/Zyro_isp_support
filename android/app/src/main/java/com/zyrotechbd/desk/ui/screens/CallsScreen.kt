@@ -1,8 +1,7 @@
 package com.zyrotechbd.desk.ui.screens
 
-import android.content.Intent
+import com.zyrotechbd.desk.call.Phone
 import android.media.MediaPlayer
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -305,7 +304,7 @@ fun CallDetailScreen(navController: NavHostController, company: String, callId: 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         c.caller?.let { number ->
                             SmallAction(s.cDial, Icons.Filled.PhoneCallback) {
-                                context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")))
+                                Phone.dial(context, number, c.customer?.name ?: number)
                             }
                         }
                         val customer = c.customer

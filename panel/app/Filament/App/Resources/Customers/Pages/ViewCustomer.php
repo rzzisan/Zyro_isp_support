@@ -11,8 +11,11 @@ use App\Filament\App\SmsActions;
 use App\Filament\App\WaCampaignActions;
 use App\Filament\App\TicketActions;
 use App\Models\BillingCustomer;
+use App\Models\SipSetting;
+use App\Support\Menu;
 use App\Services\Engine;
 use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\DB;
@@ -59,6 +62,12 @@ class ViewCustomer extends ViewRecord
                         'billing_customer_id' => $c->id, 'customer_id' => $c->customer_id, 'viewed_at' => now()]);
                     $this->replaceMountedAction('showPassword');
                 }),
+            // Desk softphone (public/softphone/phone.html): the customer's mobile through the hotline extension, recorded
+            Action::make('call')->label(__('কল'))->icon(Heroicon::OutlinedPhone)->color('success')
+                ->visible(fn () => filled($c->mobile) && Menu::can('phone') && SipSetting::live($c->company_id))
+                ->url(fn () => asset('softphone/phone.html').'?'.http_build_query(['c' => Filament::getTenant()->slug,
+                    'dial' => $c->mobile, 'name' => "{$c->name} (ID {$c->customer_id})"]))
+                ->openUrlInNewTab(),
             BillActions::receive($c),
             TicketActions::newTicket($c->customer_id)->label(__('টিকিট খুলুন'))->color('gray'),
             SmsActions::send($c)->label('SMS')->color('gray'),

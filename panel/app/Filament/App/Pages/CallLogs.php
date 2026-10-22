@@ -89,9 +89,17 @@ class CallLogs extends Page implements HasTable
                     return $c ? CustomerResource::getUrl('view', ['record' => $c]) : null;
                 }),
                 TextColumn::make('bot_answered')->label(__('ধরেছে'))->badge()
-                    ->formatStateUsing(fn ($state, CallLog $record) => $state ? __('বট') : ($record->status === 'ringing' ? __('বাজছে') : __('এজেন্ট / মিসড')))
-                    ->color(fn ($state) => $state ? 'info' : 'gray'),
-                TextColumn::make('bot_seconds')->label(__('বটের সাথে কথা'))
+                    ->formatStateUsing(fn ($state, CallLog $record) => match (true) {
+                        $record->direction === 'out' => __('আউটগোয়িং: :n', ['n' => $record->answeredBy?->name ?? '—']),
+                        (bool) $state => __('বট'),
+                        (bool) $record->answered_by => $record->answeredBy?->name ?? __('স্টাফ'),
+                        in_array($record->status, ['ringing', 'answered'], true) => __('চলছে'),
+                        $record->channel === 'whatsapp' => __('মিসড'),
+                        default => __('এজেন্ট / মিসড'),
+                    })
+                    ->color(fn ($state, CallLog $record) => $state ? 'info' : ($record->answered_by ? 'success' : 'gray')),
+                TextColumn::make('bot_seconds')->label(__('কথা'))
+                    ->state(fn (CallLog $record) => $record->bot_seconds ?: $record->agent_seconds)
                     ->formatStateUsing(fn ($state) => $state ? gmdate($state >= 3600 ? 'G:i:s' : 'i:s', (int) $state) : ''),
                 TextColumn::make('bot_flag')->label(__('ফ্লাগ'))->badge()->color('danger')
                     ->formatStateUsing(fn ($state) => __(self::FLAGS[$state] ?? $state)),
@@ -106,7 +114,7 @@ class CallLogs extends Page implements HasTable
             ])
             ->recordActions([
                 Action::make('listen')->label(__('শুনুন'))->icon(Heroicon::OutlinedPlay)->color('gray')
-                    ->visible(fn (CallLog $record) => $record->bot_answered)
+                    ->visible(fn (CallLog $record) => $record->bot_answered || filled($record->recording_path))
                     ->modalHeading(fn (CallLog $record) => __('কল: :n', ['n' => $record->caller]))
                     ->modalSubmitAction(false)->modalCancelActionLabel(__('বন্ধ করুন'))
                     ->modalContent(fn (CallLog $record) => view('filament.app.call-log-detail', [
