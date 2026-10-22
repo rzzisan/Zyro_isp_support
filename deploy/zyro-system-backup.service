@@ -1,0 +1,17 @@
+[Unit]
+Description=Zyro Desk: whole-system backup to Google Drive (one queued or scheduled job per run, see engine/system_backup.py)
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+# root: dumps the database as postgres and reads /etc/letsencrypt, /etc/zyro-desk; writes only to /var/backups/zyro-desk,
+# Google Drive and (downloads) panel/storage/app/private/system-backup-downloads
+User=root
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+WorkingDirectory=/var/www/zyro_isp_support
+EnvironmentFile=/var/www/zyro_isp_support/engine/.env
+Environment=PYTHONPATH=/var/www/zyro_isp_support
+ExecStart=/var/www/zyro_isp_support/.venv/bin/python -m engine.system_backup
+TimeoutStartSec=4h
