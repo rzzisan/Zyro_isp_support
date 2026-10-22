@@ -112,7 +112,8 @@ class Drive:
         self.bwlimit = f"{int(s.get('bwlimit_mb') or 0)}M" if int(s.get("bwlimit_mb") or 0) else "off"
         WORK.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.conf = WORK / f"rclone-{os.getpid()}.conf"
-        token = json.dumps({"access_token": "", "token_type": "Bearer", "refresh_token": db.decrypt(s["google_refresh_token"]),
+        # an already-expired placeholder access token: rclone then refreshes it; an empty one counts as "no token" (rclone 1.75)
+        token = json.dumps({"access_token": "expired", "token_type": "Bearer", "refresh_token": db.decrypt(s["google_refresh_token"]),
                             "expiry": "2000-01-01T00:00:00Z"})
         local = os.environ.get("SYSTEM_BACKUP_LOCAL_REMOTE")  # tests and drills: a folder instead of Google Drive
         gd = ["[gd]", "type = local"] if local else [
@@ -215,7 +216,8 @@ def config_part(stage: Path) -> dict:
 
 
 def code_part(stage: Path, bundle: bool) -> dict:
-    git = ["git", "-c", "safe.directory=*", "-C", str(APP)]
+    # --no-optional-locks: as root, `git status` would otherwise rewrite .git/index root-owned and break the next deploy
+    git = ["git", "--no-optional-locks", "-c", "safe.directory=*", "-C", str(APP)]
     head = _run([*git, "rev-parse", "HEAD"], check=False).stdout.decode().strip()
     status = _run([*git, "status", "--porcelain"], check=False).stdout.decode()
     diff = _run([*git, "diff", "HEAD"], check=False).stdout.decode(errors="replace")

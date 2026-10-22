@@ -451,3 +451,4 @@
 - অ্যালার্ট: বাছা WA নম্বর থেকে টেক্সট (২৪ ঘণ্টার window-এ) নয়তো UTILITY টেমপ্লেট `system_backup_alert` (প্রথমবার নিজে জমা হয়)।
 - লাইভ মাপ (2026-10-22): DB 1 GB, `pg_dump -Fc` 60 MB/15 সে.; storage/app 42 MB, apk 39 MB; ডিস্ক ১৬ GB খালি। পুরো retention-এ Drive-এ ~৫ GB লাগবে।
 - টেস্ট: `tests/Feature/SystemBackupTest.php` (৬টা)। engine-এর পুরো পথ লোকাল Postgres-এ `SYSTEM_BACKUP_LOCAL_REMOTE` দিয়ে চালিয়ে দেখা: পুরো রান, রিস্টোর টেস্ট, ডাউনলোড, prune, restore-db, restore-files, আর restore-server.sh-এর config/checksum অংশ।
+- ফিক্স (2026-10-22): প্রথম লাইভ রানে rclone 1.75 "token expired and there's no refresh token" দিয়েছিল, কারণ config-এ খালি access_token থাকলে rclone টোকেনকেই নেই ধরে; এখন মেয়াদোত্তীর্ণ placeholder দেওয়া হয়। root-এর `git status` `.git/index` root-owned 0600 করে দিচ্ছিল (পরের deploy-এ git ভাঙে); এখন `git --no-optional-locks`।
