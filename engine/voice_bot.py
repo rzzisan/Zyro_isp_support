@@ -5,7 +5,7 @@ here over AudioSocket and goes to Gemini Live, which listens and speaks Bangla. 
 due, line) is fetched while it rings. Both sides are recorded (MP3 in the panel's storage) with the transcript in
 call_logs, shown on the panel's কল লগ page.
 
-WhatsApp calls (Meta Calling API over SIP, TLS 5061 + DTLS-SRTP) land on the same Asterisk as endpoint "meta-wa" in
+WhatsApp calls (Meta Calling API over SIP, TLS 15061 + DTLS-SRTP) land on the same Asterisk as endpoint "meta-wa" in
 context zyro-wa, which asks GET /mode?wa=<business number>; the company's WhatsApp number settings (calling_mode
 off/test/live, calling_test_numbers, calling_bot_delay) decide, and the same bot answers. call_logs.channel = whatsapp.
 
@@ -215,6 +215,8 @@ allow={WA_CODECS}
 webrtc=yes
 direct_media=no
 force_rport=yes
+; BYE etc. go back over Meta's own TLS connection: Meta's Contact says port 5061, which is blocked outbound from bsol
+rewrite_contact=yes
 
 [meta-wa-identify]
 type=identify
