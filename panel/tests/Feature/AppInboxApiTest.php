@@ -82,6 +82,30 @@ class AppInboxApiTest extends TestCase
         $this->api($this->owner)->getJson($this->url('chats?box=waiting'))->assertOk()->assertJsonCount(1, 'data');
     }
 
+    public function test_known_customers_show_pppoe_with_a_short_whatsapp_name_and_are_found_by_pppoe(): void
+    {
+        $byId = $this->chat($this->company, '8801711000002', 'Sharmin Akhter', 'hi');
+        $byId->update(['customer_id' => '4306']);
+        \App\Models\BillingCustomer::create(['company_id' => $this->company->id, 'header_id' => 4306, 'customer_id' => '4306',
+            'name' => 'Sharmin', 'username' => 'mp.sharmin', 'mobile_normalized' => '8801700000000']);
+        $byNumber = $this->chat($this->company, '8801711000003', 'Rina', 'hi');
+        \App\Models\BillingCustomer::create(['company_id' => $this->company->id, 'header_id' => 5000, 'customer_id' => '5000',
+            'name' => 'Rina', 'username' => 'tld.rina', 'mobile_normalized' => '8801711000003']);
+        $twoLines = $this->chat($this->company, '8801711000004', 'Kamal', 'hi');
+        foreach ([6001, 6002] as $h) {
+            \App\Models\BillingCustomer::create(['company_id' => $this->company->id, 'header_id' => $h, 'customer_id' => (string) $h,
+                'name' => 'Kamal', 'username' => "k{$h}", 'mobile_normalized' => '8801711000004']);
+        }
+
+        $data = collect($this->api($this->owner)->getJson($this->url('chats'))->assertOk()->json('data'));
+        $this->assertSame('mp.sharmin(Sharmi…)', $data->firstWhere('id', $byId->id)['name']);
+        $this->assertSame('tld.rina(Rina)', $data->firstWhere('id', $byNumber->id)['name']);
+        $this->assertSame('Kamal', $data->firstWhere('id', $twoLines->id)['name']);
+
+        $found = $this->api($this->owner)->getJson($this->url('chats?q=sharmin'))->assertOk()->json('data');
+        $this->assertSame([$byId->id], collect($found)->pluck('id')->all());
+    }
+
     public function test_chat_shows_messages_and_a_reply_is_stored_signed_with_the_bot_paused(): void
     {
         $this->api($this->owner)->getJson($this->url('chats/'.$this->contact->id))->assertOk()

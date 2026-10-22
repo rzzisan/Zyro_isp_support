@@ -25,7 +25,10 @@ trait InboxList
     /** Up to 60 chats for the list, newest first, with their last message and the "waiting" flag. */
     public function chatList(): Collection
     {
-        return WaContact::inbox(Filament::getTenant()->getKey(), $this->box, $this->search, auth()->id())->limit(60)->get();
+        $chats = WaContact::inbox(Filament::getTenant()->getKey(), $this->box, $this->search, auth()->id())->limit(60)->get();
+        WaContact::withLineNames($chats);
+
+        return $chats;
     }
 
     public function waitingCount(): int

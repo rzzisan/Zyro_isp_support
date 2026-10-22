@@ -33,7 +33,7 @@
                         <span class="zi-av" style="background: {{ $this::avatarColor($c->wa_number) }}">{{ $this::initials($c->name, $c->wa_number) }}</span>
                         <span class="zi-item-body">
                             <span class="zi-item-top">
-                                <span class="zi-name">{{ $techs[$c->wa_number] ?? ($c->name ?: $c->displayNumber()) }}</span>
+                                <span class="zi-name">{{ $techs[$c->wa_number] ?? $c->listName() }}</span>
                                 @if (isset($techs[$c->wa_number]))<span class="zi-tech">{{ __('স্টাফ') }}</span>@endif
                                 <span class="zi-time {{ $isWaiting ? 'hot' : '' }}">{{ $this::shortTime($c->last_message_at) }}</span>
                             </span>

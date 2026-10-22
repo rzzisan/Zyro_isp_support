@@ -40,7 +40,7 @@ class InboxController extends Controller
 
         return [
             'id' => $c->id,
-            'name' => $c->name,
+            'name' => $c->linePppoe ? $c->listName() : $c->name,
             'number' => $c->displayNumber(),
             'customer_id' => $c->customer_id,
             'last_message_at' => self::at($c->last_message_at),
@@ -76,6 +76,7 @@ class InboxController extends Controller
         $this->allow($request, $company);
         $chats = WaContact::inbox($company->id, (string) $request->query('box', 'all'), (string) $request->query('q', ''),
             $request->user()->id)->limit(60)->get();
+        WaContact::withLineNames($chats);
         $staff = Technician::where('company_id', $company->id)->whereIn('wa_number', $chats->pluck('wa_number'))
             ->pluck('wa_number')->flip();
 
