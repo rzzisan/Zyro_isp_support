@@ -6,7 +6,6 @@ use App\Filament\App\Pages\CallLogs;
 use App\Http\Controllers\Controller;
 use App\Models\CallLog;
 use App\Models\Company;
-use App\Models\SipSetting;
 use App\Support\Menu;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +17,7 @@ class CallController extends Controller
     private function allow(Request $request, Company $company): void
     {
         abort_unless(Menu::allows($request->user(), $company, 'calls'), 403);
-        abort_unless(SipSetting::where('company_id', $company->id)->exists(), 404, __('হটলাইন সেট করা নেই'));
+        abort_unless(CallLog::enabledFor($company->id), 404, __('হটলাইন সেট করা নেই'));
     }
 
     public static function row(CallLog $c): array
@@ -30,6 +29,7 @@ class CallController extends Controller
             'caller' => $c->caller_normalized ? '0'.substr($c->caller_normalized, 3) : $c->caller,
             'started_at' => $c->started_at?->toIso8601String(),
             'ended_at' => $c->ended_at?->toIso8601String(),
+            'channel' => $c->channel ?? 'hotline',
             'ringing' => $c->status === 'ringing',
             'bot_answered' => (bool) $c->bot_answered,
             'bot_seconds' => $c->bot_seconds === null ? null : (int) $c->bot_seconds,

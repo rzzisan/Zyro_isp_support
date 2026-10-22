@@ -5,7 +5,6 @@ namespace App\Filament\App\Pages;
 use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Models\BillingCustomer;
 use App\Models\CallLog;
-use App\Models\SipSetting;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -14,12 +13,13 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Every hotline call the company's SIP extension saw ringing; the ones the voice bot answered (engine/voice_bot.py)
+ * Every hotline call the company's SIP extension saw ringing and every WhatsApp call (channel whatsapp); the ones the voice bot answered (engine/voice_bot.py)
  * have the recording (both sides), the transcript and, when the bot promised it, why an agent should call back.
  */
 class CallLogs extends Page implements HasTable
@@ -37,7 +37,7 @@ class CallLogs extends Page implements HasTable
 
     public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
     {
-        return __('হটলাইন কল লগ');
+        return __('কল লগ');
     }
 
     protected static ?string $slug = 'calls';
@@ -60,7 +60,7 @@ class CallLogs extends Page implements HasTable
     {
         $company = Filament::getTenant();
 
-        return \App\Support\Menu::can('calls') && $company && SipSetting::where('company_id', $company->getKey())->exists();
+        return \App\Support\Menu::can('calls') && $company && CallLog::enabledFor($company->getKey());
     }
 
     public function table(Table $table): Table
@@ -74,6 +74,9 @@ class CallLogs extends Page implements HasTable
             ->columns([
                 TextColumn::make('started_at')->label(__('সময়'))
                     ->formatStateUsing(fn ($state) => $state->timezone('Asia/Dhaka')->format('d M, g:i A')),
+                TextColumn::make('channel')->label(__('লাইন'))->badge()
+                    ->formatStateUsing(fn ($state) => $state === 'whatsapp' ? 'WhatsApp' : __('হটলাইন'))
+                    ->color(fn ($state) => $state === 'whatsapp' ? 'success' : 'gray'),
                 TextColumn::make('caller')->label(__('নম্বর'))->searchable()
                     ->formatStateUsing(fn ($state, CallLog $record) => $record->caller_normalized ? '0'.substr($record->caller_normalized, 3) : $state),
                 TextColumn::make('customer')->label(__('কাস্টমার'))->state(function (CallLog $record) {
@@ -95,6 +98,8 @@ class CallLogs extends Page implements HasTable
                 TextColumn::make('callback_reason')->label(__('কল ব্যাক'))->wrap()->color('warning')->limit(80),
             ])
             ->filters([
+                SelectFilter::make('channel')->label(__('লাইন'))
+                    ->options(['hotline' => __('হটলাইন'), 'whatsapp' => 'WhatsApp']),
                 TernaryFilter::make('bot_answered')->label(__('বট ধরেছে')),
                 TernaryFilter::make('callback')->label(__('কল ব্যাক লাগবে'))
                     ->queries(true: fn (Builder $q) => $q->whereNotNull('callback_reason'), false: fn (Builder $q) => $q->whereNull('callback_reason')),

@@ -5,6 +5,10 @@ here over AudioSocket and goes to Gemini Live, which listens and speaks Bangla. 
 due, line) is fetched while it rings. Both sides are recorded (MP3 in the panel's storage) with the transcript in
 call_logs, shown on the panel's কল লগ page.
 
+WhatsApp calls (Meta Calling API over SIP, TLS 5061 + DTLS-SRTP) land on the same Asterisk as endpoint "meta-wa" in
+context zyro-wa, which asks GET /mode?wa=<business number>; the company's WhatsApp number settings (calling_mode
+off/test/live, calling_test_numbers, calling_bot_delay) decide, and the same bot answers. call_logs.channel = whatsapp.
+
 AudioSocket: frames of [type:1][length:2 BE][payload]; 0x01 = call UUID, 0x10 = 8 kHz 16-bit mono PCM, 0x00 = hangup.
 Gemini Live takes 16 kHz PCM in and sends 24 kHz PCM out.
 """
@@ -14,6 +18,7 @@ import base64
 import json
 import logging
 import os
+import re
 import socket
 import subprocess
 import time
@@ -38,6 +43,14 @@ DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
 MAX_CALL = 600          # seconds
 FRAME = 320             # 20 ms of 8 kHz 16-bit audio
 PJSIP_FILE = os.path.join(STATE_DIR, "pjsip_zyro.conf")
+# WhatsApp calls: codecs offered to Meta (opus only when Asterisk has codec_opus; Meta takes G.711 since 2026-03)
+WA_CODECS = os.environ.get("WA_SIP_CODECS", "ulaw,alaw")
+# Meta's networks (AS32934); only INVITEs from these reach endpoint meta-wa
+META_NETS = os.environ.get("WA_SIP_NETS", ",".join([
+    "31.13.24.0/21", "31.13.64.0/18", "45.64.40.0/22", "57.141.0.0/16", "57.144.0.0/14", "66.220.144.0/20",
+    "69.63.176.0/20", "69.171.224.0/19", "74.119.76.0/22", "102.132.96.0/20", "103.4.96.0/22", "129.134.0.0/16",
+    "147.75.208.0/20", "157.240.0.0/16", "163.70.128.0/17", "163.77.128.0/17", "173.252.64.0/18", "179.60.192.0/22",
+    "185.60.216.0/22", "185.89.216.0/22", "204.15.20.0/22"])).split(",")
 
 pool = ThreadPoolExecutor(max_workers=8)
 
@@ -187,8 +200,30 @@ endpoint={c}
     return "".join(out)
 
 
+def wa_config() -> str:
+    """Endpoint for Meta's WhatsApp calls (transport-tls is in deploy/asterisk/pjsip.conf), only while some company
+    takes them. Meta calls in from its own networks; the dialplan asks /mode which company the dialed number is."""
+    if not db.one("select 1 as x from wa_accounts where calling_mode in ('test', 'live') limit 1"):
+        return ""
+    return f"""
+[meta-wa]
+type=endpoint
+transport=transport-tls
+context=zyro-wa
+disallow=all
+allow={WA_CODECS}
+webrtc=yes
+direct_media=no
+force_rport=yes
+
+[meta-wa-identify]
+type=identify
+endpoint=meta-wa
+""" + "".join(f"match={n.strip()}\n" for n in META_NETS if n.strip())
+
+
 def sync_asterisk() -> None:
-    text = pjsip_config(settings_rows())
+    text = pjsip_config(settings_rows()) + wa_config()
     try:
         old = open(PJSIP_FILE).read()
     except OSError:
@@ -323,7 +358,7 @@ def create_complaint(t, caller: str, customer_id: str, problem: str, category: s
     return {"ok": True, "ticket_no": no}
 
 
-def prepare(company_id: int, caller: str, staff: dict | None = None) -> dict:
+def prepare(company_id: int, caller: str, staff: dict | None = None, channel: str = "hotline") -> dict:
     """System prompt and voice, built while the call rings (billing lookups take a few seconds)."""
     from engine import agent, customers
     t = tenant_for(company_id)
@@ -336,6 +371,8 @@ def prepare(company_id: int, caller: str, staff: dict | None = None) -> dict:
     # the WhatsApp rules without the photo rule (no photos on a call)
     prompt = (agent.system_prompt(t).replace(agent.IMAGE_RULE, "") if t
               else f"তুমি {company['name']} (একটি ISP)-এর কাস্টমার সাপোর্ট।") + VOICE_RULES
+    if channel == "whatsapp":
+        prompt = prompt.replace("এখন তুমি ফোন কলে কথা বলছ, WhatsApp-এ না।", "এখন তুমি WhatsApp কলে (ভয়েসে) কথা বলছ, লেখা মেসেজে না।")
     number = normalize(caller)
     info = "কলারের নম্বর আমাদের কোনো কাস্টমারের সাথে মেলেনি; কাস্টমার আইডি জিজ্ঞেস করে lookup_customer দিয়ে খোঁজো।"
     if t and number:
@@ -356,6 +393,22 @@ def prepare(company_id: int, caller: str, staff: dict | None = None) -> dict:
 
 
 # --- GET /mode (asked by the Asterisk dialplan on every incoming call) -------------------------
+def numbers(text) -> set[str]:
+    return {normalize(x) or x.strip() for x in (text or "").replace("\n", ",").split(",") if x.strip()}
+
+
+def start(company_id: int, caller: str, settings: dict, delay: int, channel: str = "hotline") -> str:
+    """Book the call for the AudioSocket side and start building the prompt while it rings."""
+    number = normalize(caller) or caller
+    # the company's technicians (panel → টেকনিশিয়ান, by their WhatsApp number) get the staff desk, as on WhatsApp
+    staff = db.one("select id, name, wa_number, can_switch_lines from technicians where company_id = %s and wa_number = %s and active",
+                   (company_id, number))
+    uid = str(uuid.uuid4())
+    calls[uid] = {"company_id": company_id, "caller": caller, "settings": settings, "at": time.time(), "staff": staff,
+                  "channel": channel, "prep": pool.submit(prepare, company_id, caller, staff, channel)}
+    return f"bot:{uid}:{delay}"
+
+
 def decide(ep: str, caller: str) -> str:
     if not ep.startswith("c") or not ep[1:].isdigit():
         return "ring"
@@ -363,20 +416,31 @@ def decide(ep: str, caller: str) -> str:
     if not s or s["bot_mode"] not in ("test", "live"):
         return "ring"
     number = normalize(caller) or caller
-
-    def numbers(text):
-        return {normalize(x) or x.strip() for x in (text or "").replace("\n", ",").split(",") if x.strip()}
     if number in numbers(s.get("bot_blocked_numbers")):
         return "ring"   # blocked: the bot never takes these callers, the agents' phones ring as usual
     if s["bot_mode"] == "test" and number not in numbers(s.get("bot_test_numbers")):
         return "ring"
-    # the company's technicians (panel → টেকনিশিয়ান, by their WhatsApp number) get the staff desk, as on WhatsApp
-    staff = db.one("select id, name, wa_number, can_switch_lines from technicians where company_id = %s and wa_number = %s and active",
-                   (s["company_id"], number))
-    uid = str(uuid.uuid4())
-    calls[uid] = {"company_id": s["company_id"], "caller": caller, "settings": s, "at": time.time(), "staff": staff,
-                  "prep": pool.submit(prepare, s["company_id"], caller, staff)}
-    return f"bot:{uid}:{int(s.get('bot_delay') or 20)}"
+    return start(s["company_id"], caller, s, int(s.get("bot_delay") or 20))
+
+
+def decide_wa(to: str, caller: str) -> str:
+    """A WhatsApp call to our business number `to`: "bot:..." or "busy" (calling off, or not a test number)."""
+    digits = re.sub(r"\D", "", to or "")
+    rows = db.all_rows("select company_id, display_phone_number, calling_mode, calling_test_numbers, calling_bot_delay"
+                       " from wa_accounts where calling_mode in ('test', 'live') order by id")
+    acc = next((a for a in rows if digits and re.sub(r"\D", "", a["display_phone_number"] or "") == digits), None)
+    if not acc and len(rows) == 1:
+        acc = rows[0]   # Meta's request URI may not carry the number; one number taking calls is unambiguous
+    if not acc:
+        return "busy"
+    number = normalize(caller) or caller
+    if acc["calling_mode"] == "test" and number not in numbers(acc["calling_test_numbers"]):
+        return "busy"
+    # model, length limit and blocked numbers come from the hotline bot's settings when the company has them
+    s = db.one("select * from sip_settings where company_id = %s", (acc["company_id"],)) or {}
+    if number in numbers(s.get("bot_blocked_numbers")):
+        return "busy"
+    return start(acc["company_id"], caller, s, min(int(acc["calling_bot_delay"] or 0), 25), "whatsapp")
 
 
 async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -385,14 +449,15 @@ async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         while (await reader.readline()) not in (b"\r\n", b"\n", b""):
             pass
         q = parse_qs(urlparse(line.split(" ")[1] if " " in line else "/").query)
-        ep, caller = q.get("ep", [""])[0], q.get("caller", [""])[0]
+        ep, caller, wa = q.get("ep", [""])[0], q.get("caller", [""])[0], q.get("wa", [None])[0]
         loop = asyncio.get_running_loop()
         try:
-            body = await loop.run_in_executor(pool, decide, ep, caller)
+            body = await (loop.run_in_executor(pool, decide_wa, wa, caller) if wa is not None
+                          else loop.run_in_executor(pool, decide, ep, caller))
         except Exception:
             log.exception("mode")
-            body = "ring"
-        log.info("mode %s %s -> %s", ep, caller, body.split(":")[0])
+            body = "ring" if wa is None else "busy"
+        log.info("mode %s %s -> %s", f"wa {wa}" if wa is not None else ep, caller, body.split(":")[0])
         writer.write(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n{body}".encode())
         await writer.drain()
     finally:
@@ -543,15 +608,19 @@ async def open_live(company_id: int, model: str, prep: dict):
 def save_call(call: Call, company_id: int, caller: str, model: str, key_id: int | None, error: str | None) -> None:
     """MP3 of both sides, transcript and the outcome on the call_logs row (the one the popup made, or a new one)."""
     number = normalize(caller)
-    # the popup's row for this very call: same caller, started when /mode was asked (not just the caller's latest call)
+    channel = (calls.get(call.uid) or {}).get("channel") or "hotline"
+    # the popup's row for this very call: same caller, started when /mode was asked (not just the caller's latest call);
+    # WhatsApp calls have no popup row
     rang = (calls.get(call.uid) or {}).get("at") or call.started
-    row = db.one("select id from call_logs where company_id = %s and caller = %s and not bot_answered"
+    row = db.one("select id from call_logs where company_id = %s and caller = %s and not bot_answered and channel = 'hotline'"
                  " and abs(extract(epoch from started_at) - %s) < 90"
-                 " order by abs(extract(epoch from started_at) - %s) limit 1", (company_id, caller[:80], rang, rang))
+                 " order by abs(extract(epoch from started_at) - %s) limit 1",
+                 (company_id, caller[:80], rang, rang)) if channel == "hotline" else None
     if not row:
-        row = db.execute("insert into call_logs (company_id, call_ref, caller, caller_normalized, status, started_at, created_at, updated_at)"
-                         " values (%s, %s, %s, %s, 'ended', now() - make_interval(secs => %s), now(), now()) returning id",
-                         (company_id, "bot-" + call.uid, caller[:80], number, time.time() - call.started))
+        row = db.execute("insert into call_logs (company_id, call_ref, caller, caller_normalized, status, started_at, channel, created_at, updated_at)"
+                         " values (%s, %s, %s, %s, 'ended', now() - make_interval(secs => %s), %s, now(), now()) returning id",
+                         (company_id, ("wa-" if channel == "whatsapp" else "bot-") + call.uid, caller[:80], number,
+                          time.time() - call.started, channel))
     rel = None
     n = max(len(call.caller_track), len(call.bot_track))
     if n > FRAME * 25:   # more than half a second
@@ -659,7 +728,8 @@ def load_fillers() -> None:
             continue
         path = os.path.join(STATE_DIR, f"filler-{hashlib.sha1(text.encode()).hexdigest()[:10]}.pcm")
         if not os.path.exists(path):
-            row = db.one("select company_id from sip_settings where bot_mode in ('test', 'live') order by company_id limit 1")
+            row = db.one("select company_id from sip_settings where bot_mode in ('test', 'live') union"
+                         " select company_id from wa_accounts where calling_mode in ('test', 'live') order by company_id limit 1")
             t = tenant_for(row["company_id"]) if row else None
             ogg = agent.speak(t, text) if t else None
             if not ogg:
