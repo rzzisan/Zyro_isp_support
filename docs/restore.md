@@ -10,7 +10,7 @@
 | `runs/<তারিখ_সময়>-db/` | `zyro_support.dump` (pg_dump -Fc), `globals.sql` (রোল), `manifest.json` (sha256) | প্রতি N ঘণ্টা (ডিফল্ট ৬) |
 | `runs/<তারিখ_সময়>-full/` | উপরেরগুলো + `secrets.tar.gz` (panel/.env, engine/.env, /etc/zyro-desk), `config.tar.gz` (nginx, letsencrypt, asterisk, php-fpm pool, crontab, zyro-* systemd unit, dpkg/pip তালিকা), `code.txt` (commit + লাইভের অ-commit diff), সাপ্তাহিক/মাসিক/হাতে নেওয়াগুলোয় `code.bundle` | প্রতি রাতে (ডিফল্ট ঢাকা ৩:৩০) |
 | `files/current/` | `panel/storage/app` এর হুবহু কপি (মিডিয়া, কল রেকর্ডিং, MikroTik ব্যাকআপ) | প্রতি রাতে, শুধু বদলানোগুলো যায় |
-| `files/apk/` | `panel/public/apk` | প্রতি রাতে |
+| `files/apk/` | `panel/public/apk` থেকে শুধু সর্বশেষ `zyro-desk.apk` আর `index.html` (পুরনো ভার্সনের APK যায় না) | প্রতি রাতে |
 | `files/deleted/<তারিখ>/` | রাতের sync-এ যা মুছে গেছে বা বদলেছে তার আগের কপি | ডিফল্ট ৩০ দিন থাকে |
 
 Redis, vendor, node_modules, .venv আর লগ যায় না, কারণ এগুলো নতুন করে বানানো যায়।

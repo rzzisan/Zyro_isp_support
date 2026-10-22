@@ -15,7 +15,7 @@ Drive layout (names encrypted on Drive, shown here decrypted):
   runs/2026-10-22_0330-full/  zyro_support.dump, globals.sql, secrets.tar.gz, config.tar.gz, code.txt, [code.bundle], manifest.json
   runs/2026-10-22_0930-db/    zyro_support.dump, globals.sql, manifest.json
   files/current/              mirror of panel/storage/app (media, call recordings, MikroTik backups ...)
-  files/apk/                  mirror of panel/public/apk
+  files/apk/                  panel/public/apk: only the current zyro-desk.apk and index.html (versioned builds are skipped)
   files/deleted/2026-10-22/   what the nightly sync removed or replaced, kept keep_deleted_files_days
 
   sudo -E .venv/bin/python -m engine.system_backup            # one tick (what the timer runs)
@@ -56,6 +56,7 @@ SECRETS = [APP / "panel" / ".env", APP / "engine" / ".env", Path("/etc/zyro-desk
 CONFIG = [Path("/etc/nginx"), Path("/etc/letsencrypt"), Path("/etc/asterisk"), Path("/etc/php/8.3/fpm/pool.d"),
           Path("/var/spool/cron/crontabs")]
 EXCLUDE_FILES = ["private/livewire-tmp/**", f"{DOWNLOADS}/**", "**/*.part"]
+EXCLUDE_APK = ["zyro-desk-*.apk"]                                 # old versioned builds; zyro-desk.apk is the latest one
 CHECK_TABLES = ["companies", "users", "billing_customers", "billing_customer_bills", "billing_tickets", "wa_contacts",
                 "wa_messages", "bill_collections", "onu_assignments", "mikrotik_routers"]
 GOOGLE_REVOKED = "Google Drive-এর অনুমতি বাতিল হয়েছে; /super → সিস্টেম ব্যাকআপে আবার সংযোগ দিন"
@@ -231,15 +232,18 @@ def code_part(stage: Path, bundle: bool) -> dict:
 
 def sync_files(drive: Drive, stamp: str) -> dict:
     out = {}
-    for src, dst in ((STORAGE, "files/current"), (APK, "files/apk")):
+    for src, dst, excludes in ((STORAGE, "files/current", EXCLUDE_FILES), (APK, "files/apk", EXCLUDE_APK)):
         if not src.is_dir():
             continue
         args = ["sync", str(src), f"zb:{dst}", "--backup-dir", f"zb:files/deleted/{stamp}/{dst.split('/')[-1]}",
                 "--bwlimit", drive.bwlimit, "--transfers", "2", "--fast-list"]
-        for ex in EXCLUDE_FILES:
+        for ex in excludes:
             args += ["--exclude", ex]
+        if src == APK:
+            args.append("--delete-excluded")                     # builds already on Drive move to files/deleted and expire
         drive.rc(*args)
-        files = [p for p in src.rglob("*") if p.is_file() and "livewire-tmp" not in p.parts and "system-backup-downloads" not in p.parts]
+        files = [p for p in src.rglob("*") if p.is_file() and "livewire-tmp" not in p.parts and "system-backup-downloads" not in p.parts
+                 and not (src == APK and p.name.startswith("zyro-desk-") and p.suffix == ".apk")]
         out[dst] = {"files": len(files), "bytes": sum(p.stat().st_size for p in files)}
     return out
 
