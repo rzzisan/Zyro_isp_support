@@ -124,6 +124,11 @@ class DailyBillTest extends TestCase
             ->callAction(TestAction::make('create')->table(), ['name' => 'কালেক্টর', 'permissions' => ['bills'], 'bill_view_employees' => ['5'], 'memberships' => [$m->id]])
             ->assertHasNoFormErrors();
         $this->assertSame([5], PermissionGroup::sole()->bill_view_employees);
+        // bills only from the group: the team page still offers the member's own collectors
+        $m->forceFill(['permissions' => null])->save();
+        Livewire::test(ManageMemberships::class)
+            ->mountAction(TestAction::make('edit')->table($m))
+            ->assertFormFieldVisible('bill_view_employees', 'mountedActionSchema0');
 
         // group's collectors plus their own entries
         $this->panel($this->agent);
