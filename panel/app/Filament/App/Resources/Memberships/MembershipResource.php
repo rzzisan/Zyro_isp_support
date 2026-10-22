@@ -3,13 +3,16 @@
 namespace App\Filament\App\Resources\Memberships;
 
 use App\Filament\App\Resources\Memberships\Pages\ManageMemberships;
+use App\Models\BillingDailyBill;
 use App\Models\Membership;
 use App\Models\User;
+use App\Support\Menu;
 use BackedEnum;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -19,6 +22,7 @@ use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 /** Team: who works in this company and with which role. Owner/Admin only; owners can't be removed here. */
 class MembershipResource extends Resource
@@ -48,7 +52,7 @@ class MembershipResource extends Resource
 
     public static function canAccess(): bool
     {
-        return \App\Support\Menu::can('team') && ((bool) auth()->user()?->managesCompany(Filament::getTenant()));
+        return Menu::can('team') && ((bool) auth()->user()?->managesCompany(Filament::getTenant()));
     }
 
     /** Admins may add agents/admins; only an owner may create another owner. */
@@ -84,15 +88,21 @@ class MembershipResource extends Resource
                 ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
                 ->dehydrated(fn ($state) => filled($state) && self::isOwner())
                 ->helperText(__('বদলাতে না চাইলে খালি রাখুন')),
-            \Filament\Forms\Components\CheckboxList::make('permissions')->label(__('কোন কোন মেনু দেখবেন'))->visibleOn('edit')
-                ->options(\App\Support\Menu::options())
+            Select::make('groups')->label(__('পারমিশন গ্রুপ'))->visibleOn('edit')->multiple()->preload()
+                ->visible(fn ($get) => $get('role') !== 'owner')
+                ->relationship('groups', 'name', fn (Builder $query) => $query->where('permission_groups.company_id', Filament::getTenant()->getKey()))
+                ->helperText(__('গ্রুপের সব মেনু পাবেন, সাথে নিচে নিজের টিক দেওয়া মেনুও। গ্রুপ বানাতে বা বদলাতে "পারমিশন গ্রুপ" পেজ।')),
+            CheckboxList::make('permissions')->label(__('কোন কোন মেনু দেখবেন'))->visibleOn('edit')
+                ->options(Menu::options())
                 ->columns(3)->bulkToggleable()
-                ->formatStateUsing(fn ($state, ?Membership $record) => $state ?? \App\Support\Menu::defaults($record?->role ?? 'agent'))
+                // in a group and no own list yet: the own list starts empty (the groups give the menus), else the role defaults
+                ->formatStateUsing(fn ($state, ?Membership $record) => $state ?? ($record?->groups()->exists() ? [] : Menu::defaults($record?->role ?? 'agent')))
+                ->dehydrateStateUsing(fn ($state, $get) => ! $state && filled($get('groups')) ? null : array_values((array) $state))
                 ->live()
                 ->helperText(__('ড্যাশবোর্ড আর "আমার বিলিং লগইন" সবাই দেখেন। সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin হলে কাজ করে, Agent-এর জন্য টিক দিলেও খুলবে না।')),
             Select::make('bill_view_employees')->label(__('বিল কালেকশনে কার কার নেওয়া বিল দেখবেন'))->visibleOn('edit')->multiple()
                 ->visible(fn ($get) => $get('role') === 'agent' && in_array('bills', (array) $get('permissions'), true))
-                ->options(fn () => \App\Models\BillingDailyBill::collectors(Filament::getTenant()->getKey()))
+                ->options(fn () => BillingDailyBill::collectors(Filament::getTenant()->getKey()))
                 ->formatStateUsing(fn ($state) => array_map('strval', (array) ($state ?? [])))
                 ->dehydrateStateUsing(fn ($state) => array_values(array_map('intval', (array) ($state ?? []))) ?: null)
                 ->helperText(__('বিলিং-এর Received By (যিনি টাকা নিয়েছেন)। খালি রাখলে শুধু নিজের এন্ট্রি দেওয়া বিল দেখবেন (ওপরের বিলিং ইউজারনেম মিলিয়ে)। Owner/Admin সবার বিল দেখেন।')),
@@ -107,11 +117,12 @@ class MembershipResource extends Resource
                 TextColumn::make('user.email')->label(__('ইমেইল'))->searchable(),
                 TextColumn::make('role')->label(__('রোল'))->badge()
                     ->formatStateUsing(fn ($state) => Membership::ROLES[$state] ?? $state),
+                TextColumn::make('groups.name')->label(__('পারমিশন গ্রুপ'))->badge()->placeholder('-'),
                 TextColumn::make('menus')->label(__('মেনু'))
                     ->state(fn (Membership $r) => $r->role === 'owner' ? __('সব')
-                        : count($r->permissions ?? \App\Support\Menu::defaults($r->role)).'/'.count(\App\Support\Menu::ITEMS).($r->permissions === null ? __(' (ডিফল্ট)') : ''))
-                    ->tooltip(fn (Membership $r) => collect($r->role === 'owner' ? array_keys(\App\Support\Menu::ITEMS) : ($r->permissions ?? \App\Support\Menu::defaults($r->role)))
-                        ->map(fn ($k) => \App\Support\Menu::ITEMS[$k][0] ?? $k)->join(', ')),
+                        : count(Menu::keys($r)).'/'.count(Menu::ITEMS).($r->permissions === null && $r->groups->isEmpty() ? __(' (ডিফল্ট)') : ''))
+                    ->tooltip(fn (Membership $r) => collect($r->role === 'owner' ? array_keys(Menu::ITEMS) : Menu::keys($r))
+                        ->map(fn ($k) => Menu::ITEMS[$k][0] ?? $k)->join(', ')),
                 TextColumn::make('billing')->label(__('বিলিং লগইন'))->badge()
                     ->state(fn (Membership $r) => $r->hasBillingLogin() ? ($r->billing_check_ok === false ? __('ভুল') : $r->billing_username) : __('দেওয়া নেই'))
                     ->color(fn (Membership $r) => $r->hasBillingLogin() ? ($r->billing_check_ok === false ? 'danger' : 'success') : 'gray'),
@@ -158,9 +169,9 @@ class MembershipResource extends Resource
     }
 
     /** Explicit company scope in addition to Filament tenancy: a record of another company is never listed or editable. */
-    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->where('company_id', Filament::getTenant()?->getKey() ?? 0);
+        return parent::getEloquentQuery()->where('company_id', Filament::getTenant()?->getKey() ?? 0)->with('groups');
     }
 
     public static function getPages(): array

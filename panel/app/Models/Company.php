@@ -76,6 +76,11 @@ class Company extends Model
         return $this->hasMany(Membership::class);
     }
 
+    public function permissionGroups(): HasMany
+    {
+        return $this->hasMany(PermissionGroup::class);
+    }
+
     public function aiKeys(): HasMany
     {
         return $this->hasMany(AiKey::class);

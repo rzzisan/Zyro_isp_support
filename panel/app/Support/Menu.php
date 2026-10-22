@@ -9,7 +9,8 @@ use Filament\Facades\Filament;
 
 /**
  * Per-member menu permissions. The owner always sees everything. Others see their own list
- * (company_user.permissions) or, when none is set, the defaults of their role.
+ * (company_user.permissions) plus the menus of every permission group they are in. With no own list set, a member
+ * in no group gets the defaults of their role; a member in a group gets only the groups' menus.
  * Settings menus additionally need the owner/admin role, so ticking them for an agent has no effect.
  */
 class Menu
@@ -66,7 +67,16 @@ class Menu
             return false;
         }
 
-        return in_array($key, $m->permissions ?? self::defaults($m->role), true);
+        return in_array($key, self::keys($m), true);
+    }
+
+    /** The menus a member's own list and groups give (before the owner/admin rules of allows()). */
+    public static function keys(Membership $m): array
+    {
+        $groups = ($m->relationLoaded('groups') ? $m->groups : $m->groups()->get())->pluck('permissions')->flatten()->all();
+        $own = $m->permissions ?? ($groups ? [] : self::defaults($m->role));
+
+        return array_values(array_intersect(array_keys(self::ITEMS), [...$own, ...$groups]));
     }
 
     /** For canAccess() of a page/resource in the company panel. */
