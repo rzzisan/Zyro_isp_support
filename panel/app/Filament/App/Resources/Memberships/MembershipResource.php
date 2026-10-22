@@ -88,7 +88,7 @@ class MembershipResource extends Resource
                 ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
                 ->dehydrated(fn ($state) => filled($state) && self::isOwner())
                 ->helperText(__('বদলাতে না চাইলে খালি রাখুন')),
-            Select::make('groups')->label(__('পারমিশন গ্রুপ'))->visibleOn('edit')->multiple()->preload()
+            Select::make('groups')->label(__('পারমিশন গ্রুপ'))->visibleOn('edit')->multiple()->preload()->live()
                 ->visible(fn ($get) => $get('role') !== 'owner')
                 ->relationship('groups', 'name', fn (Builder $query) => $query->where('permission_groups.company_id', Filament::getTenant()->getKey()))
                 ->helperText(__('গ্রুপের সব মেনু পাবেন, সাথে নিচে নিজের টিক দেওয়া মেনুও। গ্রুপ বানাতে বা বদলাতে "পারমিশন গ্রুপ" পেজ।')),
@@ -101,7 +101,8 @@ class MembershipResource extends Resource
                 ->live()
                 ->helperText(__('ড্যাশবোর্ড আর "আমার বিলিং লগইন" সবাই দেখেন। সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin হলে কাজ করে, Agent-এর জন্য টিক দিলেও খুলবে না।')),
             Select::make('bill_view_employees')->label(__('বিল কালেকশনে কার কার নেওয়া বিল দেখবেন'))->visibleOn('edit')->multiple()
-                ->visible(fn ($get) => $get('role') === 'agent' && in_array('bills', (array) $get('permissions'), true))
+                ->visible(fn ($get) => $get('role') === 'agent' && (in_array('bills', (array) $get('permissions'), true)
+                    || \App\Models\PermissionGroup::whereIn('id', (array) $get('groups'))->pluck('permissions')->flatten()->contains('bills')))
                 ->options(fn () => BillingDailyBill::collectors(Filament::getTenant()->getKey()))
                 ->formatStateUsing(fn ($state) => array_map('strval', (array) ($state ?? [])))
                 ->dehydrateStateUsing(fn ($state) => array_values(array_map('intval', (array) ($state ?? []))) ?: null)
