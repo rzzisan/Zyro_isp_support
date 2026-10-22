@@ -228,3 +228,11 @@ Route::get('/calls/{company:slug}/recording/{call}', function (\App\Models\Compa
 
     return response()->file($path, ['Content-Type' => 'audio/mpeg', 'Cache-Control' => 'private, max-age=3600']);
 })->middleware('web')->name('calls.recording');
+
+// whole-Desk backups (super admin): Google Drive sign-in, the recovery sheet, a prepared (decrypted) backup download
+Route::middleware('web')->prefix('system-backup')->group(function () {
+    Route::get('/google/connect', [\App\Http\Controllers\SystemBackupController::class, 'connect'])->name('system-backup.connect');
+    Route::get('/google/callback', [\App\Http\Controllers\SystemBackupController::class, 'callback'])->name('system-backup.callback');
+    Route::get('/recovery.txt', [\App\Http\Controllers\SystemBackupController::class, 'recovery'])->name('system-backup.recovery');
+    Route::get('/download/{backup}', [\App\Http\Controllers\SystemBackupController::class, 'download'])->name('system-backup.download');
+});

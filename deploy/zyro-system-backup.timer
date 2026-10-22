@@ -1,0 +1,10 @@
+[Unit]
+Description=Zyro Desk system backup: every minute picks up a panel request or a scheduled run (schedule set on /super)
+
+[Timer]
+OnCalendar=*-*-* *:*:30
+AccuracySec=5s
+Unit=zyro-system-backup.service
+
+[Install]
+WantedBy=timers.target
