@@ -6,7 +6,9 @@ the one who last worked the customer's box, else the same sub zone, else the sam
 in its area. With field teams (staff_teams) the picked person's whole team gets it, and check_team() refuses any
 assign that mixes two teams. Names are mapped to billing employees (billing_options kind 'employees'); only field staff (in a field team or linked
 to a Desk technician) get tickets, and employees inactive in billing or on the company's exclude list are skipped (Desk technicians' on/off is about WhatsApp, not work, so it is not used). Staff picked by hand always stay: callers only ask here
-when none was given. Switch: bot_settings.auto_assign.
+when none was given. Switch: bot_settings.auto_assign. Only the categories in auto_assign_area_categories go by area;
+auto_assign_category_staff gives other categories fixed staff ([{category_id, employees}]); any other category is left
+for a person to assign.
 
     python -m engine.ticket_autoassign <company_id> <customer_id>   # shows whom a new ticket would go to
 """
@@ -24,10 +26,6 @@ _SPACE = r"regexp_replace(btrim(COALESCE({}, '')), '\s+', ' ', 'g')"
 
 def _norm(s) -> str:
     return " ".join(str(s or "").split()).lower()
-
-
-def enabled(t) -> bool:
-    return bool((t.bot or {}).get("auto_assign", True))
 
 
 def refresh(company_id: int) -> int:
@@ -152,11 +150,52 @@ def pick(company_id: int, header_id=None, customer: dict | None = None) -> dict 
     return None
 
 
-def assign(t, api, complain_id, header_id=None, customer: dict | None = None) -> dict | None:
-    """Assign an open ticket that has no staff yet; returns the pick (None when nothing fitted or it is switched off)."""
-    if not complain_id or not enabled(t):
+def _settings(company_id: int) -> dict:
+    """Read each time (not the tenant's cached copy), so a change in the desk counts from the next ticket."""
+    return db.one("""SELECT auto_assign, auto_assign_area_categories, auto_assign_category_staff FROM bot_settings
+                     WHERE company_id = %s""", (company_id,)) or {}
+
+
+def _category(company_id: int, category_id=None, category_name=None) -> str | None:
+    if category_id not in (None, "", 0, "0"):
+        return str(category_id)
+    if not category_name:
         return None
-    p = pick(t.company_id, header_id, customer)
+    row = db.one("""SELECT option_id FROM billing_options WHERE company_id = %s AND kind = 'categories'
+                    AND lower(btrim(name)) = %s ORDER BY active DESC LIMIT 1""", (company_id, _norm(category_name)))
+    return str(row["option_id"]) if row else None
+
+
+def choose(company_id: int, header_id=None, customer: dict | None = None, category_id=None,
+           category_name=None) -> dict | None:
+    """Whom a new ticket of this category goes to: the category's fixed staff, else (area categories only) the area's
+    last staff, else nobody."""
+    s = _settings(company_id)
+    if not s.get("auto_assign", True):
+        return None
+    cat = _category(company_id, category_id, category_name)
+    if not cat:
+        return None
+    rule = next((r for r in (s.get("auto_assign_category_staff") or [])
+                 if str(r.get("category_id")) == cat and r.get("employees")), None)
+    if rule:
+        active = {str(r["option_id"]): r["name"] for r in db.all_rows(
+            "SELECT option_id, name FROM billing_options WHERE company_id = %s AND kind = 'employees' AND active",
+            (company_id,))}
+        ids = [str(e) for e in rule["employees"] if str(e) in active]
+        return {"employees": ids, "names": [active[i] for i in ids], "level": "category", "pinned": False,
+                "from_ticket": None} if ids else None
+    if cat in {str(c) for c in (s.get("auto_assign_area_categories") or [])}:
+        return pick(company_id, header_id, customer)
+    return None
+
+
+def assign(t, api, complain_id, header_id=None, customer: dict | None = None, category_id=None,
+           category_name=None) -> dict | None:
+    """Assign an open ticket that has no staff yet; returns the pick (None when nothing fitted or it is switched off)."""
+    if not complain_id:
+        return None
+    p = choose(t.company_id, header_id, customer, category_id, category_name)
     if not p:
         return None
     api.assign_ticket(int(complain_id), [int(e) for e in p["employees"]])
@@ -166,7 +205,10 @@ def assign(t, api, complain_id, header_id=None, customer: dict | None = None) ->
 
 
 def label(p: dict | None) -> str:
-    return f"{', '.join(p['names'])} (একই {LEVEL_BN[p['level']]})" if p else ""
+    if not p:
+        return ""
+    why = "ক্যাটাগরি অনুযায়ী" if p["level"] == "category" else f"একই {LEVEL_BN[p['level']]}"
+    return f"{', '.join(p['names'])} ({why})"
 
 
 def main() -> None:

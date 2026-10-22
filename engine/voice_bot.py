@@ -317,7 +317,7 @@ def create_complaint(t, caller: str, customer_id: str, problem: str, category: s
     no = created[0].get("ComplainId") if created else None
     try:
         from engine.ticket_autoassign import assign
-        assign(t, api, no, row.get("CustomerHeaderId"), row)
+        assign(t, api, no, row.get("CustomerHeaderId"), row, category_id=cid)
     except Exception:
         log.exception("ticket %s auto-assign failed", no)
     return {"ok": True, "ticket_no": no}

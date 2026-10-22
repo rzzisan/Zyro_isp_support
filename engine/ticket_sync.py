@@ -110,8 +110,8 @@ def fill_descriptions(api, company_id: int) -> int:
 def auto_assign_new(t, api, new_rows: list[dict]) -> list[str]:
     """Tickets opened straight in the billing software (first seen now, a short while old) with nobody on them yet get
     the staff who last worked in the customer's area (engine/ticket_autoassign.py). Returns the ticket numbers."""
-    from engine.ticket_autoassign import assign, enabled, refresh
-    if not new_rows or not enabled(t):
+    from engine.ticket_autoassign import assign, refresh
+    if not new_rows:
         return []
     refresh(t.company_id)
     done = []
@@ -122,7 +122,8 @@ def auto_assign_new(t, api, new_rows: list[dict]) -> list[str]:
             continue
         cid = str(r.get("ComplainId"))
         try:
-            p = assign(t, api, cid, r.get("CustomerHeaderId"))
+            p = assign(t, api, cid, r.get("CustomerHeaderId"), category_id=r.get("ProblemCategoryId"),
+                       category_name=r.get("Problem"))
         except Exception:
             log.exception("auto-assign failed for ticket %s", cid)
             continue

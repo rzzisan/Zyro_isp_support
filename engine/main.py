@@ -475,7 +475,7 @@ def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str
         staff = ""
         try:
             from engine.ticket_autoassign import assign, label
-            staff = label(assign(t, api, no, customer.get("CustomerHeaderId"), customer))
+            staff = label(assign(t, api, no, customer.get("CustomerHeaderId"), customer, category_id=cid))
         except Exception:
             log.exception("ticket %s auto-assign failed", no)
         return (f"{note} → টিকেট খোলা হয়েছে #{no or '?'}" + (f", দায়িত্বে {staff}" if staff else ""),
@@ -752,7 +752,7 @@ async def new_ticket(request: Request, company_id: int, background: BackgroundTa
         elif complain_id:  # no staff picked: the one who last worked in the customer's area
             try:
                 from engine.ticket_autoassign import assign, label
-                auto = label(assign(t, api, complain_id, b["header_id"]))
+                auto = label(assign(t, api, complain_id, b["header_id"], category_id=b["category_id"]))
             except Exception:
                 log.exception("ticket %s auto-assign failed", complain_id)
         return {"message": msg, "complain_id": complain_id, "auto_assigned": auto or None}
