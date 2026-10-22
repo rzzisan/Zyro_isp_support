@@ -316,6 +316,7 @@ data class Chat(
     @Json(name = "header_id") val headerId: Long? = null,           // the billing line this chat is about (details only)
     @Json(name = "line_customer_id") val lineCustomerId: String? = null,
     val sending: Boolean = true,
+    @Json(name = "can_delete") val canDelete: Boolean = false,      // owner: may delete sent messages (details only)
 )
 
 data class ChatList(val data: List<Chat> = emptyList(), @Json(name = "waiting_count") val waitingCount: Int = 0)

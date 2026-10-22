@@ -280,7 +280,18 @@ fun ChatScreen(company: String, chatId: Long, navController: NavHostController? 
                 contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(messages, key = { _, m -> m.id }) { i, m ->
                     if (i == 0 || !Format.sameDay(messages[i - 1].at, m.at)) DayHeading(Format.dayLabel(m.at, s.today, s.yesterday))
-                    Bubble(m, company, s, player)
+                    Bubble(m, company, s, player, canDelete = c.canDelete && m.direction != "in",
+                        onDelete = {
+                            scope.launch {
+                                try {
+                                    ApiClient.service.deleteMessage(company, c.id, m.id)
+                                    messages.removeAll { it.id == m.id }
+                                    Toast.makeText(context, s.messageDeleted, Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    notice = ApiClient.errorMessage(e, s.loadFailed, s.offline)
+                                }
+                            }
+                        })
                 }
             }
             if (!atBottom && messages.isNotEmpty()) {
@@ -453,35 +464,57 @@ private fun Ticks(status: String?) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Bubble(m: ChatMessage, company: String, s: AppStrings, player: ChatPlayer) {
+private fun Bubble(m: ChatMessage, company: String, s: AppStrings, player: ChatPlayer, canDelete: Boolean = false,
+    onDelete: () -> Unit = {}) {
     val mine = m.direction != "in"
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val text = m.body?.takeIf { it.isNotBlank() }
+    var menu by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
-        Column(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(12.dp))
-            .background(if (mine) PrimarySoft else Surface)
-            .border(1.dp, if (mine) PrimarySoft else Line, RoundedCornerShape(12.dp))
-            .combinedClickable(onClick = {}, onLongClick = {
-                m.body?.takeIf { it.isNotBlank() }?.let {
-                    clipboard.setText(AnnotatedString(it))
-                    Toast.makeText(context, s.copied, Toast.LENGTH_SHORT).show()
+        Box {
+            Column(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(12.dp))
+                .background(if (mine) PrimarySoft else Surface)
+                .border(1.dp, if (mine) PrimarySoft else Line, RoundedCornerShape(12.dp))
+                .combinedClickable(onClick = {}, onLongClick = {
+                    // the owner gets copy + delete; everyone else long-presses to copy, as before
+                    if (canDelete) menu = true
+                    else text?.let {
+                        clipboard.setText(AnnotatedString(it))
+                        Toast.makeText(context, s.copied, Toast.LENGTH_SHORT).show()
+                    }
+                })
+                .padding(horizontal = 12.dp, vertical = 8.dp)) {
+                if (mine) {
+                    Text(if (m.sender == "bot") s.senderBot else (m.user ?: ""), fontSize = 11.sp, color = PrimaryStrong,
+                        fontWeight = FontWeight.SemiBold)
                 }
-            })
-            .padding(horizontal = 12.dp, vertical = 8.dp)) {
-            if (mine) {
-                Text(if (m.sender == "bot") s.senderBot else (m.user ?: ""), fontSize = 11.sp, color = PrimaryStrong,
-                    fontWeight = FontWeight.SemiBold)
+                if (m.hasMedia) MediaPart(m, company, s, player)
+                m.body?.takeIf { it.isNotBlank() && !(m.type == "document" && m.hasMedia) }?.let {
+                    Text(it, fontSize = 15.sp, color = Ink, lineHeight = 20.sp)
+                }
+                Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                    if (m.status == "test") Text("TEST  ", fontSize = 10.sp, color = Warn, fontWeight = FontWeight.SemiBold)
+                    Text(Format.time(m.at), fontSize = 10.sp, color = Muted)
+                    if (mine) Ticks(m.status)
+                }
             }
-            if (m.hasMedia) MediaPart(m, company, s, player)
-            m.body?.takeIf { it.isNotBlank() && !(m.type == "document" && m.hasMedia) }?.let {
-                Text(it, fontSize = 15.sp, color = Ink, lineHeight = 20.sp)
-            }
-            Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                if (m.status == "test") Text("TEST  ", fontSize = 10.sp, color = Warn, fontWeight = FontWeight.SemiBold)
-                Text(Format.time(m.at), fontSize = 10.sp, color = Muted)
-                if (mine) Ticks(m.status)
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface)) {
+                if (text != null) DropdownMenuItem(text = { Text(s.copyText) }, onClick = {
+                    menu = false
+                    clipboard.setText(AnnotatedString(text))
+                    Toast.makeText(context, s.copied, Toast.LENGTH_SHORT).show()
+                })
+                DropdownMenuItem(text = { Text(s.deleteMessage, color = Danger) }, onClick = { menu = false; confirm = true })
             }
         }
+    }
+    if (confirm) {
+        AlertDialog(onDismissRequest = { confirm = false }, containerColor = Surface,
+            text = { Text(s.deleteMessageAsk, fontSize = 15.sp, color = Ink) },
+            confirmButton = { TextButton(onClick = { confirm = false; onDelete() }) { Text(s.deleteMessage, color = Danger) } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(s.cancel) } })
     }
 }
 

@@ -81,6 +81,8 @@
 .zi-tick.read { color: #0ea5e9; }
 .zi-tick.bad { color: #ef4444; letter-spacing: 0; }
 .zi-note { font-size: .76rem; margin-top: 4px; color: #b45309; }
+.zi-del { border: 0; background: none; padding: 0 2px; margin-left: 4px; font-size: .75rem; cursor: pointer; opacity: .35; }
+.zi-row:hover .zi-del, .zi-del:focus { opacity: 1; }
 .zi-use { border: 0; background: var(--z-accent); color: #fff; font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; cursor: pointer; }
 .zi-placeholder { margin: auto; text-align: center; color: var(--z-muted); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 30px; }
 .zi-placeholder.small { font-size: .85rem; }
