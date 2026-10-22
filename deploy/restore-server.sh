@@ -41,7 +41,7 @@ client_id = $CID
 client_secret = $CSECRET
 scope = drive.file
 root_folder_id = $FOLDER
-token = {"access_token":"","token_type":"Bearer","refresh_token":"$RTOKEN","expiry":"2000-01-01T00:00:00Z"}
+token = {"access_token":"expired","token_type":"Bearer","refresh_token":"$RTOKEN","expiry":"2000-01-01T00:00:00Z"}
 
 [zb]
 type = crypt
