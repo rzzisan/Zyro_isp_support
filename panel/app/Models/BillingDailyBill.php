@@ -32,8 +32,8 @@ class BillingDailyBill extends Model
     }
 
     /**
-     * Rows a member may see: owner/admin everything; an agent the collectors picked on the team page
-     * (billing employee ids) plus the bills they entered themselves with their own billing username.
+     * Rows a member may see: owner/admin everything; an agent the collectors picked on the team page and in their
+     * permission groups (billing employee ids) plus the bills they entered themselves with their own billing username.
      */
     public static function scopeVisibleTo(Builder $query, ?Membership $m): Builder
     {
@@ -43,7 +43,8 @@ class BillingDailyBill extends Model
         if (in_array($m->role, ['owner', 'admin'], true)) {
             return $query;
         }
-        $employees = array_map('intval', $m->bill_view_employees ?? []);
+        $groups = $m->groups()->pluck('bill_view_employees')->flatten()->all();
+        $employees = array_values(array_unique(array_map('intval', [...($m->bill_view_employees ?? []), ...$groups])));
         $own = trim((string) $m->billing_username);
 
         return $query->where(function (Builder $w) use ($employees, $own) {

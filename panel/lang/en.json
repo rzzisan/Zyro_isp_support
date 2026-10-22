@@ -1375,5 +1375,6 @@
     "গ্রুপের সব মেনু পাবেন, সাথে নিচে নিজের টিক দেওয়া মেনুও। গ্রুপ বানাতে বা বদলাতে \"পারমিশন গ্রুপ\" পেজ।": "Gets every menu of the groups, plus the menus ticked below. Create or change groups on the \"Permission groups\" page.",
     "পারমিশন গ্রুপ": "Permission groups",
     "যেমন টেকনিশিয়ান, অফিস স্টাফ": "e.g. Technicians, Office staff",
-    "সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin সদস্যের জন্য কাজ করে।": "Settings menus (WhatsApp, Billing connection, MikroTik, Bot, AI key, Team, Technicians) only work for Admin members."
+    "সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin সদস্যের জন্য কাজ করে।": "Settings menus (WhatsApp, Billing connection, MikroTik, Bot, AI key, Team, Technicians) only work for Admin members.",
+    "বিলিং-এর Received By (যিনি টাকা নিয়েছেন)। গ্রুপের Agent সদস্যরা এঁদের নেওয়া বিল দেখবেন, সাথে নিজের এন্ট্রি দেওয়া বিল আর টিম পেজে তাঁর জন্য বাছা কর্মীদের বিল। Owner/Admin সবার বিল দেখেন।": "Billing's Received By (who took the money). Agent members of the group see bills taken by these people, plus bills they entered themselves and the collectors picked for them on the team page. Owners/Admins see every bill."
 }

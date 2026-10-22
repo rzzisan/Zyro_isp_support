@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\PermissionGroups;
 
 use App\Filament\App\Resources\PermissionGroups\Pages\ManagePermissionGroups;
+use App\Models\BillingDailyBill;
 use App\Models\Membership;
 use App\Models\PermissionGroup;
 use App\Support\Menu;
@@ -61,8 +62,14 @@ class PermissionGroupResource extends Resource
             TextInput::make('name')->label(__('গ্রুপের নাম'))->required()->maxLength(100)->placeholder(__('যেমন টেকনিশিয়ান, অফিস স্টাফ'))
                 ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule) => $rule->where('company_id', Filament::getTenant()->getKey())),
             CheckboxList::make('permissions')->label(__('এই গ্রুপের সদস্যরা কোন কোন মেনু দেখবেন'))
-                ->options(Menu::options())->columns(3)->bulkToggleable()->default([])
+                ->options(Menu::options())->columns(3)->bulkToggleable()->default([])->live()
                 ->helperText(__('সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin সদস্যের জন্য কাজ করে।')),
+            Select::make('bill_view_employees')->label(__('বিল কালেকশনে কার কার নেওয়া বিল দেখবেন'))->multiple()
+                ->visible(fn ($get) => in_array('bills', (array) $get('permissions'), true))
+                ->options(fn () => BillingDailyBill::collectors(Filament::getTenant()->getKey()))
+                ->formatStateUsing(fn ($state) => array_map('strval', (array) ($state ?? [])))
+                ->dehydrateStateUsing(fn ($state) => array_values(array_map('intval', (array) ($state ?? []))) ?: null)
+                ->helperText(__('বিলিং-এর Received By (যিনি টাকা নিয়েছেন)। গ্রুপের Agent সদস্যরা এঁদের নেওয়া বিল দেখবেন, সাথে নিজের এন্ট্রি দেওয়া বিল আর টিম পেজে তাঁর জন্য বাছা কর্মীদের বিল। Owner/Admin সবার বিল দেখেন।')),
             Select::make('memberships')->label(__('সদস্য'))->multiple()->preload()->searchable()
                 ->relationship('memberships', 'id', fn (Builder $query) => $query->where('company_user.company_id', Filament::getTenant()->getKey())
                     ->where('company_user.role', '!=', 'owner')->with('user'))
