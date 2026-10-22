@@ -11,10 +11,13 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
@@ -23,7 +26,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Throwable;
 
-/** The company's WhatsApp business number(s): Meta ids, access token, bot on/off. Owner/Admin only. */
+/** The company's WhatsApp business number(s): Meta ids, access token, bot on/off, WhatsApp calls. Owner/Admin only. */
 class WaAccountResource extends Resource
 {
     use \App\Filament\App\Concerns\QuickAccessible;
@@ -70,6 +73,16 @@ class WaAccountResource extends Resource
             TextInput::make('utility_rate')->label(__('Utility মেসেজের রেট'))->numeric()->minValue(0)->suffix(__('টাকা'))
                 ->helperText(__('শুধু "WhatsApp পাঠান"-এ আনুমানিক খরচ দেখাতে; Meta কার্ডে আসল চার্জ করে')),
             TextInput::make('marketing_rate')->label(__('Marketing মেসেজের রেট'))->numeric()->minValue(0)->suffix(__('টাকা')),
+            Section::make(__('WhatsApp কল'))->collapsible()
+                ->description(__('কাস্টমার WhatsApp-এ কল করলে বট ধরে (হটলাইনের ভয়েস বটের মতো), রেকর্ড আর কল লগে থাকে। Meta-তে কলিং চালু থাকতে হবে।'))
+                ->schema([
+                    Select::make('calling_mode')->label(__('কল ধরবে'))->default('off')->selectablePlaceholder(false)
+                        ->options(['off' => __('বন্ধ (কলারকে ব্যস্ত দেখাবে)'), 'test' => __('শুধু টেস্ট নম্বরের কল'), 'live' => __('সব কল')]),
+                    Textarea::make('calling_test_numbers')->label(__('টেস্ট নম্বর'))->rows(2)
+                        ->helperText(__('কমা বা নতুন লাইনে, যেমন 01711000000')),
+                    TextInput::make('calling_bot_delay')->label(__('কত সেকেন্ড বাজার পর বট ধরবে'))->numeric()
+                        ->minValue(0)->maxValue(25)->default(3)->suffix(__('সেকেন্ড')),
+                ]),
         ]);
     }
 
@@ -82,6 +95,9 @@ class WaAccountResource extends Resource
                 TextColumn::make('phone_number_id')->label('Phone number ID')->copyable(),
                 TextColumn::make('waba_id')->label('WABA ID')->copyable(),
                 IconColumn::make('bot_enabled')->label(__('বট'))->boolean(),
+                TextColumn::make('calling_mode')->label(__('কল'))->badge()
+                    ->formatStateUsing(fn ($state) => ['off' => __('বন্ধ'), 'test' => __('টেস্ট'), 'live' => __('চালু')][$state] ?? $state)
+                    ->color(fn ($state) => $state === 'live' ? 'success' : ($state === 'test' ? 'warning' : 'gray')),
                 TextColumn::make('updated_at')->label(__('শেষ বদল'))->since(),
             ])
             ->headerActions([CreateAction::make()->label(__('নম্বর যোগ করুন'))

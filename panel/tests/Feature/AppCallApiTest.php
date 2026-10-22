@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\Membership;
 use App\Models\SipSetting;
 use App\Models\User;
+use App\Models\WaAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -59,6 +60,17 @@ class AppCallApiTest extends TestCase
 
         Membership::where('user_id', $this->agent->id)->update(['permissions' => json_encode(['customers'])]);
         $this->api()->getJson($this->url('calls'))->assertForbidden();
+    }
+
+    public function test_whatsapp_calls_open_the_call_log_without_a_hotline(): void
+    {
+        $wa = WaAccount::create(['company_id' => $this->company->id, 'waba_id' => '1', 'phone_number_id' => '2', 'access_token' => 'x']);
+        $this->api()->getJson($this->url('calls'))->assertNotFound();
+
+        $wa->update(['calling_mode' => 'test']);
+        $this->assertContains('calls', $this->api()->getJson('/api/v1/me')->json('companies.0.menus'));
+        $this->callLog(['channel' => 'whatsapp', 'bot_answered' => true]);
+        $this->api()->getJson($this->url('calls'))->assertOk()->assertJsonPath('data.0.channel', 'whatsapp');
     }
 
     public function test_calls_list_detail_and_recording(): void
