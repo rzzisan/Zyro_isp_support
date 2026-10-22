@@ -29,7 +29,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 /** Company panel: every page is scoped to the current company (tenant). */
 class AppPanelProvider extends PanelProvider
 {
-    public const NAV_GROUPS = ['সাপোর্ট', 'কাস্টমার ও বিল', 'ONU ও স্টক', 'SMS ও WhatsApp', 'নেটওয়ার্ক', 'বিলিং কনফিগারেশন', 'WhatsApp ও AI', 'সেটিংস'];
+    public const NAV_GROUPS = ['কুইক অ্যাক্সেস', 'সাপোর্ট', 'কাস্টমার ও বিল', 'ONU ও স্টক', 'SMS ও WhatsApp', 'নেটওয়ার্ক', 'বিলিং কনফিগারেশন', 'WhatsApp ও AI', 'সেটিংস'];
 
     public function panel(Panel $panel): Panel
     {
@@ -47,7 +47,7 @@ class AppPanelProvider extends PanelProvider
             ->sidebarCollapsibleOnDesktop()
             // sidebar order: daily work first, setup last (items set their group in $navigationGroup, by the Bangla
             // name used as the key here; the label shown is translated)
-            ->navigationGroups(collect(self::NAV_GROUPS)->mapWithKeys(fn (string $g) => [$g => NavigationGroup::make()->label(fn () => __($g))])->all())
+            ->navigationGroups(collect(self::NAV_GROUPS)->mapWithKeys(fn (string $g) => [$g => NavigationGroup::make()->label(fn () => __($g))->collapsible($g !== self::NAV_GROUPS[0])])->all())
             ->userMenuItems([MyProfile::menuItem(), Locale::menuItem()])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString('<link rel="stylesheet" href="'.asset('css/zyro-theme.css').'?v='.filemtime(public_path('css/zyro-theme.css')).'">'.Locale::jsScript()))
             ->renderHook(PanelsRenderHook::BODY_END, fn () => new HtmlString('<script src="'.asset('js/zyro-page-info.js').'?v='.filemtime(public_path('js/zyro-page-info.js')).'"></script>'))

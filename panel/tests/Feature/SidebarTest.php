@@ -36,8 +36,9 @@ class SidebarTest extends TestCase
     {
         $this->assertSame([
             'ড্যাশবোর্ড',
-            '# সাপোর্ট: ইনবক্স টিকিট এলাকার কর্মী ফিল্ড টিম',
-            '# কাস্টমার ও বিল: কাস্টমার বিল কালেকশন লাইন চালু/বন্ধের রেকর্ড',
+            '# কুইক অ্যাক্সেস: ইনবক্স টিকিট বিল কালেকশন কাস্টমার',
+            '# সাপোর্ট: এলাকার কর্মী ফিল্ড টিম',
+            '# কাস্টমার ও বিল: লাইন চালু/বন্ধের রেকর্ড',
             '# SMS ও WhatsApp: SMS পাঠান SMS লগ SMS টেমপ্লেট WhatsApp পাঠান WhatsApp লগ',
             '# নেটওয়ার্ক: MikroTik MikroTik ব্যাকআপ OLT নেটওয়ার্ক সেটিংস',
             '# বিলিং কনফিগারেশন: এলাকা প্যাকেজ ও সংযোগ সাপোর্ট তালিকা',
@@ -46,12 +47,21 @@ class SidebarTest extends TestCase
         ], $this->sidebar('owner'));
     }
 
+    public function test_quick_access_is_always_open(): void
+    {
+        $company = Company::create(['name' => 'Century Link Network']);
+        $user = User::factory()->create();
+        $company->users()->attach($user, ['role' => 'owner']);
+        $html = $this->actingAs($user)->get('/app/'.$company->slug.'/line-enables')->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/data-group-label="কুইক অ্যাক্সেস"\s*x-bind:class="[^"]*"\s*class="fi-sidebar-group"/u', $html);
+    }
+
     public function test_agent_does_not_see_admin_menus(): void
     {
         $sidebar = implode("\n", $this->sidebar('agent'));
         foreach (['বিলিং কনফিগারেশন', 'MikroTik', 'AI খরচ', 'টিম'] as $adminOnly) {
             $this->assertStringNotContainsString($adminOnly, $sidebar);
         }
-        $this->assertStringContainsString('# সাপোর্ট: ইনবক্স টিকিট এলাকার কর্মী', $sidebar);
+        $this->assertStringContainsString('# কুইক অ্যাক্সেস: ইনবক্স টিকিট', $sidebar);
     }
 }

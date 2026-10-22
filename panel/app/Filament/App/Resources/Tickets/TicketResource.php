@@ -46,7 +46,7 @@ class TicketResource extends Resource
 
     protected static ?string $slug = 'tickets';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সাপোর্ট';
+    protected static string|\UnitEnum|null $navigationGroup = 'কুইক অ্যাক্সেস';
 
     protected static ?int $navigationSort = 2;
 

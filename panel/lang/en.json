@@ -381,6 +381,7 @@
     "কাস্টমার MikroTik-এ অফলাইন, তাই Solve করা যাবে না": "The customer is offline on MikroTik, so it cannot be solved",
     "কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে বিলিংয়ে Solved করা হবে। বিলিং থেকে কোনো SMS যায় না।": "Checks again that the customer is online on MikroTik, then marks it Solved in billing. Billing sends no SMS.",
     "কাস্টমার ও বিল": "Customers and bills",
+    "কুইক অ্যাক্সেস": "Quick access",
     "কাস্টমার চেনা গেলে টিকিট দেখাবে": "Tickets show once the customer is known",
     "কাস্টমার চ্যাট": "Customer chat",
     "কাস্টমার তালিকা পড়া যায়নি (এই ইউজারের অনুমতি দেখুন)।": "Could not read the customer list (check this user's permissions).",
