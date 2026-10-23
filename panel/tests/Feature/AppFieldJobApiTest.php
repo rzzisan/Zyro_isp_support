@@ -103,6 +103,16 @@ class AppFieldJobApiTest extends TestCase
         $this->api($this->tech)->getJson($this->url('chats/'.$other->id))->assertForbidden();
     }
 
+    public function test_jobs_come_by_zone_subzone_and_box_like_the_print(): void
+    {
+        foreach ([['1', 'Uttara', 'Sector 7', 'B2', 3], ['2', null, null, null, 4], ['3', 'Uttara', 'Sector 7', 'B1', 1],
+            ['4', 'Mirpur', 'Block C', 'B9', 2], ['5', 'Uttara', 'Sector 7', 'B1', 5]] as [$no, $zone, $sub, $box, $hours]) {
+            $this->ticket($no, 'Rifat')->update(['zone' => $zone, 'subzone' => $sub, 'box' => $box, 'opened_at' => now()->subHours($hours)]);
+        }
+        $rows = $this->api($this->tech)->getJson($this->url('my-jobs'))->assertOk()->json('data');
+        $this->assertSame(['4', '5', '3', '1', '2'], array_column($rows, 'complain_id'));   // oldest first in a box, no place last
+    }
+
     public function test_only_members_ticked_as_technicians_have_my_jobs(): void
     {
         $owner = User::factory()->create();
