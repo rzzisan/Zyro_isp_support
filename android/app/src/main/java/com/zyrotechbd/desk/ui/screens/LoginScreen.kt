@@ -68,10 +68,12 @@ fun LoginScreen(
     onPasswordChange: (String) -> Unit,
     onToggleLang: () -> Unit,
     onLogin: () -> Unit,
+    privacyAccepted: Boolean = false,
+    onPrivacyChange: (Boolean) -> Unit = {},
 ) {
     val s = LocalStrings.current
     var showPassword by remember { mutableStateOf(false) }
-    val canLogin = !isLoading && email.isNotBlank() && password.isNotBlank()
+    val canLogin = !isLoading && email.isNotBlank() && password.isNotBlank() && privacyAccepted
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = Primary,
         unfocusedBorderColor = InputLine,
@@ -135,6 +137,8 @@ fun LoginScreen(
                         textStyle = fieldText,
                         colors = fieldColors
                     )
+                    Spacer(Modifier.height(14.dp))
+                    PrivacyAccept(privacyAccepted, onPrivacyChange)
                     if (errorMessage != null) {
                         Spacer(Modifier.height(14.dp))
                         MessageBox(errorMessage)
@@ -166,3 +170,20 @@ fun LoginScreen(
         }
     }
 }
+
+/** The privacy policy (location recording for field work) must be accepted to sign in. */
+@Composable
+fun PrivacyAccept(checked: Boolean, onChange: (Boolean) -> Unit) {
+    val s = LocalStrings.current
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onChange(!checked) }) {
+        androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = onChange,
+            colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = Primary))
+        Text(s.privacyCheck, color = Ink, fontSize = 14.sp, modifier = Modifier.weight(1f))
+    }
+    Text(s.privacySummary, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp))
+    Text(s.privacyRead, color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(start = 12.dp, top = 4.dp).clickable { uri.openUri(PRIVACY_URL) })
+}
+
+val PRIVACY_URL: String = com.zyrotechbd.desk.BuildConfig.API_BASE_URL.substringBefore("/api/") + "/privacy"

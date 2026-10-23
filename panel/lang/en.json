@@ -1530,7 +1530,6 @@
     "চলেছেন": "Travelled",
     "টিম পাতায় কোনো সদস্যকে বিলিংয়ের কর্মীর সাথে যুক্ত করা হয়নি": "No member is linked to a billing employee on the team page",
     "টেকনিশিয়ান লোকেশন": "Technician location",
-    "টেকনিশিয়ানরা অ্যাপে নোটিশ পড়ে সম্মতি দিয়েছেন। লোকেশন যায় শুধু ডিউটি চলার সময় বা কাজ চলার সময়, তখন তাদের ফোনে নোটিফিকেশন থাকে। শুধু মালিক এই পাতা দেখেন, ৯০ দিন পর পুরোনো লোকেশন মুছে যায়।": "Technicians read a notice in the app and agreed. Location is sent only while on duty or working, with a notification on their phone the whole time. Only the owner sees this page; locations older than 90 days are deleted.",
     "ডিউটিতে, :t থেকে": "On duty since :t",
     "ডিউটির বাইরে": "Off duty",
     "নকল লোকেশন": "Fake location",
@@ -1541,5 +1540,16 @@
     "শুরু": "Start",
     "শেষ লোকেশন": "Last location",
     "সবার শেষ অবস্থান": "Everyone's last position",
-    "সম্মতি দেননি": "Has not agreed"
+    "সম্মতি দেননি": "Has not agreed",
+    "আগে প্রাইভেসি পলিসি মেনে নিন": "Accept the privacy policy first",
+    "আগামীকাল করা হবে": "Will be done tomorrow",
+    "প্রাইভেসি পলিসি মেনে নিয়ে লগইন করুন (পুরোনো অ্যাপ হলে নতুন অ্যাপ নিন)": "Accept the privacy policy to sign in (on an old app, install the new one)",
+    "অটো ডিউটি": "Automatic duty",
+    "অফিসের Latitude": "Office latitude",
+    "অফিসের Longitude": "Office longitude",
+    "অফিসের কত মিটারের মধ্যে": "Within how many metres of the office",
+    "ডিউটি শুরু (এর পরে অফিসে এলে)": "Duty start (on reaching the office after this)",
+    "ডিউটি শেষ": "Duty end",
+    "Google Maps-এ অফিসের উপর চেপে ধরলে Latitude, Longitude দেখায়। শুরুর সময়ের পর টেকনিশিয়ানের ফোন অফিসের এই দূরত্বের মধ্যে এলে ডিউটি নিজে শুরু হয়; শেষের সময়ে, বা দিনের সব কাজ শেষ হলে আগেই, ডিউটি শেষ হয়।": "Long-press the office in Google Maps to see its latitude and longitude. After the start time, duty starts by itself when a technician's phone comes within this distance of the office; it ends at the end time, or earlier once the day's work is done.",
+    "টেকনিশিয়ানরা লগইনের সময় প্রাইভেসি পলিসি মেনে নিয়েছেন। লোকেশন যায় শুধু ডিউটির সময় (শুরুর সময়ের পর অফিসে এলে শুরু, শেষের সময়ে বা সব কাজ শেষ হলে শেষ) আর কাজ চলার সময়। শুধু মালিক এই পাতা দেখেন, ৯০ দিন পর পুরোনো লোকেশন মুছে যায়।": "Technicians accepted the privacy policy at sign-in. Location is sent only during duty (it starts on reaching the office after the start time and ends at the end time or when the day's work is done) and while a job runs. Only the owner sees this page; locations older than 90 days are deleted."
 }

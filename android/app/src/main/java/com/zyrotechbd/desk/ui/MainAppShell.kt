@@ -43,6 +43,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -140,8 +144,10 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
     var company by remember { mutableStateOf(SessionStore.company()) }
 
     // menus or companies may have changed in the panel since the last sign-in
+    var needPrivacy by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         runCatching { ApiClient.service.me() }.getOrNull()?.let { me ->
+            needPrivacy = !me.user.privacyAccepted
             SessionStore.save(null, me.user.name, me.user.email, me.companies)
             companies = SessionStore.companies()
             company = SessionStore.company()
@@ -157,6 +163,8 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
             askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
+    // signed in before the policy came: accept it (or sign out) before going on
+    if (needPrivacy) PrivacyGate(onAccepted = { needPrivacy = false }, onLogout = onLogout)
     val pushOpen by Push.open.collectAsState()
     val waitingChats by Badges.waitingChats.collectAsState()
     val openTickets by Badges.openTickets.collectAsState()
@@ -169,10 +177,8 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
         val tabs = tabsFor(company, s)
         val isTab = currentRoute == null || tabs.any { it.route == currentRoute }
 
-        // a field technician on duty or working: the location service runs (and its notification shows)
-        LaunchedEffect(companyKey) {
-            if (company?.can("field_jobs") == true) FieldTracker.refresh(context, companyKey)
-        }
+        // a field technician: location during duty and work, as the privacy policy accepted at sign-in says
+        if (company?.can("field_jobs") == true) FieldLocationSetup(companyKey)
 
         // tab counts: on start, every few minutes, and right after a push
         LaunchedEffect(companyKey) {
@@ -289,4 +295,67 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
             }
         }
     }
+}
+
+/** Location permission for a field technician (while using, then "all the time"), and the 15-minute check. */
+@Composable
+private fun FieldLocationSetup(company: String) {
+    val s = LocalStrings.current
+    val context = LocalContext.current
+    var askBackground by remember { mutableStateOf(false) }
+    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val foreground = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (FieldTracker.hasPermission(context) && !FieldTracker.hasBackground(context)) askBackground = true
+    }
+    LaunchedEffect(company) {
+        FieldTracker.schedule(context, company)
+        when {
+            !FieldTracker.hasPermission(context) ->
+                foreground.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            !FieldTracker.hasBackground(context) -> askBackground = true
+        }
+    }
+    if (askBackground && Build.VERSION.SDK_INT >= 29) AlertDialog(
+        onDismissRequest = { askBackground = false },
+        containerColor = com.zyrotechbd.desk.ui.theme.Surface,
+        title = { Text(s.locBgTitle) },
+        text = { Text(s.locBgText) },
+        confirmButton = {
+            TextButton(onClick = {
+                askBackground = false
+                background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }) { Text(s.locBgOk) }
+        },
+    )
+}
+
+/** The privacy policy for members signed in before it came: the app waits until it is accepted. */
+@Composable
+private fun PrivacyGate(onAccepted: () -> Unit, onLogout: () -> Unit) {
+    val s = LocalStrings.current
+    val scope = rememberCoroutineScope()
+    var checked by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = {},
+        containerColor = com.zyrotechbd.desk.ui.theme.Surface,
+        title = { Text(s.privacyTitle) },
+        text = {
+            Column {
+                Text(s.privacyNeeded)
+                Spacer(Modifier.height(8.dp))
+                com.zyrotechbd.desk.ui.screens.PrivacyAccept(checked) { checked = it }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = checked && !busy, onClick = {
+                busy = true
+                scope.launch {
+                    if (runCatching { ApiClient.service.acceptPrivacy() }.isSuccess) onAccepted()
+                    busy = false
+                }
+            }) { Text(s.privacyAccept) }
+        },
+        dismissButton = { TextButton(onClick = onLogout) { Text(s.logout) } },
+    )
 }

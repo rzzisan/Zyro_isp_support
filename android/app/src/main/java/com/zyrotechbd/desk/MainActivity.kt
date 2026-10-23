@@ -98,6 +98,7 @@ private fun AuthRoot(onToggleLang: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var privacy by remember { mutableStateOf(false) }
 
     // a token the server no longer accepts (signed out from the panel, member removed): back to the login screen
     DisposableEffect(Unit) {
@@ -118,13 +119,15 @@ private fun AuthRoot(onToggleLang: () -> Unit) {
             onEmailChange = { email = it.trim() },
             onPasswordChange = { password = it },
             onToggleLang = onToggleLang,
+            privacyAccepted = privacy,
+            onPrivacyChange = { privacy = it },
             onLogin = {
                 scope.launch {
                     isLoading = true
                     errorMessage = null
                     try {
                         val device = "${Build.MANUFACTURER} ${Build.MODEL}".trim().take(100)
-                        val res = ApiClient.service.login(LoginRequest(email, password, device))
+                        val res = ApiClient.service.login(LoginRequest(email, password, device, privacy))
                         withContext(Dispatchers.IO) {
                             SessionStore.save(res.token, res.user.name, res.user.email, res.companies)
                         }

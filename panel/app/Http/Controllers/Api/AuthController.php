@@ -20,7 +20,7 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $data = $request->validate(['email' => 'required|email|max:255', 'password' => 'required|string|max:255',
-            'device' => 'nullable|string|max:120']);
+            'device' => 'nullable|string|max:120', 'privacy' => 'nullable|boolean']);
         $user = User::whereRaw('lower(email) = ?', [mb_strtolower(trim($data['email']))])->first();
         if (! $user || ! Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages(['email' => __('ইমেইল বা পাসওয়ার্ড ভুল')]);
@@ -28,6 +28,11 @@ class AuthController extends Controller
         if (! $user->companies()->exists()) {
             throw ValidationException::withMessages(['email' => __('আপনি কোনো কোম্পানির সদস্য নন')]);
         }
+        // the app shows the privacy policy (location recording for field work) and signs in only once it is accepted
+        if (! ($data['privacy'] ?? false)) {
+            throw ValidationException::withMessages(['email' => __('প্রাইভেসি পলিসি মেনে নিয়ে লগইন করুন (পুরোনো অ্যাপ হলে নতুন অ্যাপ নিন)')]);
+        }
+        static::acceptPrivacy($user);
         $token = $user->createToken('android:'.($data['device'] ?? 'phone'))->plainTextToken;
 
         return response()->json(['token' => $token] + static::profile($user));
@@ -36,6 +41,21 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         return response()->json(static::profile($request->user()));
+    }
+
+    /** A member signed in before the policy came accepts it in the app (it blocks the app until then). */
+    public function privacy(Request $request): JsonResponse
+    {
+        static::acceptPrivacy($request->user());
+
+        return response()->json(static::profile($request->user()->fresh()));
+    }
+
+    /** Accepting the policy is the technicians' consent to location recording in every company they work in. */
+    public static function acceptPrivacy(User $user): void
+    {
+        $user->forceFill(['privacy_accepted_at' => $user->privacy_accepted_at ?? now()])->save();
+        Membership::where('user_id', $user->id)->whereNull('location_consent_at')->update(['location_consent_at' => now()]);
     }
 
     /** This phone's Firebase token, so the engine can push new WhatsApp messages to it (gone with the sign-in). */
@@ -92,7 +112,8 @@ class AuthController extends Controller
                         && ($k !== 'phone' || Softphone::available($company))))];
         })->values();
 
-        return ['user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'locale' => $user->locale],
+        return ['user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'locale' => $user->locale,
+            'privacy_accepted' => $user->privacy_accepted_at !== null],
             'companies' => $companies];
     }
 }

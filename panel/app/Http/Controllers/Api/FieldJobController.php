@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\FieldJob;
 use App\Models\SmsSetting;
 use App\Services\Engine;
+use App\Support\FieldDuty;
 use App\Support\FieldWork;
 use App\Support\Menu;
 use Illuminate\Http\JsonResponse;
@@ -62,7 +63,8 @@ class FieldJobController extends Controller
 
     private function row(BillingTicket $t, ?FieldJob $j): array
     {
-        return TicketController::row($t) + ['job' => self::job($j)];
+        return TicketController::row($t) + ['job' => self::job($j),
+            'later_on' => $t->field_later_on && $t->field_later_on > FieldDuty::today() ? $t->field_later_on : null];
     }
 
     /** The member's open tickets (newest first) and the ones solved in the last day. */
@@ -121,6 +123,9 @@ class FieldJobController extends Controller
     {
         $t = $this->ticket($request, $company, $ticket);
         abort_unless($t->isOpen(), 422, __('টিকিটটা আর খোলা নেই'));
+        if ($t->field_later_on) {
+            $t->forceFill(['field_later_on' => null])->save();   // put off, but done today after all
+        }
         $job = FieldJob::where('ticket_id', $t->id)->first();
         if ($job && $job->status !== 'done') {
             return response()->json(['job' => self::job($job->load('starter'))]);   // a team mate started it already
@@ -150,11 +155,34 @@ class FieldJobController extends Controller
     {
         $t = $this->ticket($request, $company, $ticket);
         $job = FieldJob::where('ticket_id', $t->id)->where('status', 'paused')->firstOrFail();
+        if ($t->field_later_on) {
+            $t->forceFill(['field_later_on' => null])->save();
+        }
         $job->forceFill(['status' => 'running', 'paused_seconds' => $job->paused_seconds + (int) $job->paused_at->diffInSeconds(now()),
             'paused_at' => null])->save();
         $job->log('resume', $request->user()->id);
 
         return response()->json(['job' => self::job($job->load('starter'))]);
+    }
+
+    /** "আগামীকাল করব": the ticket leaves today's work (a running job pauses), so duty can end; ?on=0 takes it back. */
+    public function later(Request $request, Company $company, int $ticket): JsonResponse
+    {
+        $t = $this->ticket($request, $company, $ticket);
+        abort_unless($t->isOpen(), 422, __('টিকিটটা আর খোলা নেই'));
+        $on = $request->boolean('on', true);
+        $t->forceFill(['field_later_on' => $on ? now(FieldDuty::TZ)->addDay()->toDateString() : null])->save();
+        $job = FieldJob::where('ticket_id', $t->id)->first();
+        if ($on && $job?->status === 'running') {
+            $job->forceFill(['status' => 'paused', 'paused_at' => now(), 'pause_reason' => __('আগামীকাল করা হবে')])->save();
+        }
+        $job?->log($on ? 'later' : 'today', $request->user()->id);
+        $m = \App\Models\Membership::where('company_id', $company->id)->where('user_id', $request->user()->id)->first();
+        if ($m) {
+            FieldDuty::sync($m, $request->user(), $company);
+        }
+
+        return response()->json(['ticket' => $this->row($t->fresh(), $job?->fresh()?->load('starter'))]);
     }
 
     /** The customer's PPPoE on MikroTik (the app asks every minute while the job is open; ?fresh=1 asks the router now). */

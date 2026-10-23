@@ -360,19 +360,19 @@ abstract class AppStrings {
     abstract val jobsNotLinked: String
     abstract val jobsEmpty: String
     abstract val startWork: String
-    abstract val locTitle: String
-    abstract val locNoticeTitle: String
-    abstract val locNotice: String
-    abstract val locAgree: String
-    abstract val locNotNow: String
-    abstract val locNeedConsent: String
-    abstract val locReadNotice: String
-    abstract val dutyLabel: String
-    abstract val dutyOn: String
-    abstract val dutyOff: String
-    abstract val dutyJobRunning: String
-    abstract val locPermission: String
-    abstract val locAllow: String
+    abstract val doTomorrow: String
+    abstract val doToday: String
+    abstract val laterNote: String
+    abstract val laterPill: String
+    abstract val privacyCheck: String
+    abstract val privacyRead: String
+    abstract val privacySummary: String
+    abstract val privacyTitle: String
+    abstract val privacyAccept: String
+    abstract val privacyNeeded: String
+    abstract val locBgTitle: String
+    abstract val locBgText: String
+    abstract val locBgOk: String
     abstract val pauseWork: String
     abstract val resumeWork: String
     abstract val finishWork: String
@@ -762,19 +762,19 @@ object BengaliStrings : AppStrings() {
     override val jobsNotLinked = "আপনার লগইন বিলিংয়ের কোনো কর্মীর সাথে লিংক করা নেই। Owner টিম পেজে \"বিলিংয়ে কোন কর্মী\" সেট করলে এখানে কাজ দেখাবে।"
     override val jobsEmpty = "এখানে কোনো কাজ নেই"
     override val startWork = "কাজ শুরু করুন"
-    override val locTitle = "লোকেশন"
-    override val locNoticeTitle = "লোকেশন শেয়ারের নোটিশ"
-    override val locNotice = "এই অ্যাপ আপনার ফোনের লোকেশন অফিসে পাঠাবে:\n\n• শুধু ডিউটি চালু থাকলে (প্রতি ৫ মিনিটে) আর কাজ চলার সময় (প্রতি মিনিটে)।\n• কাজ শুরু ও শেষ করার সময় আপনি কোথায় ছিলেন, আর কাস্টমারের বাসা থেকে কত দূরে।\n• লোকেশন চালু থাকলে ফোনের নোটিফিকেশনে সবসময় \"Desk: লোকেশন চালু\" দেখাবে। ডিউটি বন্ধ করলে লোকেশন যাওয়াও বন্ধ।\n• নকল লোকেশন (Fake GPS) অ্যাপ ধরা পড়লে অফিস তা দেখতে পাবে।\n• শুধু মালিক এই লোকেশন দেখেন। ৯০ দিন পর পুরোনো লোকেশন মুছে যায়।"
-    override val locAgree = "বুঝেছি, সম্মতি দিচ্ছি"
-    override val locNotNow = "পরে"
-    override val locNeedConsent = "ডিউটি ও কাজের সময় লোকেশন অফিসে যায়। আগে নোটিশটা পড়ে সম্মতি দিন।"
-    override val locReadNotice = "নোটিশ পড়ুন"
-    override val dutyLabel = "ডিউটি"
-    override val dutyOn = "ডিউটি চলছে · লোকেশন চালু"
-    override val dutyOff = "ডিউটির বাইরে · লোকেশন বন্ধ"
-    override val dutyJobRunning = "কাজ চলছে · লোকেশন চালু"
-    override val locPermission = "ফোনে লোকেশনের অনুমতি দেওয়া নেই, তাই লোকেশন যাচ্ছে না।"
-    override val locAllow = "অনুমতি দিন"
+    override val doTomorrow = "আগামীকাল করব"
+    override val doToday = "আজই করব"
+    override val laterNote = "এই কাজ আগামীকাল করা হবে"
+    override val laterPill = "আগামীকাল"
+    override val privacyCheck = "প্রাইভেসি পলিসি পড়েছি ও মেনে নিচ্ছি"
+    override val privacyRead = "পলিসি পড়ুন"
+    override val privacySummary = "মাঠের কাজে ডিউটি ও কাজের সময় ফোনের লোকেশন রেকর্ড হয়। বিস্তারিত পলিসিতে।"
+    override val privacyTitle = "প্রাইভেসি পলিসি"
+    override val privacyAccept = "মেনে নিচ্ছি"
+    override val privacyNeeded = "অ্যাপ ব্যবহার করতে প্রাইভেসি পলিসি মেনে নিন।"
+    override val locBgTitle = "লোকেশনের অনুমতি"
+    override val locBgText = "প্রাইভেসি পলিসি অনুযায়ী ডিউটির সময় লোকেশন লাগে, অ্যাপ বন্ধ থাকলেও। পরের পাতায় \"সবসময় অনুমতি দিন\" (Allow all the time) বেছে নিন।"
+    override val locBgOk = "ঠিক আছে"
     override val pauseWork = "বিরতি"
     override val resumeWork = "আবার শুরু"
     override val finishWork = "কাজ শেষ"
@@ -1164,19 +1164,19 @@ object EnglishStrings : AppStrings() {
     override val jobsNotLinked = "Your login is not linked to a billing employee. Once the owner sets \"Billing employee\" on the team page, your jobs show here."
     override val jobsEmpty = "No jobs here"
     override val startWork = "Start work"
-    override val locTitle = "Location"
-    override val locNoticeTitle = "Location sharing notice"
-    override val locNotice = "This app sends your phone's location to the office:\n\n• Only while duty is on (every 5 minutes) and while a job runs (every minute).\n• Where you were when you started and finished work, and how far that was from the customer.\n• While location is on, a \"Desk: location on\" notification always shows. Turning duty off stops it.\n• If a fake GPS app is used, the office can see that.\n• Only the owner sees these locations. They are deleted after 90 days."
-    override val locAgree = "I understand and agree"
-    override val locNotNow = "Later"
-    override val locNeedConsent = "Your location goes to the office during duty and work. Read the notice and agree first."
-    override val locReadNotice = "Read the notice"
-    override val dutyLabel = "Duty"
-    override val dutyOn = "On duty · location on"
-    override val dutyOff = "Off duty · location off"
-    override val dutyJobRunning = "Working · location on"
-    override val locPermission = "Location permission is off on this phone, so no location is sent."
-    override val locAllow = "Allow"
+    override val doTomorrow = "Do it tomorrow"
+    override val doToday = "Do it today"
+    override val laterNote = "This job will be done tomorrow"
+    override val laterPill = "Tomorrow"
+    override val privacyCheck = "I have read and accept the privacy policy"
+    override val privacyRead = "Read the policy"
+    override val privacySummary = "For field work, the phone's location is recorded during duty and work. Details in the policy."
+    override val privacyTitle = "Privacy policy"
+    override val privacyAccept = "Accept"
+    override val privacyNeeded = "Accept the privacy policy to use the app."
+    override val locBgTitle = "Location permission"
+    override val locBgText = "As the privacy policy says, duty needs your location even while the app is closed. On the next screen choose \"Allow all the time\"."
+    override val locBgOk = "OK"
     override val pauseWork = "Pause"
     override val resumeWork = "Resume"
     override val finishWork = "Finish"

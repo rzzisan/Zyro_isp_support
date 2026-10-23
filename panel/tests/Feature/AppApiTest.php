@@ -59,8 +59,10 @@ class AppApiTest extends TestCase
 
     public function test_login_returns_a_token_and_the_companies_with_their_menus(): void
     {
-        $res = $this->postJson('/api/v1/login', ['email' => 'Owner@Example.com', 'password' => 'secret-pass', 'device' => 'Pixel'])
-            ->assertOk()->assertJsonPath('user.email', 'owner@example.com')
+        // the privacy policy must be accepted (older apps don't send it)
+        $this->postJson('/api/v1/login', ['email' => 'Owner@Example.com', 'password' => 'secret-pass'])->assertStatus(422);
+        $res = $this->postJson('/api/v1/login', ['email' => 'Owner@Example.com', 'password' => 'secret-pass', 'device' => 'Pixel', 'privacy' => true])
+            ->assertOk()->assertJsonPath('user.privacy_accepted', true)->assertJsonPath('user.email', 'owner@example.com')
             ->assertJsonPath('companies.0.slug', $this->company->slug)->assertJsonPath('companies.0.role', 'owner');
         $this->assertContains('bills', $res->json('companies.0.menus'));
         $this->assertNotEmpty($res->json('token'));

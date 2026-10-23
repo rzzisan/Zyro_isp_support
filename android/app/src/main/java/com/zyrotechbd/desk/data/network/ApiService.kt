@@ -19,6 +19,9 @@ interface ApiService {
     @GET("me")
     suspend fun me(): Profile
 
+    @POST("privacy")
+    suspend fun acceptPrivacy(): Profile
+
     @POST("logout")
     suspend fun logout(): OkResponse
 
@@ -218,11 +221,8 @@ interface ApiService {
     @GET("c/{company}/field/location")
     suspend fun fieldLocation(@Path("company") company: String): LocationState
 
-    @POST("c/{company}/field/consent")
-    suspend fun fieldConsent(@Path("company") company: String): LocationState
-
-    @POST("c/{company}/field/duty")
-    suspend fun fieldDuty(@Path("company") company: String, @Body request: DutyRequest): LocationState
+    @POST("c/{company}/my-jobs/{id}/later")
+    suspend fun laterJob(@Path("company") company: String, @Path("id") id: Long, @Query("on") on: Int): LaterResponse
 
     @POST("c/{company}/field/locations")
     suspend fun fieldLocations(@Path("company") company: String, @Body request: LocationBatch): LocationState

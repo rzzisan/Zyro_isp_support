@@ -14,9 +14,15 @@ data class PasswordRequest(
     @Json(name = "password_confirmation") val passwordConfirmation: String,
 )
 
-data class LoginRequest(val email: String, val password: String, val device: String)
+data class LoginRequest(val email: String, val password: String, val device: String, val privacy: Boolean = false)
 
-data class UserInfo(val id: Long, val name: String, val email: String, val locale: String? = null)
+data class UserInfo(
+    val id: Long,
+    val name: String,
+    val email: String,
+    val locale: String? = null,
+    @Json(name = "privacy_accepted") val privacyAccepted: Boolean = true,
+)
 
 /** A company the user works in and the Desk menus they may open there (inbox, customers, bills, ...). */
 data class CompanyInfo(
@@ -457,6 +463,8 @@ data class MyJobRow(
     val duration: String? = null,
     val open: Boolean = true,
     val job: FieldJob? = null,
+    /** Put off ("আগামীকাল করব") to this day (yyyy-MM-dd); null when it is today's work. */
+    @Json(name = "later_on") val laterOn: String? = null,
     val online: Boolean? = null,
 )
 
@@ -474,6 +482,8 @@ data class MyJobDetail(
 )
 
 data class JobResponse(val job: FieldJob)
+
+data class LaterResponse(val ticket: MyJobRow)
 
 data class PauseRequest(val reason: String)
 
@@ -510,8 +520,6 @@ data class LocationState(
     val interval: Int = 300,
     val saved: Int? = null,
 )
-
-data class DutyRequest(val on: Boolean)
 
 data class LocationPoint(
     val lat: Double,

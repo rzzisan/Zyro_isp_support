@@ -23,6 +23,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('me', [AuthController::class, 'me']);
         Route::post('logout', [AuthController::class, 'logout']);
+        Route::post('privacy', [AuthController::class, 'privacy']);
         Route::post('password', [AuthController::class, 'password'])->middleware('throttle:5,1');
         Route::post('push-token', [AuthController::class, 'pushToken'])->middleware('throttle:20,1');
 
@@ -73,13 +74,11 @@ Route::prefix('v1')->group(function () {
             Route::get('my-jobs', [FieldJobController::class, 'index']);
             Route::get('my-jobs/{ticket}', [FieldJobController::class, 'show'])->whereNumber('ticket');
             Route::get('my-jobs/{ticket}/line', [FieldJobController::class, 'line'])->whereNumber('ticket')->middleware('throttle:30,1');
-            foreach (['start', 'pause', 'resume'] as $step) {
+            foreach (['start', 'pause', 'resume', 'later'] as $step) {
                 Route::post("my-jobs/{ticket}/{$step}", [FieldJobController::class, $step])->whereNumber('ticket')->middleware('throttle:30,1');
             }
             Route::post('my-jobs/{ticket}/solve', [FieldJobController::class, 'solve'])->whereNumber('ticket')->middleware('throttle:20,1');
             Route::get('field/location', [FieldLocationController::class, 'show']);
-            Route::post('field/consent', [FieldLocationController::class, 'consent']);
-            Route::post('field/duty', [FieldLocationController::class, 'duty'])->middleware('throttle:20,1');
             Route::post('field/locations', [FieldLocationController::class, 'store'])->middleware('throttle:30,1');
         });
     });

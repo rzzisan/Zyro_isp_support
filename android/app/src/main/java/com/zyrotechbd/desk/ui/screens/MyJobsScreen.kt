@@ -70,6 +70,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** Which tab a ticket of mine sits in: not started, started (running or paused), or done / solved. */
 private fun bucket(r: MyJobRow): String = when {
     !r.open || r.job?.status == "done" -> "done"
+    r.laterOn != null -> "new"   // put off to tomorrow
     r.job != null -> "running"
     else -> "new"
 }
@@ -154,7 +155,6 @@ fun MyJobsScreen(navController: NavHostController, company: String) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            if (linked) FieldLocationCard(company)
             if (error != null) {
                 MessageBox(error!!, onRetry = { reload++ }, retryLabel = s.retry)
                 Spacer(Modifier.height(8.dp))
@@ -197,6 +197,7 @@ private fun JobRowView(r: MyJobRow, s: AppStrings, loadedAt: Long, now: Long, on
             Spacer(Modifier.width(8.dp))
             val job = r.job
             when {
+                r.laterOn != null && r.open -> Pill(s.laterPill, Warn)
                 job != null && job.status != "done" && r.open -> {
                     val left = job.targetMinutes * 60L - workedNow(job, loadedAt, now)
                     val color = if (job.status == "paused") Muted else if (left < 0) Danger else Good

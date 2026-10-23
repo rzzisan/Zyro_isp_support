@@ -10,7 +10,8 @@ class BotSetting extends Model
     protected $fillable = ['company_id', 'ai_provider', 'ai_model', 'bot_mode', 'live_allowlist',
         'auto_ticket', 'reply_signature', 'extra_prompt', 'customer_prompt', 'technician_prompt', 'voice_provider',
         'voice_reply', 'voice_reply_voice', 'auto_assign', 'auto_assign_exclude',
-        'auto_assign_area_categories', 'auto_assign_category_staff', 'field_job_minutes', 'field_job_targets'];
+        'auto_assign_area_categories', 'auto_assign_category_staff', 'field_job_minutes', 'field_job_targets',
+        'field_office_lat', 'field_office_lng', 'field_office_radius', 'field_duty_start', 'field_duty_end'];
 
     protected function casts(): array
     {
