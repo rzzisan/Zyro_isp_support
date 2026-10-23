@@ -133,6 +133,8 @@ class CustomerResource extends Resource
                     ->where('seen_at', '>', now()->subMinutes(PppSession::FRESH_MINUTES))->where('blocked', true)->limit(1),
             ]))
             ->striped()
+            // the whole text goes to BillingCustomer::matching, so "+880 1711 223344" or "md rahim" are not cut into words
+            ->splitSearchTerms(false)
             // same columns, in the same order, as billing's customer list, so staff find things where they expect them
             // compact rows (public/css/zyro-theme.css .z-cc) so the whole list fits without scrolling sideways
             ->columns(array_map(fn ($c) => $c->extraCellAttributes(['class' => 'z-cc'])->extraHeaderAttributes(['class' => 'z-cc']), [
