@@ -34,7 +34,7 @@ class AppFieldJobApiTest extends TestCase
         $cid = $this->company->id;
         $this->tech = User::factory()->create(['name' => 'Rifat']);
         $this->company->users()->attach($this->tech, ['role' => 'agent']);
-        Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['field_jobs']), 'billing_employee_id' => '3']);
+        Membership::where('user_id', $this->tech->id)->update(['field_technician' => true, 'permissions' => json_encode([]), 'billing_employee_id' => '3']);
         BillingOption::create(['company_id' => $cid, 'kind' => 'employees', 'option_id' => '3', 'name' => 'Rifat']);
         BillingOption::create(['company_id' => $cid, 'kind' => 'employees', 'option_id' => '4', 'name' => 'Maruf']);
         BillingOption::create(['company_id' => $cid, 'kind' => 'categories', 'option_id' => '7', 'name' => 'Line Off']);
@@ -103,12 +103,13 @@ class AppFieldJobApiTest extends TestCase
         $this->api($this->tech)->getJson($this->url('chats/'.$other->id))->assertForbidden();
     }
 
-    public function test_only_members_given_the_menu_have_my_jobs_not_owners_or_admins_by_default(): void
+    public function test_only_members_ticked_as_technicians_have_my_jobs(): void
     {
         $owner = User::factory()->create();
         $this->company->users()->attach($owner, ['role' => 'owner']);
         $admin = User::factory()->create();
         $this->company->users()->attach($admin, ['role' => 'admin']);
+        Membership::where('user_id', $admin->id)->update(['permissions' => json_encode(['inbox', 'field_jobs'])]);   // an old menu tick does nothing
         foreach ([$owner, $admin] as $u) {
             $menus = $this->api($u)->getJson('/api/v1/me')->assertOk()->json('companies.0.menus');
             $this->assertNotContains('field_jobs', $menus);
@@ -116,19 +117,16 @@ class AppFieldJobApiTest extends TestCase
             $this->api($u)->getJson($this->url('my-jobs'))->assertForbidden();
         }
         $this->assertContains('field_jobs', $this->api($this->tech)->getJson('/api/v1/me')->json('companies.0.menus'));
-        Membership::where('user_id', $owner->id)->update(['permissions' => json_encode(['field_jobs'])]);   // given, but not linked
-        $this->api($owner)->getJson($this->url('my-jobs'))->assertForbidden();
-        Membership::where('user_id', $owner->id)->update(['billing_employee_id' => '4']);   // the owner as a technician too
-        $this->api($owner)->getJson($this->url('my-jobs'))->assertOk();
+        Membership::where('user_id', $owner->id)->update(['field_technician' => true]);   // the owner as a technician too
+        $this->api($owner)->getJson($this->url('my-jobs'))->assertOk()->assertJsonPath('linked', false);
     }
 
-    public function test_not_linked_or_without_the_menu(): void
+    public function test_not_linked_or_not_a_technician(): void
     {
         $this->ticket('1', 'Rifat');
-        Membership::where('user_id', $this->tech->id)->update(['billing_employee_id' => null]);   // not a technician without the link
-        $this->api($this->tech)->getJson($this->url('my-jobs'))->assertForbidden();
-        $this->assertNotContains('field_jobs', $this->api($this->tech)->getJson('/api/v1/me')->json('companies.0.menus'));
-        Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['inbox']), 'billing_employee_id' => '3']);
+        Membership::where('user_id', $this->tech->id)->update(['billing_employee_id' => null]);
+        $this->api($this->tech)->getJson($this->url('my-jobs'))->assertOk()->assertJsonCount(0, 'data')->assertJsonPath('linked', false);
+        Membership::where('user_id', $this->tech->id)->update(['field_technician' => false, 'billing_employee_id' => '3']);
         $this->api($this->tech)->getJson($this->url('my-jobs'))->assertForbidden();
     }
 
@@ -164,7 +162,7 @@ class AppFieldJobApiTest extends TestCase
             ->assertStatus(422);
         Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/solve'));
 
-        Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['field_jobs', 'force_solve'])]);
+        Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['force_solve'])]);
         $this->api($this->tech)->postJson($this->url("my-jobs/{$t->id}/solve"), ['force_reason' => 'কাস্টমার রাউটার বন্ধ রেখেছে'])->assertOk();
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/tickets/1/solve') && $r['skip_line_check'] === true);
         $job = FieldJob::first();
@@ -192,7 +190,7 @@ class AppFieldJobApiTest extends TestCase
 
     public function test_a_technician_with_the_inbox_menu_sees_only_running_work_chats(): void
     {
-        Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['field_jobs', 'inbox'])]);
+        Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['inbox'])]);
         $mine = $this->ticket('1', 'Rifat');
         $chat = WaContact::create(['company_id' => $this->company->id, 'wa_number' => '8801838216754', 'name' => 'Bulbul', 'last_message_at' => now()]);
         $other = WaContact::create(['company_id' => $this->company->id, 'wa_number' => '8801711111111', 'name' => 'Other', 'last_message_at' => now()]);

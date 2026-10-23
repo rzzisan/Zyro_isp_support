@@ -148,7 +148,7 @@
                         <td>{{ $r['battery'] !== null ? $r['battery'].'%' : '—' }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="4" class="zl-note">{{ __('টিম পাতায় কোনো সদস্যকে বিলিংয়ের কর্মীর সাথে যুক্ত করা হয়নি') }}</td></tr>
+                    <tr><td colspan="4" class="zl-note">{{ __('টিম পাতায় কোনো সদস্যকে ফিল্ড টেকনিশিয়ান টিক দেওয়া হয়নি') }}</td></tr>
                 @endforelse
             </table>
         </div>

@@ -47,10 +47,10 @@ class Menu
 
     public static function options(bool $settings = true): array
     {
-        return collect(self::ITEMS)->filter(fn ($i) => $settings || ! $i[2])->map(fn ($i) => __($i[0]))->all();
+        return collect(self::ITEMS)->except(self::EXPLICIT)->filter(fn ($i) => $settings || ! $i[2])->map(fn ($i) => __($i[0]))->all();
     }
 
-    /** Menus only a member given them on the team page (own list or a group) has, owners and admins too. */
+    /** Not a menu to tick: "আমার কাজ" comes with the member's "ফিল্ড টেকনিশিয়ান" tick on the team page, whatever the role. */
     public const EXPLICIT = ['field_jobs'];
 
     public static function defaults(string $role): array
@@ -69,8 +69,7 @@ class Menu
             return false;
         }
         if (in_array($key, self::EXPLICIT, true)) {
-            // "আমার কাজ": field technicians only, i.e. given the menu and linked to a billing employee on the team page
-            return in_array($key, self::keys($m), true) && filled($m->billing_employee_id);
+            return (bool) $m->field_technician;   // "আমার কাজ": the members ticked as field technicians only
         }
         if ($m->role === 'owner') {
             return true;

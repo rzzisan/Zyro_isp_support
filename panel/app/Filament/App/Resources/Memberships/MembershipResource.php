@@ -91,10 +91,15 @@ class MembershipResource extends Resource
                 ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
                 ->dehydrated(fn ($state) => filled($state) && self::isOwner())
                 ->helperText(__('বদলাতে না চাইলে খালি রাখুন')),
+            Toggle::make('field_technician')->label(__('ফিল্ড টেকনিশিয়ান'))->visibleOn('edit')->live()
+                ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
+                ->dehydrated(fn () => self::isOwner())
+                ->helperText(__('টিক দিলে অ্যাপে টেকনিশিয়ানের অংশ পাবেন: "আমার কাজ", লোকেশন, আর শুধু চলমান কাজের কাস্টমারের সাথে চ্যাট। Agent হলে অ্যাপ "আমার কাজ" দিয়ে খুলবে।')),
             Select::make('billing_employee_id')->label(__('বিলিংয়ে কোন কর্মী (ফিল্ড কাজ)'))->visibleOn('edit')->searchable()
+                ->visible(fn (string $operation, $get) => $operation === 'edit' && $get('field_technician'))
                 ->options(fn () => \App\Filament\App\TicketActions::options('employees'))
                 ->formatStateUsing(fn ($state) => filled($state) ? (string) $state : null)
-                ->helperText(__('টিকিটে এই কর্মীর নাম থাকলে সেগুলো অ্যাপের "আমার কাজ"-এ দেখাবে (মেনুতে "আমার কাজ" টিক দিন)।')),
+                ->helperText(__('টিকিটে এই কর্মীর নাম থাকলে সেগুলো অ্যাপের "আমার কাজ"-এ দেখাবে।')),
             Toggle::make('wa_signature')->label(__('WhatsApp মেসেজের নিচে নাম দেখাবে'))->default(true)
                 ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
                 ->dehydrated(fn () => self::isOwner())
@@ -130,6 +135,8 @@ class MembershipResource extends Resource
                 TextColumn::make('role')->label(__('রোল'))->badge()
                     ->formatStateUsing(fn ($state) => Membership::ROLES[$state] ?? $state),
                 TextColumn::make('groups.name')->label(__('পারমিশন গ্রুপ'))->badge()->placeholder('-'),
+                \Filament\Tables\Columns\IconColumn::make('field_technician')->label(__('টেকনিশিয়ান'))->boolean()
+                    ->trueIcon('heroicon-o-wrench-screwdriver')->falseIcon('heroicon-o-minus')->trueColor('success')->falseColor('gray'),
                 TextColumn::make('menus')->label(__('মেনু'))
                     ->state(fn (Membership $r) => $r->role === 'owner' ? __('সব')
                         : count(Menu::keys($r)).'/'.count(Menu::ITEMS).($r->permissions === null && $r->groups->isEmpty() ? __(' (ডিফল্ট)') : ''))
