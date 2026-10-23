@@ -168,6 +168,19 @@ class TicketResource extends Resource
                 SelectFilter::make('category')->label(__('সমস্যা'))->options(fn () => static::listOptions('categories', 'category'))->searchable(),
                 SelectFilter::make('employee')->label(__('কর্মী (assign / সমাধান)'))->options(fn () => static::employees())->searchable()
                     ->query(fn (Builder $query, array $data) => $query->when($data['value'] ?? null, fn ($q, $name) => $q->forEmployee($name))),
+                SelectFilter::make('team')->label(__('ফিল্ড টিম'))->options(fn () => \App\Filament\App\TicketActions::teamOptions())
+                    ->query(function (Builder $query, array $data) {
+                        $team = ($data['value'] ?? null) ? \App\Models\StaffTeam::where('company_id', Filament::getTenant()?->getKey() ?? 0)->find((int) $data['value']) : null;
+                        if (! $team) {
+                            return $query;
+                        }
+                        // any member assigned to / solved the ticket (members are billing employee ids; tickets hold names)
+                        $names = \App\Filament\App\TicketActions::options('employees');
+                        $people = collect($team->members)->map(fn ($m) => $names[$m] ?? null)->filter()->values();
+
+                        return $people->isEmpty() ? $query->whereRaw('false')
+                            : $query->where(fn ($q) => $people->each(fn ($n) => $q->orWhere(fn ($w) => $w->forEmployee($n))));
+                    }),
                 SelectFilter::make('priority')->label('Priority')->options(BillingTicket::PRIORITIES),
             ])
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)

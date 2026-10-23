@@ -480,3 +480,4 @@
 - অ্যাপ 1.12.0 (versionCode 17, PR #30 49829c2, deployed 2026-10-23 03:06 UTC): কল স্ক্রিনে কলার কে (লাইন, MikroTik/ONU এখনকার অবস্থা, খোলা টিকিট, নতুন টিকিট বোতাম), API `GET /api/v1/c/{company}/call-info?number=`; প্যানেল cache + fpm reload, migration/engine restart লাগেনি।
 - 2026-10-23: টিকিট প্রিন্টে "ফিল্ড টিম" বাছা যায় (`?team={staff_teams.id}`): টিমের সব সদস্যের (members = বিলিং employee id → নাম `TicketActions::options('employees')`) কাজ চলছে টিকিট একসাথে, হেডারে "টিম: নাম (সদস্যরা)"। একজন কর্মীর জন্য আগের মতো `?employee=`।
 - 2026-10-23: টিকিট খোলা / Assign / এডিট ফর্মে "ফিল্ড টিম" পিকার (`TicketActions::teamSelect()`, সেভ হয় না): টিম বাছলে টিমের সব সদস্য কর্মী ঘরে বসে, তারপর আগের মতো assign।
+- 2026-10-23: টিকিট লিস্টে "ফিল্ড টিম" ফিল্টার: টিমের যেকোনো সদস্য assign বা সমাধান করেছে এমন টিকিট (কর্মী ফিল্টারের মতোই, `forEmployee` OR করে)।
