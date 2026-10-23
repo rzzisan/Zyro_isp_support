@@ -12,13 +12,13 @@ class Membership extends Model
 {
     protected $table = 'company_user';
 
-    protected $fillable = ['company_id', 'user_id', 'role', 'billing_username', 'billing_password', 'permissions', 'bill_view_employees', 'wa_signature', 'billing_employee_id'];
+    protected $fillable = ['company_id', 'user_id', 'role', 'billing_username', 'billing_password', 'permissions', 'bill_view_employees', 'wa_signature', 'billing_employee_id', 'location_consent_at', 'on_duty_since'];
 
     protected $hidden = ['billing_password'];
 
     protected function casts(): array
     {
-        return ['permissions' => 'array', 'bill_view_employees' => 'array', 'billing_password' => 'encrypted', 'billing_checked_at' => 'datetime', 'billing_check_ok' => 'boolean', 'wa_signature' => 'boolean'];
+        return ['permissions' => 'array', 'bill_view_employees' => 'array', 'billing_password' => 'encrypted', 'billing_checked_at' => 'datetime', 'billing_check_ok' => 'boolean', 'wa_signature' => 'boolean', 'location_consent_at' => 'datetime', 'on_duty_since' => 'datetime'];
     }
 
     /** The signed-in member of the current Desk company. */

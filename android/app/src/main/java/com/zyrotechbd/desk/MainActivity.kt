@@ -20,7 +20,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
+import com.zyrotechbd.desk.core.AppContext
 import com.zyrotechbd.desk.data.auth.SessionStore
+import com.zyrotechbd.desk.location.FieldTracker
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.LoginRequest
 import com.zyrotechbd.desk.push.OpenChat
@@ -101,6 +103,7 @@ private fun AuthRoot(onToggleLang: () -> Unit) {
     DisposableEffect(Unit) {
         ApiClient.onUnauthorized = {
             SessionStore.clear()
+            FieldTracker.stop(AppContext.app)
             scope.launch { signedIn = false }
         }
         onDispose { ApiClient.onUnauthorized = null }
@@ -142,6 +145,7 @@ private fun AuthRoot(onToggleLang: () -> Unit) {
                 scope.launch {
                     runCatching { ApiClient.service.logout() }
                     SessionStore.clear()
+                    FieldTracker.stop(AppContext.app)
                     signedIn = false
                 }
             },

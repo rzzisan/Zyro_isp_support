@@ -360,6 +360,19 @@ abstract class AppStrings {
     abstract val jobsNotLinked: String
     abstract val jobsEmpty: String
     abstract val startWork: String
+    abstract val locTitle: String
+    abstract val locNoticeTitle: String
+    abstract val locNotice: String
+    abstract val locAgree: String
+    abstract val locNotNow: String
+    abstract val locNeedConsent: String
+    abstract val locReadNotice: String
+    abstract val dutyLabel: String
+    abstract val dutyOn: String
+    abstract val dutyOff: String
+    abstract val dutyJobRunning: String
+    abstract val locPermission: String
+    abstract val locAllow: String
     abstract val pauseWork: String
     abstract val resumeWork: String
     abstract val finishWork: String
@@ -749,6 +762,19 @@ object BengaliStrings : AppStrings() {
     override val jobsNotLinked = "আপনার লগইন বিলিংয়ের কোনো কর্মীর সাথে লিংক করা নেই। Owner টিম পেজে \"বিলিংয়ে কোন কর্মী\" সেট করলে এখানে কাজ দেখাবে।"
     override val jobsEmpty = "এখানে কোনো কাজ নেই"
     override val startWork = "কাজ শুরু করুন"
+    override val locTitle = "লোকেশন"
+    override val locNoticeTitle = "লোকেশন শেয়ারের নোটিশ"
+    override val locNotice = "এই অ্যাপ আপনার ফোনের লোকেশন অফিসে পাঠাবে:\n\n• শুধু ডিউটি চালু থাকলে (প্রতি ৫ মিনিটে) আর কাজ চলার সময় (প্রতি মিনিটে)।\n• কাজ শুরু ও শেষ করার সময় আপনি কোথায় ছিলেন, আর কাস্টমারের বাসা থেকে কত দূরে।\n• লোকেশন চালু থাকলে ফোনের নোটিফিকেশনে সবসময় \"Desk: লোকেশন চালু\" দেখাবে। ডিউটি বন্ধ করলে লোকেশন যাওয়াও বন্ধ।\n• নকল লোকেশন (Fake GPS) অ্যাপ ধরা পড়লে অফিস তা দেখতে পাবে।\n• শুধু মালিক এই লোকেশন দেখেন। ৯০ দিন পর পুরোনো লোকেশন মুছে যায়।"
+    override val locAgree = "বুঝেছি, সম্মতি দিচ্ছি"
+    override val locNotNow = "পরে"
+    override val locNeedConsent = "ডিউটি ও কাজের সময় লোকেশন অফিসে যায়। আগে নোটিশটা পড়ে সম্মতি দিন।"
+    override val locReadNotice = "নোটিশ পড়ুন"
+    override val dutyLabel = "ডিউটি"
+    override val dutyOn = "ডিউটি চলছে · লোকেশন চালু"
+    override val dutyOff = "ডিউটির বাইরে · লোকেশন বন্ধ"
+    override val dutyJobRunning = "কাজ চলছে · লোকেশন চালু"
+    override val locPermission = "ফোনে লোকেশনের অনুমতি দেওয়া নেই, তাই লোকেশন যাচ্ছে না।"
+    override val locAllow = "অনুমতি দিন"
     override val pauseWork = "বিরতি"
     override val resumeWork = "আবার শুরু"
     override val finishWork = "কাজ শেষ"
@@ -1138,6 +1164,19 @@ object EnglishStrings : AppStrings() {
     override val jobsNotLinked = "Your login is not linked to a billing employee. Once the owner sets \"Billing employee\" on the team page, your jobs show here."
     override val jobsEmpty = "No jobs here"
     override val startWork = "Start work"
+    override val locTitle = "Location"
+    override val locNoticeTitle = "Location sharing notice"
+    override val locNotice = "This app sends your phone's location to the office:\n\n• Only while duty is on (every 5 minutes) and while a job runs (every minute).\n• Where you were when you started and finished work, and how far that was from the customer.\n• While location is on, a \"Desk: location on\" notification always shows. Turning duty off stops it.\n• If a fake GPS app is used, the office can see that.\n• Only the owner sees these locations. They are deleted after 90 days."
+    override val locAgree = "I understand and agree"
+    override val locNotNow = "Later"
+    override val locNeedConsent = "Your location goes to the office during duty and work. Read the notice and agree first."
+    override val locReadNotice = "Read the notice"
+    override val dutyLabel = "Duty"
+    override val dutyOn = "On duty · location on"
+    override val dutyOff = "Off duty · location off"
+    override val dutyJobRunning = "Working · location on"
+    override val locPermission = "Location permission is off on this phone, so no location is sent."
+    override val locAllow = "Allow"
     override val pauseWork = "Pause"
     override val resumeWork = "Resume"
     override val finishWork = "Finish"

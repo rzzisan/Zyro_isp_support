@@ -204,7 +204,7 @@ interface ApiService {
     suspend fun jobLine(@Path("company") company: String, @Path("id") id: Long, @Query("fresh") fresh: Int? = null): LineState
 
     @POST("c/{company}/my-jobs/{id}/start")
-    suspend fun startJob(@Path("company") company: String, @Path("id") id: Long): JobResponse
+    suspend fun startJob(@Path("company") company: String, @Path("id") id: Long, @Body request: StartRequest = StartRequest()): JobResponse
 
     @POST("c/{company}/my-jobs/{id}/pause")
     suspend fun pauseJob(@Path("company") company: String, @Path("id") id: Long, @Body request: PauseRequest): JobResponse
@@ -214,4 +214,16 @@ interface ApiService {
 
     @POST("c/{company}/my-jobs/{id}/solve")
     suspend fun finishJob(@Path("company") company: String, @Path("id") id: Long, @Body request: FinishRequest): SolveResult
+
+    @GET("c/{company}/field/location")
+    suspend fun fieldLocation(@Path("company") company: String): LocationState
+
+    @POST("c/{company}/field/consent")
+    suspend fun fieldConsent(@Path("company") company: String): LocationState
+
+    @POST("c/{company}/field/duty")
+    suspend fun fieldDuty(@Path("company") company: String, @Body request: DutyRequest): LocationState
+
+    @POST("c/{company}/field/locations")
+    suspend fun fieldLocations(@Path("company") company: String, @Body request: LocationBatch): LocationState
 }

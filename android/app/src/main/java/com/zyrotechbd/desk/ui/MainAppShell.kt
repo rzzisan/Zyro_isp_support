@@ -63,6 +63,7 @@ import androidx.navigation.compose.rememberNavController
 import com.zyrotechbd.desk.BuildConfig
 import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.network.ApiClient
+import com.zyrotechbd.desk.location.FieldTracker
 import com.zyrotechbd.desk.data.network.CompanyInfo
 import com.zyrotechbd.desk.push.Push
 import com.zyrotechbd.desk.core.Badges
@@ -167,6 +168,11 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
         val currentRoute = backStack?.destination?.route
         val tabs = tabsFor(company, s)
         val isTab = currentRoute == null || tabs.any { it.route == currentRoute }
+
+        // a field technician on duty or working: the location service runs (and its notification shows)
+        LaunchedEffect(companyKey) {
+            if (company?.can("field_jobs") == true) FieldTracker.refresh(context, companyKey)
+        }
 
         // tab counts: on start, every few minutes, and right after a push
         LaunchedEffect(companyKey) {

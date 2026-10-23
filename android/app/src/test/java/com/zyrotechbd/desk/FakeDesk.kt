@@ -72,6 +72,7 @@ class FakeDesk {
                     path.endsWith("/tickets/5") -> json("""{"ticket":$ticket,"live":{"mikrotik":{"online":false,"router":"CLN-3"},
                         "onu":{"OpticalPower":"-29.4","OnuStatus":"Offline","OLTName":"CLN-VSOL-42","OLTPort":"PON 2",
                         "LastDeregisterTime":"2026-10-19 09:12","DeregisterReason":"LOS"},"mac":"AA:BB:CC:DD:EE:FF"},"live_error":null}""")
+                    path.endsWith("/field/location") -> json("""{"consent":true,"on_duty":true,"on_duty_since":"$now","job_running":true,"track":true,"interval":60}""")
                     path.endsWith("/my-jobs") -> json("""{"linked":true,"data":[
                         ${ticket.dropLast(1)},"online":false,"job":{"id":1,"status":"running","started_at":"$now","started_by":"Rifat",
                         "worked_seconds":1520,"target_minutes":60,"line_check":true}},

@@ -14,7 +14,8 @@ class FieldJob extends Model
     protected function casts(): array
     {
         return ['started_at' => 'datetime', 'paused_at' => 'datetime', 'finished_at' => 'datetime', 'line_checked_at' => 'datetime',
-            'line_check' => 'boolean', 'line_online' => 'boolean'];
+            'line_check' => 'boolean', 'line_online' => 'boolean', 'start_lat' => 'float', 'start_lng' => 'float', 'start_mock' => 'boolean',
+            'finish_lat' => 'float', 'finish_lng' => 'float', 'finish_mock' => 'boolean'];
     }
 
     public function ticket(): BelongsTo

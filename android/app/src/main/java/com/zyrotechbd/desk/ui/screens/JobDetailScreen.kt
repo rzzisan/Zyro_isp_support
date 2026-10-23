@@ -46,6 +46,7 @@ import com.zyrotechbd.desk.call.Phone
 import com.zyrotechbd.desk.core.Format
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.FieldJob
+import com.zyrotechbd.desk.location.FieldTracker
 import com.zyrotechbd.desk.data.network.FinishRequest
 import com.zyrotechbd.desk.data.network.LineState
 import com.zyrotechbd.desk.data.network.MyJobDetail
@@ -126,6 +127,7 @@ fun JobDetailScreen(navController: NavHostController, company: String, ticketId:
             try {
                 setJob(call())
                 notice = null
+                FieldTracker.refresh(context, company)   // a running job sends location every minute
             } catch (e: Exception) {
                 notice = ApiClient.errorMessage(e, s.loadFailed, s.offline) to false
             } finally {
@@ -197,7 +199,7 @@ fun JobDetailScreen(navController: NavHostController, company: String, ticketId:
                     if (j == null) {
                         Text("${s.targetLabel}: ${d.targetMinutes} ${s.minutesShort}", fontSize = 14.sp, color = Muted)
                         Spacer(Modifier.height(10.dp))
-                        if (t.open) PrimaryButton(s.startWork, loading = busy) { step { ApiClient.service.startJob(company, ticketId).job } }
+                        if (t.open) PrimaryButton(s.startWork, loading = busy) { step { ApiClient.service.startJob(company, ticketId, FieldTracker.startRequest(FieldTracker.fix(context))).job } }
                     } else {
                         val worked = workedNow(j, loadedAt, now)
                         val left = target - worked
@@ -349,10 +351,13 @@ fun JobDetailScreen(navController: NavHostController, company: String, ticketId:
                     onDismiss = { showFinish = false },
                 ) { remark, sms, force ->
                     try {
-                        val res = ApiClient.service.finishJob(company, ticketId, FinishRequest(remark.ifBlank { null }, sms, force))
+                        val f = FieldTracker.fix(context)
+                        val res = ApiClient.service.finishJob(company, ticketId,
+                            FinishRequest(remark.ifBlank { null }, sms, force, f?.lat, f?.lng, f?.accuracy, f?.mock))
                         showFinish = false
                         notice = listOfNotNull(s.jobFinished, res.sms).joinToString(" · ") to true
                         load(true)
+                        scope.launch { FieldTracker.refresh(context, company) }
                         null
                     } catch (e: Exception) {
                         scope.launch { checkLine(false) }

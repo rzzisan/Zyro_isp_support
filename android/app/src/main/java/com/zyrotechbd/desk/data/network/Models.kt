@@ -486,7 +486,43 @@ data class LineState(
     @Json(name = "checked_at") val checkedAt: String? = null,
 )
 
-data class FinishRequest(val remark: String?, val sms: Boolean, @Json(name = "force_reason") val forceReason: String?)
+data class FinishRequest(
+    val remark: String?,
+    val sms: Boolean,
+    @Json(name = "force_reason") val forceReason: String?,
+    val lat: Double? = null,
+    val lng: Double? = null,
+    val accuracy: Float? = null,
+    val mock: Boolean? = null,
+)
+
+/** Where the phone was when the work was started (null fields when no location). */
+data class StartRequest(val lat: Double? = null, val lng: Double? = null, val accuracy: Float? = null, val mock: Boolean? = null)
+
+// ── Field location (told to the technician; owner-only map) ─────────────────────
+
+data class LocationState(
+    val consent: Boolean = false,
+    @Json(name = "on_duty") val onDuty: Boolean = false,
+    @Json(name = "on_duty_since") val onDutySince: String? = null,
+    @Json(name = "job_running") val jobRunning: Boolean = false,
+    val track: Boolean = false,
+    val interval: Int = 300,
+    val saved: Int? = null,
+)
+
+data class DutyRequest(val on: Boolean)
+
+data class LocationPoint(
+    val lat: Double,
+    val lng: Double,
+    val accuracy: Float? = null,
+    val mock: Boolean = false,
+    val battery: Int? = null,
+    val at: String,
+)
+
+data class LocationBatch(val points: List<LocationPoint>)
 
 // ── Push ───────────────────────────────────────────────────────────────────────
 
