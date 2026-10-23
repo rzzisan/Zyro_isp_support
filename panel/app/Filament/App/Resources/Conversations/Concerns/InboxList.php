@@ -25,7 +25,11 @@ trait InboxList
     /** Up to 60 chats for the list, newest first, with their last message and the "waiting" flag. */
     public function chatList(): Collection
     {
-        $chats = WaContact::inbox(Filament::getTenant()->getKey(), $this->box, $this->search, auth()->id())->limit(60)->get();
+        $company = Filament::getTenant();
+        $chats = WaContact::inbox($company->getKey(), $this->box, $this->search, auth()->id())
+            ->when(\App\Support\FieldWork::restricted(auth()->user(), $company),
+                fn ($q) => $q->whereIn('id', \App\Support\FieldWork::activeContactIds(auth()->user(), $company)))
+            ->limit(60)->get();
         WaContact::withLineNames($chats);
 
         return $chats;
@@ -33,7 +37,9 @@ trait InboxList
 
     public function waitingCount(): int
     {
-        return WaContact::waitingCount(Filament::getTenant()->getKey());
+        $company = Filament::getTenant();
+
+        return \App\Support\FieldWork::restricted(auth()->user(), $company) ? 0 : WaContact::waitingCount($company->getKey());
     }
 
     public function setBox(string $box): void

@@ -27,6 +27,9 @@ data class CompanyInfo(
     val menus: List<String> = emptyList(),
 ) {
     fun can(menu: String) = menu in menus
+
+    /** A field technician: chats only with customers whose work they have started (the server enforces it too). */
+    val fieldOnly get() = role == "agent" && can("field_jobs")
 }
 
 data class LoginResponse(val token: String, val user: UserInfo, val companies: List<CompanyInfo>)

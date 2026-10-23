@@ -27,7 +27,9 @@ class InboxController extends Controller
     /** One chat: also a field technician's customer (FieldWork::mayChat). */
     private function allowChat(Request $request, Company $company, WaContact $contact): void
     {
-        abort_unless(Menu::allows($request->user(), $company, 'inbox') || \App\Support\FieldWork::mayChat($request->user(), $company, $contact), 403);
+        $user = $request->user();
+        abort_unless(\App\Support\FieldWork::restricted($user, $company) || ! Menu::allows($user, $company, 'inbox')
+            ? \App\Support\FieldWork::mayChat($user, $company, $contact) : true, 403);
     }
 
     private function contact(Company $company, int $id): WaContact
@@ -80,15 +82,18 @@ class InboxController extends Controller
     public function index(Request $request, Company $company): JsonResponse
     {
         $this->allow($request, $company);
+        $field = \App\Support\FieldWork::restricted($request->user(), $company);
         $chats = WaContact::inbox($company->id, (string) $request->query('box', 'all'), (string) $request->query('q', ''),
-            $request->user()->id)->limit(60)->get();
+            $request->user()->id)
+            ->when($field, fn ($q) => $q->whereIn('id', \App\Support\FieldWork::activeContactIds($request->user(), $company)))
+            ->limit(60)->get();
         WaContact::withLineNames($chats);
         $staff = Technician::where('company_id', $company->id)->whereIn('wa_number', $chats->pluck('wa_number'))
             ->pluck('wa_number')->flip();
 
         return response()->json([
             'data' => $chats->map(fn ($c) => self::chat($c, $staff->has($c->wa_number)))->values(),
-            'waiting_count' => WaContact::waitingCount($company->id),
+            'waiting_count' => $field ? 0 : WaContact::waitingCount($company->id),
         ]);
     }
 
@@ -145,6 +150,7 @@ class InboxController extends Controller
     {
         $this->allow($request, $company);
         $c = $this->contact($company, $contact);
+        $this->allowChat($request, $company, $c);
         $id = $request->input('user_id');
         $id = $id === 'me' ? $request->user()->id : ($id === null ? null : (int) $id);
         abort_if($id && ! $company->users()->whereKey($id)->exists(), 422, __('এই সদস্য এই কোম্পানিতে নেই'));
@@ -158,6 +164,7 @@ class InboxController extends Controller
     {
         $this->allow($request, $company);
         $c = $this->contact($company, $contact);
+        $this->allowChat($request, $company, $c);
         $request->validate(['paused' => ['required', 'boolean']]);
         $request->boolean('paused') ? $c->pauseBot(ViewConversation::MANUAL_PAUSE_HOURS) : $c->resumeBot();
 
@@ -169,6 +176,7 @@ class InboxController extends Controller
     {
         $this->allow($request, $company);
         $c = $this->contact($company, $contact);
+        $this->allowChat($request, $company, $c);
         $request->validate(['muted' => ['required', 'boolean']]);
         $c->forceFill(['notify_muted' => $request->boolean('muted')])->save();
 

@@ -94,13 +94,27 @@ class FieldJobController extends Controller
 
         return response()->json([
             'ticket' => $this->row($t, $job),
-            'customer' => $c ? CustomerController::row($c, (bool) $c->onlineSession()) + ['address' => $c->address, 'chat_id' => $c->chat()?->id] : null,
+            'customer' => $c ? CustomerController::row($c, (bool) $c->onlineSession()) + ['address' => $c->address, 'chat_id' => $this->chatId($request, $company, $c)] : null,
             'live' => $info, 'live_error' => $error,
             'target_minutes' => $job?->target_minutes ?? $minutes,
             'line_check' => $job?->line_check ?? $check,
             'can_force' => Menu::allows($request->user(), $company, 'force_solve'),
             'sms_solved' => ['ready' => $sms->eventReady('ticket_solved'), 'on' => $sms->eventOn('ticket_solved')],
         ]);
+    }
+
+    /** The customer's WhatsApp chat when it exists and this member may open it now (a technician: while the work runs). */
+    private function chatId(Request $request, Company $company, BillingCustomer $c): ?int
+    {
+        $chat = $c->chat();
+        if (! $chat) {
+            return null;
+        }
+        $user = $request->user();
+        $open = FieldWork::restricted($user, $company) || ! Menu::allows($user, $company, 'inbox')
+            ? FieldWork::mayChat($user, $company, $chat) : true;
+
+        return $open ? $chat->id : null;
     }
 
     public function start(Request $request, Company $company, int $ticket): JsonResponse

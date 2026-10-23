@@ -174,7 +174,9 @@ class CustomerController extends Controller
 
         return response()->json(['customer' => static::row($c, (bool) $c->onlineSession()) + [
             'address' => $c->address, 'joined_on' => $c->joined_on?->format('Y-m-d'), 'server' => $c->server,
-            'chat_id' => $c->chat()?->id,
+            'chat_id' => ($chat = $c->chat()) && (\App\Support\FieldWork::restricted($request->user(), $company) || ! Menu::allows($request->user(), $company, 'inbox')
+                ? \App\Support\FieldWork::mayChat($request->user(), $company, $chat) : true) ? $chat->id : null,
+            'on_whatsapp' => (bool) $chat,
         ], 'payments' => $payments, 'tickets' => $tickets, 'sections' => $sections,
             'details_fetched_at' => $c->details_fetched_at?->toIso8601String(),
             'history' => BillingTicket::where('company_id', $company->id)->where('customer_header_id', $headerId)
