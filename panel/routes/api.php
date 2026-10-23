@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\CallController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\FieldJobController;
+use App\Http\Controllers\Api\FieldLocationController;
 use App\Http\Controllers\Api\InboxController;
 use App\Http\Controllers\Api\MonitoringController;
 use App\Http\Controllers\Api\TicketController;
@@ -76,6 +77,10 @@ Route::prefix('v1')->group(function () {
                 Route::post("my-jobs/{ticket}/{$step}", [FieldJobController::class, $step])->whereNumber('ticket')->middleware('throttle:30,1');
             }
             Route::post('my-jobs/{ticket}/solve', [FieldJobController::class, 'solve'])->whereNumber('ticket')->middleware('throttle:20,1');
+            Route::get('field/location', [FieldLocationController::class, 'show']);
+            Route::post('field/consent', [FieldLocationController::class, 'consent']);
+            Route::post('field/duty', [FieldLocationController::class, 'duty'])->middleware('throttle:20,1');
+            Route::post('field/locations', [FieldLocationController::class, 'store'])->middleware('throttle:30,1');
         });
     });
 });

@@ -6,12 +6,15 @@ use App\Models\BillingCustomer;
 use App\Models\BillingTicket;
 use App\Models\BotSetting;
 use App\Models\Company;
+use App\Models\CustomerLocation;
 use App\Models\FieldJob;
+use App\Models\FieldLocation;
 use App\Models\Membership;
 use App\Models\User;
 use App\Models\WaContact;
 use App\Services\Engine;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
@@ -210,5 +213,40 @@ class FieldWork
         return $line['online'] === null
             ? __('রাউটার থেকে লাইনের অবস্থা জানা যায়নি, তাই কাজ শেষ করা যাচ্ছে না। একটু পরে আবার চেষ্টা করুন।')
             : __('কাস্টমারের লাইন এখনো Online হয়নি (MikroTik)। Online হলে তবেই কাজ শেষ করা যাবে।');
+    }
+
+    /** The location the app sent with start / solve: lat, lng, accuracy (m), mock; null when none or not valid. */
+    public static function point(Request $request): ?array
+    {
+        $d = $request->validate(['lat' => ['nullable', 'numeric', 'between:-90,90'], 'lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'accuracy' => ['nullable', 'numeric', 'min:0'], 'mock' => ['nullable', 'boolean']]);
+        if (! isset($d['lat'], $d['lng'])) {
+            return null;
+        }
+
+        return ['lat' => (float) $d['lat'], 'lng' => (float) $d['lng'], 'accuracy' => isset($d['accuracy']) ? (int) round($d['accuracy']) : null,
+            'mock' => (bool) ($d['mock'] ?? false)];
+    }
+
+    /** Note where the work was started / finished ($at), and how far that is from where the customer is known to be. */
+    public static function place(FieldJob $job, string $at, ?array $p): void
+    {
+        if (! $p) {
+            return;
+        }
+        $headerId = (int) $job->ticket?->customer_header_id;
+        $home = $headerId ? CustomerLocation::where('company_id', $job->company_id)->where('header_id', $headerId)->first() : null;
+        $job->forceFill(["{$at}_lat" => $p['lat'], "{$at}_lng" => $p['lng'], "{$at}_accuracy" => $p['accuracy'], "{$at}_mock" => $p['mock'],
+            "{$at}_distance" => $home ? FieldLocation::distance($home->lat, $home->lng, $p['lat'], $p['lng']) : null])->save();
+    }
+
+    /** The first job finished at a customer with the line online, from a real and fairly exact fix, tells where they are. */
+    public static function learnCustomer(FieldJob $job, ?array $p): void
+    {
+        $headerId = (int) $job->ticket?->customer_header_id;
+        if (! $p || ! $headerId || $p['mock'] || ($p['accuracy'] ?? 999) > 100 || $job->line_online !== true) {
+            return;
+        }
+        CustomerLocation::firstOrCreate(['company_id' => $job->company_id, 'header_id' => $headerId], ['lat' => $p['lat'], 'lng' => $p['lng']]);
     }
 }

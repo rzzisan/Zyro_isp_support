@@ -154,6 +154,7 @@ fun MyJobsScreen(navController: NavHostController, company: String) {
                 }
             }
             Spacer(Modifier.height(8.dp))
+            if (linked) FieldLocationCard(company)
             if (error != null) {
                 MessageBox(error!!, onRetry = { reload++ }, retryLabel = s.retry)
                 Spacer(Modifier.height(8.dp))

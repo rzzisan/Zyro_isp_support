@@ -130,6 +130,7 @@ class FieldJobController extends Controller
             'started_by' => $request->user()->id, 'started_at' => now(), 'paused_at' => null, 'paused_seconds' => 0, 'pause_reason' => null,
             'target_minutes' => $minutes, 'line_check' => $check, 'finished_at' => null, 'finished_by' => null, 'force_reason' => null]);
         $job->log('start', $request->user()->id);
+        FieldWork::place($job->setRelation('ticket', $t), 'start', FieldWork::point($request));
 
         return response()->json(['job' => self::job($job->load('starter'))]);
     }
@@ -191,7 +192,10 @@ class FieldJobController extends Controller
 
             return response()->json(['message' => $e->getMessage()], 422);
         }
+        $point = FieldWork::point($request);
+        FieldWork::place($job->setRelation('ticket', $t), 'finish', $point);
         FieldWork::solved($t, $request->user()->id, $online, $online === false ? $force : null);
+        FieldWork::learnCustomer($job->fresh()->setRelation('ticket', $t), $point);
         $sms = ($data['sms'] ?? false) ? TicketActions::queueTicketSms('ticket_solved', (int) $t->customer_header_id, $t->mobile, [
             'ticket_no' => (string) $t->complain_id, 'problem' => (string) $t->category, 'status' => 'সমাধান',
             'technician' => (string) ($t->solved_by ?: $t->assigned_to)], $company->id) : null;
