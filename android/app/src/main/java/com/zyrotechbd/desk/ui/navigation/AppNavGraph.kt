@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.zyrotechbd.desk.ui.screens.BillFormScreen
+import com.zyrotechbd.desk.ui.screens.DialPadScreen
 import com.zyrotechbd.desk.ui.screens.ChangePasswordScreen
 import com.zyrotechbd.desk.ui.screens.BillsScreen
 import com.zyrotechbd.desk.ui.screens.ChatScreen
@@ -39,6 +40,7 @@ fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: 
         composable(Routes.Inbox) { InboxScreen(navController, companyKey) }
         composable(Routes.Monitoring) { MonitoringScreen(navController, companyKey) }
         composable(Routes.Calls) { CallsScreen(navController, companyKey) }
+        composable(Routes.DialPad) { DialPadScreen() }
         composable(Routes.Call, arguments = listOf(navArgument("callId") { type = NavType.LongType })) {
             CallDetailScreen(navController, companyKey, it.arguments?.getLong("callId") ?: 0L)
         }

@@ -51,6 +51,8 @@ import com.zyrotechbd.desk.data.network.FinishRequest
 import com.zyrotechbd.desk.data.network.LineState
 import com.zyrotechbd.desk.data.network.MyJobDetail
 import com.zyrotechbd.desk.data.network.PauseRequest
+import com.zyrotechbd.desk.ui.components.CallAction
+import com.zyrotechbd.desk.ui.components.callNumbers
 import com.zyrotechbd.desk.ui.components.Danger
 import com.zyrotechbd.desk.ui.components.DeskCard
 import com.zyrotechbd.desk.ui.components.DeskTextField
@@ -315,17 +317,16 @@ fun JobDetailScreen(navController: NavHostController, company: String, ticketId:
                     Text(listOfNotNull((c?.customerId ?: t.customerId)?.let { "ID $it" }, c?.username).joinToString(" · "),
                         fontSize = 13.sp, color = Muted)
                     Spacer(Modifier.height(6.dp))
-                    InfoRow(s.mobile, c?.mobile ?: t.mobile)
+                    // the customer's own mobile and the contact number given with the ticket, when it is another one
+                    val numbers = callNumbers(s.mobile to (c?.mobile ?: t.mobile), s.contactMobile to t.complainNumber, s.mobile to t.mobile)
+                    numbers.forEach { InfoRow(it.label, it.number) }
                     InfoRow(s.area, c?.place()?.ifEmpty { null } ?: listOfNotNull(t.zone, t.subzone).joinToString(" / "))
                     InfoRow(s.address, c?.address)
                     c?.`package`?.let { InfoRow(s.packageLabel, it) }
                     c?.due?.takeIf { it > 0 }?.let { InfoRow(s.due, Format.tk(it), valueColor = Danger) }
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val mobile = (c?.mobile ?: t.mobile)?.filter { it.isDigit() || it == '+' }.orEmpty()
-                        SmallAction(s.call, Icons.Filled.Call, Modifier.weight(1f), enabled = mobile.isNotEmpty()) {
-                            Phone.dial(context, mobile, "${c?.name ?: t.customerName ?: ""} (ID ${c?.customerId ?: t.customerId ?: ""})")
-                        }
+                        CallAction(numbers, "${c?.name ?: t.customerName ?: ""} (ID ${c?.customerId ?: t.customerId ?: ""})", Modifier.weight(1f))
                         // only the customer's WhatsApp chat in the app, and only while the work runs (the server sends chat_id then)
                         if (c?.chatId != null) {
                             SmallAction(s.titleChat, Icons.Filled.Chat, Modifier.weight(1f), color = Color(0xFF128C7E)) {

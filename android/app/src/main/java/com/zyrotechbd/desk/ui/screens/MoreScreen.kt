@@ -45,6 +45,7 @@ import com.zyrotechbd.desk.ui.components.DeskCard
 import com.zyrotechbd.desk.push.NotifySettings
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -67,6 +68,7 @@ fun MoreScreen(
     onOpen: (String) -> Unit,
     onPrinters: () -> Unit,
     onPassword: () -> Unit,
+    onDialPad: () -> Unit,
     onSwitchCompany: (String) -> Unit,
     onOpenDesk: () -> Unit,
     onToggleLang: () -> Unit,
@@ -98,6 +100,11 @@ fun MoreScreen(
                     MoreRow(t.label, t.icon) { onOpen(t.route) }
                 }
             }
+            Spacer(Modifier.height(16.dp))
+        }
+        // calls to any number go out through the hotline, for members with the phone menu
+        if (company?.can("phone") == true) {
+            DeskCard { MoreRow(s.dialPad, Icons.Filled.Dialpad, onClick = onDialPad) }
             Spacer(Modifier.height(16.dp))
         }
         SectionTitle(s.notifications)

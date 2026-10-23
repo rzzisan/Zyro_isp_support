@@ -51,6 +51,8 @@ import com.zyrotechbd.desk.data.network.Choice
 import com.zyrotechbd.desk.data.network.SolveRequest
 import com.zyrotechbd.desk.data.network.TicketDetail
 import com.zyrotechbd.desk.data.network.TicketOptions
+import com.zyrotechbd.desk.ui.components.CallAction
+import com.zyrotechbd.desk.ui.components.callNumbers
 import com.zyrotechbd.desk.ui.components.Danger
 import com.zyrotechbd.desk.ui.components.DeskCard
 import com.zyrotechbd.desk.ui.components.DeskTextField
@@ -145,7 +147,6 @@ fun TicketDetailScreen(navController: NavHostController, company: String, ticket
                     InfoRow(s.solvedAtLabel, t.solvedAt?.let { Format.dateTime(it) })
                     InfoRow(s.durationLabel, t.duration)
                     InfoRow(s.createdByLabel, t.createdBy)
-                    InfoRow(s.complainNoLabel, t.complainNumber?.takeIf { it != t.mobile })
                     if (t.open) {
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -163,14 +164,12 @@ fun TicketDetailScreen(navController: NavHostController, company: String, ticket
                     Text(t.customerName ?: "", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                     Text(listOfNotNull(t.customerId?.let { "ID $it" }, t.username).joinToString(" · "), fontSize = 13.sp, color = Muted)
                     Spacer(Modifier.height(6.dp))
-                    InfoRow(s.mobile, t.mobile)
+                    val numbers = callNumbers(s.mobile to t.mobile, s.contactMobile to t.complainNumber)
+                    numbers.forEach { InfoRow(it.label, it.number) }
                     InfoRow(s.area, listOfNotNull(t.zone, t.subzone).filter { it.isNotBlank() }.joinToString(" / "))
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val mobile = t.mobile?.filter { it.isDigit() || it == '+' }.orEmpty()
-                        SmallAction(s.call, Icons.Filled.Call, Modifier.weight(1f), enabled = mobile.isNotEmpty()) {
-                            Phone.dial(context, mobile, t.customerName ?: mobile)
-                        }
+                        CallAction(numbers, t.customerName ?: numbers.firstOrNull()?.number.orEmpty(), Modifier.weight(1f))
                         val company0 = SessionStore.company()
                         val canOpen = t.headerId != null && (company0?.can("customers") == true || company0?.can("bills") == true)
                         if (canOpen) {
