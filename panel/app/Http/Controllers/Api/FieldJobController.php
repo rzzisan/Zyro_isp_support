@@ -215,8 +215,8 @@ class FieldJobController extends Controller
         }
         $online = $job->line_check ? (bool) $job->fresh()->line_online : null;
         try {
-            // the engine checks the line again, unless this category needs no line or a reason was accepted above
-            Engine::solve($company->id, $t->complain_id, $data['remark'] ?? null, $online !== true);
+            // the line was just asked from the router above (or needs no check, or a reason was accepted): no second check
+            Engine::solve($company->id, $t->complain_id, $data['remark'] ?? null, true);
         } catch (RuntimeException $e) {
             Cache::forget('ticket-info:'.$company->id.':'.(int) $t->customer_header_id);
 
