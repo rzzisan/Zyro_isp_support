@@ -120,11 +120,8 @@ class OnuEntry
     public static function searchCustomers(int $companyId, string $search): array
     {
         $search = trim($search);
-        $digits = preg_replace('/\D/', '', $search);
         $rows = BillingCustomer::where('company_id', $companyId)->whereNull('gone_at')
-            ->where(fn ($w) => $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$search])
-                ->orWhere('username', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%")
-                ->when(strlen($digits) >= 5, fn ($x) => $x->orWhere('mobile', 'like', "%{$digits}%")))
+            ->matching($search)
             ->orderByRaw("ltrim(customer_id, '0') = ltrim(?, '0') DESC", [$search])->orderBy('is_left')->orderBy('customer_id')->limit(15)
             ->get(['customer_id', 'name', 'mobile', 'username', 'zone', 'subzone', 'box', 'is_left', 'left_on']);
         $options = $rows->mapWithKeys(fn ($c) => [$c->customer_id => BillingCustomer::searchLabel($c)])->all();

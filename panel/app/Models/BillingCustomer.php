@@ -43,26 +43,52 @@ class BillingCustomer extends Model
     }
 
     /**
+     * Customer search used everywhere in the desk (customer list, header search, pickers, app): the customer ID, any
+     * part of the PPPoE user or name (case-insensitive; with several words each word must match, in any order), or
+     * the mobile written any way: 01711-223344, +880 1711 223344, 8801711223344 or just its last digits.
+     */
+    public function scopeMatching(Builder $query, string $search): Builder
+    {
+        $q = trim(preg_replace('/\s+/u', ' ', mb_substr($search, 0, 60)));
+        if ($q === '') {
+            return $query;
+        }
+        $like = fn (string $s) => '%'.addcslashes($s, '%_\\').'%';
+        $digits = preg_replace('/\D/', '', $q);
+
+        return $query->where(function (Builder $w) use ($q, $like, $digits) {
+            $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$q])->orWhere('customer_id', 'ilike', $like($q))
+                ->orWhere('username', 'ilike', $like($q))->orWhere('name', 'ilike', $like($q));
+            $words = explode(' ', $q);
+            if (count($words) > 1) {
+                $w->orWhere(function (Builder $all) use ($words, $like) {
+                    foreach ($words as $word) {
+                        $all->where(fn (Builder $one) => $one->where('name', 'ilike', $like($word))->orWhere('username', 'ilike', $like($word)));
+                    }
+                });
+            }
+            // a phone number: drop the country code and the leading 0, then match the rest anywhere in the mobile
+            $core = preg_replace('/^(?:88)?0?/', '', $digits);
+            if (strlen($core) >= 4 && strlen($digits) * 2 >= strlen(str_replace(' ', '', $q))) {
+                $w->orWhere('mobile_normalized', 'like', "%{$core}%")
+                    ->orWhereRaw("regexp_replace(coalesce(mobile, ''), ?, '', 'g') like ?", ['\D', "%{$core}%"]);
+            }
+        });
+    }
+
+    /**
      * Header search, like the billing software's: any part of the customer ID, PPPoE user, name or mobile. Reads the
      * desk's own copy; when that has nobody, asks billing's header search and copies the customers we don't have.
      * Left customers are included after the current ones. Shared by the panel's header search and the app.
      */
     public static function headerSearch(int $companyId, string $search, int $limit = 30): Collection
     {
-        $q = trim(mb_substr($search, 0, 30));
+        $q = trim(mb_substr($search, 0, 60));
         if ($q === '') {
             return collect();
         }
         $base = fn () => static::where('company_id', $companyId)->whereNull('gone_at');
-        $rows = $base()->where(function (Builder $w) use ($q) {
-            $like = '%'.addcslashes($q, '%_\\').'%';
-            $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$q])->orWhere('customer_id', 'ilike', $like)
-                ->orWhere('username', 'ilike', $like)->orWhere('name', 'ilike', $like);
-            $digits = ltrim(preg_replace('/\D/', '', $q), '0');
-            if (strlen($digits) >= 4 && strlen($digits) * 2 >= strlen($q)) {
-                $w->orWhere('mobile_normalized', 'like', "%{$digits}%");
-            }
-        })
+        $rows = $base()->matching($q)
             ->orderByRaw("(ltrim(customer_id, '0') = ltrim(?, '0') OR lower(username) = lower(?)) DESC", [$q, $q])
             ->orderBy('is_left')->orderByRaw("CASE WHEN customer_id ~ '^[0-9]{1,9}$' THEN customer_id::bigint END")
             ->limit($limit)->get();
