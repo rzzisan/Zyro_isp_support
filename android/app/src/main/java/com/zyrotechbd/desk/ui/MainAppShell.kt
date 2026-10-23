@@ -98,8 +98,9 @@ data class Tab(val route: String, val label: String, val icon: ImageVector)
  * The first four sit in the bottom bar next to "More"; the rest are listed on the More screen.
  */
 private fun screensFor(company: CompanyInfo?, s: AppStrings): List<Tab> = buildList {
-    add(Tab(Routes.Dashboard, s.navDashboard, Icons.Filled.Home))
+    // a field technician opens on their jobs, in the dashboard's place
     if (company?.can("field_jobs") == true) add(Tab(Routes.MyJobs, s.navMyJobs, Icons.Filled.Engineering))
+    else add(Tab(Routes.Dashboard, s.navDashboard, Icons.Filled.Home))
     if (company?.can("inbox") == true) add(Tab(Routes.Inbox, s.navInbox, Icons.Filled.Forum))
     if (company?.can("tickets") == true) add(Tab(Routes.Tickets, s.navTickets, Icons.Filled.ConfirmationNumber))
     if (company?.can("customers") == true || company?.can("bills") == true) {
@@ -273,7 +274,8 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
         ) { padding ->
             // the app draws edge to edge, so adjustResize does not shrink it: make room for the keyboard here
             Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
-                AppNavGraph(navController = navController, companyKey = companyKey, modifier = Modifier.fillMaxSize()) {
+                AppNavGraph(navController = navController, companyKey = companyKey, modifier = Modifier.fillMaxSize(),
+                    start = if (company?.can("field_jobs") == true) Routes.MyJobs else Routes.Dashboard) {
                     MoreScreen(
                         company = company,
                         companies = companies,

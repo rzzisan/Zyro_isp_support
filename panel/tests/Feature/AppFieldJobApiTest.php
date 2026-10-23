@@ -103,6 +103,23 @@ class AppFieldJobApiTest extends TestCase
         $this->api($this->tech)->getJson($this->url('chats/'.$other->id))->assertForbidden();
     }
 
+    public function test_only_members_given_the_menu_have_my_jobs_not_owners_or_admins_by_default(): void
+    {
+        $owner = User::factory()->create();
+        $this->company->users()->attach($owner, ['role' => 'owner']);
+        $admin = User::factory()->create();
+        $this->company->users()->attach($admin, ['role' => 'admin']);
+        foreach ([$owner, $admin] as $u) {
+            $menus = $this->api($u)->getJson('/api/v1/me')->assertOk()->json('companies.0.menus');
+            $this->assertNotContains('field_jobs', $menus);
+            $this->assertContains('inbox', $menus);
+            $this->api($u)->getJson($this->url('my-jobs'))->assertForbidden();
+        }
+        $this->assertContains('field_jobs', $this->api($this->tech)->getJson('/api/v1/me')->json('companies.0.menus'));
+        Membership::where('user_id', $owner->id)->update(['permissions' => json_encode(['field_jobs'])]);   // the owner as a technician too
+        $this->api($owner)->getJson($this->url('my-jobs'))->assertOk();
+    }
+
     public function test_not_linked_or_without_the_menu(): void
     {
         $this->ticket('1', 'Rifat');
