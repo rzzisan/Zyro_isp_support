@@ -42,6 +42,13 @@ import com.zyrotechbd.desk.data.network.CompanyInfo
 import com.zyrotechbd.desk.ui.Tab
 import com.zyrotechbd.desk.ui.components.Danger
 import com.zyrotechbd.desk.ui.components.DeskCard
+import com.zyrotechbd.desk.push.NotifySettings
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import com.zyrotechbd.desk.ui.components.SectionTitle
 import com.zyrotechbd.desk.ui.strings.LocalStrings
 import com.zyrotechbd.desk.ui.theme.Ink
@@ -93,6 +100,17 @@ fun MoreScreen(
             }
             Spacer(Modifier.height(16.dp))
         }
+        SectionTitle(s.notifications)
+        DeskCard {
+            var chats by remember { mutableStateOf(NotifySettings.chats) }
+            ToggleRow(s.notifyChats, Icons.Filled.Notifications, chats) { chats = it; NotifySettings.chats = it }
+            if (company?.can("phone") == true) {
+                var calls by remember { mutableStateOf(NotifySettings.calls) }
+                HorizontalDivider(color = Line)
+                ToggleRow(s.notifyCalls, Icons.Filled.Call, calls) { calls = it; NotifySettings.calls = it }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
         DeskCard {
             MoreRow(s.navPrinters, Icons.Filled.Print, onClick = onPrinters)
             HorizontalDivider(color = Line)
@@ -121,6 +139,18 @@ fun MoreScreen(
         Spacer(Modifier.height(16.dp))
         Text("Zyro Desk · ${s.version} ${BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = Muted,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+@Composable
+private fun ToggleRow(label: String, icon: ImageVector, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = Muted, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(label, fontSize = 15.sp, color = Ink, modifier = Modifier.weight(1f))
+        androidx.compose.material3.Switch(checked = checked, onCheckedChange = onChange,
+            colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Primary))
     }
 }
 

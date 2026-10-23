@@ -25,7 +25,7 @@ class DeskMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val d = message.data
         when (d["type"]) {
-            "call" -> return incomingCall(d)
+            "call" -> return if (NotifySettings.calls) incomingCall(d) else Unit   // turned off on this phone: no ringing
             "call_taken" -> {
                 val uid = d["uid"] ?: return
                 Push.callTaken.tryEmit(uid)
@@ -38,6 +38,7 @@ class DeskMessagingService : FirebaseMessagingService() {
         val chatId = d["chat_id"]?.toLongOrNull() ?: return
         Push.events.tryEmit(chatId)
         if (Push.visibleChat == chatId) return  // already reading it
+        if (!NotifySettings.chats) return  // turned off on this phone (lists still refresh)
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val intent = Intent(this, MainActivity::class.java)

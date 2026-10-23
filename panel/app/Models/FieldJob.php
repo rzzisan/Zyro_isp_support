@@ -11,6 +11,12 @@ class FieldJob extends Model
 {
     protected $guarded = [];
 
+    protected static function booted(): void
+    {
+        // a started / finished job opens or closes that customer's chat pushes for the technicians on it
+        static::saved(fn (FieldJob $j) => \App\Support\FieldWork::refreshChats((int) $j->company_id));
+    }
+
     protected function casts(): array
     {
         return ['started_at' => 'datetime', 'paused_at' => 'datetime', 'finished_at' => 'datetime', 'line_checked_at' => 'datetime',

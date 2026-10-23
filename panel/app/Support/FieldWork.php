@@ -102,6 +102,28 @@ class FieldWork
         return in_array($contact->id, static::activeContactIds($user, $company), true);
     }
 
+    /**
+     * Keep company_user.field_restricted / field_chat_ids current, so the engine pushes a technician's phone and browser
+     * only the messages of their running work (engine/fcm.py, engine/webpush.py). Runs when a job or a member changes.
+     */
+    public static function refreshChats(int $companyId, ?int $userId = null): void
+    {
+        $company = Company::find($companyId);
+        if (! $company) {
+            return;
+        }
+        Membership::where('company_id', $companyId)->when($userId, fn ($q) => $q->where('user_id', $userId))->with('user')->get()
+            ->each(function (Membership $m) use ($company) {
+                $user = $m->user;
+                $restricted = static::restricted($user, $company);
+                $ids = static::allowed($user, $company) ? static::activeContactIds($user, $company) : null;
+                $json = $ids === null ? null : json_encode(array_values(array_map('intval', $ids)));
+                if ((bool) $m->field_restricted !== $restricted || $m->getRawOriginal('field_chat_ids') !== $json) {
+                    Membership::whereKey($m->id)->update(['field_restricted' => $restricted, 'field_chat_ids' => $json]);
+                }
+            });
+    }
+
     /** [minutes, line_check] for a ticket category (billing's name), from the field work settings. */
     public static function target(int $companyId, ?string $category): array
     {

@@ -72,6 +72,7 @@ class FieldJobController extends Controller
     {
         $this->allow($request, $company);
         FieldWork::closeSolved($company->id);
+        FieldWork::refreshChats($company->id, $request->user()->id);   // group menus or ticket assignments may have changed
         $tickets = FieldWork::tickets($request->user(), $company)->orderByDesc('opened_at')->orderByDesc('id')->limit(100)->get();
         $jobs = FieldJob::whereIn('ticket_id', $tickets->pluck('id'))->with('starter')->get()->keyBy('ticket_id');
         $online = BillingCustomer::where('company_id', $company->id)->whereIn('header_id', $tickets->pluck('customer_header_id')->filter())
@@ -172,6 +173,7 @@ class FieldJobController extends Controller
         abort_unless($t->isOpen(), 422, __('টিকিটটা আর খোলা নেই'));
         $on = $request->boolean('on', true);
         $t->forceFill(['field_later_on' => $on ? now(FieldDuty::TZ)->addDay()->toDateString() : null])->save();
+        FieldWork::refreshChats($company->id);
         $job = FieldJob::where('ticket_id', $t->id)->first();
         if ($on && $job?->status === 'running') {
             $job->forceFill(['status' => 'paused', 'paused_at' => now(), 'pause_reason' => __('আগামীকাল করা হবে')])->save();
