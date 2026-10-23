@@ -116,15 +116,18 @@ class AppFieldJobApiTest extends TestCase
             $this->api($u)->getJson($this->url('my-jobs'))->assertForbidden();
         }
         $this->assertContains('field_jobs', $this->api($this->tech)->getJson('/api/v1/me')->json('companies.0.menus'));
-        Membership::where('user_id', $owner->id)->update(['permissions' => json_encode(['field_jobs'])]);   // the owner as a technician too
+        Membership::where('user_id', $owner->id)->update(['permissions' => json_encode(['field_jobs'])]);   // given, but not linked
+        $this->api($owner)->getJson($this->url('my-jobs'))->assertForbidden();
+        Membership::where('user_id', $owner->id)->update(['billing_employee_id' => '4']);   // the owner as a technician too
         $this->api($owner)->getJson($this->url('my-jobs'))->assertOk();
     }
 
     public function test_not_linked_or_without_the_menu(): void
     {
         $this->ticket('1', 'Rifat');
-        Membership::where('user_id', $this->tech->id)->update(['billing_employee_id' => null]);
-        $this->api($this->tech)->getJson($this->url('my-jobs'))->assertOk()->assertJsonCount(0, 'data')->assertJsonPath('linked', false);
+        Membership::where('user_id', $this->tech->id)->update(['billing_employee_id' => null]);   // not a technician without the link
+        $this->api($this->tech)->getJson($this->url('my-jobs'))->assertForbidden();
+        $this->assertNotContains('field_jobs', $this->api($this->tech)->getJson('/api/v1/me')->json('companies.0.menus'));
         Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['inbox']), 'billing_employee_id' => '3']);
         $this->api($this->tech)->getJson($this->url('my-jobs'))->assertForbidden();
     }

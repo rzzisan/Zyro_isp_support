@@ -69,7 +69,8 @@ class Menu
             return false;
         }
         if (in_array($key, self::EXPLICIT, true)) {
-            return in_array($key, self::keys($m), true);   // "আমার কাজ": field technicians only
+            // "আমার কাজ": field technicians only, i.e. given the menu and linked to a billing employee on the team page
+            return in_array($key, self::keys($m), true) && filled($m->billing_employee_id);
         }
         if ($m->role === 'owner') {
             return true;
