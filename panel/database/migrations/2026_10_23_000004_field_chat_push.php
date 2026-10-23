@@ -14,6 +14,12 @@ return new class extends Migration
             $table->boolean('field_restricted')->default(false);
             $table->jsonb('field_chat_ids')->nullable();
         });
+        // technicians already set up get no other chats' pushes from now on; their running work fills in on the next change
+        foreach (\Illuminate\Support\Facades\DB::table('company_user')->where('role', 'agent')->get(['id', 'permissions']) as $m) {
+            if (in_array('field_jobs', json_decode((string) $m->permissions, true) ?: [], true)) {
+                \Illuminate\Support\Facades\DB::table('company_user')->where('id', $m->id)->update(['field_restricted' => true, 'field_chat_ids' => '[]']);
+            }
+        }
     }
 
     public function down(): void
