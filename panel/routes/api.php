@@ -58,6 +58,7 @@ Route::prefix('v1')->group(function () {
             Route::get('calls/{call}', [CallController::class, 'show'])->whereNumber('call');
             Route::get('calls/{call}/recording', [CallController::class, 'recording'])->whereNumber('call');
             Route::get('softphone', [CallController::class, 'softphone']);
+            Route::get('call-info', [CallController::class, 'callInfo']);
 
             Route::get('tickets', [TicketController::class, 'index']);
             Route::get('ticket-customers', [TicketController::class, 'customers']);

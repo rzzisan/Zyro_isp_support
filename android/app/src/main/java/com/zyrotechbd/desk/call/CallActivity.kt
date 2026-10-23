@@ -6,10 +6,12 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
@@ -21,84 +23,75 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.zyrotechbd.desk.BuildConfig
 import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.network.ApiClient
+import com.zyrotechbd.desk.data.network.CallInfo
+import com.zyrotechbd.desk.data.network.LiveInfo
 import com.zyrotechbd.desk.push.Push
-import com.zyrotechbd.desk.ui.theme.Background
 import com.zyrotechbd.desk.ui.theme.DeskTheme
-import com.zyrotechbd.desk.ui.theme.Ink
-import com.zyrotechbd.desk.ui.theme.Muted
-import com.zyrotechbd.desk.ui.theme.StatusDue
-import com.zyrotechbd.desk.ui.theme.StatusPaid
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
+/** Where the call is: ringing here, connecting, the other side ringing, talking, over. */
+enum class CallPhase { Ringing, Connecting, Calling, Talking, Ended }
+
 /**
- * Desk phone: a WebView of the panel's softphone page (panel/public/softphone/phone.html, JsSIP over wss into Asterisk),
- * fed its login through window.ZyroApp. Opened ringing by a WhatsApp call push (ধরুন takes it, if nobody else did)
- * or straight away to call a customer through the hotline extension.
+ * Desk phone. The call itself runs in a hidden WebView of the panel's softphone page (panel/public/softphone/phone.html,
+ * JsSIP over wss into Asterisk), fed its login through window.ZyroApp, which reports the call's state back. The screen
+ * (CallScreen.kt) is native: who the caller is (their lines, MikroTik/ONU now, open tickets, a new ticket) and the call
+ * controls. Opened ringing by a WhatsApp call push (ধরুন takes it, if nobody else did) or straight away to call a
+ * customer through the hotline extension.
  */
 class CallActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_COMPANY = "company"
         private const val EXTRA_TARGET = "target"
         private const val EXTRA_TITLE = "title"
+        private const val EXTRA_NUMBER = "number"
         private const val EXTRA_UID = "uid"
         private const val EXTRA_ANSWER = "answer"
         private const val RING_SECONDS = 45_000L
 
         /** A ringing WhatsApp call; answer = the notification's ধরুন was tapped. */
-        fun incoming(context: Context, company: String, uid: String, title: String, answer: Boolean): Intent =
+        fun incoming(context: Context, company: String, uid: String, title: String, number: String, answer: Boolean): Intent =
             Intent(context, CallActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra(EXTRA_COMPANY, company).putExtra(EXTRA_UID, uid)
+                .putExtra(EXTRA_COMPANY, company).putExtra(EXTRA_UID, uid).putExtra(EXTRA_NUMBER, number)
                 .putExtra(EXTRA_TARGET, "take-$uid").putExtra(EXTRA_TITLE, title).putExtra(EXTRA_ANSWER, answer)
 
         fun outgoing(context: Context, company: String, number: String, title: String): Intent =
             Intent(context, CallActivity::class.java)
-                .putExtra(EXTRA_COMPANY, company).putExtra(EXTRA_TARGET, number).putExtra(EXTRA_TITLE, title)
-                .putExtra(EXTRA_ANSWER, true)
+                .putExtra(EXTRA_COMPANY, company).putExtra(EXTRA_TARGET, number).putExtra(EXTRA_NUMBER, number)
+                .putExtra(EXTRA_TITLE, title).putExtra(EXTRA_ANSWER, true)
     }
 
-    private var ringing by mutableStateOf(false)
-    private var status by mutableStateOf("")
-    private var web by mutableStateOf<WebView?>(null)
+    // ── what CallScreen shows ──
+    var phase by mutableStateOf(CallPhase.Connecting); private set
+    var status by mutableStateOf(""); private set
+    var talkingSince by mutableStateOf<Long?>(null); private set
+    var muted by mutableStateOf(false); private set
+    var speaker by mutableStateOf(false); private set
+    var info by mutableStateOf<CallInfo?>(null); private set
+    var infoError by mutableStateOf<String?>(null); private set
+    var selected by mutableStateOf(0); private set
+    var live by mutableStateOf<LiveInfo?>(null); private set
+    var liveLoading by mutableStateOf(false); private set
+    var liveError by mutableStateOf<String?>(null); private set
+    var web by mutableStateOf<WebView?>(null); private set
+
     private var config: String? = null
     private var oldAudioMode = AudioManager.MODE_NORMAL
+    private var liveJob: Job? = null
 
     // a ComponentActivity with no fragments; lint only sees an old fragment library pulled in transitively
     @SuppressLint("InvalidFragmentVersionForActivityResult")
@@ -106,9 +99,11 @@ class CallActivity : ComponentActivity() {
         if (ok) connect() else end("মাইক্রোফোনের অনুমতি ছাড়া কল করা যায় না")
     }
 
-    private val company get() = intent.getStringExtra(EXTRA_COMPANY).orEmpty()
+    val company get() = intent.getStringExtra(EXTRA_COMPANY).orEmpty()
     private val target get() = intent.getStringExtra(EXTRA_TARGET).orEmpty()
-    private val title get() = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+    val title get() = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+    val number get() = intent.getStringExtra(EXTRA_NUMBER) ?: target.takeUnless { it.startsWith("take-") }.orEmpty()
+    val whatsapp get() = target.startsWith("take-")
     private val uid get() = intent.getStringExtra(EXTRA_UID)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,13 +120,14 @@ class CallActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = hangUp()
         })
-        setContent { DeskTheme { Screen() } }
+        setContent { DeskTheme { CallScreen(this) } }
 
         // the call was taken elsewhere (or by the bot) or the caller gave up: stop ringing here
         lifecycleScope.launch {
             Push.callTaken.collect { if (it == uid && web == null) end(null) }
         }
         start(intent)
+        loadInfo()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -145,20 +141,64 @@ class CallActivity : ComponentActivity() {
     private fun start(intent: Intent) {
         if (intent.getBooleanExtra(EXTRA_ANSWER, false)) answer()
         else {
-            ringing = true
+            phase = CallPhase.Ringing
             lifecycleScope.launch {
                 delay(RING_SECONDS)
-                if (web == null) end(null)
+                if (web == null && phase == CallPhase.Ringing) end(null)
             }
         }
     }
 
-    private fun answer() {
-        ringing = false
+    fun answer() {
+        phase = CallPhase.Connecting
         uid?.let { CallNotifications.cancel(this, it) }
         status = "সংযোগ হচ্ছে…"
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) connect()
         else mic.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    /** Who the number is: their lines and open tickets; then the live box of the chosen line. */
+    fun loadInfo() {
+        val n = number.filter { it.isDigit() }
+        if (n.length < 8) return
+        lifecycleScope.launch {
+            infoError = null
+            try {
+                val i = ApiClient.service.callInfo(company, n)
+                info = i
+                if (selected >= i.lines.size) selected = 0
+                if (live == null) loadLive(false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                infoError = ApiClient.errorMessage(e, "কাস্টমারের তথ্য আনা যায়নি", "ইন্টারনেট নেই")
+            }
+        }
+    }
+
+    fun select(i: Int) {
+        if (i == selected) return
+        selected = i
+        live = null
+        loadLive(false)
+    }
+
+    fun loadLive(fresh: Boolean) {
+        val line = info?.lines?.getOrNull(selected) ?: return
+        liveJob?.cancel()
+        liveJob = lifecycleScope.launch {
+            liveLoading = true
+            liveError = null
+            try {
+                live = ApiClient.service.customerLive(company, line.customer.headerId, if (fresh) 1 else null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                liveError = ApiClient.errorMessage(e, "রাউটার/ONU-এর তথ্য আনা যায়নি", "ইন্টারনেট নেই")
+            } finally {
+                liveLoading = false
+            }
+        }
     }
 
     /** Fetch this member's softphone login, then load the page that dials. */
@@ -168,7 +208,7 @@ class CallActivity : ComponentActivity() {
                 end("ফোন চালু করা যায়নি: ${it.message ?: ""}")
                 return@launch
             }
-            if (!target.startsWith("take-") && !cfg.canCallOut) {
+            if (!whatsapp && !cfg.canCallOut) {
                 // no hotline line in Desk: the phone's own dialer then
                 startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$target")))
                 finish()
@@ -179,7 +219,6 @@ class CallActivity : ComponentActivity() {
             val am = getSystemService(AudioManager::class.java)
             oldAudioMode = am.mode
             am.mode = AudioManager.MODE_IN_COMMUNICATION
-            status = ""
             web = newWebView().also { it.loadUrl(BuildConfig.DESK_URL + "softphone/phone.html") }
         }
     }
@@ -208,16 +247,60 @@ class CallActivity : ComponentActivity() {
         @JavascriptInterface
         fun config(): String = config ?: "{}"
 
+        /** The page's state code: calling, ringing, talking, ended. */
         @JavascriptInterface
         fun state(s: String) {
-            if (s == "ended") lifecycleScope.launch {
-                delay(1500)
-                finish()
+            runOnUiThread {
+                when (s) {
+                    "calling", "ringing" -> if (phase != CallPhase.Talking) phase = CallPhase.Calling
+                    "talking" -> {
+                        phase = CallPhase.Talking
+                        if (talkingSince == null) talkingSince = SystemClock.elapsedRealtime()
+                    }
+                    "ended" -> {
+                        phase = CallPhase.Ended
+                        // stay a moment, longer when the call never connected (its reason is on screen)
+                        lifecycleScope.launch {
+                            delay(if (talkingSince == null) 3500 else 1500)
+                            finish()
+                        }
+                    }
+                }
             }
+        }
+
+        /** The page's own line for the state (also why a call failed). */
+        @JavascriptInterface
+        fun status(text: String) {
+            runOnUiThread { status = text }
         }
     }
 
-    private fun hangUp() {
+    fun toggleMute() {
+        val w = web ?: return
+        w.evaluateJavascript("document.getElementById('mute').click()", null)
+        muted = !muted
+    }
+
+    fun toggleSpeaker() {
+        routeSpeaker(!speaker)
+    }
+
+    private fun routeSpeaker(on: Boolean) {
+        val am = getSystemService(AudioManager::class.java)
+        if (Build.VERSION.SDK_INT >= 31) {
+            if (on) {
+                am.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                    ?.let { am.setCommunicationDevice(it) }
+            } else am.clearCommunicationDevice()
+        } else {
+            @Suppress("DEPRECATION")
+            am.isSpeakerphoneOn = on
+        }
+        speaker = on
+    }
+
+    fun hangUp() {
         val w = web
         if (w == null) {
             end(null)
@@ -230,13 +313,15 @@ class CallActivity : ComponentActivity() {
         }
     }
 
+    fun decline() = end(null)
+
     private fun end(message: String?) {
         uid?.let { CallNotifications.cancel(this, it) }
         if (message == null) {
             finish()
             return
         }
-        ringing = false
+        phase = CallPhase.Ended
         status = message
         lifecycleScope.launch {
             delay(2500)
@@ -248,53 +333,11 @@ class CallActivity : ComponentActivity() {
         web?.let {
             it.evaluateJavascript("window.zyroHangup && window.zyroHangup()", null)
             it.destroy()
+            if (speaker) routeSpeaker(false)
             getSystemService(AudioManager::class.java).mode = oldAudioMode
         }
         web = null
         super.onDestroy()
-    }
-
-    @Composable
-    private fun Screen() {
-        val w = web
-        if (w != null) {
-            AndroidView({ w }, Modifier.fillMaxSize())
-            return
-        }
-        Column(
-            Modifier.fillMaxSize().background(Background).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 48.dp)) {
-                Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(6.dp))
-                Text(if (target.startsWith("take-")) "WhatsApp কল" else "হটলাইন থেকে কল", fontSize = 15.sp, color = Muted)
-                Spacer(Modifier.height(24.dp))
-                Text(if (ringing) "কল আসছে…" else status, fontSize = 17.sp, color = Ink, textAlign = TextAlign.Center)
-            }
-            if (ringing) {
-                Row(horizontalArrangement = Arrangement.spacedBy(64.dp), modifier = Modifier.padding(bottom = 32.dp)) {
-                    RoundButton(Icons.Filled.CallEnd, "কাটুন", StatusDue) { end(null) }
-                    RoundButton(Icons.Filled.Call, "ধরুন", StatusPaid) { answer() }
-                }
-            } else {
-                RoundButton(Icons.Filled.CallEnd, "কেটে দিন", StatusDue) { end(null) }
-            }
-        }
-    }
-
-    @Composable
-    private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color, onClick: () -> Unit) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(72.dp).background(color, CircleShape), contentAlignment = Alignment.Center) {
-                IconButton(onClick = onClick, modifier = Modifier.size(72.dp)) {
-                    Icon(icon, label, tint = Color.White, modifier = Modifier.size(32.dp))
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(label, fontSize = 13.sp, color = Muted)
-        }
     }
 }
 

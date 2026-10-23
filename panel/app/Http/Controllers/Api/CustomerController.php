@@ -229,7 +229,10 @@ class CustomerController extends Controller
     /** The live box of the customer page: MikroTik now, OLT/ONU now, billing state (same as the ticket form's). */
     public function live(Request $request, Company $company, int $headerId): JsonResponse
     {
-        $this->allow($request, $company);
+        // also on the app's call screen, for members who take calls without the customers menu
+        if (! Menu::allows($request->user(), $company, 'phone')) {
+            $this->allow($request, $company);
+        }
         $key = 'ticket-info:'.$company->id.':'.$headerId;
         if ($request->boolean('fresh')) {
             Cache::forget($key);
