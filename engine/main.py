@@ -838,8 +838,16 @@ async def solve(request: Request, company_id: int, complain_id: int, background:
             raise HTTPException(status_code=400, detail=f"কাস্টমারের লাইন MikroTik-এ ব্লক ({mk.get('profile')}), ইন্টারনেট নেই; লাইন চালু হলে Solve করুন")
         if not mk.get("online"):
             raise HTTPException(status_code=400, detail="কাস্টমার MikroTik-এ অফলাইন, লাইন চালু হলে Solve করুন")
-    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
-    await run_in_threadpool(billing_call, lambda: api.solve_ticket(complain_id, (b.get("remark") or "")[:500]))
+    uid = int(b.get("user_id") or 0)
+    remark = b.get("remark") or ""
+    # a member without a personal billing login (field technicians) solves with the company login; the remark says who
+    own = db.one("SELECT billing_username, billing_password FROM company_user WHERE company_id = %s AND user_id = %s", (company_id, uid))
+    if own is not None and not (own["billing_username"] and own["billing_password"]):
+        who = db.one("SELECT name FROM users WHERE id = %s", (uid,))
+        if who and who["name"]:
+            remark = f"[{who['name']}] {remark}".strip()
+    api = billing_call(lambda: tenants.billing_for_user(t, uid, member_fallback=True))
+    await run_in_threadpool(billing_call, lambda: api.solve_ticket(complain_id, remark[:500]))
     db.execute("""UPDATE billing_tickets SET state = 'solved', solved_at = now(), solved_by = COALESCE(solved_by, assigned_to),
                     updated_at = now() WHERE company_id = %s AND complain_id = %s""", (company_id, str(complain_id)))
     background.add_task(refresh_tickets, t)
