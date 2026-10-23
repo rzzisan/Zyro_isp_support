@@ -32,7 +32,7 @@ class FieldLocationTest extends TestCase
         $cid = $this->company->id;
         $this->tech = User::factory()->create(['name' => 'Rifat']);
         $this->company->users()->attach($this->tech, ['role' => 'agent']);
-        Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['field_jobs']), 'billing_employee_id' => '3']);
+        Membership::where('user_id', $this->tech->id)->update(['field_technician' => true, 'permissions' => json_encode([]), 'billing_employee_id' => '3']);
         BillingOption::create(['company_id' => $cid, 'kind' => 'employees', 'option_id' => '3', 'name' => 'Rifat']);
         BillingCustomer::create(['company_id' => $cid, 'header_id' => 15630, 'customer_id' => '5629', 'name' => 'Bulbul',
             'username' => 'tld.bulbul', 'mobile' => '01838216754']);
@@ -87,7 +87,7 @@ class FieldLocationTest extends TestCase
         $this->assertNotNull(Membership::where('user_id', $this->tech->id)->value('location_consent_at'));
 
         // someone without the menu cannot send
-        Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['inbox'])]);
+        Membership::where('user_id', $this->tech->id)->update(['field_technician' => false]);
         $this->api($this->tech)->getJson($this->url('field/location'))->assertForbidden();
     }
 

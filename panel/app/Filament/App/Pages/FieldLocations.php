@@ -62,11 +62,11 @@ class FieldLocations extends Page
         return (int) Filament::getTenant()->getKey();
     }
 
-    /** Members linked to a billing employee or with any point: [user_id => name]. */
+    /** Members ticked as field technicians or with any point: [user_id => name]. */
     public function technicians(): array
     {
         $cid = $this->companyId();
-        $ids = Membership::where('company_id', $cid)->whereNotNull('billing_employee_id')->pluck('user_id')
+        $ids = Membership::where('company_id', $cid)->where('field_technician', true)->pluck('user_id')
             ->merge(FieldLocation::where('company_id', $cid)->distinct()->pluck('user_id'))->unique();
 
         return \App\Models\User::whereIn('id', $ids)->orderBy('name')->pluck('name', 'id')->all();
