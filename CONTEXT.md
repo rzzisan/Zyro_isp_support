@@ -478,4 +478,4 @@
 - APK 1.11.0 (versionCode 16) https://desk.zyrotechbd.com/apk/zyro-desk.apk, একই release key (SHA-256 a232f5ba…ec7d72)। প্রথম build lintVitalRelease-এ আটকায় (InvalidFragmentVersionForActivityResult, ComponentActivity-তে false positive) → `@SuppressLint` (945ccf8)।
 - লাইভ যাচাই 2026-10-23: Zisan অ্যাপে WhatsApp কল ধরেছেন (call_logs 62, 64: answered_by 25, MP3), অ্যাপ থেকে আউটগোয়িং (60, 63: direction out, 106 দিয়ে, MP3)।
 - অ্যাপ 1.12.0 (versionCode 17, PR #30 49829c2, deployed 2026-10-23 03:06 UTC): কল স্ক্রিনে কলার কে (লাইন, MikroTik/ONU এখনকার অবস্থা, খোলা টিকিট, নতুন টিকিট বোতাম), API `GET /api/v1/c/{company}/call-info?number=`; প্যানেল cache + fpm reload, migration/engine restart লাগেনি।
-
+- 2026-10-23: টিকিট প্রিন্টে "ফিল্ড টিম" বাছা যায় (`?team={staff_teams.id}`): টিমের সব সদস্যের (members = বিলিং employee id → নাম `TicketActions::options('employees')`) কাজ চলছে টিকিট একসাথে, হেডারে "টিম: নাম (সদস্যরা)"। একজন কর্মীর জন্য আগের মতো `?employee=`।

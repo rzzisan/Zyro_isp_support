@@ -36,7 +36,7 @@
 <header>
     <div>
         <h1>{{ $company->name }}</h1>
-        <p class="sub">{{ __('কাজ চলছে এমন টিকিট') }} · {{ __('কর্মী:') }} <b>{{ $employee }}</b></p>
+        <p class="sub">{{ __('কাজ চলছে এমন টিকিট') }} · {{ ($isTeam ?? false) ? __('টিম:') : __('কর্মী:') }} <b>{{ $employee }}</b></p>
     </div>
     <div class="meta">
         {{ __('মোট টিকিট:') }} <b>{{ $tickets->count() }}</b><br>

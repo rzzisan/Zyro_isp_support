@@ -5,6 +5,7 @@ namespace App\Filament\App;
 use App\Models\BillingCustomer;
 use App\Models\BillingTicket;
 use App\Models\SmsSetting;
+use App\Models\StaffTeam;
 use App\Models\Technician;
 use App\Services\Engine;
 use App\Support\Sms;
@@ -243,7 +244,17 @@ class TicketActions
             ->modalHeading(__('কাজ চলছে এমন টিকিট প্রিন্ট'))
             ->modalSubmitActionLabel(__('প্রিন্ট পেজ খুলুন'))
             ->schema([
-                Select::make('employee')->label(__('কর্মী'))->required()->searchable()
+                Select::make('team')->label(__('ফিল্ড টিম'))->searchable()->live()
+                    ->options(function () {
+                        $names = static::options('employees');
+
+                        return StaffTeam::where('company_id', static::company())->orderBy('name')->get()->mapWithKeys(fn ($t) => [
+                            $t->id => $t->name.' ('.collect($t->members)->map(fn ($m) => $names[$m] ?? null)->filter()->join(', ').')',
+                        ])->all();
+                    })
+                    ->helperText(__('টিম বাছলে টিমের সব সদস্যের টিকিট একসাথে প্রিন্ট হবে; একজন কর্মীর জন্য খালি রাখুন')),
+                Select::make('employee')->label(__('কর্মী'))->searchable()
+                    ->required(fn ($get) => blank($get('team')))->hidden(fn ($get) => filled($get('team')))
                     ->options(function () {
                         $names = [];
                         foreach (BillingTicket::where('company_id', static::company())->where('state', 'processing')
@@ -262,7 +273,8 @@ class TicketActions
                     ->helperText(__('শুধু যাদের নামে এখন কাজ চলছে এমন টিকিট আছে')),
             ])
             ->action(function (array $data, $livewire) {
-                $url = route('tickets.print', ['company' => Filament::getTenant()->slug, 'employee' => $data['employee']]);
+                $url = route('tickets.print', ['company' => Filament::getTenant()->slug]
+                    + (filled($data['team'] ?? null) ? ['team' => $data['team']] : ['employee' => $data['employee']]));
                 $livewire->js('window.open('.json_encode($url).', "_blank")');
             });
     }

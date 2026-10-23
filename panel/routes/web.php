@@ -33,14 +33,22 @@ Route::get('/media/{message}', function (\App\Models\WaMessage $message) {
     return response()->file($path, ['Content-Type' => $mime, 'Cache-Control' => 'private, max-age=86400']);
 })->middleware('web')->name('media.show');
 
-// printable list of one employee's in-progress billing tickets; members of that company only
+// printable list of one employee's (or one field team's) in-progress billing tickets; members of that company only
 Route::get('/print/{company:slug}/tickets', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
     $user = Auth::user();
     abort_unless($user && $user->canAccessTenant($company), 403);
-    $employee = trim((string) $request->query('employee'));
-    abort_if($employee === '', 404);
+    $team = $request->query('team') ? \App\Models\StaffTeam::where('company_id', $company->id)->findOrFail((int) $request->query('team')) : null;
+    if ($team) {  // members are billing employee ids; tickets hold their names
+        $names = \App\Filament\App\TicketActions::options('employees', $company->id);
+        $people = collect($team->members)->map(fn ($m) => $names[$m] ?? null)->filter()->values()->all();
+        $employee = $team->name.' ('.implode(', ', $people).')';
+    } else {
+        $people = [trim((string) $request->query('employee'))];
+        $employee = $people[0];
+    }
+    abort_if($employee === '' || ! $people, 404);
     $tickets = \App\Models\BillingTicket::where('company_id', $company->id)->where('state', 'processing')
-        ->forEmployee($employee, assignedOnly: true)
+        ->where(fn ($q) => collect($people)->each(fn ($n) => $q->orWhere(fn ($w) => $w->forEmployee($n, assignedOnly: true))))
         ->orderByRaw('lower(subzone) asc nulls last')->orderBy('opened_at')->get();
     // ONU Rx power per PPPoE username: router MAC (last PPP session) -> ONU behind it (from the OLT sync)
     $rx = \Illuminate\Support\Facades\DB::table('ppp_sessions as s')
@@ -49,7 +57,7 @@ Route::get('/print/{company:slug}/tickets', function (\App\Models\Company $compa
         ->where('s.company_id', $company->id)->whereIn('s.username', $tickets->pluck('username')->filter()->all())
         ->whereNotNull('u.rx_dbm')->pluck('u.rx_dbm', 's.username');
 
-    return view('print.tickets', ['company' => $company, 'employee' => $employee, 'tickets' => $tickets, 'rx' => $rx,
+    return view('print.tickets', ['company' => $company, 'employee' => $employee, 'isTeam' => (bool) $team, 'tickets' => $tickets, 'rx' => $rx,
         'now' => now('Asia/Dhaka')]);
 })->middleware('web')->name('tickets.print');
 
