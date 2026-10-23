@@ -136,10 +136,7 @@ class CustomerResource extends Resource
             // same columns, in the same order, as billing's customer list, so staff find things where they expect them
             // compact rows (public/css/zyro-theme.css .z-cc) so the whole list fits without scrolling sideways
             ->columns(array_map(fn ($c) => $c->extraCellAttributes(['class' => 'z-cc'])->extraHeaderAttributes(['class' => 'z-cc']), [
-                TextColumn::make('customer_id')->label('C.Code')->sortable()->searchable(query: fn (Builder $query, string $search) => $query
-                    ->where(fn ($w) => $w->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$search])
-                        ->orWhere('name', 'ilike', "%{$search}%")->orWhere('username', 'ilike', "%{$search}%")
-                        ->orWhere('mobile', 'like', '%'.preg_replace('/\D/', '', $search).'%'))),
+                TextColumn::make('customer_id')->label('C.Code')->sortable()->searchable(query: fn (Builder $query, string $search) => $query->matching($search)),
                 TextColumn::make('username')->label('ID/IP')->copyable()->placeholder('—')
                     ->icon(Heroicon::Signal)->iconColor(fn (BillingCustomer $r) => $r->online_uptime !== null ? 'success' : ($r->online_blocked !== null ? 'danger' : 'gray'))
                     ->tooltip(fn (BillingCustomer $r) => $r->online_uptime !== null ? __('অনলাইন · ').$r->online_uptime
