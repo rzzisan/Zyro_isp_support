@@ -100,6 +100,8 @@ class CallActivity : ComponentActivity() {
     private var config: String? = null
     private var oldAudioMode = AudioManager.MODE_NORMAL
 
+    // a ComponentActivity with no fragments; lint only sees an old fragment library pulled in transitively
+    @SuppressLint("InvalidFragmentVersionForActivityResult")
     private val mic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) connect() else end("মাইক্রোফোনের অনুমতি ছাড়া কল করা যায় না")
     }
