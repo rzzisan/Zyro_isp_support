@@ -60,6 +60,27 @@ class MenuPermissionTest extends TestCase
         $this->assertTrue(Menu::allows($owner, $company, 'technicians'));
     }
 
+    public function test_a_saved_list_with_the_old_my_jobs_menu_still_saves(): void
+    {
+        $company = Company::create(['name' => 'Century Link Network']);
+        $owner = User::factory()->create();
+        $agent = User::factory()->create();
+        $company->users()->attach($owner, ['role' => 'owner']);
+        $company->users()->attach($agent, ['role' => 'agent', 'permissions' => json_encode(['inbox', 'field_jobs'])]);
+        $group = PermissionGroup::create(['company_id' => $company->id, 'name' => 'Technisian', 'permissions' => ['tickets', 'field_jobs']]);
+
+        $this->actingAs($owner);
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($company);
+        $m = Membership::where('user_id', $agent->id)->sole();
+        Livewire::test(ManageMemberships::class)->callAction(TestAction::make('edit')->table($m))->assertHasNoFormErrors();
+        $this->assertSame(['inbox'], $m->fresh()->permissions);
+        Livewire::test(ManagePermissionGroups::class)->callAction(TestAction::make('edit')->table($group))->assertHasNoFormErrors();
+        $this->assertSame(['tickets'], $group->fresh()->permissions);
+
+        (include database_path('migrations/2026_10_23_000006_drop_field_jobs_from_menu_lists.php'))->up();
+    }
+
     public function test_group_menus_reach_every_member_of_the_group(): void
     {
         $company = Company::create(['name' => 'Century Link Network']);

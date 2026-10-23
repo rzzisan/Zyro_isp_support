@@ -112,7 +112,7 @@ class MembershipResource extends Resource
                 ->options(Menu::options())
                 ->columns(3)->bulkToggleable()
                 // in a group and no own list yet: the own list starts empty (the groups give the menus), else the role defaults
-                ->formatStateUsing(fn ($state, ?Membership $record) => $state ?? ($record?->groups()->exists() ? [] : Menu::defaults($record?->role ?? 'agent')))
+                ->formatStateUsing(fn ($state, ?Membership $record) => $state !== null ? Menu::selectable($state) : ($record?->groups()->exists() ? [] : Menu::defaults($record?->role ?? 'agent')))
                 ->dehydrateStateUsing(fn ($state, $get) => ! $state && filled($get('groups')) ? null : array_values((array) $state))
                 ->live()
                 ->helperText(__('ড্যাশবোর্ড আর "আমার বিলিং লগইন" সবাই দেখেন। সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin হলে কাজ করে, Agent-এর জন্য টিক দিলেও খুলবে না।')),
