@@ -50,6 +50,12 @@ class Menu
         return collect(self::ITEMS)->except(self::EXPLICIT)->filter(fn ($i) => $settings || ! $i[2])->map(fn ($i) => __($i[0]))->all();
     }
 
+    /** A saved list as the checkboxes can show it: keys no longer offered (like the old "আমার কাজ") are dropped. */
+    public static function selectable(array $keys): array
+    {
+        return array_values(array_intersect($keys, array_keys(self::options())));
+    }
+
     /** Not a menu to tick: "আমার কাজ" comes with the member's "ফিল্ড টেকনিশিয়ান" tick on the team page, whatever the role. */
     public const EXPLICIT = ['field_jobs'];
 

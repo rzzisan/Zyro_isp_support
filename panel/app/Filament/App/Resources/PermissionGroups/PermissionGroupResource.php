@@ -65,6 +65,7 @@ class PermissionGroupResource extends Resource
                 ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule) => $rule->where('company_id', Filament::getTenant()->getKey())),
             CheckboxList::make('permissions')->label(__('এই গ্রুপের সদস্যরা কোন কোন মেনু দেখবেন'))
                 ->options(Menu::options())->columns(3)->bulkToggleable()->default([])->live()
+                ->formatStateUsing(fn ($state) => Menu::selectable((array) $state))
                 ->helperText(__('সেটিংসের মেনুগুলো (WhatsApp, বিলিং সংযোগ, MikroTik, বট, AI key, টিম, টেকনিশিয়ান) শুধু Admin সদস্যের জন্য কাজ করে।')),
             Select::make('bill_view_employees')->label(__('বিল কালেকশনে কার কার নেওয়া বিল দেখবেন'))->multiple()
                 ->visible(fn ($get) => in_array('bills', (array) $get('permissions'), true))
