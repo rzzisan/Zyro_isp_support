@@ -1507,5 +1507,19 @@
     "হটলাইন": "Hotline",
     "টিম:": "Team:",
     "টিম বাছলে টিমের সব সদস্যের টিকিট একসাথে প্রিন্ট হবে; একজন কর্মীর জন্য খালি রাখুন": "Pick a team to print all its members' tickets together; leave empty for one staff member",
-    "টিম বাছলে টিমের সব সদস্য একসাথে কর্মী ঘরে বসে যাবে": "Picking a team puts all its members in the staff box"
+    "টিম বাছলে টিমের সব সদস্য একসাথে কর্মী ঘরে বসে যাবে": "Picking a team puts all its members in the staff box",
+    "Online হলে তবেই শেষ": "Finish only when online",
+    "অ্যাপে \"কাজ শুরু করুন\" চাপলে এই সময় থেকে কাউন্টডাউন চলে; পার হলে দেরি গোনে।": "\"Start work\" in the app counts down from this time; after it, the delay is counted.",
+    "আগে \"কাজ শুরু করুন\" চাপুন": "Tap \"Start work\" first",
+    "আমার কাজ (ফিল্ড টেকনিশিয়ান)": "My jobs (field technician)",
+    "কাজ শেষ করার সময় (মিনিট), সব ক্যাটাগরি": "Time to finish a job (minutes), all categories",
+    "কাস্টমারের লাইন এখনো Online হয়নি (MikroTik)। Online হলে তবেই কাজ শেষ করা যাবে।": "The customer's line is not online yet (MikroTik). The job can be finished only once it is online.",
+    "ক্যাটাগরি অনুযায়ী আলাদা": "Per category",
+    "টিকিটে এই কর্মীর নাম থাকলে সেগুলো অ্যাপের \"আমার কাজ\"-এ দেখাবে (মেনুতে \"আমার কাজ\" টিক দিন)।": "Tickets naming this employee show in the app's \"My jobs\" (tick \"My jobs\" in the menus).",
+    "ফিল্ড কাজ সেটিং": "Field work settings",
+    "বিলিংয়ে কোন কর্মী (ফিল্ড কাজ)": "Billing employee (field work)",
+    "মিনিট": "Minutes",
+    "রাউটার থেকে লাইনের অবস্থা জানা যায়নি, তাই কাজ শেষ করা যাচ্ছে না। একটু পরে আবার চেষ্টা করুন।": "Could not read the line from the router, so the job cannot be finished. Try again shortly.",
+    "লাইন অফলাইন থাকলে কাজ শেষ করার অনুমতি আপনার নেই": "You may not finish a job while the line is offline",
+    "লাইন অফলাইন থাকলেও কারণ লিখে কাজ শেষ": "Finish a job with a reason even when the line is offline"
 }

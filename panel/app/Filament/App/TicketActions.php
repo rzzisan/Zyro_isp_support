@@ -488,6 +488,7 @@ class TicketActions
 
                     return;
                 }
+                \App\Support\FieldWork::solved($record, auth()->id());
                 $smsNote = ($data['sms'] ?? false) ? static::queueTicketSms('ticket_solved', (int) $record->customer_header_id,
                     $record->mobile, ['ticket_no' => (string) $record->complain_id, 'problem' => (string) $record->category,
                         'status' => 'সমাধান', 'technician' => (string) ($record->solved_by ?: $record->assigned_to)]) : null;

@@ -91,6 +91,10 @@ class MembershipResource extends Resource
                 ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
                 ->dehydrated(fn ($state) => filled($state) && self::isOwner())
                 ->helperText(__('বদলাতে না চাইলে খালি রাখুন')),
+            Select::make('billing_employee_id')->label(__('বিলিংয়ে কোন কর্মী (ফিল্ড কাজ)'))->visibleOn('edit')->searchable()
+                ->options(fn () => \App\Filament\App\TicketActions::options('employees'))
+                ->formatStateUsing(fn ($state) => filled($state) ? (string) $state : null)
+                ->helperText(__('টিকিটে এই কর্মীর নাম থাকলে সেগুলো অ্যাপের "আমার কাজ"-এ দেখাবে (মেনুতে "আমার কাজ" টিক দিন)।')),
             Toggle::make('wa_signature')->label(__('WhatsApp মেসেজের নিচে নাম দেখাবে'))->default(true)
                 ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
                 ->dehydrated(fn () => self::isOwner())

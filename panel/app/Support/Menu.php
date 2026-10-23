@@ -23,6 +23,9 @@ class Menu
         'tickets' => ['টিকিট', true, false],
         'calls' => ['হটলাইন কল লগ (রেকর্ডিং)', true, false],
         'phone' => ['ফোন: WhatsApp কল ধরা ও কাস্টমারকে কল', false, false],
+        // field technicians in the app: only their own tickets and those customers (needs the billing employee on the team page)
+        'field_jobs' => ['আমার কাজ (ফিল্ড টেকনিশিয়ান)', false, false],
+        'force_solve' => ['লাইন অফলাইন থাকলেও কারণ লিখে কাজ শেষ', false, false],
         'bills' => ['বিল কালেকশন', false, false],
         'sms' => ['SMS (পাঠানো, লগ, টেমপ্লেট)', false, false],
         'wa_campaign' => ['WhatsApp টেমপ্লেট পাঠানো ও লগ', false, false],

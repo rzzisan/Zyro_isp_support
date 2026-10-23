@@ -12,7 +12,7 @@ class Membership extends Model
 {
     protected $table = 'company_user';
 
-    protected $fillable = ['company_id', 'user_id', 'role', 'billing_username', 'billing_password', 'permissions', 'bill_view_employees', 'wa_signature'];
+    protected $fillable = ['company_id', 'user_id', 'role', 'billing_username', 'billing_password', 'permissions', 'bill_view_employees', 'wa_signature', 'billing_employee_id'];
 
     protected $hidden = ['billing_password'];
 

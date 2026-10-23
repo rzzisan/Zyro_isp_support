@@ -352,6 +352,37 @@ abstract class AppStrings {
     abstract val passwordTooShort: String
     abstract val passwordChanged: String
     abstract val passwordFailed: String
+    abstract val navMyJobs: String
+    abstract val titleJob: String
+    abstract val jobsNew: String
+    abstract val jobsRunning: String
+    abstract val jobsDone: String
+    abstract val jobsNotLinked: String
+    abstract val jobsEmpty: String
+    abstract val startWork: String
+    abstract val pauseWork: String
+    abstract val resumeWork: String
+    abstract val finishWork: String
+    abstract val pauseReasonLabel: String
+    abstract val pausedLabel: String
+    abstract val timeLeft: String
+    abstract val overdueLabel: String
+    abstract val workedLabel: String
+    abstract val targetLabel: String
+    abstract val startedByLabel: String
+    abstract val mikrotikLine: String
+    abstract val lineOnline: String
+    abstract val lineOffline: String
+    abstract val lineUnknown: String
+    abstract val lineChecked: String
+    abstract val lineEveryMinute: String
+    abstract val lineNoCheck: String
+    abstract val checkNow: String
+    abstract val finishNeedsOnline: String
+    abstract val forceReasonLabel: String
+    abstract val startFirst: String
+    abstract val jobFinished: String
+    abstract val minutesShort: String
 }
 
 object BengaliStrings : AppStrings() {
@@ -710,6 +741,37 @@ object BengaliStrings : AppStrings() {
     override val cDial = "কল করুন"
     override val cPlayFailed = "রেকর্ডিং চালানো যায়নি"
     override val cLoadingRec = "রেকর্ডিং আনা হচ্ছে…"
+    override val navMyJobs = "আমার কাজ"
+    override val titleJob = "কাজ"
+    override val jobsNew = "নতুন"
+    override val jobsRunning = "চলমান"
+    override val jobsDone = "শেষ"
+    override val jobsNotLinked = "আপনার লগইন বিলিংয়ের কোনো কর্মীর সাথে লিংক করা নেই। Owner টিম পেজে \"বিলিংয়ে কোন কর্মী\" সেট করলে এখানে কাজ দেখাবে।"
+    override val jobsEmpty = "এখানে কোনো কাজ নেই"
+    override val startWork = "কাজ শুরু করুন"
+    override val pauseWork = "বিরতি"
+    override val resumeWork = "আবার শুরু"
+    override val finishWork = "কাজ শেষ"
+    override val pauseReasonLabel = "কেন থামাচ্ছেন? (যেমন মাল লাগবে, কাস্টমার বাসায় নেই)"
+    override val pausedLabel = "বিরতিতে"
+    override val timeLeft = "বাকি"
+    override val overdueLabel = "দেরি"
+    override val workedLabel = "কাজের সময়"
+    override val targetLabel = "টার্গেট"
+    override val startedByLabel = "শুরু করেছেন"
+    override val mikrotikLine = "MikroTik লাইন"
+    override val lineOnline = "Online"
+    override val lineOffline = "Offline"
+    override val lineUnknown = "জানা যায়নি"
+    override val lineChecked = "শেষ চেক"
+    override val lineEveryMinute = "কাজ চলাকালে প্রতি ১ মিনিটে আপডেট হয়"
+    override val lineNoCheck = "এই ক্যাটাগরিতে কাজ শেষ করতে লাইন Online লাগে না"
+    override val checkNow = "এখনই চেক"
+    override val finishNeedsOnline = "লাইন Online না হলে কাজ শেষ করা যাবে না"
+    override val forceReasonLabel = "লাইন Offline, তবুও শেষ করার কারণ"
+    override val startFirst = "কাজ শেষ করতে আগে \"কাজ শুরু করুন\" চাপুন"
+    override val jobFinished = "কাজ শেষ, টিকিট সমাধান হয়েছে"
+    override val minutesShort = "মিনিট"
 }
 
 object EnglishStrings : AppStrings() {
@@ -1068,4 +1130,35 @@ object EnglishStrings : AppStrings() {
     override val cDial = "Call"
     override val cPlayFailed = "Could not play the recording"
     override val cLoadingRec = "Fetching the recording…"
+    override val navMyJobs = "My jobs"
+    override val titleJob = "Job"
+    override val jobsNew = "New"
+    override val jobsRunning = "Running"
+    override val jobsDone = "Done"
+    override val jobsNotLinked = "Your login is not linked to a billing employee. Once the owner sets \"Billing employee\" on the team page, your jobs show here."
+    override val jobsEmpty = "No jobs here"
+    override val startWork = "Start work"
+    override val pauseWork = "Pause"
+    override val resumeWork = "Resume"
+    override val finishWork = "Finish"
+    override val pauseReasonLabel = "Why pause? (e.g. need parts, customer not home)"
+    override val pausedLabel = "Paused"
+    override val timeLeft = "left"
+    override val overdueLabel = "Late"
+    override val workedLabel = "Worked"
+    override val targetLabel = "Target"
+    override val startedByLabel = "Started by"
+    override val mikrotikLine = "MikroTik line"
+    override val lineOnline = "Online"
+    override val lineOffline = "Offline"
+    override val lineUnknown = "Unknown"
+    override val lineChecked = "Checked"
+    override val lineEveryMinute = "Updates every minute while working"
+    override val lineNoCheck = "This category does not need the line online to finish"
+    override val checkNow = "Check now"
+    override val finishNeedsOnline = "The line must be online to finish"
+    override val forceReasonLabel = "Line offline: reason to finish anyway"
+    override val startFirst = "Tap \"Start work\" before finishing"
+    override val jobFinished = "Done, the ticket is solved"
+    override val minutesShort = "min"
 }

@@ -29,6 +29,13 @@ class CustomerController extends Controller
         abort_unless(Menu::allows($request->user(), $company, 'customers') || Menu::allows($request->user(), $company, 'bills'), 403);
     }
 
+    /** One customer's page: also a field technician working one of this customer's tickets. */
+    private function allowOne(Request $request, Company $company, int $headerId): void
+    {
+        abort_unless(Menu::allows($request->user(), $company, 'customers') || Menu::allows($request->user(), $company, 'bills')
+            || \App\Support\FieldWork::mayViewCustomer($request->user(), $company, $headerId), 403);
+    }
+
     public static function row(BillingCustomer $c, bool $online = false): array
     {
         $out = [];
@@ -141,7 +148,7 @@ class CustomerController extends Controller
     /** One customer: details, recent payments and open tickets from the Desk's copy (fast; the live part is separate). */
     public function show(Request $request, Company $company, int $headerId): JsonResponse
     {
-        $this->allow($request, $company);
+        $this->allowOne($request, $company, $headerId);
         $c = BillingCustomer::where('company_id', $company->id)->where('header_id', $headerId)->firstOrFail();
         $payments = BillingCustomerPayment::where('company_id', $company->id)->where('customer_header_id', $headerId)
             ->where('is_canceled', false)->orderByDesc('received_on')->orderByDesc('id')->limit(12)
@@ -182,7 +189,7 @@ class CustomerController extends Controller
     /** Copy billing's details and history for this customer now (the panel's customer page does this on open); runs in the background. */
     public function refresh(Request $request, Company $company, int $headerId): JsonResponse
     {
-        $this->allow($request, $company);
+        $this->allowOne($request, $company, $headerId);
         $c = BillingCustomer::where('company_id', $company->id)->where('header_id', $headerId)->firstOrFail();
         try {
             $running = (bool) (Engine::refreshCustomerHistory($company->id, (int) $c->header_id)['running'] ?? false);
@@ -195,7 +202,7 @@ class CustomerController extends Controller
 
     public function historyStatus(Request $request, Company $company, int $headerId): JsonResponse
     {
-        $this->allow($request, $company);
+        $this->allowOne($request, $company, $headerId);
 
         try {
             return response()->json(['running' => Engine::customerHistoryRunning($company->id, $headerId)]);
@@ -231,7 +238,7 @@ class CustomerController extends Controller
     {
         // also on the app's call screen, for members who take calls without the customers menu
         if (! Menu::allows($request->user(), $company, 'phone')) {
-            $this->allow($request, $company);
+            $this->allowOne($request, $company, $headerId);
         }
         $key = 'ticket-info:'.$company->id.':'.$headerId;
         if ($request->boolean('fresh')) {

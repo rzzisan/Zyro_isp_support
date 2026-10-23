@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\BillController;
 use App\Http\Controllers\Api\CallController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\FieldJobController;
 use App\Http\Controllers\Api\InboxController;
 use App\Http\Controllers\Api\MonitoringController;
 use App\Http\Controllers\Api\TicketController;
@@ -67,6 +68,14 @@ Route::prefix('v1')->group(function () {
             Route::get('tickets/{ticket}', [TicketController::class, 'show'])->whereNumber('ticket');
             Route::post('tickets/{ticket}/assign', [TicketController::class, 'assign'])->whereNumber('ticket');
             Route::post('tickets/{ticket}/solve', [TicketController::class, 'solve'])->whereNumber('ticket')->middleware('throttle:30,1');
+
+            Route::get('my-jobs', [FieldJobController::class, 'index']);
+            Route::get('my-jobs/{ticket}', [FieldJobController::class, 'show'])->whereNumber('ticket');
+            Route::get('my-jobs/{ticket}/line', [FieldJobController::class, 'line'])->whereNumber('ticket')->middleware('throttle:30,1');
+            foreach (['start', 'pause', 'resume'] as $step) {
+                Route::post("my-jobs/{ticket}/{$step}", [FieldJobController::class, $step])->whereNumber('ticket')->middleware('throttle:30,1');
+            }
+            Route::post('my-jobs/{ticket}/solve', [FieldJobController::class, 'solve'])->whereNumber('ticket')->middleware('throttle:20,1');
         });
     });
 });

@@ -161,7 +161,7 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                         SmallAction(s.call, Icons.Filled.Call, Modifier.weight(1f), enabled = mobile.isNotEmpty()) {
                             Phone.dial(context, mobile, "${c.name ?: ""} (ID ${c.customerId ?: ""})")
                         }
-                        val inApp = c.chatId != null && SessionStore.company()?.can("inbox") == true
+                        val inApp = c.chatId != null && (SessionStore.company()?.can("inbox") == true || SessionStore.company()?.can("field_jobs") == true)
                         SmallAction("WhatsApp", Icons.Filled.Chat, Modifier.weight(1f), color = Color(0xFF128C7E),
                             enabled = inApp || mobile.isNotEmpty()) {
                             if (inApp) {
