@@ -49,7 +49,8 @@ Route::get('/print/{company:slug}/tickets', function (\App\Models\Company $compa
     abort_if($employee === '' || ! $people, 404);
     $tickets = \App\Models\BillingTicket::where('company_id', $company->id)->where('state', 'processing')
         ->where(fn ($q) => collect($people)->each(fn ($n) => $q->orWhere(fn ($w) => $w->forEmployee($n, assignedOnly: true))))
-        ->orderByRaw('lower(subzone) asc nulls last')->orderBy('opened_at')->get();
+        ->orderByRaw('lower(zone) asc nulls last')->orderByRaw('lower(subzone) asc nulls last')->orderByRaw('lower(box) asc nulls last')
+        ->orderBy('opened_at')->get();
     // ONU Rx power per PPPoE username: router MAC (last PPP session) -> ONU behind it (from the OLT sync)
     $rx = \Illuminate\Support\Facades\DB::table('ppp_sessions as s')
         ->join('customer_onus as m', fn ($j) => $j->on('m.company_id', '=', 's.company_id')->whereRaw('m.client_mac = upper(s.caller_id)'))

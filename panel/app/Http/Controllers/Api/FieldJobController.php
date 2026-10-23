@@ -67,13 +67,15 @@ class FieldJobController extends Controller
             'later_on' => $t->field_later_on && $t->field_later_on > FieldDuty::today() ? $t->field_later_on : null];
     }
 
-    /** The member's open tickets (newest first) and the ones solved in the last day. */
+    /** The member's open tickets and the ones solved in the last day, by zone, subzone and box (the print's order), oldest first in a box. */
     public function index(Request $request, Company $company): JsonResponse
     {
         $this->allow($request, $company);
         FieldWork::closeSolved($company->id);
         FieldWork::refreshChats($company->id, $request->user()->id);   // group menus or ticket assignments may have changed
         $tickets = FieldWork::tickets($request->user(), $company)->orderByDesc('opened_at')->orderByDesc('id')->limit(100)->get();
+        $tickets = $tickets->sortBy(fn (BillingTicket $t) => collect([$t->zone, $t->subzone, $t->box])
+            ->map(fn ($v) => blank($v) ? "\u{10FFFF}" : mb_strtolower(trim($v)))->push($t->opened_at?->timestamp ?? 0, $t->id)->all())->values();
         $jobs = FieldJob::whereIn('ticket_id', $tickets->pluck('id'))->with('starter')->get()->keyBy('ticket_id');
         $online = BillingCustomer::where('company_id', $company->id)->whereIn('header_id', $tickets->pluck('customer_header_id')->filter())
             ->get()->mapWithKeys(fn (BillingCustomer $c) => [(int) $c->header_id => (bool) $c->onlineSession()]);
