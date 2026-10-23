@@ -136,6 +136,8 @@ fun JobDetailScreen(navController: NavHostController, company: String, ticketId:
     }
 
     LaunchedEffect(ticketId) { load() }
+    // wake the GPS now and when finishing, so the start / finish buttons find a recent place instead of waiting for one
+    LaunchedEffect(ticketId, showFinish) { FieldTracker.warm(context) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(1_000)

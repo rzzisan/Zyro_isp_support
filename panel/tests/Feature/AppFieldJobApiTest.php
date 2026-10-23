@@ -145,7 +145,7 @@ class AppFieldJobApiTest extends TestCase
 
         $this->api($this->tech)->getJson($this->url("my-jobs/{$t->id}/line"))->assertOk()->assertJsonPath('online', true);
         $this->api($this->tech)->postJson($this->url("my-jobs/{$t->id}/solve"), ['remark' => 'ঠিক'])->assertOk();
-        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/tickets/1/solve') && $r['skip_line_check'] === false);
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/tickets/1/solve') && $r['skip_line_check'] === true);   // asked the router just before: no second check
         $job = FieldJob::first();
         $this->assertSame('done', $job->status);
         $this->assertTrue($job->line_online);

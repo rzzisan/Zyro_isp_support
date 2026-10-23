@@ -108,8 +108,28 @@ object FieldTracker {
             .minByOrNull { if (it.hasAccuracy()) it.accuracy else Float.MAX_VALUE }
     }
 
+    /** A last-known fix from the last [maxAgeMs], without waiting for the GPS. */
+    @SuppressLint("MissingPermission")
+    fun recent(context: Context, maxAgeMs: Long = 2 * 60_000): Location? {
+        if (!hasPermission(context)) return null
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
+        return listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            .mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
+            .filter { System.currentTimeMillis() - it.time < maxAgeMs }
+            .minByOrNull { if (it.hasAccuracy()) it.accuracy else Float.MAX_VALUE }
+    }
+
+    /**
+     * The place for start / finish: a fix from the last 2 minutes right away (the job screen asks for one when it
+     * opens), else at most 3 s for a fresh one, so the buttons don't wait on the GPS.
+     */
     suspend fun fix(context: Context): Fix? =
-        location(context)?.let { Fix(it.latitude, it.longitude, if (it.hasAccuracy()) it.accuracy else null, isMock(it)) }
+        (recent(context) ?: location(context, 3_000))?.let { Fix(it.latitude, it.longitude, if (it.hasAccuracy()) it.accuracy else null, isMock(it)) }
+
+    /** Wake the GPS when a job screen opens, so [fix] finds a recent place when a button is pressed. */
+    suspend fun warm(context: Context) {
+        location(context, 20_000)
+    }
 
     fun startRequest(f: Fix?) = StartRequest(f?.lat, f?.lng, f?.accuracy, f?.mock)
 
