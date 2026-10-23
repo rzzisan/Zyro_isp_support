@@ -21,6 +21,16 @@ class Membership extends Model
         return ['permissions' => 'array', 'bill_view_employees' => 'array', 'billing_password' => 'encrypted', 'billing_checked_at' => 'datetime', 'billing_check_ok' => 'boolean', 'wa_signature' => 'boolean', 'location_consent_at' => 'datetime', 'on_duty_since' => 'datetime', 'duty_day' => 'date:Y-m-d', 'duty_ended_at' => 'datetime'];
     }
 
+    protected static function booted(): void
+    {
+        // menus or the billing employee changed: which message pushes this member gets
+        static::saved(function (Membership $m) {
+            if ($m->wasChanged(['role', 'permissions', 'billing_employee_id']) || $m->wasRecentlyCreated) {
+                \App\Support\FieldWork::refreshChats((int) $m->company_id, (int) $m->user_id);
+            }
+        });
+    }
+
     /** The signed-in member of the current Desk company. */
     public static function current(): ?self
     {

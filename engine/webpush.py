@@ -70,9 +70,8 @@ def _send_all(company_id: int, contact: dict, mtype: str | None, body: str | Non
             """SELECT s.id, s.endpoint, s.p256dh, s.auth, c.slug FROM push_subscriptions s
                JOIN companies c ON c.id = s.company_id
                JOIN company_user cu ON cu.company_id = s.company_id AND cu.user_id = s.user_id
-               WHERE s.company_id = %s
-                 AND (cu.role = 'owner' OR cu.permissions IS NULL OR cu.permissions ? 'inbox')""",
-            (company_id,))
+               WHERE s.company_id = %s AND """ + fcm.CHAT_MEMBERS,
+            (company_id, int(contact["id"])))
         if not subs:
             return
         from pywebpush import WebPushException, webpush

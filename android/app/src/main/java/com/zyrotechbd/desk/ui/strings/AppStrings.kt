@@ -360,6 +360,9 @@ abstract class AppStrings {
     abstract val jobsNotLinked: String
     abstract val jobsEmpty: String
     abstract val startWork: String
+    abstract val notifications: String
+    abstract val notifyChats: String
+    abstract val notifyCalls: String
     abstract val doTomorrow: String
     abstract val doToday: String
     abstract val laterNote: String
@@ -762,6 +765,9 @@ object BengaliStrings : AppStrings() {
     override val jobsNotLinked = "আপনার লগইন বিলিংয়ের কোনো কর্মীর সাথে লিংক করা নেই। Owner টিম পেজে \"বিলিংয়ে কোন কর্মী\" সেট করলে এখানে কাজ দেখাবে।"
     override val jobsEmpty = "এখানে কোনো কাজ নেই"
     override val startWork = "কাজ শুরু করুন"
+    override val notifications = "নোটিফিকেশন"
+    override val notifyChats = "মেসেজ নোটিফিকেশন"
+    override val notifyCalls = "WhatsApp কল বাজবে"
     override val doTomorrow = "আগামীকাল করব"
     override val doToday = "আজই করব"
     override val laterNote = "এই কাজ আগামীকাল করা হবে"
@@ -1164,6 +1170,9 @@ object EnglishStrings : AppStrings() {
     override val jobsNotLinked = "Your login is not linked to a billing employee. Once the owner sets \"Billing employee\" on the team page, your jobs show here."
     override val jobsEmpty = "No jobs here"
     override val startWork = "Start work"
+    override val notifications = "Notifications"
+    override val notifyChats = "Message notifications"
+    override val notifyCalls = "Ring for WhatsApp calls"
     override val doTomorrow = "Do it tomorrow"
     override val doToday = "Do it today"
     override val laterNote = "This job will be done tomorrow"

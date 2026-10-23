@@ -24,6 +24,11 @@ _lock = threading.Lock()
 _account: dict | None = None
 _access: tuple[str, float] | None = None  # token, expiry (epoch seconds)
 
+# who gets a chat's message push (cu = company_user, one %s = the chat id): members who may open the inbox, except
+# field technicians, who get only the chats of their running work (the panel keeps field_chat_ids current)
+CHAT_MEMBERS = """((cu.role = 'owner' OR cu.permissions IS NULL OR cu.permissions ? 'inbox') AND NOT cu.field_restricted
+                   OR COALESCE(cu.field_chat_ids, '[]'::jsonb) @> to_jsonb(%s::bigint))"""
+
 
 def _b64(b: bytes) -> str:
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
@@ -82,8 +87,8 @@ def _send_all(company_id: int, data: dict[str, str], user_ids: list[int] | None 
             rows = db.all_rows(
                 """SELECT p.id, p.token FROM app_push_tokens p
                    JOIN company_user cu ON cu.company_id = %s AND cu.user_id = p.user_id
-                   WHERE cu.role = 'owner' OR cu.permissions IS NULL OR cu.permissions ? 'inbox'""",
-                (company_id,))
+                   WHERE """ + CHAT_MEMBERS + """ """,
+                (company_id, int(data.get("chat_id") or 0)))
         if not rows:
             return
         url = f"https://fcm.googleapis.com/v1/projects/{acc['project_id']}/messages:send"

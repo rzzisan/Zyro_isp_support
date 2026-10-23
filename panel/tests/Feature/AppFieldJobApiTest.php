@@ -180,12 +180,17 @@ class AppFieldJobApiTest extends TestCase
         $this->api($this->tech)->getJson($this->url('chats'))->assertOk()->assertJsonCount(0, 'data');
         $this->api($this->tech)->postJson($this->url("my-jobs/{$mine->id}/start"))->assertOk();
         $this->api($this->tech)->getJson($this->url('chats'))->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $chat->id);
+        // the engine pushes this technician only that chat's messages
+        $m = Membership::where('user_id', $this->tech->id)->first();
+        $this->assertTrue((bool) $m->field_restricted);
+        $this->assertSame([$chat->id], json_decode($m->getRawOriginal('field_chat_ids'), true));
         $this->api($this->tech)->getJson($this->url('chats/'.$other->id))->assertForbidden();
         $this->api($this->tech)->postJson($this->url('chats/'.$other->id.'/reply'), ['body' => 'hi'])->assertForbidden();
 
         // finished work closes the chat again; an admin with the same menus is not limited
         FieldJob::first()->update(['status' => 'done']);
         $this->api($this->tech)->getJson($this->url('chats'))->assertOk()->assertJsonCount(0, 'data');
+        $this->assertSame([], json_decode(Membership::where('user_id', $this->tech->id)->first()->getRawOriginal('field_chat_ids'), true));
         Membership::where('user_id', $this->tech->id)->update(['role' => 'admin']);
         $this->api($this->tech)->getJson($this->url('chats/'.$other->id))->assertOk();
     }
