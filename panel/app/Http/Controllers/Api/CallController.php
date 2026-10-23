@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Filament\App\Pages\CallLogs;
 use App\Http\Controllers\Controller;
+use App\Models\BillingCustomer;
+use App\Models\BillingTicket;
 use App\Models\CallLog;
 use App\Models\Company;
+use App\Models\Technician;
+use App\Models\WaContact;
 use App\Support\Menu;
 use App\Support\Softphone;
 use Illuminate\Http\JsonResponse;
@@ -89,6 +93,37 @@ class CallController extends Controller
         abort_unless($cfg, 403);
 
         return response()->json($cfg)->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * The app's call screen: who this number is (customers with this mobile, and the line a WhatsApp chat named) with
+     * their open tickets. The live MikroTik/ONU box comes from customers/{headerId}/live.
+     */
+    public function callInfo(Request $request, Company $company): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(Menu::allows($user, $company, 'phone') || Menu::allows($user, $company, 'customers')
+            || Menu::allows($user, $company, 'bills'), 403);
+        $n = Technician::normalize((string) $request->query('number'));
+        abort_if(strlen($n) < 8, 422);
+        $ids = WaContact::where('company_id', $company->id)->where('wa_number', $n)->whereNotNull('customer_id')
+            ->pluck('customer_id');
+        $customers = BillingCustomer::where('company_id', $company->id)
+            ->where(fn ($q) => $q->where('mobile_normalized', $n)->orWhereIn('customer_id', $ids))
+            ->orderBy('is_left')->orderByDesc('header_id')->limit(5)->get();
+        $tickets = BillingTicket::where('company_id', $company->id)->whereIn('customer_header_id', $customers->pluck('header_id'))
+            ->whereIn('state', ['pending', 'processing'])->orderByDesc('opened_at')->get()->groupBy('customer_header_id');
+
+        return response()->json([
+            'lines' => $customers->map(fn (BillingCustomer $c) => [
+                'customer' => CustomerController::row($c, (bool) $c->onlineSession()) + ['address' => $c->address],
+                'tickets' => ($tickets->get($c->header_id) ?? collect())->take(5)->map(fn (BillingTicket $t) => [
+                    'id' => $t->id, 'complain_id' => $t->complain_id, 'category' => $t->category, 'state' => $t->state,
+                    'opened_at' => $t->opened_at?->toIso8601String(), 'assigned_to' => $t->assigned_to, 'note' => $t->note,
+                ])->values(),
+            ])->values(),
+            'can' => ['ticket' => Menu::allows($user, $company, 'tickets'), 'customer' => Menu::allows($user, $company, 'customers')],
+        ]);
     }
 
     /** The recording (both sides, mp3), written by the engine's voice bot under storage/app/call-recordings. */

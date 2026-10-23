@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\BillingCustomer;
+use App\Models\BillingTicket;
 use App\Models\CallLog;
 use App\Models\Company;
 use App\Models\Membership;
@@ -66,5 +68,25 @@ class SoftphoneTest extends TestCase
             ->assertJsonPath('items.0.channel', 'whatsapp')->assertJsonPath('items.0.take', null);
         $this->actingAs($this->member('agent', ['customers', 'phone']))->getJson($poll)->assertOk()
             ->assertJsonPath('items.0.take', 'abc-123');
+    }
+
+    public function test_call_screen_finds_the_callers_lines_and_open_tickets(): void
+    {
+        $cid = $this->company->id;
+        BillingCustomer::create(['company_id' => $cid, 'header_id' => 11, 'customer_id' => '5629', 'name' => 'Rahim',
+            'mobile' => '01577077629', 'mobile_normalized' => '8801577077629', 'status' => 'Active', 'due' => 500]);
+        BillingCustomer::create(['company_id' => $cid, 'header_id' => 12, 'customer_id' => '7001', 'name' => 'Other',
+            'mobile' => '01711000000', 'mobile_normalized' => '8801711000000', 'status' => 'Active']);
+        BillingTicket::create(['company_id' => $cid, 'complain_id' => '900', 'state' => 'pending', 'customer_id' => '5629',
+            'customer_header_id' => 11, 'category' => 'Line Off', 'opened_at' => now()]);
+        BillingTicket::create(['company_id' => $cid, 'complain_id' => '901', 'state' => 'solved', 'customer_id' => '5629',
+            'customer_header_id' => 11, 'category' => 'Slow', 'opened_at' => now()]);
+        $url = '/api/v1/c/'.$this->company->slug.'/call-info?number=01577077629';
+
+        $this->actingAs($this->member('agent', ['inbox']), 'sanctum')->getJson($url)->assertForbidden();
+        $this->actingAs($this->member('agent', ['phone']), 'sanctum')->getJson($url)->assertOk()
+            ->assertJsonCount(1, 'lines')->assertJsonPath('lines.0.customer.name', 'Rahim')
+            ->assertJsonCount(1, 'lines.0.tickets')->assertJsonPath('lines.0.tickets.0.complain_id', '900')
+            ->assertJsonPath('can.ticket', false);
     }
 }

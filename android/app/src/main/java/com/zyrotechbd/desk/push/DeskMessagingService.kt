@@ -66,10 +66,11 @@ class DeskMessagingService : FirebaseMessagingService() {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val company = d["company"].orEmpty()
-        val title = d["name"]?.takeIf { it.isNotBlank() }?.let { "$it (${d["caller"].orEmpty()})" } ?: d["caller"].orEmpty()
+        val title = d["name"]?.takeIf { it.isNotBlank() } ?: d["caller"].orEmpty()
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        val ring = PendingIntent.getActivity(this, uid.hashCode(), CallActivity.incoming(this, company, uid, title, false), flags)
-        val take = PendingIntent.getActivity(this, uid.hashCode() + 1, CallActivity.incoming(this, company, uid, title, true), flags)
+        val number = d["caller"].orEmpty()
+        val ring = PendingIntent.getActivity(this, uid.hashCode(), CallActivity.incoming(this, company, uid, title, number, false), flags)
+        val take = PendingIntent.getActivity(this, uid.hashCode() + 1, CallActivity.incoming(this, company, uid, title, number, true), flags)
         val n = NotificationCompat.Builder(this, Push.CALL_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_desk)
             .setColor(Primary.toArgb())

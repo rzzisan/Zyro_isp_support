@@ -94,6 +94,9 @@ interface ApiService {
     @GET("c/{company}/softphone")
     suspend fun softphone(@Path("company") company: String): SoftphoneConfig
 
+    @GET("c/{company}/call-info")
+    suspend fun callInfo(@Path("company") company: String, @Query("number") number: String): CallInfo
+
     @GET("c/{company}/calls/{id}")
     suspend fun call(@Path("company") company: String, @Path("id") id: Long): CallResult
 

@@ -72,7 +72,7 @@ fun NewTicketScreen(navController: NavHostController, company: String, headerId:
         if (id == null) {
             CustomerSearch(company) { picked = it.headerId }
         } else {
-            TicketForm(navController, company, id, onChangeCustomer = { picked = null })
+            TicketForm(company, id, onDone = { navController.popBackStack() }, onChangeCustomer = { picked = null })
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -139,8 +139,9 @@ private fun CustomerSearch(company: String, onPick: (Customer) -> Unit) {
 private fun defaultPriority(list: List<Choice>): String? =
     (list.firstOrNull { it.name.equals("medium", ignoreCase = true) } ?: list.firstOrNull())?.id
 
+/** The ticket form for one customer; also on the app's call screen (call/CallScreen.kt), without the customer change. */
 @Composable
-private fun TicketForm(navController: NavHostController, company: String, headerId: Long, onChangeCustomer: () -> Unit) {
+fun TicketForm(company: String, headerId: Long, onDone: () -> Unit, onChangeCustomer: (() -> Unit)? = null) {
     val s = LocalStrings.current
     val scope = rememberCoroutineScope()
     var options by remember { mutableStateOf<TicketOptions?>(null) }
@@ -183,7 +184,7 @@ private fun TicketForm(navController: NavHostController, company: String, header
                 Column(Modifier.padding(16.dp)) {
                     MessageBox(text, color = Good)
                     Spacer(Modifier.height(12.dp))
-                    PrimaryButton(s.done) { navController.popBackStack() }
+                    PrimaryButton(s.done) { onDone() }
                 }
             }
             return@ScreenBody
@@ -198,8 +199,10 @@ private fun TicketForm(navController: NavHostController, company: String, header
                         Text(c.name ?: "", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                         Text(listOfNotNull(c.customerId?.let { "ID $it" }, c.username).joinToString(" · "), fontSize = 12.sp, color = Muted)
                     }
-                    Text(s.changeCustomer, color = PrimaryStrong, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { onChangeCustomer() }.padding(8.dp))
+                    if (onChangeCustomer != null) {
+                        Text(s.changeCustomer, color = PrimaryStrong, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { onChangeCustomer() }.padding(8.dp))
+                    }
                 }
             }
             Spacer(Modifier.height(10.dp))

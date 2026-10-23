@@ -451,6 +451,13 @@ data class CallPage(val data: List<CallRow> = emptyList(), @Json(name = "next_pa
 
 data class CallResult(val call: CallRow)
 
+/** The call screen: the caller's lines (customers with this mobile, or named in their WhatsApp chat), open tickets each. */
+data class CallInfo(val lines: List<CallerLine> = emptyList(), val can: CallInfoCan = CallInfoCan())
+
+data class CallerLine(val customer: Customer, val tickets: List<Ticket> = emptyList())
+
+data class CallInfoCan(val ticket: Boolean = false, val customer: Boolean = false)
+
 /** The member's Desk phone login (call/CallActivity hands it to the softphone page). */
 data class SoftphoneConfig(
     val ws: String,

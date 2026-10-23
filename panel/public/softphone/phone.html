@@ -53,6 +53,7 @@ button.end { background:var(--red); color:#fff; width:76px; height:76px }
     function state(text, code) {
         $('state').textContent = text;
         try { app && app.state(code || ''); } catch (e) {}
+        try { app && app.status && app.status(text); } catch (e) {}   // app 1.12+: its own call screen shows the text
     }
     function finish(text) {
         if (done) return;
