@@ -66,27 +66,77 @@ class FieldLocationTest extends TestCase
             'assigned_to' => 'Rifat', 'opened_at' => now()->subHour()]);
     }
 
-    public function test_consent_comes_before_duty_and_points(): void
+    private function at(string $dhaka): void
     {
-        $point = ['lat' => 23.75, 'lng' => 90.39, 'accuracy' => 12, 'battery' => 80, 'at' => now()->toIso8601String()];
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-24 '.$dhaka, 'Asia/Dhaka'));
+    }
+
+    private function send(float $lat, float $lng, array $extra = []): \Illuminate\Testing\TestResponse
+    {
+        return $this->api($this->tech)->postJson($this->url('field/locations'), ['points' => [['lat' => $lat, 'lng' => $lng,
+            'accuracy' => 10, 'at' => now()->toIso8601String()] + $extra]]);
+    }
+
+    public function test_privacy_at_login_is_the_consent(): void
+    {
+        $this->tech->forceFill(['email' => 'rifat@example.com', 'password' => 'secret-pass'])->save();
         $this->api($this->tech)->getJson($this->url('field/location'))->assertOk()->assertJsonPath('consent', false)->assertJsonPath('track', false);
-        $this->api($this->tech)->postJson($this->url('field/duty'), ['on' => true])->assertStatus(422);
-        $this->api($this->tech)->postJson($this->url('field/locations'), ['points' => [$point]])->assertStatus(422);
+        $this->send(23.75, 90.39)->assertStatus(422);
 
-        $this->api($this->tech)->postJson($this->url('field/consent'))->assertOk()->assertJsonPath('consent', true)->assertJsonPath('track', false);
-        $this->api($this->tech)->postJson($this->url('field/duty'), ['on' => true])->assertOk()
-            ->assertJsonPath('track', true)->assertJsonPath('interval', 300);
-        $this->api($this->tech)->postJson($this->url('field/locations'), ['points' => [$point,
-            ['lat' => 23.7, 'lng' => 90.3, 'at' => now()->addHour()->toIso8601String()],     // wrong phone clock
-            ['lat' => 23.7, 'lng' => 90.3, 'mock' => true, 'at' => now()->subMinute()->toIso8601String()]]])
-            ->assertOk()->assertJsonPath('saved', 2);
-        $this->assertSame(1, FieldLocation::where('mock', true)->count());
-
-        $this->api($this->tech)->postJson($this->url('field/duty'), ['on' => false])->assertOk()->assertJsonPath('track', false);
+        $this->postJson('/api/v1/login', ['email' => 'rifat@example.com', 'password' => 'secret-pass', 'privacy' => true])->assertOk();
+        $this->assertNotNull(Membership::where('user_id', $this->tech->id)->value('location_consent_at'));
 
         // someone without the menu cannot send
         Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['inbox'])]);
         $this->api($this->tech)->getJson($this->url('field/location'))->assertForbidden();
+    }
+
+    public function test_duty_starts_at_the_office_after_ten_and_ends_at_five(): void
+    {
+        Membership::where('user_id', $this->tech->id)->update(['location_consent_at' => now()]);
+        \App\Models\BotSetting::create(['company_id' => $this->company->id, 'field_office_lat' => 23.7500, 'field_office_lng' => 90.3900]);
+        $this->ticket();
+
+        $this->at('09:30');   // before the start: no location
+        $this->api($this->tech)->getJson($this->url('field/location'))->assertJsonPath('track', false);
+
+        $this->at('10:05');   // waiting to reach the office
+        $this->api($this->tech)->getJson($this->url('field/location'))->assertJsonPath('track', true)->assertJsonPath('on_duty', false);
+        $this->send(23.7600, 90.3900)->assertJsonPath('on_duty', false);                    // 1 km away
+        $this->send(23.7500, 90.3900, ['mock' => true])->assertJsonPath('on_duty', false);   // fake GPS
+        $this->send(23.75015, 90.3900)->assertJsonPath('on_duty', true)->assertJsonPath('track', true);   // ~17 m
+
+        $this->at('17:01');
+        $this->api($this->tech)->getJson($this->url('field/location'))->assertJsonPath('on_duty', false)->assertJsonPath('track', false);
+    }
+
+    public function test_duty_ends_when_the_work_is_done_and_tomorrow_work_does_not_count(): void
+    {
+        Membership::where('user_id', $this->tech->id)->update(['location_consent_at' => now()]);
+        $this->at('10:30');
+        $t1 = $this->ticket();
+        $t2 = BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => '2', 'state' => 'processing',
+            'customer_header_id' => 15630, 'category' => 'Line Off', 'assigned_to' => 'Rifat', 'opened_at' => now()]);
+        $this->send(23.75, 90.39)->assertJsonPath('on_duty', true);   // no office set: the first point in hours
+
+        $this->api($this->tech)->postJson($this->url("my-jobs/{$t2->id}/start"))->assertOk();
+        $this->api($this->tech)->postJson($this->url("my-jobs/{$t2->id}/later"))->assertOk()
+            ->assertJsonPath('ticket.later_on', '2026-10-25')->assertJsonPath('ticket.job.status', 'paused');
+        $this->api($this->tech)->postJson($this->url("my-jobs/{$t1->id}/start"))->assertOk();
+        $this->api($this->tech)->postJson($this->url("my-jobs/{$t1->id}/solve"))->assertOk();
+        $t1->update(['state' => 'solved', 'solved_at' => now()]);
+        $this->api($this->tech)->getJson($this->url('field/location'))->assertJsonPath('on_duty', false)->assertJsonPath('track', false);
+
+        // a new ticket the same day brings duty back without going to the office again
+        BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => '3', 'state' => 'pending',
+            'customer_header_id' => 15630, 'category' => 'Line Off', 'assigned_to' => 'Rifat', 'opened_at' => now()]);
+        $this->api($this->tech)->getJson($this->url('field/location'))->assertJsonPath('on_duty', true);
+
+        // the next day the put-off ticket counts again
+        $this->at('11:00');
+        $this->travel(1)->days();
+        $this->api($this->tech)->getJson($this->url('my-jobs'))->assertOk();
+        $this->assertSame(2, \App\Support\FieldDuty::remaining($this->tech, $this->company));
     }
 
     public function test_old_points_are_deleted(): void
@@ -104,7 +154,7 @@ class FieldLocationTest extends TestCase
         Membership::where('user_id', $this->tech->id)->update(['location_consent_at' => now()]);
         $t = $this->ticket();
         $this->api($this->tech)->postJson($this->url("my-jobs/{$t->id}/start"), ['lat' => 23.7500, 'lng' => 90.3900, 'accuracy' => 20])->assertOk();
-        $this->api($this->tech)->getJson($this->url('field/location'))->assertJsonPath('track', true)->assertJsonPath('interval', 60);
+        $this->api($this->tech)->getJson($this->url('field/location'))->assertJsonPath('track', true)->assertJsonPath('job_running', true);
         $job = FieldJob::first();
         $this->assertEqualsWithDelta(23.75, $job->start_lat, 0.0001);
         $this->assertNull($job->start_distance);   // the customer's place is not known yet
@@ -143,5 +193,18 @@ class FieldLocationTest extends TestCase
 
         \Livewire\Livewire::actingAs($owner)->test(\App\Filament\App\Pages\FieldLocations::class)
             ->call('showRoute', $this->tech->id)->assertOk()->assertSee('কিমি');
+    }
+
+    public function test_owner_sets_the_office_and_duty_hours(): void
+    {
+        $owner = User::factory()->create();
+        $this->company->users()->attach($owner, ['role' => 'owner']);
+        $this->actingAs($owner)->get("/app/{$this->company->slug}/staff-teams")->assertOk();
+        \Filament\Facades\Filament::setCurrentPanel('app');
+        \Filament\Facades\Filament::setTenant($this->company);
+        \Livewire\Livewire::test(\App\Filament\App\Resources\StaffTeams\Pages\ManageStaffTeams::class)
+            ->callAction('fieldSettings', data: ['field_job_minutes' => 90, 'field_office_lat' => '23.7512345', 'field_office_lng' => '90.3912345',
+                'field_office_radius' => 25, 'field_duty_start' => '09:30', 'field_duty_end' => '18:00'])->assertHasNoActionErrors();
+        $this->assertSame([23.7512345, 90.3912345, 25, '09:30', '18:00'], \App\Support\FieldDuty::settings($this->company->id));
     }
 }

@@ -259,3 +259,6 @@ Route::middleware('web')->prefix('system-backup')->group(function () {
     Route::get('/recovery.txt', [\App\Http\Controllers\SystemBackupController::class, 'recovery'])->name('system-backup.recovery');
     Route::get('/download/{backup}', [\App\Http\Controllers\SystemBackupController::class, 'download'])->name('system-backup.download');
 });
+
+// the app's privacy policy (shown and accepted at sign-in; location recording for field technicians)
+Route::view('/privacy', 'legal.privacy')->middleware('web')->name('privacy');

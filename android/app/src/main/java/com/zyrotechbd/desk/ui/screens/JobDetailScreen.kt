@@ -127,7 +127,6 @@ fun JobDetailScreen(navController: NavHostController, company: String, ticketId:
             try {
                 setJob(call())
                 notice = null
-                FieldTracker.refresh(context, company)   // a running job sends location every minute
             } catch (e: Exception) {
                 notice = ApiClient.errorMessage(e, s.loadFailed, s.offline) to false
             } finally {
@@ -247,6 +246,26 @@ fun JobDetailScreen(navController: NavHostController, company: String, ticketId:
                             }
                         }
                     }
+                    // not finished today: off today's list (duty can end), back tomorrow
+                    if (t.open && j?.status != "done") {
+                        Spacer(Modifier.height(6.dp))
+                        if (t.laterOn != null) Text(s.laterNote, fontSize = 12.sp, color = Warn)
+                        TextButton(enabled = !busy, onClick = {
+                            scope.launch {
+                                busy = true
+                                try {
+                                    val r = ApiClient.service.laterJob(company, ticketId, if (t.laterOn == null) 1 else 0).ticket
+                                    detail = d.copy(ticket = r)
+                                    setJob(r.job)
+                                    notice = null
+                                } catch (e: Exception) {
+                                    notice = ApiClient.errorMessage(e, s.loadFailed, s.offline) to false
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        }) { Text(if (t.laterOn == null) s.doTomorrow else s.doToday, color = PrimaryStrong) }
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -357,7 +376,6 @@ fun JobDetailScreen(navController: NavHostController, company: String, ticketId:
                         showFinish = false
                         notice = listOfNotNull(s.jobFinished, res.sms).joinToString(" · ") to true
                         load(true)
-                        scope.launch { FieldTracker.refresh(context, company) }
                         null
                     } catch (e: Exception) {
                         scope.launch { checkLine(false) }
