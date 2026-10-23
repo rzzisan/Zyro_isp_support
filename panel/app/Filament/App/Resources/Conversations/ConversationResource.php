@@ -101,7 +101,12 @@ class ConversationResource extends Resource
     /** Explicit company scope in addition to Filament tenancy. */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->where('company_id', Filament::getTenant()?->getKey() ?? 0);
+        $company = Filament::getTenant();
+
+        // field technicians: only the chats of customers whose work they have started
+        return parent::getEloquentQuery()->where('company_id', $company?->getKey() ?? 0)
+            ->when($company && \App\Support\FieldWork::restricted(auth()->user(), $company),
+                fn ($q) => $q->whereIn('id', \App\Support\FieldWork::activeContactIds(auth()->user(), $company)));
     }
 
     public static function getPages(): array

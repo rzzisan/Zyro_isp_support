@@ -162,8 +162,9 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                             Phone.dial(context, mobile, "${c.name ?: ""} (ID ${c.customerId ?: ""})")
                         }
                         val inApp = c.chatId != null && (SessionStore.company()?.can("inbox") == true || SessionStore.company()?.can("field_jobs") == true)
+                        val fieldOnly = SessionStore.company()?.fieldOnly == true
                         SmallAction("WhatsApp", Icons.Filled.Chat, Modifier.weight(1f), color = Color(0xFF128C7E),
-                            enabled = inApp || mobile.isNotEmpty()) {
+                            enabled = inApp || (!fieldOnly && mobile.isNotEmpty())) {
                             if (inApp) {
                                 navController.navigate(Routes.chat(c.chatId!!))
                                 return@SmallAction

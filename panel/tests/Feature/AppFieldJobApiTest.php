@@ -94,7 +94,12 @@ class AppFieldJobApiTest extends TestCase
         $this->api($this->tech)->getJson($this->url('tickets'))->assertForbidden();
         $chat = WaContact::create(['company_id' => $this->company->id, 'wa_number' => '8801838216754', 'name' => 'Bulbul']);
         $other = WaContact::create(['company_id' => $this->company->id, 'wa_number' => '8801711111111', 'name' => 'Other']);
+        // the chat opens only once the work has started, and never someone else's
+        $this->api($this->tech)->getJson($this->url('chats/'.$chat->id))->assertForbidden();
+        $this->api($this->tech)->getJson($this->url('my-jobs/'.$mine->id))->assertJsonPath('customer.chat_id', null);
+        $this->api($this->tech)->postJson($this->url("my-jobs/{$mine->id}/start"))->assertOk();
         $this->api($this->tech)->getJson($this->url('chats/'.$chat->id))->assertOk();
+        $this->api($this->tech)->getJson($this->url('my-jobs/'.$mine->id))->assertJsonPath('customer.chat_id', $chat->id);
         $this->api($this->tech)->getJson($this->url('chats/'.$other->id))->assertForbidden();
     }
 
@@ -163,5 +168,25 @@ class AppFieldJobApiTest extends TestCase
         $this->api($this->tech)->postJson($this->url("my-jobs/{$t->id}/start"))->assertOk();
         $t->update(['state' => 'solved', 'solved_at' => now()]);
         $this->api($this->tech)->getJson($this->url('my-jobs'))->assertOk()->assertJsonPath('data.0.job.status', 'done');
+    }
+
+    public function test_a_technician_with_the_inbox_menu_sees_only_running_work_chats(): void
+    {
+        Membership::where('user_id', $this->tech->id)->update(['permissions' => json_encode(['field_jobs', 'inbox'])]);
+        $mine = $this->ticket('1', 'Rifat');
+        $chat = WaContact::create(['company_id' => $this->company->id, 'wa_number' => '8801838216754', 'name' => 'Bulbul', 'last_message_at' => now()]);
+        $other = WaContact::create(['company_id' => $this->company->id, 'wa_number' => '8801711111111', 'name' => 'Other', 'last_message_at' => now()]);
+
+        $this->api($this->tech)->getJson($this->url('chats'))->assertOk()->assertJsonCount(0, 'data');
+        $this->api($this->tech)->postJson($this->url("my-jobs/{$mine->id}/start"))->assertOk();
+        $this->api($this->tech)->getJson($this->url('chats'))->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $chat->id);
+        $this->api($this->tech)->getJson($this->url('chats/'.$other->id))->assertForbidden();
+        $this->api($this->tech)->postJson($this->url('chats/'.$other->id.'/reply'), ['body' => 'hi'])->assertForbidden();
+
+        // finished work closes the chat again; an admin with the same menus is not limited
+        FieldJob::first()->update(['status' => 'done']);
+        $this->api($this->tech)->getJson($this->url('chats'))->assertOk()->assertJsonCount(0, 'data');
+        Membership::where('user_id', $this->tech->id)->update(['role' => 'admin']);
+        $this->api($this->tech)->getJson($this->url('chats/'.$other->id))->assertOk();
     }
 }

@@ -71,16 +71,32 @@ class FieldWork
             && static::tickets($user, $company)->where('customer_header_id', $headerId)->exists();
     }
 
-    /** ... and that customer's WhatsApp chat. */
-    public static function mayChat(?User $user, Company $company, WaContact $contact): bool
+    /**
+     * A field technician (an agent with the field_jobs menu): even with the inbox menu they only see and write to the
+     * WhatsApp chats of customers whose work they have started and not finished.
+     */
+    public static function restricted(?User $user, Company $company): bool
+    {
+        return $user !== null && $user->roleIn($company) === 'agent' && static::allowed($user, $company);
+    }
+
+    /** The chats of the customers whose job (started, not done) is on one of the member's open tickets. */
+    public static function activeContactIds(?User $user, Company $company): array
     {
         if (! static::allowed($user, $company)) {
-            return false;
+            return [];
         }
-        $headers = static::tickets($user, $company)->whereNotNull('customer_header_id')->pluck('customer_header_id')->unique();
+        $headers = static::tickets($user, $company)->whereIn('state', ['pending', 'processing'])->whereNotNull('customer_header_id')
+            ->whereHas('fieldJob', fn ($q) => $q->where('status', '!=', 'done'))->pluck('customer_header_id')->unique();
 
         return BillingCustomer::where('company_id', $company->id)->whereIn('header_id', $headers)->get()
-            ->contains(fn (BillingCustomer $c) => $c->chat()?->id === $contact->id);
+            ->map(fn (BillingCustomer $c) => $c->chat()?->id)->filter()->unique()->values()->all();
+    }
+
+    /** ... and that customer's WhatsApp chat, while the work runs. */
+    public static function mayChat(?User $user, Company $company, WaContact $contact): bool
+    {
+        return in_array($contact->id, static::activeContactIds($user, $company), true);
     }
 
     /** [minutes, line_check] for a ticket category (billing's name), from the field work settings. */

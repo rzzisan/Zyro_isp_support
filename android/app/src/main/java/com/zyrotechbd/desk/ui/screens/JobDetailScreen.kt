@@ -1,7 +1,5 @@
 package com.zyrotechbd.desk.ui.screens
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -305,15 +303,11 @@ fun JobDetailScreen(navController: NavHostController, company: String, ticketId:
                         SmallAction(s.call, Icons.Filled.Call, Modifier.weight(1f), enabled = mobile.isNotEmpty()) {
                             Phone.dial(context, mobile, "${c?.name ?: t.customerName ?: ""} (ID ${c?.customerId ?: t.customerId ?: ""})")
                         }
-                        SmallAction(s.titleChat, Icons.Filled.Chat, Modifier.weight(1f), color = Color(0xFF128C7E),
-                            enabled = c?.chatId != null || mobile.isNotEmpty()) {
-                            if (c?.chatId != null) {
+                        // only the customer's WhatsApp chat in the app, and only while the work runs (the server sends chat_id then)
+                        if (c?.chatId != null) {
+                            SmallAction(s.titleChat, Icons.Filled.Chat, Modifier.weight(1f), color = Color(0xFF128C7E)) {
                                 navController.navigate(Routes.chat(c.chatId!!))
-                                return@SmallAction
                             }
-                            val digits = mobile.filter { it.isDigit() }
-                            val wa = if (digits.startsWith("0")) "88$digits" else digits
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$wa")))
                         }
                         if (t.headerId != null) {
                             SmallAction(s.openCustomer, Icons.Filled.Person, Modifier.weight(1f)) {

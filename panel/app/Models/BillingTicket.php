@@ -24,6 +24,11 @@ class BillingTicket extends Model
         return $this->belongsTo(Company::class);
     }
 
+    public function fieldJob(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(FieldJob::class, 'ticket_id');
+    }
+
     /** Tickets assigned to or solved by $name (values look like "Maruf (10-07-26), Rifat"). */
     public function scopeForEmployee($query, string $name, bool $assignedOnly = false)
     {
