@@ -8,6 +8,7 @@ use App\Models\Membership;
 use App\Models\User;
 use App\Support\Menu;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -152,11 +153,50 @@ class MembershipResource extends Resource
                     ->using(fn (array $data) => self::addMember($data)),
             ])
             ->recordActions([
+                self::setPasswordAction(),
                 EditAction::make()->visible(fn (Membership $record) => $record->role !== 'owner'
                     || auth()->user()->roleIn(Filament::getTenant()) === 'owner'),
                 DeleteAction::make()->label(__('সরান'))
                     ->visible(fn (Membership $record) => $record->role !== 'owner' && $record->user_id !== auth()->id()),
             ]);
+    }
+
+    /**
+     * The owner sets a new Desk password for a member without the old one (forgotten password, a leaving phone).
+     * Not for the owner's own login (that is "আমার পাসওয়ার্ড", which asks for the current one), not for a
+     * super-admin, and not for a user who also works in another company, since that login is not this owner's alone.
+     * The member is signed out of every browser and phone.
+     */
+    public static function setPasswordAction(): Action
+    {
+        return Action::make('setPassword')->label(__('পাসওয়ার্ড সেট'))->icon(Heroicon::OutlinedKey)->color('warning')
+            ->visible(fn (Membership $record) => self::isOwner() && $record->user_id !== auth()->id())
+            ->modalHeading(fn (Membership $record) => __('নতুন পাসওয়ার্ড: ').$record->user?->name)
+            ->modalDescription(__('পুরনো পাসওয়ার্ড লাগবে না। সেভ করলে এই সদস্য সব ব্রাউজার আর অ্যাপ থেকে লগআউট হবেন, নতুন পাসওয়ার্ডে আবার লগইন করবেন।'))
+            ->modalSubmitActionLabel(__('পাসওয়ার্ড সেট করুন'))
+            ->schema([
+                TextInput::make('password')->label(__('নতুন পাসওয়ার্ড'))->password()->revealable()
+                    ->required()->minLength(8)->same('password_confirmation')->validationAttribute(__('নতুন পাসওয়ার্ড')),
+                TextInput::make('password_confirmation')->label(__('নতুন পাসওয়ার্ড আবার লিখুন'))->password()->revealable()
+                    ->required()->dehydrated(false),
+            ])
+            ->action(function (Membership $record, array $data) {
+                $user = $record->user;
+                if (! self::isOwner() || ! $user || $user->id === auth()->id() || $record->company_id !== Filament::getTenant()->getKey()) {
+                    return;
+                }
+                if ($user->is_super_admin || Membership::where('user_id', $user->id)->where('company_id', '!=', $record->company_id)->exists()) {
+                    Notification::make()->danger()->title(__('এই ইউজারের পাসওয়ার্ড এখান থেকে বদলানো যাবে না'))
+                        ->body(__('তিনি অন্য কোম্পানিতেও আছেন বা সুপার অ্যাডমিন। সাপোর্টে যোগাযোগ করুন।'))->send();
+
+                    return;
+                }
+                $user->forceFill(['password' => $data['password']])->save();
+                $user->tokens()->delete();
+                \Illuminate\Support\Facades\DB::table('sessions')->where('user_id', $user->id)->delete();
+                Notification::make()->success()->title(__('পাসওয়ার্ড সেট হয়েছে'))
+                    ->body(__('নতুন পাসওয়ার্ডটা সদস্যকে জানিয়ে দিন।'))->send();
+            });
     }
 
     public static function addMember(array $data): Membership
