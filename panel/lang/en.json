@@ -1506,5 +1506,6 @@
     "সব কল": "All calls",
     "হটলাইন": "Hotline",
     "টিম:": "Team:",
-    "টিম বাছলে টিমের সব সদস্যের টিকিট একসাথে প্রিন্ট হবে; একজন কর্মীর জন্য খালি রাখুন": "Pick a team to print all its members' tickets together; leave empty for one staff member"
+    "টিম বাছলে টিমের সব সদস্যের টিকিট একসাথে প্রিন্ট হবে; একজন কর্মীর জন্য খালি রাখুন": "Pick a team to print all its members' tickets together; leave empty for one staff member",
+    "টিম বাছলে টিমের সব সদস্য একসাথে কর্মী ঘরে বসে যাবে": "Picking a team puts all its members in the staff box"
 }

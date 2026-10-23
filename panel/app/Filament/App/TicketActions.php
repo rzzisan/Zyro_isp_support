@@ -176,6 +176,7 @@ class TicketActions
                     Textarea::make('comment')->label(__('সমস্যার বিবরণ'))->required()->rows(3)->maxLength(1900),
                     Grid::make(2)->schema([
                         Select::make('dept_id')->label(__('ডিপার্টমেন্ট (ঐচ্ছিক)'))->options(fn () => static::options('departments')),
+                        static::teamSelect(),
                         Select::make('employees')->label(__('কর্মী assign (ঐচ্ছিক)'))->multiple()->searchable()
                             ->options(fn () => static::options('employees'))
                             ->helperText(__('খালি রাখলে অটো assign সেটিং অনুযায়ী কর্মী পাবেন (ক্যাটাগরি দেখে)')),
@@ -245,13 +246,7 @@ class TicketActions
             ->modalSubmitActionLabel(__('প্রিন্ট পেজ খুলুন'))
             ->schema([
                 Select::make('team')->label(__('ফিল্ড টিম'))->searchable()->live()
-                    ->options(function () {
-                        $names = static::options('employees');
-
-                        return StaffTeam::where('company_id', static::company())->orderBy('name')->get()->mapWithKeys(fn ($t) => [
-                            $t->id => $t->name.' ('.collect($t->members)->map(fn ($m) => $names[$m] ?? null)->filter()->join(', ').')',
-                        ])->all();
-                    })
+                    ->options(fn () => static::teamOptions())
                     ->helperText(__('টিম বাছলে টিমের সব সদস্যের টিকিট একসাথে প্রিন্ট হবে; একজন কর্মীর জন্য খালি রাখুন')),
                 Select::make('employee')->label(__('কর্মী'))->searchable()
                     ->required(fn ($get) => blank($get('team')))->hidden(fn ($get) => filled($get('team')))
@@ -279,6 +274,30 @@ class TicketActions
             });
     }
 
+    /** "ফিল্ড টিম" picker: choosing a team fills the staff picker with all its members (not saved itself). */
+    public static function teamSelect(): Select
+    {
+        return Select::make('team')->label(__('ফিল্ড টিম'))->searchable()->live()->dehydrated(false)
+            ->options(fn () => static::teamOptions())
+            ->afterStateUpdated(function ($state, callable $set) {
+                $team = $state ? StaffTeam::where('company_id', static::company())->find((int) $state) : null;
+                if ($team) {
+                    $set('employees', array_map('strval', $team->members));
+                }
+            })
+            ->helperText(__('টিম বাছলে টিমের সব সদস্য একসাথে কর্মী ঘরে বসে যাবে'));
+    }
+
+    /** team id => "name (member, member)". */
+    public static function teamOptions(): array
+    {
+        $names = static::options('employees');
+
+        return StaffTeam::where('company_id', static::company())->orderBy('name')->get()->mapWithKeys(fn ($t) => [
+            $t->id => $t->name.' ('.collect($t->members)->map(fn ($m) => $names[$m] ?? null)->filter()->join(', ').')',
+        ])->all();
+    }
+
     public static function assign(): Action
     {
         return Action::make('assign')->label('Assign')->icon(Heroicon::OutlinedUserPlus)->color('gray')
@@ -297,6 +316,7 @@ class TicketActions
             })
             ->schema([
                 Select::make('dept_id')->label(__('ডিপার্টমেন্ট (ঐচ্ছিক)'))->options(fn () => static::options('departments')),
+                static::teamSelect(),
                 Select::make('employees')->label(__('কর্মী'))->multiple()->searchable()->required()
                     ->options(fn () => static::options('employees')),
                 Toggle::make('sms_employees')->label(__('কর্মীকে SMS')),
@@ -389,6 +409,7 @@ class TicketActions
                 Textarea::make('comment')->label(__('সমস্যার বিবরণ'))->required()->rows(4)->maxLength(1900),
                 Grid::make(2)->schema([
                     Select::make('dept_id')->label(__('ডিপার্টমেন্ট (ঐচ্ছিক)'))->options(fn () => static::options('departments')),
+                    static::teamSelect(),
                     Select::make('employees')->label(__('কর্মী'))->multiple()->searchable()
                         ->helperText(__('খালি রাখলে কর্মী যেমন আছে থাকবে'))
                         ->options(fn () => static::options('employees')),
