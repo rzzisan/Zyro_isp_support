@@ -50,9 +50,13 @@ class Menu
         return collect(self::ITEMS)->filter(fn ($i) => $settings || ! $i[2])->map(fn ($i) => __($i[0]))->all();
     }
 
+    /** Menus only a member given them on the team page (own list or a group) has, owners and admins too. */
+    public const EXPLICIT = ['field_jobs'];
+
     public static function defaults(string $role): array
     {
-        return array_keys(array_filter(self::ITEMS, fn ($i) => in_array($role, ['owner', 'admin'], true) || $i[1]));
+        return array_values(array_diff(array_keys(array_filter(self::ITEMS, fn ($i) => in_array($role, ['owner', 'admin'], true) || $i[1])),
+            self::EXPLICIT));
     }
 
     public static function allows(?User $user, ?Company $company, string $key): bool
@@ -63,6 +67,9 @@ class Menu
         $m = Membership::where('company_id', $company->getKey())->where('user_id', $user->getKey())->first();
         if (! $m) {
             return false;
+        }
+        if (in_array($key, self::EXPLICIT, true)) {
+            return in_array($key, self::keys($m), true);   // "আমার কাজ": field technicians only
         }
         if ($m->role === 'owner') {
             return true;

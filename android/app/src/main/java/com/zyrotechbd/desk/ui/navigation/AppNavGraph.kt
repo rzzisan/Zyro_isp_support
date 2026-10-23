@@ -27,8 +27,8 @@ import com.zyrotechbd.desk.ui.screens.TicketsScreen
 
 @Composable
 fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: Modifier = Modifier,
-                more: @Composable () -> Unit) {
-    NavHost(navController = navController, startDestination = Routes.Dashboard, modifier = modifier) {
+                start: String = Routes.Dashboard, more: @Composable () -> Unit) {
+    NavHost(navController = navController, startDestination = start, modifier = modifier) {
         composable(Routes.Dashboard) { DashboardScreen(navController, companyKey) }
         composable(Routes.Customers) { CustomersScreen(navController, companyKey, collect = false) }
         composable(Routes.Collect) { CustomersScreen(navController, companyKey, collect = true) }
