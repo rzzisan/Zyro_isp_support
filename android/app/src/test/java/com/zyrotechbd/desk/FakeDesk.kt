@@ -16,7 +16,7 @@ class FakeDesk {
         "username":"en.enamul","zone":"Tilardi","subzone":"Bazar","package":"10 Mbps","monthly_bill":525,"due":525,
         "status":"Active","disabled":false,"is_left":false,"online":true,"last_payment_date":"2026-09-10"}"""
     private val ticket get() = """{"id":5,"complain_id":"57231","customer_name":"Bulbul Ahmed","customer_id":"0003","header_id":3,
-        "username":"en.enamul","mobile":"01714080210","zone":"Tilardi","subzone":"Bazar","category":"Line Off","priority":"High",
+        "username":"en.enamul","mobile":"01714080210","complain_number":"01990123456","zone":"Tilardi","subzone":"Bazar","category":"Line Off","priority":"High",
         "state":"pending","person":"Maruf","description":"লাল বাতি জ্বলছে, সকাল থেকে নেট নেই","created_by":"Desk Bot",
         "opened_at":"$now","duration":"2 ঘণ্টা 5 মিনিট","open":true}"""
     private val customer2 = """{"header_id":4,"customer_id":"0004","name":"Rahima Khatun","mobile":"01811000000",

@@ -37,6 +37,7 @@ import com.zyrotechbd.desk.ui.screens.InboxScreen
 import com.zyrotechbd.desk.ui.screens.LoginScreen
 import com.zyrotechbd.desk.ui.screens.MoreScreen
 import com.zyrotechbd.desk.ui.screens.PrintersScreen
+import com.zyrotechbd.desk.ui.screens.DialPadScreen
 import com.zyrotechbd.desk.ui.strings.BengaliStrings
 import com.zyrotechbd.desk.ui.strings.LocalStrings
 import com.zyrotechbd.desk.ui.theme.Background
@@ -116,7 +117,7 @@ class ScreenshotTest {
         LoginScreen("z@x.com", "", false, null, {}, {}, {}, {})
     }
     @Test fun more() = shot("7-more", "Zisan") {
-        MoreScreen(SessionStore.company(), SessionStore.companies(), emptyList(), {}, {}, {}, {}, {}, {}, {})
+        MoreScreen(SessionStore.company(), SessionStore.companies(), emptyList(), {}, {}, {}, {}, {}, {}, {}, {})
     }
     @Test fun inbox() = shot("9-inbox", "Rahima") { InboxScreen(rememberNavController(), "cln") }
     @Test fun chat() = shot("10-chat", "লাইন বন্ধ") { ChatScreen("cln", 7, rememberNavController()) }
@@ -124,6 +125,7 @@ class ScreenshotTest {
     @Test fun ticket() = shot("12-ticket", "-29.4") { TicketDetailScreen(rememberNavController(), "cln", 5) }
     @Test fun myJobs() = shot("17-my-jobs", "Bulbul") { MyJobsScreen(rememberNavController(), "cln") }
     @Test fun job() = shot("18-job", "-29.4") { JobDetailScreen(rememberNavController(), "cln", 5) }
+    @Test fun dialPad() = shot("19-dial-pad", "Hotline") { DialPadScreen() }
     @Test fun newTicket() = shot("13-new-ticket", "57231") { NewTicketScreen(rememberNavController(), "cln", 3) }
     @Test fun printers() {
         val app = rule.activity.application

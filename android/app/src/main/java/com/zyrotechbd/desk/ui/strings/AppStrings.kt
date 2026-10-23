@@ -49,6 +49,12 @@ abstract class AppStrings {
     abstract val lineOff: String
     abstract val blocked: String
     abstract val call: String
+    abstract val chooseNumber: String
+    abstract val contactMobile: String
+    abstract val dialPad: String
+    abstract val dialHint: String
+    abstract val dialViaHotline: String
+    abstract val erase: String
     abstract val due: String
     abstract val monthlyBill: String
     abstract val mobile: String
@@ -449,6 +455,12 @@ object BengaliStrings : AppStrings() {
     override val lineOff = "লাইন বন্ধ"
     override val blocked = "ব্লক"
     override val call = "কল"
+    override val chooseNumber = "কোন নম্বরে কল দেবেন?"
+    override val contactMobile = "যোগাযোগের নম্বর"
+    override val dialPad = "ডায়াল প্যাড"
+    override val dialHint = "নম্বর লিখুন"
+    override val dialViaHotline = "কল যাবে Hotline নম্বর দিয়ে"
+    override val erase = "মুছুন"
     override val due = "বকেয়া"
     override val monthlyBill = "মাসিক বিল"
     override val mobile = "মোবাইল"
@@ -854,6 +866,12 @@ object EnglishStrings : AppStrings() {
     override val lineOff = "Line off"
     override val blocked = "Blocked"
     override val call = "Call"
+    override val chooseNumber = "Which number to call?"
+    override val contactMobile = "Contact number"
+    override val dialPad = "Dial pad"
+    override val dialHint = "Enter a number"
+    override val dialViaHotline = "The call goes out from the hotline number"
+    override val erase = "Erase"
     override val due = "Due"
     override val monthlyBill = "Monthly bill"
     override val mobile = "Mobile"

@@ -451,6 +451,8 @@ data class MyJobRow(
     @Json(name = "customer_id") val customerId: String? = null,
     @Json(name = "header_id") val headerId: Long? = null,
     val mobile: String? = null,
+    /** The contact number given when the ticket was opened (may be another than the customer's own). */
+    @Json(name = "complain_number") val complainNumber: String? = null,
     val zone: String? = null,
     val subzone: String? = null,
     val category: String? = null,

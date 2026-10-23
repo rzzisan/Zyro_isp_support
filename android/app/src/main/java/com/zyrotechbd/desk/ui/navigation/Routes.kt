@@ -10,6 +10,7 @@ object Routes {
     const val Inbox = "inbox"
     const val Monitoring = "monitoring"
     const val Calls = "calls"
+    const val DialPad = "dial"
     const val More = "more"                  // printers, company, language, sign out
 
     const val CustomerDetail = "customers/{headerId}"
