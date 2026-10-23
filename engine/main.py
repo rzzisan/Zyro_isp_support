@@ -162,6 +162,17 @@ def forward_to_legacy(raw: bytes, signature: str) -> None:
         log.warning("legacy forward failed: %s", e)
 
 
+def without_nul(v):
+    """The payload without NUL characters: Postgres text/jsonb cannot hold \\u0000, and some WhatsApp payloads carry it."""
+    if isinstance(v, str):
+        return v.replace("\x00", "")
+    if isinstance(v, list):
+        return [without_nul(x) for x in v]
+    if isinstance(v, dict):
+        return {without_nul(k): without_nul(x) for k, x in v.items()}
+    return v
+
+
 @app.post("/webhook")
 async def receive(request: Request):
     raw = await request.body()
@@ -169,15 +180,18 @@ async def receive(request: Request):
         raise HTTPException(status_code=403)
     if LEGACY_FORWARD_URL:
         threading.Thread(target=forward_to_legacy, args=(raw, request.headers["x-hub-signature-256"]), daemon=True).start()
-    payload = json.loads(raw)
+    payload = without_nul(json.loads(raw))
     jobs = []
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
             value = change.get("value", {})
             pnid = value.get("metadata", {}).get("phone_number_id")
             t = tenants.by_phone_number_id(pnid) if pnid else None
-            db.execute("INSERT INTO wa_events (company_id, payload, received_at) VALUES (%s, %s, now())",
-                       (t.company_id if t else None, json.dumps({"field": change.get("field"), "value": value})))
+            try:  # only a log: never let it stop the messages
+                db.execute("INSERT INTO wa_events (company_id, payload, received_at) VALUES (%s, %s, now())",
+                           (t.company_id if t else None, json.dumps({"field": change.get("field"), "value": value})))
+            except Exception:
+                log.exception("wa_events insert failed")
             if not t:
                 continue  # a number no company owns
             if change.get("field") == "messages":
