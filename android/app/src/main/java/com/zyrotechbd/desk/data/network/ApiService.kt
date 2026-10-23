@@ -193,4 +193,25 @@ interface ApiService {
 
     @POST("c/{company}/tickets/{id}/solve")
     suspend fun solveTicket(@Path("company") company: String, @Path("id") id: Long, @Body request: SolveRequest): SolveResult
+
+    @GET("c/{company}/my-jobs")
+    suspend fun myJobs(@Path("company") company: String): MyJobsPage
+
+    @GET("c/{company}/my-jobs/{id}")
+    suspend fun myJob(@Path("company") company: String, @Path("id") id: Long, @Query("fresh") fresh: Int? = null): MyJobDetail
+
+    @GET("c/{company}/my-jobs/{id}/line")
+    suspend fun jobLine(@Path("company") company: String, @Path("id") id: Long, @Query("fresh") fresh: Int? = null): LineState
+
+    @POST("c/{company}/my-jobs/{id}/start")
+    suspend fun startJob(@Path("company") company: String, @Path("id") id: Long): JobResponse
+
+    @POST("c/{company}/my-jobs/{id}/pause")
+    suspend fun pauseJob(@Path("company") company: String, @Path("id") id: Long, @Body request: PauseRequest): JobResponse
+
+    @POST("c/{company}/my-jobs/{id}/resume")
+    suspend fun resumeJob(@Path("company") company: String, @Path("id") id: Long): JobResponse
+
+    @POST("c/{company}/my-jobs/{id}/solve")
+    suspend fun finishJob(@Path("company") company: String, @Path("id") id: Long, @Body request: FinishRequest): SolveResult
 }

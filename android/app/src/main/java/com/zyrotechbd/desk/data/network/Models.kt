@@ -417,6 +417,74 @@ data class SolveRequest(val remark: String?, val sms: Boolean)
 
 data class SolveResult(val ok: Boolean = false, val sms: String? = null)
 
+// ── Field work (আমার কাজ) ──────────────────────────────────────────────────────
+
+/** The work on one ticket: running / paused / done, seconds worked (less pauses) when the server answered. */
+data class FieldJob(
+    val id: Long,
+    val status: String = "running",
+    @Json(name = "started_at") val startedAt: String? = null,
+    @Json(name = "started_by") val startedBy: String? = null,
+    @Json(name = "pause_reason") val pauseReason: String? = null,
+    @Json(name = "worked_seconds") val workedSeconds: Long = 0,
+    @Json(name = "target_minutes") val targetMinutes: Int = 90,
+    @Json(name = "line_check") val lineCheck: Boolean = true,
+    @Json(name = "line_online") val lineOnline: Boolean? = null,
+    @Json(name = "finished_at") val finishedAt: String? = null,
+    @Json(name = "force_reason") val forceReason: String? = null,
+)
+
+/** A ticket of mine with its job, and whether the customer is online now (our MikroTik copy). */
+data class MyJobRow(
+    val id: Long,
+    @Json(name = "complain_id") val complainId: String = "",
+    @Json(name = "customer_name") val customerName: String? = null,
+    @Json(name = "customer_id") val customerId: String? = null,
+    @Json(name = "header_id") val headerId: Long? = null,
+    val mobile: String? = null,
+    val zone: String? = null,
+    val subzone: String? = null,
+    val category: String? = null,
+    val priority: String? = null,
+    val state: String = "pending",
+    val person: String? = null,
+    val description: String? = null,
+    @Json(name = "opened_at") val openedAt: String? = null,
+    @Json(name = "solved_at") val solvedAt: String? = null,
+    val duration: String? = null,
+    val open: Boolean = true,
+    val job: FieldJob? = null,
+    val online: Boolean? = null,
+)
+
+data class MyJobsPage(val data: List<MyJobRow> = emptyList(), val linked: Boolean = true)
+
+data class MyJobDetail(
+    val ticket: MyJobRow,
+    val customer: Customer? = null,
+    val live: LiveInfo? = null,
+    @Json(name = "live_error") val liveError: String? = null,
+    @Json(name = "target_minutes") val targetMinutes: Int = 90,
+    @Json(name = "line_check") val lineCheck: Boolean = true,
+    @Json(name = "can_force") val canForce: Boolean = false,
+    @Json(name = "sms_solved") val smsSolved: SmsSwitch = SmsSwitch(),
+)
+
+data class JobResponse(val job: FieldJob)
+
+data class PauseRequest(val reason: String)
+
+data class LineState(
+    val online: Boolean? = null,
+    val blocked: Boolean = false,
+    val uptime: String? = null,
+    val address: String? = null,
+    val error: String? = null,
+    @Json(name = "checked_at") val checkedAt: String? = null,
+)
+
+data class FinishRequest(val remark: String?, val sms: Boolean, @Json(name = "force_reason") val forceReason: String?)
+
 // ── Push ───────────────────────────────────────────────────────────────────────
 
 data class PushTokenRequest(val token: String)

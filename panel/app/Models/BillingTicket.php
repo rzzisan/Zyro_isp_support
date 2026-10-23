@@ -27,6 +27,12 @@ class BillingTicket extends Model
     /** Tickets assigned to or solved by $name (values look like "Maruf (10-07-26), Rifat"). */
     public function scopeForEmployee($query, string $name, bool $assignedOnly = false)
     {
+        if ($query->getConnection()->getDriverName() !== 'pgsql') {   // tests (SQLite): the same match with LIKE
+            $like = fn ($w, string $col) => $w->orWhere(fn ($x) => collect([$name, "{$name} (%", "{$name},%", "%, {$name}", "%, {$name} (%", "%, {$name},%"])
+                ->each(fn ($p) => $x->orWhere($col, 'like', $p)));
+
+            return $query->where(fn ($w) => $like($w, 'assigned_to')->when(! $assignedOnly, fn ($x) => $like($x, 'solved_by')));
+        }
         $re = '(^|, )'.preg_quote($name).'( \(|,|$)';
 
         return $query->where(fn ($w) => $w->whereRaw('assigned_to ~* ?', [$re])

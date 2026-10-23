@@ -21,6 +21,10 @@ object Routes {
     const val NewTicket = "ticket-new?headerId={headerId}"
     fun newTicket(headerId: Long? = null) = "ticket-new" + (headerId?.let { "?headerId=$it" } ?: "")
 
+    const val MyJobs = "my-jobs"
+    const val Job = "my-jobs/{ticketId}"
+    fun job(id: Long) = "my-jobs/$id"
+
     const val Call = "calls/{callId}"
     fun call(id: Long) = "calls/$id"
 

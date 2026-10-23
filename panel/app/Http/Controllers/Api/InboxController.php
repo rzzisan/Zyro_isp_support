@@ -24,6 +24,12 @@ class InboxController extends Controller
         abort_unless(Menu::allows($request->user(), $company, 'inbox'), 403);
     }
 
+    /** One chat: also a field technician's customer (FieldWork::mayChat). */
+    private function allowChat(Request $request, Company $company, WaContact $contact): void
+    {
+        abort_unless(Menu::allows($request->user(), $company, 'inbox') || \App\Support\FieldWork::mayChat($request->user(), $company, $contact), 403);
+    }
+
     private function contact(Company $company, int $id): WaContact
     {
         return WaContact::where('company_id', $company->id)->findOrFail($id);
@@ -89,8 +95,8 @@ class InboxController extends Controller
     /** One chat: the latest 150 messages oldest first, whether a free reply is allowed, and who it can be given to. */
     public function show(Request $request, Company $company, int $contact): JsonResponse
     {
-        $this->allow($request, $company);
         $c = $this->contact($company, $contact)->load(['lastMessage', 'assignedUser']);
+        $this->allowChat($request, $company, $c);
         $messages = $c->messages()->with('user')->latest('id')->limit(150)->get()->reverse()->values();
         $staff = Technician::where('company_id', $company->id)->where('wa_number', $c->wa_number)->exists();
         $cid = $c->suggestedCustomerId();  // the line this chat is about, for the app's customer and ticket buttons
@@ -109,8 +115,8 @@ class InboxController extends Controller
     /** A staff reply: text, or a file (image, PDF, MP4, MP3) with an optional caption; the bot may stay quiet a while. */
     public function reply(Request $request, Company $company, int $contact): JsonResponse
     {
-        $this->allow($request, $company);
         $c = $this->contact($company, $contact);
+        $this->allowChat($request, $company, $c);
         $data = $request->validate([
             'body' => [$request->hasFile('file') ? 'nullable' : 'required', 'string', 'max:4000'],
             'pause_minutes' => ['nullable', 'integer', 'min:0', 'max:4320'],
@@ -183,8 +189,10 @@ class InboxController extends Controller
     /** Voice, image or file of a message, fetched from Meta once and kept on the server. */
     public function media(Request $request, Company $company, int $message): BinaryFileResponse
     {
-        $this->allow($request, $company);
         $m = WaMessage::where('company_id', $company->id)->findOrFail($message);
+        if (! Menu::allows($request->user(), $company, 'inbox')) {
+            $this->allowChat($request, $company, $this->contact($company, (int) $m->contact_id));
+        }
         abort_unless($m->hasMedia(), 404);
         try {
             [$path, $mime] = WhatsApp::media($m);

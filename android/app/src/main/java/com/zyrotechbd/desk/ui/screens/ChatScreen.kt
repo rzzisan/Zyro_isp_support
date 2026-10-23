@@ -405,7 +405,7 @@ private fun ChatHeader(c: Chat, members: List<Member>, s: AppStrings, navControl
         }
         val co = SessionStore.company()
         val headerId = c.headerId
-        if (navController != null && headerId != null && (co?.can("customers") == true || co?.can("bills") == true)) {
+        if (navController != null && headerId != null && (co?.can("customers") == true || co?.can("bills") == true || co?.can("field_jobs") == true)) {
             IconButton(onClick = { navController.navigate(Routes.customerDetail(headerId)) }) {
                 Icon(Icons.Filled.Person, s.openCustomer, tint = PrimaryStrong)
             }

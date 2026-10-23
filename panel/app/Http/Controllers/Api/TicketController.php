@@ -9,6 +9,7 @@ use App\Models\BillingTicket;
 use App\Models\Company;
 use App\Models\SmsSetting;
 use App\Services\Engine;
+use App\Support\FieldWork;
 use App\Support\Menu;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -198,6 +199,7 @@ class TicketController extends Controller
 
             return response()->json(['message' => $e->getMessage()], 422);
         }
+        FieldWork::solved($t, $request->user()->id);
         $sms = ($data['sms'] ?? false) ? TicketActions::queueTicketSms('ticket_solved', (int) $t->customer_header_id, $t->mobile, [
             'ticket_no' => (string) $t->complain_id, 'problem' => (string) $t->category, 'status' => 'সমাধান',
             'technician' => (string) ($t->solved_by ?: $t->assigned_to)], $company->id) : null;

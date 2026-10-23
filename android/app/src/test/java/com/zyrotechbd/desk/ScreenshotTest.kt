@@ -21,6 +21,8 @@ import com.zyrotechbd.desk.ui.screens.BillFormScreen
 import com.zyrotechbd.desk.ui.screens.NewTicketScreen
 import com.zyrotechbd.desk.ui.screens.TicketDetailScreen
 import com.zyrotechbd.desk.ui.screens.TicketsScreen
+import com.zyrotechbd.desk.ui.screens.MyJobsScreen
+import com.zyrotechbd.desk.ui.screens.JobDetailScreen
 import com.zyrotechbd.desk.ui.screens.BillsScreen
 import com.zyrotechbd.desk.ui.screens.CustomerDetailScreen
 import com.zyrotechbd.desk.ui.screens.CustomersScreen
@@ -120,6 +122,8 @@ class ScreenshotTest {
     @Test fun chat() = shot("10-chat", "লাইন বন্ধ") { ChatScreen("cln", 7, rememberNavController()) }
     @Test fun tickets() = shot("11-tickets", "Rahima") { TicketsScreen(rememberNavController(), "cln") }
     @Test fun ticket() = shot("12-ticket", "-29.4") { TicketDetailScreen(rememberNavController(), "cln", 5) }
+    @Test fun myJobs() = shot("17-my-jobs", "Bulbul") { MyJobsScreen(rememberNavController(), "cln") }
+    @Test fun job() = shot("18-job", "-29.4") { JobDetailScreen(rememberNavController(), "cln", 5) }
     @Test fun newTicket() = shot("13-new-ticket", "57231") { NewTicketScreen(rememberNavController(), "cln", 3) }
     @Test fun printers() {
         val app = rule.activity.application

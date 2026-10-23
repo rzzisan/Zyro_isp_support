@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ConfirmationNumber
+import androidx.compose.material.icons.filled.Engineering
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -93,6 +94,7 @@ data class Tab(val route: String, val label: String, val icon: ImageVector)
  */
 private fun screensFor(company: CompanyInfo?, s: AppStrings): List<Tab> = buildList {
     add(Tab(Routes.Dashboard, s.navDashboard, Icons.Filled.Home))
+    if (company?.can("field_jobs") == true) add(Tab(Routes.MyJobs, s.navMyJobs, Icons.Filled.Engineering))
     if (company?.can("inbox") == true) add(Tab(Routes.Inbox, s.navInbox, Icons.Filled.Forum))
     if (company?.can("tickets") == true) add(Tab(Routes.Tickets, s.navTickets, Icons.Filled.ConfirmationNumber))
     if (company?.can("customers") == true || company?.can("bills") == true) {
@@ -121,6 +123,8 @@ private fun titleFor(route: String?, s: AppStrings): String? = when (route) {
     Routes.Chat -> s.titleChat
     Routes.Tickets -> s.navTickets
     Routes.Ticket -> s.titleTicket
+    Routes.MyJobs -> s.navMyJobs
+    Routes.Job -> s.titleJob
     Routes.NewTicket -> s.titleNewTicket
     Routes.CustomerDetail -> s.titleCustomer
     Routes.BillForm -> s.titleBillForm

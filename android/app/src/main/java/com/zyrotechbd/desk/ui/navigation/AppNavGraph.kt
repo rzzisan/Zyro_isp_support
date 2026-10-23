@@ -15,6 +15,8 @@ import com.zyrotechbd.desk.ui.screens.CustomerDetailScreen
 import com.zyrotechbd.desk.ui.screens.CustomersScreen
 import com.zyrotechbd.desk.ui.screens.DashboardScreen
 import com.zyrotechbd.desk.ui.screens.InboxScreen
+import com.zyrotechbd.desk.ui.screens.JobDetailScreen
+import com.zyrotechbd.desk.ui.screens.MyJobsScreen
 import com.zyrotechbd.desk.ui.screens.MonitoringScreen
 import com.zyrotechbd.desk.ui.screens.CallsScreen
 import com.zyrotechbd.desk.ui.screens.CallDetailScreen
@@ -46,6 +48,10 @@ fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: 
         composable(Routes.Tickets) { TicketsScreen(navController, companyKey) }
         composable(Routes.Ticket, arguments = listOf(navArgument("ticketId") { type = NavType.LongType })) {
             TicketDetailScreen(navController, companyKey, it.arguments?.getLong("ticketId") ?: 0L)
+        }
+        composable(Routes.MyJobs) { MyJobsScreen(navController, companyKey) }
+        composable(Routes.Job, arguments = listOf(navArgument("ticketId") { type = NavType.LongType })) {
+            JobDetailScreen(navController, companyKey, it.arguments?.getLong("ticketId") ?: 0L)
         }
         composable(Routes.NewTicket, arguments = listOf(navArgument("headerId") { type = NavType.LongType; defaultValue = 0L })) {
             NewTicketScreen(navController, companyKey, it.arguments?.getLong("headerId") ?: 0L)

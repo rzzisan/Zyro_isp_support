@@ -103,10 +103,11 @@ class Engine
     }
 
     /** Mark a ticket solved in billing; the engine refuses unless the customer is online on MikroTik now. */
-    public static function solve(int $companyId, string $complainId, ?string $remark): array
+    /** Solved in billing; the engine first checks the customer is online on MikroTik unless $skipLineCheck (field work allowed it). */
+    public static function solve(int $companyId, string $complainId, ?string $remark, bool $skipLineCheck = false): array
     {
         return static::call('post', "/internal/{$companyId}/tickets/{$complainId}/solve",
-            ['remark' => (string) $remark, 'user_id' => auth()->id()]) ?? [];
+            ['remark' => (string) $remark, 'user_id' => auth()->id(), 'skip_line_check' => $skipLineCheck]) ?? [];
     }
 
     public static function solvers(int $companyId, string $complainId): array

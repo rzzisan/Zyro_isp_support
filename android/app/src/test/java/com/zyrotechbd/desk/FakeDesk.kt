@@ -72,6 +72,18 @@ class FakeDesk {
                     path.endsWith("/tickets/5") -> json("""{"ticket":$ticket,"live":{"mikrotik":{"online":false,"router":"CLN-3"},
                         "onu":{"OpticalPower":"-29.4","OnuStatus":"Offline","OLTName":"CLN-VSOL-42","OLTPort":"PON 2",
                         "LastDeregisterTime":"2026-10-19 09:12","DeregisterReason":"LOS"},"mac":"AA:BB:CC:DD:EE:FF"},"live_error":null}""")
+                    path.endsWith("/my-jobs") -> json("""{"linked":true,"data":[
+                        ${ticket.dropLast(1)},"online":false,"job":{"id":1,"status":"running","started_at":"$now","started_by":"Rifat",
+                        "worked_seconds":1520,"target_minutes":60,"line_check":true}},
+                        {"id":6,"complain_id":"57232","customer_name":"Rahima Khatun","customer_id":"0004","header_id":4,
+                        "category":"Slow Speed","priority":"Medium","state":"processing","person":"Rifat","zone":"Murma",
+                        "opened_at":"$now","duration":"20 মিনিট","open":true,"online":true,"job":null}]}""")
+                    path.endsWith("/my-jobs/5") -> json("""{"ticket":${ticket.dropLast(1)},"job":{"id":1,"status":"running",
+                        "started_at":"$now","started_by":"Rifat","worked_seconds":1520,"target_minutes":60,"line_check":true}},
+                        "customer":$customer,"live":{"mikrotik":{"online":false,"router":"CLN-3"},"onu":{"OpticalPower":"-29.4",
+                        "OnuStatus":"Offline","OLTName":"CLN-VSOL-42"}},"target_minutes":60,"line_check":true,"can_force":false,
+                        "sms_solved":{"ready":true,"on":true}}""")
+                    path.endsWith("/my-jobs/5/line") -> json("""{"online":false,"blocked":false,"error":null,"checked_at":"$now"}""")
                     path.endsWith("/ticket-options") -> json("""{"categories":[{"id":"7","name":"Line Off"},{"id":"8","name":"Slow Speed"}],
                         "priorities":[{"id":"1","name":"Low"},{"id":"2","name":"Medium"},{"id":"3","name":"High"}],"departments":[],
                         "employees":[{"id":"3","name":"Maruf"},{"id":"4","name":"Rifat"}],"sms_open":{"ready":true,"on":true},
