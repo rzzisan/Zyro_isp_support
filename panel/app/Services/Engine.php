@@ -211,6 +211,12 @@ class Engine
     }
 
     /** Copy the last 3 days of billing's Daily Bill Collection now. */
+    /** অনলাইন পেমেন্ট "এখনই Sync": the last 3 days of billing's webhook + PayBill lists. */
+    public static function syncOnlinePayments(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/online-payments/sync") ?? [];
+    }
+
     public static function syncDailyBills(int $companyId): array
     {
         return static::call('post', "/internal/{$companyId}/daily-bills/sync") ?? [];

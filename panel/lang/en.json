@@ -1555,5 +1555,20 @@
     "ফিল্ড টেকনিশিয়ান": "Field technician",
     "টিক দিলে অ্যাপে টেকনিশিয়ানের অংশ পাবেন: \"আমার কাজ\", লোকেশন, আর শুধু চলমান কাজের কাস্টমারের সাথে চ্যাট। Agent হলে অ্যাপ \"আমার কাজ\" দিয়ে খুলবে।": "When ticked, the app shows the technician part: \"My jobs\", location, and chat only with customers of running jobs. For an Agent the app opens on \"My jobs\".",
     "টিকিটে এই কর্মীর নাম থাকলে সেগুলো অ্যাপের \"আমার কাজ\"-এ দেখাবে।": "Tickets with this employee's name show in the app's \"My jobs\".",
-    "টিম পাতায় কোনো সদস্যকে ফিল্ড টেকনিশিয়ান টিক দেওয়া হয়নি": "No member is ticked as a field technician on the Team page"
+    "টিম পাতায় কোনো সদস্যকে ফিল্ড টেকনিশিয়ান টিক দেওয়া হয়নি": "No member is ticked as a field technician on the Team page",
+    "অনলাইন পেমেন্ট": "Online payments",
+    "বিলিং-এর Webhook আর PayBill পেমেন্ট (bKash/Nagad), প্রতি ৩ মিনিটে আসে": "Billing's webhook and PayBill payments (bKash/Nagad), synced every 3 minutes",
+    "\"সেটেল হয়নি\" পেমেন্ট বিলিং-এ হাতে সেটেল করতে হয়।": "\"Not settled\" payments must be settled by hand in billing.",
+    "Webhook :w, PayBill :p (গত ৩ দিন)": "Webhook :w, PayBill :p (last 3 days)",
+    "করেছেন: :u": "By: :u",
+    "কে সেটেল করলেন": "Settled by",
+    "কোথা থেকে": "Source",
+    "গেটওয়ের অবস্থা": "Gateway status",
+    "চেনা": "Known",
+    "চেনা যায়নি": "Not identified",
+    "যে নম্বর থেকে": "Paid from",
+    "সেটেল হয়নি": "Not settled",
+    "সেটেল হয়নি (Payment Requested)": "Not settled (Payment Requested)",
+    "অটো সেটেল": "Auto settled",
+    "হাতে সেটেল": "Settled by hand"
 }

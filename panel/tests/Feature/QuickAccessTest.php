@@ -66,7 +66,7 @@ class QuickAccessTest extends TestCase
         $sidebar = $this->sidebar($owner);
         $this->assertStringContainsString("\nকুইক অ্যাক্সেস: টিকিট লাইন চালু/বন্ধের রেকর্ড\n", $sidebar);
         $this->assertMatchesRegularExpression('/\nসাপোর্ট: ইনবক্স/u', $sidebar);
-        $this->assertMatchesRegularExpression('/\nকাস্টমার ও বিল: কাস্টমার বিল কালেকশন\n/u', $sidebar);
+        $this->assertMatchesRegularExpression('/\nকাস্টমার ও বিল: কাস্টমার বিল কালেকশন অনলাইন পেমেন্ট\n/u', $sidebar);
     }
 
     public function test_nothing_picked_hides_the_group(): void

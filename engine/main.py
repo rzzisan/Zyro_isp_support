@@ -934,6 +934,15 @@ def daily_bills_live(request: Request, company_id: int):
     return daily_bill_sync.live(t)
 
 
+@app.post("/internal/{company_id}/online-payments/sync")
+def online_payments_sync_now(request: Request, company_id: int):
+    """অনলাইন পেমেন্ট page's "এখনই Sync": the last 3 days of billing's webhook and PayBill payments."""
+    t = internal_tenant(request, company_id)
+    from engine import online_payment_sync
+    frm, to = online_payment_sync.date_range(3, None, None)
+    return billing_call(lambda: online_payment_sync.sync_company(t, frm, to))
+
+
 @app.post("/internal/{company_id}/daily-bills/sync")
 def daily_bills_sync_now(request: Request, company_id: int):
     """বিল কালেকশন page's "এখনই Sync": the last 3 days of billing's Daily Bill Collection."""
