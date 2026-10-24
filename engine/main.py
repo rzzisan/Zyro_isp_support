@@ -355,7 +355,7 @@ def customer_view(context: dict, verified: bool, text: str = "") -> dict:
     c = ctx.get("customer") or {}
     c.pop("registered_mobile", None)
     (ctx.get("pppoe") or {}).pop("ip", None)
-    for k in ("address", "caller_id"):
+    for k in ("address", "caller_id", "profile"):  # profile: a router setting, not the package (2026-10-24)
         (ctx.get("mikrotik") or {}).pop(k, None)
     if not verified:
         ctx.pop("bill", None)

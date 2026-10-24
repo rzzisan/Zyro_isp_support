@@ -314,7 +314,7 @@ def safe_view(context: dict) -> dict:
     ctx = json.loads(json.dumps(context, ensure_ascii=False, default=str))
     (ctx.get("customer") or {}).pop("registered_mobile", None)
     (ctx.get("pppoe") or {}).pop("ip", None)
-    for k in ("address", "caller_id"):
+    for k in ("address", "caller_id", "profile"):  # profile: a router setting, not the package (2026-10-24)
         (ctx.get("mikrotik") or {}).pop(k, None)
     ctx["today"] = (datetime.now(timezone.utc) + timedelta(hours=6)).strftime("%Y-%m-%d")
     return ctx
