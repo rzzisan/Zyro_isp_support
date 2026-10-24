@@ -108,6 +108,22 @@ class CompanySettingsTest extends TestCase
             ->assertDontSee('99 বার');
     }
 
+    public function test_tickets_switch_saves_and_shows_desk_numbers(): void
+    {
+        $this->as($this->owner);
+        Livewire::test(BillingSettings::class)
+            ->assertFormSet(['tickets_in_billing' => true])
+            ->assertSee('100001')
+            ->fillForm(['provider' => 'ispdigital', 'base_url' => 'https://demo.ispdigital.cloud', 'username' => 'bot',
+                'password' => 'p@ss-12345', 'tickets_in_billing' => false])
+            ->call('save')->assertHasNoFormErrors();
+        $this->assertFalse(BillingConnection::first()->tickets_in_billing);
+        $this->assertTrue(BillingConnection::deskTickets($this->company->id));
+
+        DB::table('ticket_numbers')->insert(['company_id' => $this->company->id, 'last_no' => 100007, 'created_at' => now(), 'updated_at' => now()]);
+        Livewire::test(BillingSettings::class)->assertFormSet(['tickets_in_billing' => false])->assertSee('শেষ নম্বর 100007');
+    }
+
     public function test_billing_connection_test_logs_in_and_counts_customers(): void
     {
         BillingConnection::create(['company_id' => $this->company->id, 'base_url' => 'https://demo.ispdigital.cloud',
