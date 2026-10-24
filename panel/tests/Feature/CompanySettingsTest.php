@@ -82,6 +82,32 @@ class CompanySettingsTest extends TestCase
         $this->assertSame('bot2', BillingConnection::first()->username);
     }
 
+    public function test_billing_live_and_onu_switches_save_and_show_fallback_counts(): void
+    {
+        $this->as($this->owner);
+        Livewire::test(BillingSettings::class)
+            ->assertFormSet(['live_from_billing' => true, 'onu_from_billing' => true])
+            ->assertSee('গত ৭ দিনে বিলিং লাগেনি।')
+            ->fillForm(['provider' => 'ispdigital', 'base_url' => 'https://demo.ispdigital.cloud', 'username' => 'bot',
+                'password' => 'p@ss-12345', 'live_from_billing' => false, 'onu_from_billing' => true])
+            ->call('save')->assertHasNoFormErrors();
+        $c = BillingConnection::first();
+        $this->assertFalse($c->live_from_billing);
+        $this->assertTrue($c->onu_from_billing);
+
+        $today = now('Asia/Dhaka')->toDateString();
+        DB::table('billing_fallbacks')->insert([
+            ['company_id' => $this->company->id, 'day' => $today, 'kind' => 'onu', 'reason' => 'not_on_own_olt', 'count' => 7],
+            ['company_id' => $this->company->id, 'day' => now('Asia/Dhaka')->subDays(10)->toDateString(), 'kind' => 'onu', 'reason' => 'not_on_own_olt', 'count' => 99],
+            ['company_id' => $this->company->id, 'day' => $today, 'kind' => 'live', 'reason' => 'no_mac', 'count' => 2],
+        ]);
+        Livewire::test(BillingSettings::class)
+            ->assertFormSet(['live_from_billing' => false])
+            ->assertSee('OLT-এ ONU মেলেনি 7 বার')
+            ->assertSee('MAC জানা ছিল না 2 বার')
+            ->assertDontSee('99 বার');
+    }
+
     public function test_billing_connection_test_logs_in_and_counts_customers(): void
     {
         BillingConnection::create(['company_id' => $this->company->id, 'base_url' => 'https://demo.ispdigital.cloud',

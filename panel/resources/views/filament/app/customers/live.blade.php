@@ -11,17 +11,20 @@
         if ($mk) { $online = (bool) ($mk['online'] ?? false); }
         // connected on a block profile (billing disabled the line): no internet
         $blocked = (bool) ($mk['blocked'] ?? false);
+        $src = $live['sources'] ?? [];
+        $srcLabel = fn ($s) => ['mikrotik' => 'MikroTik', 'own OLT' => __('নিজস্ব OLT'), 'billing' => __('বিলিং')][$s] ?? __('তথ্য নেই');
         $rows = [
             __('MikroTik (এখন)') => $mk ? (($mk['online'] ?? false) ? __('অনলাইন · ').($mk['uptime'] ?? '').' · '.($mk['router'] ?? '')
                 : ($blocked ? __('ব্লক (:profile) · ইন্টারনেট নেই · ', ['profile' => $mk['profile'] ?? '']).($mk['router'] ?? '') : __('অফলাইন · ').($mk['router'] ?? ''))) : __('রাউটার থেকে উত্তর আসেনি'),
             __('IP / MAC (রাউটার)') => $mk && (($mk['online'] ?? false) || $blocked) ? (($mk['address'] ?? '—').' · '.($mk['caller_id'] ?? '—')) : '—',
-            __('PPPoE (বিলিং)') => ($p['connectivity'] ?? '—'),
+            'PPPoE' => ($p['connectivity'] ?? '—'),
             'Uptime' => $p['uptime'] ?? '—',
             __('শেষ logout') => $p['last_logout'] ?? '—',
             'IP' => $p['ip'] ?? '—',
             __('ডাউনলোড') => $p['downloaded'] ?? '—',
             'ONU' => $o ? trim(($o['status'] ?? '—').' · '.($o['optical_power_dbm'] ?? '').' dBm · '.($o['olt'] ?? ''), ' ·') : __('তথ্য নেই'),
             __('ONU শেষ বন্ধ') => $o ? trim(($o['last_deregister'] ?? '').' '.($o['deregister_reason'] ?? '')) ?: '—' : '—',
+            __('তথ্যের উৎস') => __('সংযোগ: ').$srcLabel($src['connection'] ?? null).' · ONU: '.$srcLabel($src['onu'] ?? null),
             __('লাইন (বিলিং)') => ! empty($cu['disabled']) ? __('বন্ধ') : __('চালু'),
             __('বিলের অবস্থা') => $b['payment_status'] ?? '—',
             __('এই মাসে দেবেন / দিয়েছেন') => ($b['payable'] ?? '—').' / '.(($b['paid'] ?? '') ?: __('০')),

@@ -314,33 +314,20 @@ def safe_view(context: dict) -> dict:
     ctx = json.loads(json.dumps(context, ensure_ascii=False, default=str))
     (ctx.get("customer") or {}).pop("registered_mobile", None)
     (ctx.get("pppoe") or {}).pop("ip", None)
+    ctx.pop("mac", None)
     for k in ("address", "caller_id", "profile"):  # profile: a router setting, not the package (2026-10-24)
         (ctx.get("mikrotik") or {}).pop(k, None)
     ctx["today"] = (datetime.now(timezone.utc) + timedelta(hours=6)).strftime("%Y-%m-%d")
     return ctx
 
 
-class _NoBillingOnu:
-    """The billing API without its ONU page, which often takes 15+ s; a caller waits on the line meanwhile.
-    add_online() puts our own OLT's ONU status in instead."""
-
-    def __init__(self, api):
-        self._api = api
-
-    def __getattr__(self, name):
-        return getattr(self._api, name)
-
-    def onu_info(self, mac):
-        return None
-
-
 def line_context(t, api, row: dict, staff: bool = False) -> dict:
     """The WhatsApp bot's view of one line: bill, due, MikroTik/ONU status, open tickets.
     Staff see everything (PPPoE IP, MAC) like on the WhatsApp staff desk."""
     from engine import customers
-    from engine.ispdigital import diagnose
     from engine.ticket_actions import open_tickets
-    ctx = customers.add_online(t, diagnose(_NoBillingOnu(api), customers.fresh(api, row)), row)
+    # never billing's ONU page here: it often takes 15+ s and a caller waits on the line meanwhile
+    ctx = customers.live_context(t, api, customers.fresh(api, row), billing_onu=False)
     ctx["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
                            for x in open_tickets(t, row.get("CustomerId"))]
     if staff:

@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from engine import customers, db, tenant as tenants
-from engine.ispdigital import URL_RE, diagnose, find_customer_by_text
+from engine.ispdigital import URL_RE, find_customer_by_text
 from engine.llm import _whatsapp_format
 from engine.tenant import Tenant
 
@@ -107,8 +107,8 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
                    (json.dumps({"mode": "technician", "tech_customer": customer.get("CustomerId"),
                                 "at": datetime.now(timezone.utc).isoformat()}), contact["id"]))
         customer = customers.fresh(api, customer)
-        context = customers.add_online(t, diagnose(api, customer), customer)
-        context["customer"]["mac"] = (api.live_status(customer["CustomerHeaderId"]) or {}).get("calledid")
+        context = customers.live_context(t, api, customer)
+        context["customer"]["mac"] = context.pop("mac", None)
         try:
             context["open_tickets"] = [
                 {"no": x.get("ComplainId"), "problem": x.get("Problem"), "opened": x.get("CreatedOn"),

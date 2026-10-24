@@ -20,6 +20,8 @@ class Tenant:
     billing: tuple[str, str, str] | None          # base_url, username, password
     bot: dict = field(default_factory=dict)        # bot_settings row
     max_bot_replies: int | None = None
+    billing_live: bool = True    # বিলিং সংযোগ switches: billing may fill in the connection/MAC our MikroTik doesn't have
+    billing_onu: bool = True     # ... and the ONU our OLTs don't have
 
     @property
     def active(self) -> bool:
@@ -48,7 +50,8 @@ def by_phone_number_id(phone_number_id: str) -> Tenant | None:
     )
     tenant = None
     if row:
-        b = db.one("SELECT base_url, username, password FROM billing_connections WHERE company_id = %s",
+        b = db.one("""SELECT base_url, username, password, live_from_billing, onu_from_billing
+                       FROM billing_connections WHERE company_id = %s""",
                    (row["company_id"],))
         bot = db.one("SELECT * FROM bot_settings WHERE company_id = %s", (row["company_id"],)) or {}
         tenant = Tenant(
@@ -57,6 +60,7 @@ def by_phone_number_id(phone_number_id: str) -> Tenant | None:
             wa_token=db.decrypt(row["access_token"]), bot_enabled=row["bot_enabled"],
             billing=(b["base_url"], b["username"], db.decrypt(b["password"])) if b else None,
             bot=dict(bot), max_bot_replies=row["max_bot_replies"],
+            billing_live=bool(b["live_from_billing"]) if b else False, billing_onu=bool(b["onu_from_billing"]) if b else False,
         )
     with _lock:
         _cache[phone_number_id] = (now, tenant)
