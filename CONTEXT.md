@@ -487,3 +487,5 @@
 - WhatsApp: `agent.without_thinking` শেষ "উত্তর:"-এর পরের অংশ রাখে আর সিগনেচার সরায়; `LEAK` শব্দ থাকলে একবার আবার লেখায়। কোম্পানির নিজের প্রম্পট থাকলেও `REPLY_RULES` সবসময় যোগ হয় (ভয়েসে বাদ)। সিগনেচার `deliver`-এ একবার। বটের প্রশ্ন ছাড়া মেসেজের পর ack এলে চুপ। AI লেখার সময় স্টাফ লিখলে ড্রাফট বাদ (`staff_wrote_since`)। খোলা টিকেটে বট ২ বার বলার পর "কেউ আসেনি" এলে বট ৬ ঘণ্টা থামে (`NOBODY`, model=escalate)। লাইনের নয় এমন টিকেটের ফলো-আপ সাধারণ ভাষায় (`is_line_problem`)।
 - ভয়েস: টিকেটের কথা বলে tool না ডাকলে `end_call` একবার ফেরত দেয় (`promised_without_tool`); মুখে বলা tool নাম transcript থেকে কাটে, "end_call" বললে কল শেষ। VOICE_RULES-এ নতুন নিয়ম।
 - বাকি: FAQ (অফিস সময়, Wi-Fi পাসওয়ার্ড, রাউটার লগইন নীতি) Zisan-এর উত্তরের অপেক্ষায়; ভয়েস গ্রিটিং দেরি; চ্যাট 1308-এ ভুল কাস্টমারে টিকেট।
+
+- 2026-10-24 (ba4a425, live 06:30 UTC): bots no longer see the MikroTik profile (`mikrotik.profile`, e.g. "15 Mbps 525") in customer_view / voice safe_view; REPLY_RULES: on package questions name only `customer.package`, no speed/Mbps/profile. Cause: bot compared profile speed with package and told a customer "profile shows 15 Mbps".
