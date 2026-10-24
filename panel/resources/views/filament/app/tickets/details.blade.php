@@ -60,5 +60,28 @@
         </div>
     </div>
 
+    {{-- What was done on it from the Desk (ticket_events) --}}
+    @php($events = $t->events)
+    @if ($events->isNotEmpty() || $t->isDesk())
+        <div class="ztd-card">
+            <div class="ztd-head">
+                <div class="ztd-title"><span class="ztd-ico">🕘</span>{{ __('ইতিহাস') }}</div>
+                <span class="ztd-sub">{{ $t->isDesk() ? __('Desk-এর টিকিট') : __('বিলিংয়ের টিকিট') }}</span>
+            </div>
+            @forelse ($events as $e)
+                @php($d = $e->detail ?? [])
+                <div class="ztd-note">
+                    <b>{{ $dt($e->created_at) }}</b> · {{ __(\App\Models\TicketEvent::KINDS[$e->kind] ?? $e->kind) }}
+                    @if ($e->actor) · {{ $e->actor }}@endif
+                    @if (! empty($d['employees'])) · {{ implode(', ', (array) $d['employees']) }}@endif
+                    @if (! empty($d['category'])) · {{ $d['category'] }}@endif
+                    @if (! empty($d['remark'])) · “{{ $d['remark'] }}”@endif
+                </div>
+            @empty
+                <div class="ztd-note">{{ __('এখনো কিছু নেই') }}</div>
+            @endforelse
+        </div>
+    @endif
+
     @include('filament.app.tickets.partials.line', ['part' => 'cards'])
 </div>

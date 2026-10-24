@@ -511,3 +511,15 @@
 - নতুন টিকিট ফর্ম (`ticket-info`)-এও একই নিয়ম: own_line/own_onu, তারপর সুইচ চালু থাকলে বিলিং।
 - সুইচ দুটো: `billing_connections.live_from_billing` আর `onu_from_billing` (ডিফল্ট চালু), সেটিংস → বিলিং সংযোগ পেজে। Engine এগুলো Tenant-এ পড়ে, ৬০ সেকেন্ডের মধ্যে কার্যকর হয়।
 - `billing_fallbacks` (company, day, kind live|onu, reason no_router|no_mac|not_on_own_olt, count): প্রতিবার বিলিং লাগলে গোনা হয়। একই পেজে গত ৭ দিনের হিসাব দেখায়, যাতে বোঝা যায় কখন সুইচ বন্ধ করা যায়। Century Link: এক সপ্তাহ চালু রেখে দেখা, তারপর বন্ধ।
+
+## টিকিট Desk-এই (Desk-ই মূল), বিলিং ঐচ্ছিক (2026-10-24)
+- Zisan বেছে নিয়েছেন "Desk-ই মূল": নতুন টিকিট Desk-এ খুলবে, বিলিং-এ যাবে না; পুরনো বিলিং টিকিট ইতিহাস হিসেবে থাকবে। প্রতিটা কোম্পানির জন্য সুইচ: সেটিংস → বিলিং সংযোগ → "নতুন টিকিট বিলিং সফটওয়্যারে খোলা হবে" (`billing_connections.tickets_in_billing`, ডিফল্ট চালু = আগের মতো বিলিং)। বন্ধ করলেই Desk মোড; যেকোনো সময় আবার চালু করা যায়।
+- `engine/desk_tickets.py: DeskTickets` = ISPDigital-এর টিকিট কলগুলোর (create_ticket, open_tickets_for, assign_ticket, update_ticket, solve_ticket, ticket_solvers, ticket_form, support_options) Desk সংস্করণ, `billing_tickets`-এ `source = 'desk'` সারিতে। তাই বট, ভয়েস বট, অটো-অ্যাসাইন, টেকনিশিয়ানের WhatsApp একইভাবে চলে।
+  - `for_new(t, ...)`: নতুন টিকিট কোথায় (Tenant.desk_tickets)। `for_ticket(t, complain_id, ...)`: টিকিট যেখানে খোলা হয়েছিল সেখানেই কাজ হয় (Desk টিকিট Desk-এ, বাকিগুলো বিলিং-এ)। তাই সুইচ বদলালেও পুরনো খোলা টিকিট ঠিকমতো সমাধান হয়।
+  - নম্বর: `ticket_numbers` (company, last_no)। প্রথম Desk নম্বর = বিলিংয়ের সর্বোচ্চ নম্বরের পরের এক লাখের ঘর + 1 (57301 হলে 100001), যাতে বিলিংয়ের নম্বরের সাথে না মেলে।
+  - `ticket_events` (open/assign/edit/solve, user_id, actor, detail): Desk টিকিটের প্রতিটা কাজ, আর বিলিং টিকিটে Desk থেকে করা কাজ। টিকিটের "বিস্তারিত"-এ "ইতিহাস" কার্ডে দেখায়।
+  - অ্যাসাইন করলে state 'processing', নতুন কর্মী থাকলে সাথে সাথে `ticket_notify.notify` (sync-এর অপেক্ষা নেই)। notify এখন Desk টিকিটের কর্মী Desk থেকে পড়ে (`_solvers`)।
+  - বিলিংয়ের "কর্মীকে SMS" Desk টিকিটে লুকানো; কাস্টমারের SMS আগের মতোই Desk-এর SMS গেটওয়ে থেকে।
+- `ticket_sync` Desk মোডেও চলে (বিলিং-এ আগে খোলা বা কেউ সেখানে খুললে সেগুলো আসে), কিন্তু `source = 'desk'` সারি কখনো ছোঁয় না (upsert, বিবরণ, "বন্ধ" করা সব জায়গায় `source IS DISTINCT FROM 'desk'`)। সাবধান: `source` কলাম আগে থেকেই ছিল (null = sync, 'history' = কাস্টমারের অভিযোগের ইতিহাস)।
+- বট: খোলা টিকিট আছে কিনা Desk মোডে লোকাল টেবিল থেকে দেখে; সমাধান (`solve_for_customer`) আর ফলো-আপ প্রতিটা টিকিটের উৎস দেখে।
+- এখনো বাকি (৩খ): ক্যাটাগরি/কর্মী/ডিপার্টমেন্ট তালিকা এখনো বিলিং থেকে Sync হয় (`billing_options`); Desk থেকে যোগ/বদলের ব্যবস্থা। cutover-এর দিন Zisan ঠিক করবেন।

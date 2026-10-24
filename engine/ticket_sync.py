@@ -1,5 +1,8 @@
 """Copy support tickets from each company's billing software into billing_tickets.
 
+Rows opened in the Desk itself (source 'desk', engine/desk_tickets.py) are left alone. A company whose new tickets open
+in the Desk is still synced, so the tickets opened in billing before the switch (or by someone there since) stay here.
+
 Open tickets: the whole Daily Complain list (pending + processing). Solved tickets: Support History
 for the last --days days. Run every few minutes by zyro-ticket-sync.timer; --days 90 for a backfill.
   set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.ticket_sync [--days 3] [--company ID]
@@ -64,7 +67,8 @@ def upsert(company_id: int, r: dict, state: str) -> None:
              assigned_to = COALESCE(EXCLUDED.assigned_to, billing_tickets.assigned_to),
              solved_by = EXCLUDED.solved_by, created_by = EXCLUDED.created_by, note = EXCLUDED.note,
              opened_at = COALESCE(EXCLUDED.opened_at, billing_tickets.opened_at), solved_at = EXCLUDED.solved_at,
-             raw = EXCLUDED.raw, synced_at = now(), updated_at = now()""",
+             raw = EXCLUDED.raw, synced_at = now(), updated_at = now()
+           WHERE billing_tickets.source IS DISTINCT FROM 'desk'""",
         (company_id, str(r.get("ComplainId")), r.get("CustomerId"), r.get("CustomerHeaderId"), r.get("UserName"),
          r.get("CustomerName"), r.get("MobileNumber"), r.get("Zone"), r.get("SubZone"), r.get("Box") or None,
          r.get("Problem"), PRIORITY.get(r.get("ProblemPriorityId")), state,
@@ -93,7 +97,7 @@ def fill_descriptions(api, company_id: int) -> int:
     """Refresh the description of every open ticket ('' when it has none); staff edit it in the billing software."""
     n = 0
     for r in db.all_rows("""SELECT complain_id, description FROM billing_tickets WHERE company_id = %s
-                            AND state IN ('pending', 'processing')""", (company_id,)):
+                            AND source IS DISTINCT FROM 'desk' AND state IN ('pending', 'processing')""", (company_id,)):
         try:
             d = fetch_description(api, r["complain_id"])
         except Exception:
@@ -142,7 +146,8 @@ def sync_company(t, days: int) -> dict:
     processing = {str(r.get("ComplainId")) for r in fetch_all(api, "/ClientSupport/AjaxDailyComplainList",
                                                                 {"customQueryString": "processing"})}
     before = {r["complain_id"]: r["assigned_to"] for r in db.all_rows(
-        "SELECT complain_id, assigned_to FROM billing_tickets WHERE company_id = %s AND state IN ('pending', 'processing')",
+        """SELECT complain_id, assigned_to FROM billing_tickets WHERE company_id = %s AND source IS DISTINCT FROM 'desk'
+           AND state IN ('pending', 'processing')""",
         (t.company_id,))}
     known = {r["complain_id"] for r in db.all_rows(
         "SELECT complain_id FROM billing_tickets WHERE company_id = %s AND complain_id = ANY(%s)",
@@ -174,11 +179,12 @@ def sync_company(t, days: int) -> dict:
         log.exception("area staff refresh failed for company %s", t.company_id)
         area_staff = 0
 
-    # open here but gone from the billing open list and not seen as solved: closed some other way
+    # open here but gone from the billing open list and not seen as solved: closed some other way (not Desk tickets)
     open_ids = [str(r.get("ComplainId")) for r in open_rows]
     gone = db.execute(
         """WITH u AS (UPDATE billing_tickets SET state = 'closed', synced_at = now(), updated_at = now()
-                      WHERE company_id = %s AND state IN ('pending', 'processing') AND NOT (complain_id = ANY(%s))
+                      WHERE company_id = %s AND source IS DISTINCT FROM 'desk' AND state IN ('pending', 'processing')
+                        AND NOT (complain_id = ANY(%s))
                       RETURNING 1)
            SELECT count(*) AS n FROM u""", (t.company_id, open_ids))
     return {"open": len(open_rows), "processing": len(processing), "solved": len(solved), "closed": gone["n"], "described": described,

@@ -1,7 +1,7 @@
 """Tell a technician on WhatsApp when a ticket is assigned to their billing employee (Desk → টেকনিশিয়ান → বিলিং কর্মী).
 
 ticket_sync calls notify() with the tickets whose staff changed in this sync, so an assignment made in the desk or
-straight in the billing software both arrive here. One message per ticket and technician (ticket_notifications).
+straight in the billing software both arrive here; a Desk ticket (engine/desk_tickets.py) calls it when it is assigned. One message per ticket and technician (ticket_notifications).
 Inside the 24-hour window (the technician wrote to us lately) it is a normal text; otherwise the approved utility
 template TEMPLATE, which this module submits to Meta itself the first time it is needed.
 """
@@ -197,8 +197,20 @@ def _save(t: Tenant, tech: dict, res: dict, mtype: str, body: str) -> None:
         log.warning("could not store the ticket message in the chat", exc_info=True)
 
 
+def _solvers(t: Tenant, api, cid: str) -> dict:
+    """A Desk ticket's staff from the Desk (its number means nothing to billing), any other ticket's from billing."""
+    from engine.desk_tickets import DeskTickets, source
+    if source(t.company_id, cid) == "desk":
+        return DeskTickets(t).ticket_solvers(cid)
+    if isinstance(api, DeskTickets):
+        from engine import tenant as tenants
+        api = tenants.billing(t)
+    return api.ticket_solvers(int(cid)) or {}
+
+
 def notify(t: Tenant, api, complain_ids: list[str]) -> int:
-    """For each ticket whose staff just changed: ask billing which employees it has now; message their technicians."""
+    """For each ticket whose staff just changed: ask billing (or the Desk, for a Desk ticket) which employees it has now;
+    message their technicians."""
     techs = linked_technicians(t.company_id)
     if not techs:
         return 0
@@ -214,9 +226,9 @@ def notify(t: Tenant, api, complain_ids: list[str]) -> int:
     sent = 0
     for cid in dict.fromkeys([*map(str, complain_ids), *retry]):
         try:
-            ids = {str(e) for e in ((api.ticket_solvers(int(cid)) or {}).get("EmployeeIds") or [])}
+            ids = {str(e) for e in (_solvers(t, api, cid).get("EmployeeIds") or [])}
         except Exception:
-            log.warning("ticket %s: could not read its staff from billing", cid, exc_info=True)
+            log.warning("ticket %s: could not read its staff", cid, exc_info=True)
             continue
         for emp in ids & by_employee.keys():
             for tech in by_employee[emp]:

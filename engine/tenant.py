@@ -22,6 +22,7 @@ class Tenant:
     max_bot_replies: int | None = None
     billing_live: bool = True    # বিলিং সংযোগ switches: billing may fill in the connection/MAC our MikroTik doesn't have
     billing_onu: bool = True     # ... and the ONU our OLTs don't have
+    desk_tickets: bool = False   # new tickets open in the Desk (engine/desk_tickets.py), not in billing
 
     @property
     def active(self) -> bool:
@@ -50,7 +51,7 @@ def by_phone_number_id(phone_number_id: str) -> Tenant | None:
     )
     tenant = None
     if row:
-        b = db.one("""SELECT base_url, username, password, live_from_billing, onu_from_billing
+        b = db.one("""SELECT base_url, username, password, live_from_billing, onu_from_billing, tickets_in_billing
                        FROM billing_connections WHERE company_id = %s""",
                    (row["company_id"],))
         bot = db.one("SELECT * FROM bot_settings WHERE company_id = %s", (row["company_id"],)) or {}
@@ -61,6 +62,7 @@ def by_phone_number_id(phone_number_id: str) -> Tenant | None:
             billing=(b["base_url"], b["username"], db.decrypt(b["password"])) if b else None,
             bot=dict(bot), max_bot_replies=row["max_bot_replies"],
             billing_live=bool(b["live_from_billing"]) if b else False, billing_onu=bool(b["onu_from_billing"]) if b else False,
+            desk_tickets=not b["tickets_in_billing"] if b else True,
         )
     with _lock:
         _cache[phone_number_id] = (now, tenant)

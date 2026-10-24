@@ -20,7 +20,7 @@ def open_tickets(t: Tenant, customer_id: str | None) -> list[dict]:
     if not customer_id:
         return []
     return db.all_rows(
-        """SELECT complain_id, category, state, opened_at FROM billing_tickets
+        """SELECT complain_id, category, state, opened_at, source FROM billing_tickets
            WHERE company_id = %s AND ltrim(customer_id, '0') = ltrim(%s, '0') AND state = ANY(%s)
            ORDER BY opened_at DESC NULLS LAST""", (t.company_id, str(customer_id), list(OPEN)))
 
@@ -44,11 +44,16 @@ def solve_for_customer(t: Tenant, customer: dict, remark: str) -> tuple[bool, st
         return False, f"টিকিট {nos} সমাধান করা হয়নি: কাস্টমারের লাইন এখন অফলাইন।"
     if os.environ.get("ENGINE_DRY_RUN", "1") == "1":
         return False, f"(টেস্ট মোড: টিকিট {nos} আসলে সমাধান করা হয়নি)"
-    api = tenants.billing(t)
+    from engine.desk_tickets import DeskTickets
+    billing = None
     done, failed = [], []
     for x in tickets:
         try:
-            api.solve_ticket(int(x["complain_id"]), remark[:500])
+            if x["source"] == "desk":
+                DeskTickets(t, actor="WhatsApp বট").solve_ticket(x["complain_id"], remark[:500])
+            else:
+                billing = billing or tenants.billing(t)
+                billing.solve_ticket(int(x["complain_id"]), remark[:500])
             done.append(x["complain_id"])
         except Exception:
             log.exception("solve ticket %s failed", x["complain_id"])
@@ -58,7 +63,7 @@ def solve_for_customer(t: Tenant, customer: dict, remark: str) -> tuple[bool, st
                       WHERE company_id = %s AND complain_id = ANY(%s)""", (t.company_id, done))
     if failed:
         return bool(done), (f"✅ টিকিট {', '.join(done)} সমাধান করা হয়েছে। " if done else "") + \
-            f"টিকিট {', '.join(failed)} বিলিংয়ে সমাধান করা যায়নি।"
+            f"টিকিট {', '.join(failed)} সমাধান করা যায়নি।"
     return True, f"✅ টিকিট {', '.join(done)} সমাধান করা হয়েছে।"
 
 
@@ -94,17 +99,20 @@ def followup_candidates(t: Tenant) -> list[dict]:
 
 def followup_company(t: Tenant, dry: bool = False) -> int:
     from engine.main import deliver
-    api = tenants.billing(t)
+    api = None
     sent = 0
     for c in followup_candidates(t):
         tickets = open_tickets(t, c["customer_id"])
         username = db.one("""SELECT username FROM billing_customers WHERE company_id = %s
                              AND ltrim(customer_id, '0') = ltrim(%s, '0') AND gone_at IS NULL""",
                           (t.company_id, c["customer_id"]))
-        try:  # the copy can be up to 5 minutes old: ask billing whether it's still open
-            still = {str(x.get("ComplainId")) for x in api.open_tickets_for((username or {}).get("username") or "")}
-        except Exception:
-            still = {x["complain_id"] for x in tickets}
+        still = {x["complain_id"] for x in tickets if x["source"] == "desk"}  # the Desk's own: this is the record
+        if len(still) < len(tickets):
+            try:  # the copy of a billing ticket can be up to 5 minutes old: ask billing whether it's still open
+                api = api or tenants.billing(t)
+                still |= {str(x.get("ComplainId")) for x in api.open_tickets_for((username or {}).get("username") or "")}
+            except Exception:
+                still = {x["complain_id"] for x in tickets}
         tickets = [x for x in tickets if x["complain_id"] in still]
         if not tickets:
             continue

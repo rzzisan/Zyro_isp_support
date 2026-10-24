@@ -109,10 +109,12 @@ def handle_tech(t: Tenant, contact: dict, tech: dict, text: str, message_id: int
         customer = customers.fresh(api, customer)
         context = customers.live_context(t, api, customer)
         context["customer"]["mac"] = context.pop("mac", None)
+        from engine.desk_tickets import DeskTickets
+        tickets_api = DeskTickets(t) if t.desk_tickets else api  # the Desk's list also has the billing ones copied
         try:
             context["open_tickets"] = [
                 {"no": x.get("ComplainId"), "problem": x.get("Problem"), "opened": x.get("CreatedOn"),
-                 "assigned": x.get("SolvedBy")} for x in api.open_tickets_for(customer.get("UserName") or "")]
+                 "assigned": x.get("SolvedBy")} for x in tickets_api.open_tickets_for(customer.get("UserName") or "")]
         except Exception:
             context["open_tickets"] = None
         chat = customer_contact(t, customer)
