@@ -62,6 +62,15 @@ def solve_for_customer(t: Tenant, customer: dict, remark: str) -> tuple[bool, st
     return True, f"✅ টিকিট {', '.join(done)} সমাধান করা হয়েছে।"
 
 
+# ticket categories about the line itself; the rest (Others Support, Password change, রাউটার কনফিগার) are not
+LINE_WORDS = ("speed", "slow", "line", "অনু", "onu", "ফাইবার", "fiber", "optical", "cable", "রাউটার নষ্ট")
+
+
+def is_line_problem(category: str | None) -> bool:
+    c = (category or "").lower()
+    return any(w in c for w in LINE_WORDS)
+
+
 def followup_candidates(t: Tenant) -> list[dict]:
     """Chats with an open ticket whose last customer message is 20-23.5 hours old (the window closes at 24),
     not yet asked since that message, no one from our side talking in the last hour, ticket at least 2 hours old."""
@@ -100,8 +109,11 @@ def followup_company(t: Tenant, dry: bool = False) -> int:
         if not tickets:
             continue
         nos = ", ".join(x["complain_id"] for x in tickets)
-        text = (f"জি, আপনার লাইনের যে সমস্যার অভিযোগ দিয়েছিলেন (নম্বর {nos}), সেটা কি সমাধান হয়েছে? "
-                "লাইন এখন ঠিকমতো চলছে কিনা একটু জানাবেন।")
+        if all(is_line_problem(x["category"]) for x in tickets):
+            text = (f"জি, আপনার লাইনের যে সমস্যার অভিযোগ দিয়েছিলেন (নম্বর {nos}), সেটা কি সমাধান হয়েছে? "
+                    "লাইন এখন ঠিকমতো চলছে কিনা একটু জানাবেন।")
+        else:  # a question, a payment, a password change: not "is your line fine now?" (daily review 2026-10-24)
+            text = f"জি, আপনার অভিযোগটা (নম্বর {nos}) কি সমাধান হয়েছে? একটু জানাবেন।"
         if dry:
             log.info("would ask contact %s about %s", c["id"], nos)
             continue

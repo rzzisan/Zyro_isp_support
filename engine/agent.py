@@ -104,10 +104,34 @@ IMAGE_RULE = (
 )
 
 
+# always added after a company's own rules too (daily chat review 2026-10-24: thinking sent to customers, promises the
+# system can't keep, wrong months, missed tickets)
+REPLY_RULES = (
+    "সবসময়ের নিয়ম:\n"
+    "- উত্তরে শুধু কাস্টমারকে পাঠানোর লেখাটা থাকবে। নিজের চিন্তা বা বিশ্লেষণ, \"উত্তর:\" লেবেল, live_data, bill_day, "
+    "mikrotik, open_tickets-এর মতো ভেতরের নাম, বা \"-- Zyro\" সিগনেচার লিখবে না (সিগনেচার সিস্টেম নিজে যোগ করে)।\n"
+    "- যা সিস্টেম করে না তার কথা দেবে না: টেকনিশিয়ান কবে বা কখন আসবেন বলবে না, \"টিকেটে যোগ করে রাখছি\" বলবে না "
+    "(খোলা টিকেটে কিছু যোগ করার ব্যবস্থা নেই)। \"অফিসে জানাচ্ছি\" বা \"টিমকে জানাচ্ছি\" লিখলে সেই উত্তরেই [[TICKET: ...]] দেবে; "
+    "খোলা টিকেট থাকলে শুধু বলবে টিম সেটা দেখছে।\n"
+    "- কাস্টমার বলেন কালেক্টর বা অফিসের লোকের হাতে টাকা দিয়েছেন অথচ বকেয়া দেখাচ্ছে: তর্ক করবে না, "
+    "[[TICKET: Others Support | কালেক্টরকে টাকা দিয়েছেন বলছেন: কত টাকা, কবে, কাকে]]।\n"
+    "- বকেয়া কোন মাসের, সেটা live_data-তে মাস লেখা থাকলে তবেই বলবে; না থাকলে শুধু মোট বকেয়া।\n"
+    "- ছবির বর্ণনায় নিশ্চিত না লেখা থাকলে ছবিটাকে সমস্যার কারণ বলবে না।\n"
+    "- স্পিড বা প্যাকেজ বাড়াতে চাইলে \"বাড়ানো যায় না\" বলবে না: নির্দেশনা বা FAQ-তে থাকা প্যাকেজ (নাম, স্পিড, দাম) জানাও "
+    "আর [[TICKET: Others Support | প্যাকেজ আপগ্রেড চান: ...]]।\n"
+    "- IP ক্যামেরা, টিভি বক্স, অ্যাপ বা অন্য ডিভাইস সেটআপ আমাদের সার্ভিস না: এক লাইনে বলো, ডিভাইসের বিক্রেতা বা "
+    "টেকনিশিয়ানের সাথে যোগাযোগ করতে; লম্বা টিপস দেবে না।\n"
+    "- \"লাইনের সমস্যা\" বা \"নেট সমস্যা\"-র মতো অভিযোগ দ্বিতীয়বার এলে, বা কাস্টমার বলেন ধাপ করেও হয়নি: আর প্রশ্ন না করে টিকেট খোলো।\n"
+    "- নেট আর ডিশের (টিভির) লাইন দুটোই বন্ধ বললে টিকেটের বিবরণে সেটা লিখবে (এলাকার তার কাটা হতে পারে)।\n"
+    "- live_data-তে ONU-র তথ্য না থাকলে বা error থাকলে অনুর অবস্থা (অনলাইন/অফলাইন) দাবি করবে না।\n"
+    "- নাম দেখে নিশ্চিত না হলে \"ভাই\" বা \"আপু\" না, শুধু \"জি\"।"
+)
+
+
 def system_prompt(t: Tenant, query: str | None = None) -> str:
     # the company may have edited the built-in rules (Bot settings); empty = the built-in text
     base = (t.bot.get("customer_prompt") or "").strip() or SYSTEM_PROMPT
-    prompt = base.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)") + "\n\n" + IMAGE_RULE
+    prompt = base.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)") + "\n\n" + IMAGE_RULE + "\n\n" + REPLY_RULES
     block = knowledge(t, query)
     if not block:
         return prompt
@@ -206,8 +230,38 @@ def draft_reply(t: Tenant, history: list[dict], context: dict | None,
                     "content": f"<live_data>\n{ctx}\n</live_data>\n\nকাস্টমারের মেসেজ:\n{history[-1]['content']}"}
     # the FAQ entries that match what the customer is asking now (and just before)
     asked = "\n".join(m["content"] for m in history[-3:] if m["role"] == "user")
-    text, provider, model = generate_with_fallback(t, system_prompt(t, asked), messages, "customer", contact_id)
+    system = system_prompt(t, asked)
+    text, provider, model = generate_with_fallback(t, system, messages, "customer", contact_id)
+    text = without_thinking(text, t.bot.get("reply_signature"))
+    if text and LEAK.search(text):
+        # the model wrote its reasoning for the customer to read (2026-10-23, chats 540 and 1318): one more try
+        log.warning("reply for contact %s had reasoning in it, asking again", contact_id)
+        text, provider, model = generate_with_fallback(t, system + RETRY_NOTE, messages, "customer", contact_id)
+        text = without_thinking(text, t.bot.get("reply_signature"))
+        if text and LEAK.search(text):
+            text = "\n".join(x for x in text.split("\n") if not LEAK.search(x)).strip() or None
     return _whatsapp_format(text), provider, model
+
+
+# words only the model's own reasoning has, never a reply to a customer
+LEAK = re.compile(r"live_data|bill_day|open_tickets|mikrotik|verified|নির্দেশনায় (?:কিছু )?(?:নেই|বলা)|বানিয়ে বলা যাবে না|"
+                  r"কাস্টমার বলছে|কাস্টমারের নাম \S+,|দিয়ে শুরু করব", re.I)
+RETRY_NOTE = ("\n\nজরুরি: আগের খসড়ায় তোমার নিজের চিন্তা আর ডেটার নাম লেখা ছিল, যা কাস্টমার দেখে ফেলত। এবার শুধু কাস্টমারকে "
+              "পাঠানোর ছোট উত্তরটা লেখো, আর কিছু না।")
+
+
+def without_thinking(text: str | None, signature: str | None = None) -> str | None:
+    """Only the part meant for the customer: what follows the last "উত্তর:" label (the prompt's examples are written
+    "কাস্টমার: ... → উত্তর: ...", and the model sometimes writes its reasoning, then "উত্তর:", then the reply), without
+    the signature the model copies from the chat (deliver adds it once)."""
+    if not text:
+        return text
+    labels = list(re.finditer(r"(?m)^[ \t*]*উত্তর[ \t*]*[:：][ \t*]*", text))
+    if labels:
+        text = text[labels[-1].end():]
+    if signature and signature.strip():
+        text = "\n".join(x for x in text.split("\n") if x.strip() != signature.strip())
+    return re.sub(r"\n{3,}", "\n\n", text).strip() or None
 
 
 # tried in order on each key: Google no longer serves gemini-2.5-flash to keys of new accounts (404 "no longer available
@@ -344,7 +398,7 @@ IMAGE_PROMPT = (
     "- পাসপোর্ট, NID, মেডিকেল কাগজের মতো ব্যক্তিগত ডকুমেন্ট: শুধু কী ধরনের ডকুমেন্ট; ভেতরের নাম, নম্বর বা অন্য তথ্য লিখবে না।\n"
     "- অন্য কিছু (খাবার, খেলা, ভিডিও, মানুষ): এক লাইনে কী ধরনের ছবি। মানুষের পরিচয় বলবে না।\n"
     "উত্তরের শুরুতে লেখো NET: যদি ছবিটা ইন্টারনেট লাইন, অনু/রাউটার/তার, Wi-Fi, স্পিড, নেটের এরর, বিল বা পেমেন্টের "
-    "সাথে সম্পর্কিত; না হলে (খাবার, ব্যক্তিগত ডকুমেন্ট, গেম, সিনেমা, মানুষ, অন্য কিছু) লেখো OTHER:। তারপর বর্ণনা। "
+    "সাথে সম্পর্কিত (বিকাশ, নগদ, রকেট বা ব্যাংকের যেকোনো টাকা পাঠানো/মার্চেন্ট পে/পেমেন্ট সফলের স্ক্রিনশট সবসময় NET); না হলে (খাবার, ব্যক্তিগত ডকুমেন্ট, গেম, সিনেমা, মানুষ, অন্য কিছু) লেখো OTHER:। তারপর বর্ণনা। "
     "শুধু বর্ণনা লেখো; কাস্টমারকে উত্তর, পরামর্শ বা কোনো শিরোনাম/বুলেট না।"
 )
 UNRELATED_PHOTO = "[অপ্রাসঙ্গিক ছবি]"  # body tag: staff see it, the bot neither answers nor reads it

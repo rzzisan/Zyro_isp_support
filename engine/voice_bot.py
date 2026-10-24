@@ -91,8 +91,26 @@ VOICE_RULES = (
     "আবোল-তাবোল কথা বললে আর এগোবে না: বলো \"আমাদের একজন স্টাফ আপনার সাথে যোগাযোগ করবেন, ধন্যবাদ\", "
     "request_callback (flag off_topic) দাও, তারপর end_call।\n"
     "- সমাধান করতে না পারলে request_callback (flag unsolved) দিয়ে একই কথা বলে end_call।\n"
+    "- টিকেট খোলা, বা অফিস/টেকনিশিয়ানকে জানানোর কথা মুখে বলার আগে create_complaint ডাকবে (মানুষ চাইলে request_callback); "
+    "ফল না আসা পর্যন্ত \"জানাচ্ছি\", \"টিকেট করছি\" বলবে না। create_complaint এক কলে একবারই।\n"
+    "- টুলের নাম (end_call, lookup_customer, create_complaint) কখনো মুখে বলবে না; কল শেষ করতে শুধু end_call টুল ডাকবে।\n"
+    "- কলের শুরুতে কলারের সংযোগের তথ্য দেওয়া থাকলে তিনি কাস্টমার কিনা আবার জিজ্ঞেস করবে না। কলার যে নাম বলেন তা ওই "
+    "তথ্যের নামের সাথে মিললে সেটাই ধরো, আবার lookup_customer করবে না।\n"
+    "- কলারের সংযোগ পাওয়া না গেলে (lookup_customer-এ found=true না আসা পর্যন্ত) কোনো বকেয়া, টাকা, প্যাকেজ বা লাইনের "
+    "অবস্থা বলবে না; নির্দেশনার উদাহরণের টাকার অঙ্ক কারো আসল তথ্য না।\n"
+    "- রাউটার রিস্টার্ট বা তার চেক সর্বোচ্চ একবার বলবে। কলার বলেন আগেই করেছেন বা তাতে হয়নি, তাহলে সাথে সাথে "
+    "create_complaint। তার উল্টাপাল্টা লাগানোর মতো পরামর্শ দেবে না।\n"
+    "- প্যাকেজের নাম, স্পিড, দাম শুধু কাস্টমার তথ্যের package থেকে বলবে; মাসিক বিল আর মোট বকেয়া আলাদা করে বলবে। "
+    "পেমেন্টের নম্বর বা নিয়ম জানতে চাইলে কোম্পানির নির্দেশনা থেকে বলবে, নম্বরের অঙ্কগুলো ধীরে আলাদা করে।\n"
+    "- কাস্টমার তথ্যের open_tickets-এ খোলা অভিযোগ থাকলে লাইনের সমস্যার কথায় প্রথমেই সেই অভিযোগ নম্বর জানাও আর বলো "
+    "টিম কাজ করছে; আবার রিস্টার্টের ধাপ শেখাবে না।\n"
+    "- লাইনের অবস্থা বাংলায় বলবে (\"বিলের কারণে বন্ধ\", \"চালু আছে\"), \"ডিসএবল্ড\" জাতীয় ইংরেজি শব্দে না।\n"
+    "- কলারের কথা অন্য ভাষার মতো শোনালে বা অর্থ বোঝা না গেলে অনুমান করবে না, বলবে \"জি, আরেকবার বলবেন?\"\n"
     "- কথা শেষ হলে বিদায় জানিয়ে end_call ডাকো।"
 )
+# the bot says it will open a ticket / tell the office (then it must have called create_complaint or request_callback)
+PROMISE = re.compile(r"টিকেট|টিকিট|জানাচ্ছি|জানিয়ে দিচ্ছি|জানানো হলো|জানিয়ে রাখছি|অভিযোগটা লিখে|টেকনিশিয়ান")
+SPOKEN_TOOL = re.compile(r"\s*\b(end[_ ]?call|lookup[_ ]?customer|create[_ ]?complaint|request[_ ]?callback)\b\.?", re.I)
 STAFF_RULES = (
     "তুমি {company}-এর অফিস সাপোর্ট ডেস্ক, ফোনে কথা বলছ কোম্পানির স্টাফ/টেকনিশিয়ান {tech}-এর সাথে (তিনি কাস্টমার নন)। "
     "WhatsApp-এ স্টাফরা যা পান, ফোনেও তাই দেবে:\n"
@@ -420,8 +438,10 @@ def prepare(company_id: int, caller: str, staff: dict | None = None, channel: st
               else f"তুমি {company['name']} (একটি ISP)-এর কাস্টমার সাপোর্ট।") + VOICE_RULES
     if channel == "whatsapp":
         prompt = prompt.replace("এখন তুমি ফোন কলে কথা বলছ, WhatsApp-এ না।", "এখন তুমি WhatsApp কলে (ভয়েসে) কথা বলছ, লেখা মেসেজে না।")
+    prompt = prompt.replace(agent.REPLY_RULES, "") if t else prompt   # WhatsApp-only rules
     number = normalize(caller)
-    info = "কলারের নম্বর আমাদের কোনো কাস্টমারের সাথে মেলেনি; কাস্টমার আইডি জিজ্ঞেস করে lookup_customer দিয়ে খোঁজো।"
+    info = ("কলারের সংযোগ: পাওয়া যায়নি (CUSTOMER NOT FOUND)। কলারের নম্বর আমাদের কোনো কাস্টমারের সাথে মেলেনি, তাই "
+            "এই কলারের কোনো বকেয়া, প্যাকেজ বা লাইনের অবস্থা তোমার জানা নেই। কাস্টমার আইডি জিজ্ঞেস করে lookup_customer দিয়ে খোঁজো।")
     if t and number:
         try:
             from engine import tenant as tenants
@@ -698,6 +718,15 @@ class Call:
         self.up_state = self.down_state = None
         self.usage = {"input": 0, "output": 0}
         self.started = time.time()
+        self.tools_used: set[str] = set()
+        self.end_refused = False
+
+    def promised_without_tool(self) -> bool:
+        """The bot said "টিকেট করছি / জানাচ্ছি" but never called create_complaint or request_callback (review
+        2026-10-24, calls 103 and 104: no ticket was opened)."""
+        if self.info.get("staff") or {"create_complaint", "request_callback"} & self.tools_used:
+            return False
+        return any(x["who"] == "bot" and PROMISE.search(x["text"]) for x in self.turns)
 
     def say(self, who: str, text: str) -> None:
         if not text:
@@ -756,7 +785,13 @@ class Call:
             if sc.get("interrupted"):
                 self.out.clear()           # the caller started talking: stop at once
             self.say("caller", (sc.get("inputTranscription") or {}).get("text", ""))
-            self.say("bot", (sc.get("outputTranscription") or {}).get("text", ""))
+            spoken = (sc.get("outputTranscription") or {}).get("text", "")
+            if SPOKEN_TOOL.search(spoken):
+                # it said "end_call" aloud instead of calling the tool (call 106 hung on until the caller hung up)
+                if re.search(r"end[_ ]?call", spoken, re.I) and not self.promised_without_tool():
+                    self.hangup_after_drain = True
+                spoken = SPOKEN_TOOL.sub("", spoken)
+            self.say("bot", spoken)
             u = m.get("usageMetadata")
             if u:
                 self.usage["input"] += int(u.get("promptTokenCount") or 0)
@@ -773,7 +808,13 @@ class Call:
                         self.callback = (args.get("reason") or "কল ব্যাক চেয়েছেন")[:300]
                         self.flag = args.get("flag") if args.get("flag") in FLAGS else "unsolved"
                     elif name == "end_call":
-                        self.hangup_after_drain = True
+                        if not self.end_refused and self.promised_without_tool():
+                            self.end_refused = True   # once: never keep a caller on the line for this
+                            result = {"ok": False, "note": "কল এখনো শেষ হয়নি। তুমি টিকেট বা অফিসে জানানোর কথা বলেছ কিন্তু "
+                                      "create_complaint বা request_callback ডাকোনি। এখনই সেটা ডাকো, ফল এলে অভিযোগ নম্বর "
+                                      "বলো, তারপর বিদায় জানিয়ে end_call।"}
+                        else:
+                            self.hangup_after_drain = True
                     elif name == "lookup_customer":
                         result = await loop.run_in_executor(pool, lookup_customer, t, args.get("id_or_mobile", ""),
                                                             bool(staff))
@@ -788,6 +829,8 @@ class Call:
                 except Exception as e:
                     log.exception("tool %s", name)
                     result = {"error": str(e)[:200]}
+                if name:
+                    self.tools_used.add(name)
                 log.info("call %s tool %s -> %s", self.uid, name, str(result)[:120])
                 await ws.send(json.dumps({"toolResponse": {"functionResponses": [
                     {"id": fc.get("id"), "name": name, "response": json.loads(json.dumps(result, default=str))}]}},

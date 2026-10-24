@@ -236,7 +236,7 @@ NO = ("না", "নাহ", "no", "na", "nah", "not", "noi", "nai", "n")
 # a whole message made of these (or only emoji) just closes the talk
 ACKS = {"ok", "oke", "okay", "thanks", "thank", "you", "thx", "tnx", "ধন্যবাদ", "ঠিক", "আছে", "ওকে", "আচ্ছা", "acha",
         "thik", "ase", "ache", "hm", "হুম", "ji", "জি", "জ্বি", "in", "sha", "allah", "ইনশাআল্লাহ", "alhamdulillah",
-        "আলহামদুলিল্লাহ", "vai", "bhai", "ভাই", "ভাইয়া", "vaiya"}
+        "আলহামদুলিল্লাহ", "vai", "bhai", "ভাই", "ভাইয়া", "vaiya", "উকে", "অকে", "ওকেই", "ঠিকাছে", "সব", "okey", "done"}
 ASK_ID = "আপনি লাইন নেওয়ার সময় যে ফোন নম্বর দিয়েছিলেন সেই নম্বরটা দিন, অথবা কাস্টমার ID জানা থাকলে বলুন।"
 AGENT = "ঠিক আছে, শিগগিরই আমাদের একজন সাপোর্ট এজেন্ট আপনার সাথে যোগাযোগ করবেন।"
 OK_DAYS = 7  # an identified chat stays identified this long; unfinished identification restarts after a day
@@ -398,15 +398,34 @@ def unanswered_text(t: Tenant, contact_id: int) -> str:
 
 
 def ack_already_answered(t: Tenant, contact_id: int) -> bool:
-    """A second "ok" in a row: our last message already answered an "ok", so the talk is over."""
-    rows = db.all_rows(
-        """SELECT direction, sender, body FROM wa_messages WHERE company_id = %s AND contact_id = %s
-           ORDER BY id DESC LIMIT 6""", (t.company_id, contact_id))
-    last_out = next((i for i, r in enumerate(rows) if r["direction"] == "out"), None)
-    if last_out is None or rows[last_out]["sender"] != "bot" or "?" in (rows[last_out]["body"] or ""):
-        return False  # our last message asked something (e.g. "সমাধান হয়েছে?"): an "ok" answers it
-    before = next((r for r in rows[last_out + 1:] if r["direction"] == "in"), None)
-    return bool(before and before["body"] is not None and _is_ack(before["body"]))
+    """An "ok"/"ধন্যবাদ"/👍 after our bot's last message, which asked nothing: the talk is over, no reply (daily review
+    2026-10-24: "Ok" got "জি, ধন্যবাদ" again and again)."""
+    row = db.one(
+        """SELECT sender, body FROM wa_messages WHERE company_id = %s AND contact_id = %s AND direction = 'out'
+           ORDER BY id DESC LIMIT 1""", (t.company_id, contact_id))
+    # our last message asked something (e.g. "সমাধান হয়েছে?"): an "ok" answers it
+    return bool(row and row["sender"] == "bot" and "?" not in (row["body"] or ""))
+
+
+def staff_wrote_since(t: Tenant, contact_id: int, message_id: int) -> bool:
+    """Someone from the office (Desk or the WhatsApp app) wrote after the customer's message: the bot keeps out."""
+    return bool(db.one(
+        """SELECT 1 FROM wa_messages WHERE company_id = %s AND contact_id = %s AND direction = 'out' AND id > %s
+             AND sender IN ('staff', 'app') LIMIT 1""", (t.company_id, contact_id, message_id)))
+
+
+# the customer says nobody came / nobody answers about an open complaint
+NOBODY = re.compile(r"আসে ?নি|আসে নাই|আসলো না|আসেনাই|কেউ আসে|লোক আসে|ধরে না|ধরছে না|ধরতেছে না|ধরেনা|খবর নাই|"
+                    r"ase ?ni|ase nai|ashe nai|keu ase|dhore na|dhorche na|kono khobor", re.I)
+ESCALATE_AFTER = 2  # bot replies about the same open ticket in a day, before a person takes over
+
+
+def times_said(t: Tenant, contact_id: int, text: str, hours: int = 24) -> int:
+    row = db.one(
+        """SELECT count(*) AS n FROM wa_messages WHERE company_id = %s AND contact_id = %s AND direction = 'out'
+             AND sender = 'bot' AND created_at > now() - make_interval(hours => %s) AND body LIKE %s""",
+        (t.company_id, contact_id, hours, f"%{text}%"))
+    return int(row["n"]) if row else 0
 
 
 def said_recently(t: Tenant, contact_id: int, text: str, hours: int = 12) -> bool:
@@ -436,8 +455,10 @@ def may_send(t: Tenant, wa: str) -> bool:
 
 
 def deliver(t: Tenant, contact: dict, message_id: int, text: str, note: str | None = None, **draft_kw) -> None:
-    sig = t.bot.get("reply_signature")
-    body = text.rstrip() + (f"\n\n{sig}" if sig and not text.rstrip().endswith(sig) else "")
+    sig = (t.bot.get("reply_signature") or "").strip()
+    if sig:  # once, at the very end (a ticket number added after the model's own copied signature made it twice)
+        text = re.sub(r"\n{3,}", "\n\n", "\n".join(x for x in text.split("\n") if x.strip() != sig)).strip()
+    body = text.rstrip() + (f"\n\n{sig}" if sig else "")
     mode = "dry_run" if DRY_RUN else (t.bot.get("bot_mode") or "shadow")
     error = None
     if may_send(t, contact["wa_number"]):
@@ -618,10 +639,26 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = 
         from engine.ticket_actions import open_tickets, solve_for_customer
         context["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
                                    for x in open_tickets(t, customer.get("CustomerId"))]
-        history = [{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
+        if context["open_tickets"] and NOBODY.search(text):
+            no = str(context["open_tickets"][0]["no"])
+            if times_said(t, contact["id"], no) >= ESCALATE_AFTER:
+                # the bot has only "the team is looking" to say: a person takes over (daily review 2026-10-24, chat 1180)
+                db.execute("UPDATE wa_contacts SET bot_paused_until = now() + interval '6 hours' WHERE id = %s",
+                           (contact["id"],))
+                deliver(t, contact, message_id,
+                        f"দুঃখিত, দেরি হচ্ছে। আপনার অভিযোগটা (নম্বর {no}) এখন আমাদের অফিসের একজন সরাসরি দেখছেন, "
+                        "তিনি শিগগিরই আপনার সাথে যোগাযোগ করবেন।",
+                        f"টিকিট {no}: কাস্টমার বারবার বলছেন কেউ আসেনি/যোগাযোগ হয়নি। বট ৬ ঘণ্টা বন্ধ, স্টাফ দেখুন",
+                        provider="flow", model="escalate")
+                return
+        history =[{"role": "user", "content": pending + "\n" + text}] if pending else history_for(t, contact["id"])
         if not history or history[-1]["role"] != "user":
             history.append({"role": "user", "content": text})
         draft, provider, model = draft_reply(t, history, context, contact["id"])
+        if draft and (staff_wrote_since(t, contact["id"], message_id) or bot_paused(contact)):
+            # office staff answered (e.g. "please wait") while the AI was writing: theirs stands, no ticket either
+            save_draft(t, contact["id"], message_id, "superseded", draft, context=context, provider=provider, model=model)
+            return
         ticket_note = None
         if draft:
             mm = re.search(r"\[\[TICKET:\s*(.*?)\]\]", draft, re.S)
