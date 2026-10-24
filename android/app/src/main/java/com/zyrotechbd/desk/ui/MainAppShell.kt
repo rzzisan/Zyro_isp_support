@@ -317,6 +317,7 @@ private fun FieldLocationSetup(company: String) {
             !FieldTracker.hasPermission(context) ->
                 foreground.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
             !FieldTracker.hasBackground(context) -> askBackground = true
+            else -> FieldTracker.askBatteryOnce(context)   // battery saver would stop the duty location
         }
     }
     if (askBackground && Build.VERSION.SDK_INT >= 29) AlertDialog(
