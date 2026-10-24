@@ -21,7 +21,7 @@ from fastapi.responses import PlainTextResponse
 
 from engine import customers, db, tenant as tenants, wa_campaign, webpush
 from engine.agent import UNRELATED_PHOTO
-from engine.ispdigital import diagnose, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
+from engine.ispdigital import find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
 from engine.tenant import Tenant
 
 VERIFY_TOKEN = os.environ.get("WA_VERIFY_TOKEN", "")
@@ -355,6 +355,7 @@ def customer_view(context: dict, verified: bool, text: str = "") -> dict:
     c = ctx.get("customer") or {}
     c.pop("registered_mobile", None)
     (ctx.get("pppoe") or {}).pop("ip", None)
+    ctx.pop("mac", None)
     for k in ("address", "caller_id", "profile"):  # profile: a router setting, not the package (2026-10-24)
         (ctx.get("mikrotik") or {}).pop(k, None)
     if not verified:
@@ -634,7 +635,7 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = 
         if not pending and _is_ack(text) and ack_already_answered(t, contact["id"]):
             return  # "ওকে" after our "ঠিক আছে, জানাবেন": nothing more to say
         api = tenants.billing(t)
-        context = customer_view(customers.add_online(t, diagnose(api, customers.fresh(api, customer)), customer), verified,
+        context = customer_view(customers.live_context(t, api, customers.fresh(api, customer)), verified,
                                 "\n".join(x for x in (pending, text) if x))
         from engine.ticket_actions import open_tickets, solve_for_customer
         context["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
@@ -1021,7 +1022,7 @@ def customer_live(request: Request, company_id: int, header_id: int):
     if not row or not row["extra"]:
         raise HTTPException(status_code=404, detail="কাস্টমার পাওয়া যায়নি")
     api = tenants.billing(t)
-    return billing_call(lambda: customers.add_online(t, diagnose(api, customers.fresh(api, row["extra"])), row["extra"]))
+    return billing_call(lambda: customers.live_context(t, api, customers.fresh(api, row["extra"])))
 
 
 def _norm(name: str | None) -> str:
@@ -1222,38 +1223,30 @@ def bill_receipt_no(request: Request, company_id: int, collection_id: int):
 
 @app.get("/internal/{company_id}/customers/{header_id}/ticket-info")
 def ticket_info(request: Request, company_id: int, header_id: int):
-    """New-ticket form: customer and bill from our copy, connection from our MikroTik, OLT/ONU from billing."""
+    """New-ticket form: customer and bill from our copy, connection from our MikroTik, ONU from our OLT; billing only
+    fills in a MAC / ONU we don't have, while the company's বিলিং সংযোগ switches allow it."""
     t = internal_tenant(request, company_id)
     row = db.one("""SELECT customer_id, username, name, mobile, address, zone, subzone, box, package, monthly_bill, due, paid,
                            status, disabled, last_payment_date, server, extra
                     FROM billing_customers WHERE company_id = %s AND header_id = %s""", (company_id, header_id))
     if not row:
         raise HTTPException(status_code=404, detail="কাস্টমার পাওয়া যায়নি")
-    from engine.ppp_sync import online_now
-    try:
-        mk = online_now(company_id, row["username"] or "", row["server"])
-    except Exception:
-        mk = None
+    mk, mac = customers.own_line(t, row["username"] or "", row["server"])
     last = db.one("SELECT caller_id, address, uptime, seen_at FROM ppp_sessions WHERE company_id = %s AND username = %s",
                   (company_id, row["username"]))
-    mac = (mk or {}).get("caller_id") or (last or {}).get("caller_id")
-    if not mac:
+    if not mac and t.billing_live:
+        customers.note_fallback(t, "live", "no_mac")
         try:  # offline and never seen by us: billing still knows the last router MAC
             mac = tenants.billing(t).live_status(header_id).get("calledid") or None
         except Exception:
             log.exception("billing live status failed")
-    onu = None
-    if mac:
-        from engine.olt_sync import onu_for_mac
+    onu = customers.own_onu(t, mac)
+    if not onu and mac and t.billing_onu:
+        customers.note_fallback(t, "onu", "not_on_own_olt")
         try:
-            onu = onu_for_mac(company_id, mac)  # our own OLT, read now
+            onu = tenants.billing(t).onu_info(mac)
         except Exception:
-            log.exception("own OLT read failed")
-        if not onu:
-            try:
-                onu = tenants.billing(t).onu_info(mac)
-            except Exception:
-                log.exception("onu info failed")
+            log.exception("onu info failed")
     extra = row.pop("extra") or {}
     return {
         "customer": {k: (str(v) if v is not None and not isinstance(v, (bool, int, float, str)) else v) for k, v in row.items()},

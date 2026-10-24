@@ -11,10 +11,13 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class BillingSettings extends CompanySettingsPage
@@ -50,7 +53,8 @@ class BillingSettings extends CompanySettingsPage
     protected function fillData(Model $record): array
     {
         return ['provider' => $record->provider, 'base_url' => $record->base_url,
-            'username' => $record->username, 'password' => null];
+            'username' => $record->username, 'password' => null,
+            'live_from_billing' => $record->live_from_billing ?? true, 'onu_from_billing' => $record->onu_from_billing ?? true];
     }
 
     public function form(Schema $schema): Schema
@@ -71,7 +75,29 @@ class BillingSettings extends CompanySettingsPage
                 ->content(fn () => $record->last_checked_at
                     ? ($record->last_check_ok ? '✅ ' : '❌ ').$record->last_check_message.' · '.$record->last_checked_at->diffForHumans()
                     : __('এখনো পরীক্ষা করা হয়নি')),
+            Section::make(__('বিলিং থেকে কী কী আনা হবে'))
+                ->description(__('সংযোগ, MAC আর ONU সবসময় আগে আমাদের MikroTik ও OLT থেকে আসে। সুইচ চালু থাকলে যেটা আমাদের কাছে নেই শুধু সেটা বিলিং থেকে আনা হয়; বন্ধ থাকলে বিলিং-এ যাওয়াই হয় না।'))
+                ->schema([
+                    Toggle::make('live_from_billing')->label(__('বিলিং থেকে লাইভ স্ট্যাটাস / MAC'))->default(true)
+                        ->helperText(fn () => __('কোনো MikroTik উত্তর না দিলে, বা কাস্টমারের MAC আমরা কখনো না দেখলে।').' '.$this->fallbackText('live')),
+                    Toggle::make('onu_from_billing')->label(__('বিলিং থেকে ONU পাওয়ার'))->default(true)
+                        ->helperText(fn () => __('কাস্টমারের MAC আমাদের কোনো OLT-এ না মিললে।').' '.$this->fallbackText('onu')),
+                ]),
         ]);
+    }
+
+    /** How often billing had to fill in over the last 7 days, so the owner sees when the switch can go off. */
+    public function fallbackText(string $kind): string
+    {
+        $rows = DB::table('billing_fallbacks')->where('company_id', Filament::getTenant()->getKey())->where('kind', $kind)
+            ->where('day', '>=', now('Asia/Dhaka')->subDays(6)->toDateString())
+            ->selectRaw('reason, sum(count) AS n')->groupBy('reason')->pluck('n', 'reason');
+        if ($rows->isEmpty()) {
+            return __('গত ৭ দিনে বিলিং লাগেনি।');
+        }
+        $labels = ['no_router' => __('MikroTik উত্তর দেয়নি'), 'no_mac' => __('MAC জানা ছিল না'), 'not_on_own_olt' => __('OLT-এ ONU মেলেনি')];
+
+        return __('গত ৭ দিনে বিলিং লেগেছে: ').$rows->map(fn ($n, $r) => ($labels[$r] ?? $r).' '.$n.' '.__('বার'))->implode(', ');
     }
 
     protected function beforeSaving(array $data, Model $record): array

@@ -409,7 +409,7 @@
 - Zisan-এর সিদ্ধান্ত: 106-ই থাকবে; বাজবে, ২০ সেকেন্ডে কেউ না ধরলে বট ধরবে; শুরুতে বলবে কল রেকর্ড হচ্ছে; ফ্রি Gemini key দিয়ে।
 - সেটিং: হটলাইন (SIP) পাতার "ভয়েস বট" অংশ: বন্ধ / শুধু টেস্ট নম্বরের কলে / সব কলে, কত সেকেন্ড পর (০-২৫), মডেল (খালি = gemini-3.1-flash-live-preview; ফ্রি key-তে প্রথম অডিও ~০.৬ সে), টেস্ট নম্বর।
 - Asterisk 20 (apt) bsol-এ: কনফিগ রিপোর `deploy/asterisk/` (মূল কপি `/etc/asterisk.dist`); শুধু PJSIP UDP 5075, chan_sip/IAX/ARI বন্ধ। `zyro-voice.service` (`engine/voice_bot.py`) চালু কোম্পানির জন্য `/var/lib/zyro-voice/pjsip_zyro.conf` লেখে (endpoint `c<company_id>`, identify_by=ip) আর `asterisk -rx "pjsip reload"` (claude-dev asterisk গ্রুপে; asterisk.conf astctl 0660)। বট বন্ধ থাকলে Asterisk রেজিস্টার করে না; পপআপ baresip (zyro-sip) দিয়েই চলে।
-- ডায়ালপ্ল্যান `zyro-in`: CURL `127.0.0.1:8997/mode` → "ring" (শুধু বাজে) বা "bot:<uuid>:<sec>" → Ringing, Wait, Answer, AudioSocket 127.0.0.1:9093। বাজার সময়েই কলারের নম্বরে কাস্টমার খুঁজে (WhatsApp বটের মতো by_whatsapp + diagnose + add_online + খোলা টিকিট) প্রম্পট তৈরি হয়।
+- ডায়ালপ্ল্যান `zyro-in`: CURL `127.0.0.1:8997/mode` → "ring" (শুধু বাজে) বা "bot:<uuid>:<sec>" → Ringing, Wait, Answer, AudioSocket 127.0.0.1:9093। বাজার সময়েই কলারের নম্বরে কাস্টমার খুঁজে (WhatsApp বটের মতো by_whatsapp + customers.live_context + খোলা টিকিট) প্রম্পট তৈরি হয়।
 - অডিও: AudioSocket 8 kHz ⇄ Gemini 16 kHz ইন / 24 kHz আউট (audioop.ratecv; Python 3.13-এ audioop নেই)। কাস্টমার কথা বললে Gemini "interrupted" দেয়, তখন বাকি অডিও ফেলে দেওয়া হয়। টুল: request_callback(reason), end_call।
 - রেকর্ডিং: দুই পাশ একই ঘড়িতে মিশিয়ে MP3 `panel/storage/app/call-recordings/<company>/<call_log id>.mp3`; call_logs-এ bot_answered, bot_seconds, transcript (text JSON, টেস্ট DB SQL_ASCII বলে jsonb না), callback_reason, bot_error। খরচ ai_usage-এ purpose voice_call।
 - প্যানেল: সাপোর্ট → কল লগ (`CallLogs`, মেনু অনুমতি `calls`), "শুনুন" = অডিও + কথোপকথন; অডিও `/calls/{company}/recording/{call}`।
@@ -499,3 +499,15 @@
 - প্যানেল: কাস্টমার ও বিল → "অনলাইন পেমেন্ট" (`/online-payments`, অনুমতি `bills`, এজেন্টেরও সব দেখা যায়, কালেক্টর-ভিত্তিক সীমা নেই কারণ এগুলো কাস্টমারের নিজের পেমেন্ট)। কলাম: সময়, মাধ্যম+উৎস, TrxID (খোঁজা/কপি), টাকা, কাস্টমার (কাস্টমার পেজের লিংক), রেফারেন্স, যে নম্বর থেকে, অবস্থা, কে সেটেল করলেন। ফিল্টার মাস (ডিফল্ট চলতি), তারিখ, অবস্থা, উৎস, মাধ্যম, চেনা/অচেনা, কে সেটেল করলেন। কার্ড: মোট, Webhook, PayBill, সেটেল হয়নি। মেনুতে গত ৭ দিনের "সেটেল হয়নি" সংখ্যা লাল ব্যাজ। টেবিল ৬০ সে. poll। Desk কিছু সেটেল করে না, বিলিং-এ হাতে।
 - যাচাই (dry-run 2026-10-24, অক্টোবর ১-২৪): webhook ৩১৭ (bKash ৩০৩, Nagad ১৪; settled ২৬৯, requested ৪, manual ৪০, transferred ৩, retransferred ১), paybill ৩৮১; বিলিং রিপোর্টের bKash Webhook ৩০১ / PayBill ৩৮১ / Nagad ১৪-এর সাথে মেলে।
 - টেস্ট `tests/Feature/OnlinePaymentTest.php` (৫টা)। আগে থেকে ফেল করা (এই কাজের নয়): AreaStaffTest (category_id টাইপ), SoftphoneTest (APP_URL), LocaleTest-এ পাসওয়ার্ড সেটের ৮টা লেখা।
+
+## লাইভ স্ট্যাটাস/MAC/ONU আগে নিজস্ব সিস্টেম থেকে, বিলিং শুধু ফাঁক পূরণে (2026-10-24)
+- লক্ষ্য: ধাপে ধাপে Desk-কে বিলিং থেকে স্বাধীন করা (প্ল্যান: claude.ai/artifact/8SPuVwcUjwb5yRyDHrJRhW)। এই ধাপে বিলিং-এর পুরো সংযোগ বাদ দেওয়া হয়নি: প্রতিটা কোম্পানির জন্য চালু/বন্ধের সুইচ আছে, কারণ এটা SaaS।
+- `engine/customers.py: live_context(t, api, customer)` এখন বট, কাস্টমার পেজের "লাইভ অবস্থা", টেকনিশিয়ানের WhatsApp আর ভয়েস বট সবাই ব্যবহার করে। পুরনো `add_online` বাদ দেওয়া হয়েছে।
+  - ক্রম: (১) MikroTik-এ এখনকার অবস্থা দেখা (`online_now`)। (২) MAC নেওয়া হয় এই সেশন থেকে, না পেলে `ppp_sessions`-এর শেষ সেশন থেকে। (৩) সেই MAC দিয়ে নিজের OLT-এ ONU খোঁজা (`onu_for_mac`)।
+  - বিলিং-এর `GetCustomerOtherData` (প্রায় ৩.৫ সেকেন্ড লাগে) ডাকা হয় শুধু দুই ক্ষেত্রে: কোনো রাউটার উত্তর না দিলে, অথবা MAC কখনো দেখা না গেলে। শর্ত: "বিলিং থেকে লাইভ স্ট্যাটাস / MAC" সুইচ চালু থাকতে হবে।
+  - বিলিং-এর `GetOLTInfo` ডাকা হয় শুধু তখন, যখন MAC আমাদের কোনো OLT-এ মেলে না। শর্ত: "বিলিং থেকে ONU পাওয়ার" সুইচ চালু থাকতে হবে। ভয়েস বট এটা কখনো ডাকে না।
+  - PPPoE-এর অবস্থা, uptime, IP আর ডাউনলোড আসে MikroTik থেকে। মাসিক বিল আর পেমেন্ট স্ট্যাটাস আসে কাস্টমার সারি থেকে, শেষ পেমেন্ট আসে পেমেন্টের তালিকা থেকে।
+  - `context["sources"]` = {connection: mikrotik|billing|None, onu: own OLT|billing|None}। এটা কাস্টমার পেজে "তথ্যের উৎস" নামে দেখায়। `context["mac"]` শুধু স্টাফ দেখে; customer_view আর safe_view এটা সরিয়ে দেয়।
+- নতুন টিকিট ফর্ম (`ticket-info`)-এও একই নিয়ম: own_line/own_onu, তারপর সুইচ চালু থাকলে বিলিং।
+- সুইচ দুটো: `billing_connections.live_from_billing` আর `onu_from_billing` (ডিফল্ট চালু), সেটিংস → বিলিং সংযোগ পেজে। Engine এগুলো Tenant-এ পড়ে, ৬০ সেকেন্ডের মধ্যে কার্যকর হয়।
+- `billing_fallbacks` (company, day, kind live|onu, reason no_router|no_mac|not_on_own_olt, count): প্রতিবার বিলিং লাগলে গোনা হয়। একই পেজে গত ৭ দিনের হিসাব দেখায়, যাতে বোঝা যায় কখন সুইচ বন্ধ করা যায়। Century Link: এক সপ্তাহ চালু রেখে দেখা, তারপর বন্ধ।

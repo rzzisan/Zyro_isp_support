@@ -8,8 +8,8 @@ import logging
 import re
 
 from engine import db
-from engine.ispdigital import (ISPDigital, find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile,
-                               number_text, without_urls)
+from engine.ispdigital import (ISPDigital, diagnose, find_customer_by_text, find_customer_by_whatsapp,
+                               normalize_bd_mobile, number_text, without_urls)
 from engine.tenant import Tenant
 
 log = logging.getLogger("zyro-engine")
@@ -126,23 +126,84 @@ def search(t: Tenant, q: str, limit: int = 10) -> list[dict]:
     return [r["extra"] for r in rows if r["extra"]]
 
 
-def add_online(t: Tenant, context: dict, row: dict) -> dict:
-    """Put the MikroTik's answer (online right now, uptime, IP, MAC) into the bot's live data."""
+def note_fallback(t: Tenant, kind: str, reason: str) -> None:
+    """Count each time billing had to fill in for our own MikroTik/OLT (shown on the বিলিং সংযোগ page), so the
+    owner can see when the billing switches can go off."""
     try:
-        from engine.ppp_sync import online_now
-        context["mikrotik"] = online_now(t.company_id, row.get("UserName") or "", row.get("Server"))
-        mac = (context["mikrotik"] or {}).get("caller_id")
-        if not mac:  # offline now: the router MAC from its last session
-            last = db.one("SELECT caller_id FROM ppp_sessions WHERE company_id = %s AND username = %s",
-                          (t.company_id, row.get("UserName") or ""))
-            mac = last and last["caller_id"]
-        if mac:
-            from engine.olt_sync import onu_for_mac
-            own = onu_for_mac(t.company_id, mac)
-            if own:  # our OLT's answer (right now) replaces the billing software's copy
-                context["onu"] = {"olt": own["OLTName"], "port": own["OLTPort"], "status": own["OnuStatus"],
-                                  "optical_power_dbm": own["OpticalPower"], "distance_m": own["Distance"],
-                                  "last_change": own["LastChange"], "source": "own OLT"}
+        db.execute("""INSERT INTO billing_fallbacks (company_id, day, kind, reason, count)
+                      VALUES (%s, (now() AT TIME ZONE 'Asia/Dhaka')::date, %s, %s, 1)
+                      ON CONFLICT (company_id, day, kind, reason) DO UPDATE SET count = billing_fallbacks.count + 1""",
+                   (t.company_id, kind, reason))
+    except Exception:
+        log.exception("could not count billing fallback")
+
+
+def own_line(t: Tenant, username: str, server: str | None) -> tuple[dict | None, str | None]:
+    """(MikroTik's answer now or None, the router MAC: this session's, else the last one we saw)."""
+    from engine.ppp_sync import online_now
+    try:
+        mk = online_now(t.company_id, username or "", server)
     except Exception:
         log.exception("mikrotik check failed")
+        mk = None
+    mac = (mk or {}).get("caller_id")
+    if not mac and username:
+        last = db.one("SELECT caller_id FROM ppp_sessions WHERE company_id = %s AND username = %s", (t.company_id, username))
+        mac = last and last["caller_id"]
+    return mk, mac or None
+
+
+def own_onu(t: Tenant, mac: str | None) -> dict | None:
+    """Our own OLT's ONU behind that router MAC, read now (billing-like shape)."""
+    if not mac:
+        return None
+    from engine.olt_sync import onu_for_mac
+    try:
+        return onu_for_mac(t.company_id, mac)
+    except Exception:
+        log.exception("own OLT read failed")
+        return None
+
+
+def _gb(n) -> str | None:
+    return None if n is None else f"{n / 1024 ** 3:.2f} GB"
+
+
+def live_context(t: Tenant, api: ISPDigital, customer: dict, billing_onu: bool = True) -> dict:
+    """Everything the bot / customer page / technician needs about one line, from our own MikroTik and OLT first.
+    The billing software is asked only for what we don't have, and only while the company's switches allow it
+    (বিলিং সংযোগ page): its live page when no router answered or we never saw the MAC, its ONU page when the
+    MAC isn't on our OLTs. billing_onu=False: never billing's ONU page (slow, 15+ s; the voice bot)."""
+    mk, mac = own_line(t, customer.get("UserName") or "", customer.get("Server"))
+    live = None
+    if (mk is None or not mac) and t.billing_live:
+        note_fallback(t, "live", "no_router" if mk is None else "no_mac")
+        try:
+            live = api.live_status(customer["CustomerHeaderId"])
+        except Exception as e:
+            log.warning("billing live status failed for %s: %s", customer.get("CustomerHeaderId"), e)
+        mac = mac or (live or {}).get("calledid") or None
+    onu = own_onu(t, mac)
+    billing_onu_row = None
+    if not onu and mac and billing_onu and t.billing_onu:
+        note_fallback(t, "onu", "not_on_own_olt")
+        try:
+            billing_onu_row = api.onu_info(mac)
+        except Exception as e:
+            log.warning("billing ONU info failed: %s", e)
+    context = diagnose(api, customer, live=live or {}, onu=billing_onu_row, ask_billing=False)
+    if not live and mk:  # the connection from our router instead of billing's page
+        context["pppoe"] = {"connectivity": "Blocked" if mk.get("blocked") else ("Connected" if mk.get("online") else "Disconnected"),
+                            "uptime": mk.get("uptime"), "last_logout": None, "ip": mk.get("address"),
+                            "downloaded": _gb(mk.get("download_bytes"))}
+    context["mikrotik"] = mk
+    if onu:  # our OLT's answer (right now)
+        context["onu"] = {"olt": onu["OLTName"], "port": onu["OLTPort"], "status": onu["OnuStatus"],
+                          "optical_power_dbm": onu["OpticalPower"], "distance_m": onu["Distance"],
+                          "last_change": onu["LastChange"], "source": "own OLT"}
+    elif context.get("onu"):
+        context["onu"]["source"] = "billing"
+    context["sources"] = {"connection": "mikrotik" if mk else ("billing" if live else None),
+                          "onu": "own OLT" if onu else ("billing" if billing_onu_row else None)}
+    context["mac"] = mac  # staff only: customer_view / safe_view drop it
     return context

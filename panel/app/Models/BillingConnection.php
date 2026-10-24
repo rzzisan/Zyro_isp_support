@@ -8,13 +8,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BillingConnection extends Model
 {
     protected $fillable = ['company_id', 'provider', 'base_url', 'username', 'password',
-        'last_checked_at', 'last_check_ok', 'last_check_message'];
+        'last_checked_at', 'last_check_ok', 'last_check_message', 'live_from_billing', 'onu_from_billing'];
 
     protected $hidden = ['password'];
 
     protected function casts(): array
     {
-        return ['password' => 'encrypted', 'last_checked_at' => 'datetime', 'last_check_ok' => 'boolean'];
+        return ['password' => 'encrypted', 'last_checked_at' => 'datetime', 'last_check_ok' => 'boolean',
+            'live_from_billing' => 'boolean', 'onu_from_billing' => 'boolean'];
     }
 
     public function company(): BelongsTo

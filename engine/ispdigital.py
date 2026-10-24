@@ -531,20 +531,24 @@ def find_customer_by_text(api: ISPDigital, text: str, allow_bare_id: bool = True
     return None
 
 
-def diagnose(api: ISPDigital, customer: dict) -> dict:
-    """Collect everything the bot needs, in the order: bill -> ONU -> PPPoE."""
+def diagnose(api: ISPDigital, customer: dict, live: dict | None = None, onu: dict | None = None,
+             ask_billing: bool = True) -> dict:
+    """Collect everything the bot needs, in the order: bill -> ONU -> PPPoE.
+    ask_billing=False: billing's live page and ONU page are not asked; live/onu are whatever the caller already has
+    (customers.live_context fills them from our own MikroTik/OLT first)."""
     hid = customer["CustomerHeaderId"]
     # the billing software is sometimes slow (timeouts): answer with what we have instead of not answering
-    try:
-        live = api.live_status(hid)
-    except Exception as e:
-        log.warning("billing live status failed for %s: %s", hid, e)
-        live = {}
-    try:
-        onu = api.onu_info(live.get("calledid"))
-    except Exception as e:
-        log.warning("billing ONU info failed for %s: %s", hid, e)
-        onu = None
+    if live is None and ask_billing:
+        try:
+            live = api.live_status(hid)
+        except Exception as e:
+            log.warning("billing live status failed for %s: %s", hid, e)
+    live = live or {}
+    if onu is None and ask_billing:
+        try:
+            onu = api.onu_info(live.get("calledid"))
+        except Exception as e:
+            log.warning("billing ONU info failed for %s: %s", hid, e)
     try:
         payments = [{
             "date": p.get("PaymentDate"), "month": p.get("BillMonth"), "paid": p.get("PaidAmount"),
@@ -564,13 +568,13 @@ def diagnose(api: ISPDigital, customer: dict) -> dict:
             "disabled": customer.get("Disabled"),
             "bill_day": customer.get("BillingLastDate"),
         },
-        "bill": {
-            "monthly": live.get("monthlyBill"),
+        "bill": {  # without billing's live page: the same values from the customer row and the payments
+            "monthly": live.get("monthlyBill") or customer.get("MonthlyBill"),
             "payable": customer.get("PayabaleBill"),
             "paid": customer.get("PaidAmount"),
             "due": customer.get("BalanceDue"),
-            "payment_status": live.get("paymentStatus"),
-            "last_paid_amount": live.get("lastPaidAmount"),
+            "payment_status": live.get("paymentStatus") or customer.get("PaymentStatus"),
+            "last_paid_amount": live.get("lastPaidAmount") or (payments[0].get("paid") if payments else None),
         },
         "payments": payments,
         "pppoe": {
