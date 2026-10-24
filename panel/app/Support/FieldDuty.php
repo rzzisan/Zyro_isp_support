@@ -135,6 +135,6 @@ class FieldDuty
 
         return ['consent' => $consent, 'on_duty' => $m->on_duty_since !== null, 'on_duty_since' => $m->on_duty_since?->toIso8601String(),
             'job_running' => $running, 'track' => $consent && (($in && ($m->on_duty_since !== null || $waiting)) || $running),
-            'interval' => $running || ($in && $waiting) ? 60 : 300];
+            'interval' => $running || ($in && $waiting) ? 60 : 120];
     }
 }

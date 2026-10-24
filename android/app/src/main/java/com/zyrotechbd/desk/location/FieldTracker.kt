@@ -23,6 +23,7 @@ import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.data.network.LocationBatch
 import com.zyrotechbd.desk.data.network.LocationPoint
+import com.zyrotechbd.desk.data.network.LocationState
 import com.zyrotechbd.desk.data.network.StartRequest
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -38,15 +39,17 @@ import kotlin.coroutines.resume
 data class Fix(val lat: Double, val lng: Double, val accuracy: Float?, val mock: Boolean)
 
 /**
- * A field technician's location, as the privacy policy accepted at sign-in says: every 15 minutes (WorkManager) the
- * phone asks the server whether to send (duty hours and not yet at the office, on duty, or a job running; FieldDuty
- * on the server) and sends a point when so. Points wait on the phone while there is no internet. Starting and finishing
- * work send the place too.
+ * A field technician's location, as the privacy policy accepted at sign-in says. While the server says to send (duty
+ * hours and not yet at the office, on duty, or a job running; FieldDuty on the server) [LocationService] runs with a
+ * quiet "ডিউটি চলছে" notification and sends a point every 1-2 minutes; Android allows no regular location for a closed
+ * app without one. A 15-minute WorkManager check starts it again when the phone stopped it, and sends a point itself when
+ * it can't. Points wait on the phone while there is no internet. Starting and finishing work send the place too.
  */
 object FieldTracker {
     private const val PREFS = "field_tracker"
     private const val WORK = "field-location"
     private val lock = Mutex()
+    private val checking = Mutex()
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -73,10 +76,23 @@ object FieldTracker {
     }
 
     fun stop(context: Context) {
+        LocationService.stop(context)
         val wm = WorkManager.getInstance(context.applicationContext)
         wm.cancelUniqueWork(WORK)
         wm.cancelUniqueWork("$WORK-now")
         prefs(context).edit().clear().apply()
+    }
+
+    /** Once per install: ask Android to leave the app out of battery saving, which otherwise stops the duty location. */
+    @SuppressLint("BatteryLife")
+    fun askBatteryOnce(context: Context) {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager ?: return
+        if (pm.isIgnoringBatteryOptimizations(context.packageName) || context.getSharedPreferences("field_once", Context.MODE_PRIVATE).getBoolean("asked_battery", false)) return
+        context.getSharedPreferences("field_once", Context.MODE_PRIVATE).edit().putBoolean("asked_battery", true).apply()
+        runCatching {
+            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                android.net.Uri.parse("package:" + context.packageName)))
+        }
     }
 
     fun isMock(l: Location): Boolean =
@@ -110,17 +126,17 @@ object FieldTracker {
 
     /** A last-known fix from the last [maxAgeMs], without waiting for the GPS. */
     @SuppressLint("MissingPermission")
-    fun recent(context: Context, maxAgeMs: Long = 2 * 60_000): Location? {
+    fun recent(context: Context, maxAgeMs: Long = 60_000, maxAccuracy: Float = 50f): Location? {
         if (!hasPermission(context)) return null
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
         return listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
             .mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
-            .filter { System.currentTimeMillis() - it.time < maxAgeMs }
-            .minByOrNull { if (it.hasAccuracy()) it.accuracy else Float.MAX_VALUE }
+            .filter { System.currentTimeMillis() - it.time < maxAgeMs && it.hasAccuracy() && it.accuracy <= maxAccuracy }
+            .minByOrNull { it.accuracy }
     }
 
     /**
-     * The place for start / finish: a fix from the last 2 minutes right away (the job screen asks for one when it
+     * The place for start / finish: a good fix (50 m) from the last minute right away (the job screen asks for one when it
      * opens), else at most 3 s for a fresh one, so the buttons don't wait on the GPS.
      */
     suspend fun fix(context: Context): Fix? =
@@ -140,30 +156,60 @@ object FieldTracker {
         prefs(context).edit().putString("points", adapter.toJson(points.takeLast(2000))).apply()
     }
 
-    /** One check: ask whether to send, and send a point (with any that waited) when so; offline, the last answer counts. */
-    suspend fun check(context: Context) {
-        val company = prefs(context).getString("company", null) ?: return
-        if (SessionStore.token() == null) return stop(context)
-        val track = try {
-            ApiClient.service.fieldLocation(company).track.also { prefs(context).edit().putBoolean("track", it).apply() }
+    fun company(context: Context): String? = prefs(context).getString("company", null)
+
+    /** Seconds between points, as the server last said. */
+    fun interval(context: Context): Int = prefs(context).getInt("interval", 300)
+
+    fun point(context: Context, l: Location) = LocationPoint(l.latitude, l.longitude, if (l.hasAccuracy()) l.accuracy else null,
+        isMock(l), battery(context), Instant.ofEpochMilli(l.time).toString())
+
+    /** Keep a point until it is sent. */
+    suspend fun keep(context: Context, p: LocationPoint) = lock.withLock { save(context, pending(context) + p) }
+
+    /**
+     * Send what waits (or just ask, when nothing does); the answer says whether to keep sending and how often.
+     * Returns that answer, or null when the server could not be reached (the last answer stays).
+     */
+    suspend fun flush(context: Context): LocationState? {
+        val company = company(context) ?: return null
+        if (SessionStore.token() == null) { stop(context); return null }
+        val batch = lock.withLock { pending(context) }.take(500)
+        return try {
+            val st = if (batch.isEmpty()) ApiClient.service.fieldLocation(company) else ApiClient.service.fieldLocations(company, LocationBatch(batch))
+            if (batch.isNotEmpty()) lock.withLock { save(context, pending(context).drop(batch.size)) }
+            prefs(context).edit().putBoolean("track", st.track).putInt("interval", st.interval).apply()
+            st
         } catch (e: HttpException) {
-            if (e.code() == 403) stop(context)
-            return
+            when (e.code()) {
+                401, 403 -> stop(context)
+                422 -> lock.withLock { save(context, emptyList()) }   // policy not accepted: these cannot go
+            }
+            null
         } catch (_: Exception) {
-            prefs(context).getBoolean("track", false)
+            null   // no internet: the points wait
         }
-        if (!track) return
-        val l = location(context, 20_000) ?: return
-        val p = LocationPoint(l.latitude, l.longitude, if (l.hasAccuracy()) l.accuracy else null, isMock(l), battery(context),
-            Instant.ofEpochMilli(l.time).toString())
-        val batch = lock.withLock { (pending(context) + p).also { save(context, it) } }.take(500)
+    }
+
+    /**
+     * One check (WorkManager, app start): ask the server; while it says to send, keep [LocationService] running, and when
+     * the phone would not let it start, send one point from here. Runs one at a time, at most once a minute.
+     */
+    suspend fun check(context: Context) {
+        if (company(context) == null) return
+        if (!checking.tryLock()) return
         try {
-            ApiClient.service.fieldLocations(company, LocationBatch(batch))
-            lock.withLock { save(context, pending(context).drop(batch.size)) }
-        } catch (e: HttpException) {
-            if (e.code() == 422) lock.withLock { save(context, emptyList()) }   // policy not accepted: these cannot go
-        } catch (_: Exception) {
-            // no internet: the points wait for the next check
+            val now = System.currentTimeMillis()
+            if (now - prefs(context).getLong("checked", 0) < 50_000) return
+            prefs(context).edit().putLong("checked", now).apply()
+            val track = flush(context)?.track ?: prefs(context).getBoolean("track", false)
+            if (!track) return LocationService.stop(context)
+            if (LocationService.running || LocationService.start(context)) return
+            val l = location(context, 20_000) ?: return
+            keep(context, point(context, l))
+            flush(context)
+        } finally {
+            checking.unlock()
         }
     }
 }

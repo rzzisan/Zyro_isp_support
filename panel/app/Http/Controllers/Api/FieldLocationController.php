@@ -54,11 +54,20 @@ class FieldLocationController extends Controller
         $job = FieldJob::where('company_id', $company->id)->where('status', 'running')
             ->whereIn('ticket_id', FieldWork::tickets($request->user(), $company)->select('billing_tickets.id'))->value('id');
         $rows = [];
+        // a point sent twice (a retry after a lost answer, two checks at once) is kept once
+        $times = collect($data['points'])->map(fn ($p) => Carbon::parse($p['at'])->utc());
+        $seen = FieldLocation::where('company_id', $company->id)->where('user_id', $request->user()->id)
+            ->whereBetween('recorded_at', [$times->min(), $times->max()])->pluck('recorded_at')
+            ->map(fn ($t) => $t->getTimestamp())->flip();
         foreach ($data['points'] as $p) {
             $at = Carbon::parse($p['at'])->utc();
             if ($at->gt(now()->addMinutes(5)) || $at->lt(now()->subDays(3))) {
                 continue;   // a wrong phone clock
             }
+            if (isset($seen[$at->getTimestamp()])) {
+                continue;
+            }
+            $seen[$at->getTimestamp()] = true;
             $rows[] = ['company_id' => $company->id, 'user_id' => $request->user()->id, 'field_job_id' => $job,
                 'lat' => $p['lat'], 'lng' => $p['lng'], 'accuracy' => isset($p['accuracy']) ? (int) round($p['accuracy']) : null,
                 'mock' => (bool) ($p['mock'] ?? false), 'battery' => $p['battery'] ?? null, 'recorded_at' => $at, 'created_at' => now()];

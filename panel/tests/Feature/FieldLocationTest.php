@@ -103,7 +103,9 @@ class FieldLocationTest extends TestCase
         $this->at('10:05');   // waiting to reach the office
         $this->api($this->tech)->getJson($this->url('field/location'))->assertJsonPath('track', true)->assertJsonPath('on_duty', false);
         $this->send(23.7600, 90.3900)->assertJsonPath('on_duty', false);                    // 1 km away
+        $this->travel(1)->minutes();
         $this->send(23.7500, 90.3900, ['mock' => true])->assertJsonPath('on_duty', false);   // fake GPS
+        $this->travel(1)->minutes();
         $this->send(23.75015, 90.3900)->assertJsonPath('on_duty', true)->assertJsonPath('track', true);   // ~17 m
 
         $this->at('17:01');
@@ -137,6 +139,15 @@ class FieldLocationTest extends TestCase
         $this->travel(1)->days();
         $this->api($this->tech)->getJson($this->url('my-jobs'))->assertOk();
         $this->assertSame(2, \App\Support\FieldDuty::remaining($this->tech, $this->company));
+    }
+
+    public function test_a_point_sent_twice_is_kept_once(): void
+    {
+        Membership::where('user_id', $this->tech->id)->update(['location_consent_at' => now()]);
+        $p = ['lat' => 23.75, 'lng' => 90.39, 'at' => now()->toIso8601String()];
+        $this->api($this->tech)->postJson($this->url('field/locations'), ['points' => [$p, $p]])->assertOk()->assertJsonPath('saved', 1);
+        $this->api($this->tech)->postJson($this->url('field/locations'), ['points' => [$p]])->assertOk()->assertJsonPath('saved', 0);
+        $this->assertSame(1, FieldLocation::count());
     }
 
     public function test_old_points_are_deleted(): void
