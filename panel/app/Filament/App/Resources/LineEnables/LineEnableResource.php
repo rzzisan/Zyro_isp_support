@@ -16,7 +16,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
-/** Log: which technician asked the bot to turn on which customer's line, and the result. Read-only. */
+/** Log: who (technician, Desk member or the customer) asked to turn which line on/off, and the result. Read-only. */
 class LineEnableResource extends Resource
 {
     use \App\Filament\App\Concerns\QuickAccessible;
@@ -65,7 +65,7 @@ class LineEnableResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('created_at')->label(__('সময়'))->dateTime('d M Y, g:i A', 'Asia/Dhaka')->sortable(),
-                TextColumn::make('technician_name')->label(__('টেকনিশিয়ান'))
+                TextColumn::make('technician_name')->label(__('কে চাইলেন'))
                     ->description(fn (LineEnable $r) => $r->technician_number && str_starts_with($r->technician_number, '880') ? '0'.substr($r->technician_number, 3) : $r->technician_number)
                     ->searchable(),
                 TextColumn::make('customer_name')->label(__('কাস্টমার'))
@@ -77,11 +77,11 @@ class LineEnableResource extends Resource
                 TextColumn::make('due')->label(__('তখন বকেয়া'))->placeholder('—')->suffix(__(' টাকা')),
                 TextColumn::make('result')->label(__('ফল'))->badge()
                     ->formatStateUsing(fn (string $state) => __(LineEnable::RESULTS[$state] ?? $state))
-                    ->color(fn (string $state) => ['enabled' => 'success', 'disabled' => 'success', 'failed' => 'danger', 'not_allowed' => 'danger', 'dry_run' => 'warning'][$state] ?? 'gray'),
-                TextColumn::make('request')->label(__('টেকনিশিয়ানের মেসেজ'))->limit(60)->wrap()->toggleable(),
+                    ->color(fn (string $state) => ['enabled' => 'success', 'disabled' => 'success', 'failed' => 'danger', 'not_allowed' => 'danger', 'dry_run' => 'warning', 'used_this_month' => 'warning', 'due_too_high' => 'warning', 'not_bill' => 'warning'][$state] ?? 'gray'),
+                TextColumn::make('request')->label(__('অনুরোধের মেসেজ'))->limit(60)->wrap()->toggleable(),
             ])
             ->filters([
-                SelectFilter::make('technician_name')->label(__('টেকনিশিয়ান'))
+                SelectFilter::make('technician_name')->label(__('কে চাইলেন'))
                     ->options(fn () => LineEnable::where('company_id', $company())->distinct()->orderBy('technician_name')
                         ->pluck('technician_name', 'technician_name')->all()),
                 SelectFilter::make('action')->label(__('অনুরোধ'))->options(array_map('__', LineEnable::ACTIONS)),

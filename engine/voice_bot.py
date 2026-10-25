@@ -77,6 +77,7 @@ lock = __import__("threading").Lock()   # who takes a ringing WhatsApp call: sta
 FILLERS = {
     "lookup_customer": "একটু অপেক্ষা করুন, আমি আপনার লাইনটা চেক করছি।",
     "create_complaint": "একটু অপেক্ষা করুন, আপনার অভিযোগটা লিখে নিচ্ছি।",
+    "reconnect_line": "একটু অপেক্ষা করুন, আপনার লাইনটা দেখছি।",
 }
 fillers: dict[str, bytes] = {}   # tool name -> 8 kHz PCM
 calls: dict[str, dict] = {}   # AudioSocket UUID -> {company_id, caller, settings, prep (future)}
@@ -153,7 +154,7 @@ def numbers_in(text: str, least: int = 3) -> list[str]:
     return [x for x in re.findall(r"\d+", t) if len(x) >= least]
 
 
-SPOKEN_TOOL = re.compile(r"\s*\b(end[_ ]?call|lookup[_ ]?customer|create[_ ]?complaint|request[_ ]?callback)\b\.?", re.I)
+SPOKEN_TOOL = re.compile(r"\s*\b(end[_ ]?call|lookup[_ ]?customer|create[_ ]?complaint|request[_ ]?callback|reconnect[_ ]?line)\b\.?", re.I)
 STAFF_RULES = (
     "তুমি {company}-এর অফিস সাপোর্ট ডেস্ক, ফোনে কথা বলছ কোম্পানির স্টাফ/টেকনিশিয়ান {tech}-এর সাথে (তিনি কাস্টমার নন)। "
     "WhatsApp-এ স্টাফরা যা পান, ফোনেও তাই দেবে:\n"
@@ -166,6 +167,12 @@ STAFF_RULES = (
     "switch_line। স্পষ্ট করে না বললে এগুলো ডাকবে না। ফল এলে তবেই জানাবে, আগে নয়।\n"
     "- কাজ শেষ হলে \"ঠিক আছে ভাই\" বলে end_call।\n"
     "- টাকার অঙ্ক, ID, নম্বর মুখে বলার মতো করে স্পষ্ট বলো।"
+)
+# added when the company lets customers have a bill-disabled line turned on once a month (engine/self_reconnect.py)
+RECONNECT_RULES = (
+    "\n- কাস্টমার বিলের কারণে বন্ধ লাইনটা এখন চালু করে দিতে বললে reconnect_line ডাকো (সংযোগটা পাওয়া গেলে)। ফল আসার "
+    "আগে \"চালু করে দিচ্ছি\" বলবে না। ফলের say লেখাটা নিজের ভাষায় না বানিয়ে ঠিক সেই কথাটাই বলবে: চালু হলে সাথে বলবে যে এই "
+    "সুবিধা মাসে একবারই, আর না হলে কেন হবে না। কাস্টমার নিজে না চাইলে এই সুবিধার কথা বলবে না, reconnect_line এক কলে একবারই।"
 )
 FLAGS = {"off_topic", "wants_person", "unsolved", "time_up"}
 CATEGORIES = ["Speed Slow", "Line Off", "Line Not Stable", "অনু লাল বাতি", "অনু বাতি জলে না(ONU Power OFF)", "অনু চার্জার নষ্ট",
@@ -188,10 +195,15 @@ TOOLS = [{"functionDeclarations": [
          "reason": {"type": "STRING", "description": "short reason in Bangla"},
          "flag": {"type": "STRING", "enum": sorted(FLAGS), "description": "why the bot stops here"}},
          "required": ["reason", "flag"]}},
+    {"name": "reconnect_line", "description": "The customer asks to have their bill-disabled line turned on now: checks the "
+     "company's rule (due at most one month, once a month) and turns it on if allowed. Say the result's `say` text.",
+     "parameters": {"type": "OBJECT", "properties": {"customer_id": {"type": "STRING", "description": "the line's customer ID"}},
+                    "required": ["customer_id"]}},
     {"name": "end_call", "description": "Hang up after saying goodbye, when the conversation is over."},
 ]}]
 # staff (the panel's technicians, by their number) also get what the WhatsApp staff desk does
-STAFF_TOOLS = [{"functionDeclarations": [f for f in TOOLS[0]["functionDeclarations"] if f["name"] != "request_callback"] + [
+STAFF_TOOLS = [{"functionDeclarations": [f for f in TOOLS[0]["functionDeclarations"]
+                                                if f["name"] not in ("request_callback", "reconnect_line")] + [
     {"name": "solve_ticket", "description": "Solve the customer's open tickets (only while the line is online).",
      "parameters": {"type": "OBJECT", "properties": {
          "customer_id": {"type": "STRING"}, "remark": {"type": "STRING", "description": "what was done, short Bangla"}},
@@ -389,14 +401,20 @@ def line_context(t, api, row: dict, staff: bool = False) -> dict:
     from engine import customers
     from engine.ticket_actions import open_tickets
     # never billing's ONU page here: it often takes 15+ s and a caller waits on the line meanwhile
-    ctx = customers.live_context(t, api, customers.fresh(api, row), billing_onu=False)
+    row = customers.fresh(api, row)
+    ctx = customers.live_context(t, api, row, billing_onu=False)
     ctx["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
                            for x in open_tickets(t, row.get("CustomerId"))]
     if staff:
         ctx = json.loads(json.dumps(ctx, ensure_ascii=False, default=str))
         ctx["customer"]["zone"] = ctx["customer"].get("zone") or row.get("ZoneName")
         return ctx
-    return safe_view(ctx)
+    from engine import self_reconnect
+    ctx = safe_view(ctx)
+    state = self_reconnect.status(t, row)
+    if state:
+        ctx["self_reconnect"] = state
+    return ctx
 
 
 def find_line(t, api, query: str) -> dict | None:
@@ -437,6 +455,20 @@ def staff_action(t, tech: dict, name: str, args: dict) -> dict:
     from engine.technician import switch_line
     action = "enable" if args.get("action") == "enable" else "disable"
     return {"result": switch_line(t, tech, row, f"[ফোন কল] {action} {args.get('customer_id')}", action)}
+
+
+def reconnect_line(t, caller: str, customer_id: str, channel: str) -> dict:
+    """Tool: the customer's own request to turn their bill-disabled line on (same rule and log as the WhatsApp chat)."""
+    from engine import self_reconnect
+    from engine import tenant as tenants
+    if not t:
+        return {"error": "billing not connected"}
+    row = find_line(t, tenants.billing(t), customer_id)
+    if not row:
+        return {"ok": False, "note": "এই আইডিতে সংযোগ পাওয়া যায়নি"}
+    res = self_reconnect.reconnect(t, row, "wa_call" if channel == "whatsapp" else "hotline", normalize(caller) or caller,
+                                   f"[{'WhatsApp কল' if channel == 'whatsapp' else 'হটলাইন কল'}] কলার লাইন চালু চেয়েছেন")
+    return {"ok": res["result"] in ("enabled", "dry_run"), "result": res["result"], "say": res["say"]}
 
 
 def create_complaint(t, caller: str, customer_id: str, problem: str, category: str | None = None) -> dict:
@@ -488,6 +520,8 @@ def prepare(company_id: int, caller: str, staff: dict | None = None, channel: st
         return {"prompt": prompt + ("\n\n" + block if block else ""), "voice": voice, "tenant": t, "staff": staff}
     # the call's short rules plus the company's own instructions and FAQ (payment numbers, offers, office)
     prompt = VOICE_BASE.replace("{company}", (t.name if t else "") or company["name"]) + VOICE_RULES
+    if t and t.bot.get("self_reconnect"):
+        prompt += RECONNECT_RULES
     block = agent.knowledge(t) if t else ""
     if block:
         prompt += "\n\n" + block
@@ -997,6 +1031,10 @@ class Call:
                         result = await loop.run_in_executor(pool, create_complaint, t, self.info["caller"],
                                                             args.get("customer_id", ""), args.get("problem", ""),
                                                             args.get("category"))
+                    elif name == "reconnect_line" and not staff:
+                        channel = (calls.get(self.uid) or {}).get("channel") or "hotline"
+                        result = await loop.run_in_executor(pool, reconnect_line, t, self.info["caller"],
+                                                            args.get("customer_id", ""), channel)
                     elif name in ("solve_ticket", "switch_line") and staff:
                         result = await loop.run_in_executor(pool, staff_action, t, staff, name, args)
                         if result.get("ticket_no"):
