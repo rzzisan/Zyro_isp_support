@@ -735,11 +735,11 @@ def billing_call(fn):
 def ticket_options(request: Request, company_id: int):
     """Only when the desk has no copy yet (first use): the support page's lists, saved so the desk keeps them."""
     t = internal_tenant(request, company_id)
-    if t.desk_tickets:  # the Desk's own lists
+    from engine.billing_config import desk_lists, save_support
+    if t.desk_tickets or desk_lists(company_id):  # the Desk's own lists
         from engine.desk_tickets import DeskTickets
         return DeskTickets(t).support_options()
     opts = billing_call(lambda: tenants.billing(t).support_options())
-    from engine.billing_config import save_support
     save_support(company_id, opts)
     return opts
 
@@ -803,6 +803,17 @@ def log_billing_event(t: Tenant, complain_id, kind: str, b: dict, detail: dict |
     log_event(t.company_id, complain_id, kind, uid, member_name(t.company_id, uid), detail)
 
 
+def refuse_desk_made(t: Tenant, api, b: dict) -> None:
+    """Staff or a problem type added in the Desk can't go on a billing ticket: billing doesn't know them."""
+    if not in_billing(api):
+        return
+    from engine.desk_tickets import desk_made
+    if desk_made(t.company_id, "employees", b.get("employees") or []) or \
+            desk_made(t.company_id, "categories", b.get("category_id")):
+        raise HTTPException(status_code=400, detail="Desk-এ যোগ করা কর্মী বা সমস্যার ধরন বিলিংয়ের টিকিটে দেওয়া যায় না; "
+                                                    "নতুন টিকিট Desk-এ খুলুন (সেটিংস → বিলিং সংযোগ)")
+
+
 def refuse_mixed_teams(company_id: int, employees) -> None:
     """One ticket holds staff of one field team only (Desk → ফিল্ড টিম)."""
     from engine.ticket_autoassign import check_team
@@ -818,6 +829,7 @@ async def new_ticket(request: Request, company_id: int, background: BackgroundTa
     refuse_mixed_teams(company_id, b.get("employees"))
     from engine.desk_tickets import for_new
     api = billing_call(lambda: for_new(t, int(b.get("user_id") or 0)))
+    refuse_desk_made(t, api, b)
 
     def run():
         msg = api.create_ticket(int(b["header_id"]), str(b["category_id"]), int(b.get("priority") or 2),
@@ -854,6 +866,7 @@ async def assign(request: Request, company_id: int, complain_id: int, background
         raise HTTPException(status_code=400, detail="অন্তত একজন কর্মী বাছাই করুন")
     refuse_mixed_teams(company_id, b["employees"])
     api = billing_call(lambda: ticket_backend(t, complain_id, b))
+    refuse_desk_made(t, api, b)
     await run_in_threadpool(billing_call, lambda: api.assign_ticket(complain_id, [int(e) for e in b["employees"]],
                                                                     b.get("dept_id"), bool(b.get("sms_employees"))))
     if in_billing(api):
@@ -877,6 +890,7 @@ async def edit_ticket(request: Request, company_id: int, complain_id: int, backg
         raise HTTPException(status_code=400, detail="সমস্যার ধরন, মোবাইল আর বিবরণ লাগবে")
     refuse_mixed_teams(company_id, b.get("employees"))
     api = billing_call(lambda: ticket_backend(t, complain_id, b))
+    refuse_desk_made(t, api, b)
 
     def run():
         msg = api.update_ticket(complain_id, int(row["customer_header_id"]), str(b["category_id"]),

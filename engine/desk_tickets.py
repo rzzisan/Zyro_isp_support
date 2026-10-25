@@ -32,6 +32,16 @@ def log_event(company_id: int, complain_id, kind: str, user_id: int | None = Non
         log.warning("ticket %s: could not keep the %s event", complain_id, kind, exc_info=True)
 
 
+def desk_made(company_id: int, kind: str, ids) -> list[str]:
+    """Which of these list ids were added in the Desk (billing_options.desk): billing doesn't know them."""
+    ids = [str(i) for i in (ids if isinstance(ids, (list, tuple, set)) else [ids]) if i not in (None, "")]
+    if not ids:
+        return []
+    return [r["option_id"] for r in db.all_rows(
+        """SELECT option_id FROM billing_options WHERE company_id = %s AND kind = %s AND desk AND option_id = ANY(%s)""",
+        (company_id, kind, ids))]
+
+
 def member_name(company_id: int, user_id: int | None) -> str | None:
     if not user_id:
         return None

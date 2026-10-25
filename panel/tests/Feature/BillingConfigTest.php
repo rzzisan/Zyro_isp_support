@@ -79,6 +79,27 @@ class BillingConfigTest extends TestCase
         Http::assertSent(fn ($r) => str_contains($r->url(), "/internal/{$this->company->id}/billing-config/sync?kind=packages"));
     }
 
+    public function test_desk_kept_ticket_lists_are_added_and_edited_here_without_sync(): void
+    {
+        \App\Models\BillingConnection::create(['company_id' => $this->company->id, 'base_url' => 'https://demo.ispdigital.cloud',
+            'username' => 'bot', 'password' => 'secret', 'ticket_lists_in_billing' => false]);
+        $arif = $this->option('employees', '3', 'Arif');
+        $this->as($this->owner);
+
+        Livewire::test(\App\Filament\App\Resources\BillingConfig\Pages\EmployeeList::class)
+            ->assertActionHidden('sync')
+            ->callTableAction('create', data: ['name' => 'Rubel', 'active' => true])->assertHasNoTableActionErrors()
+            ->callTableAction('edit', $arif, ['active' => false])->assertHasNoTableActionErrors();
+        $rubel = BillingOption::where('kind', 'employees')->where('name', 'Rubel')->first();
+        $this->assertSame('900001', $rubel->option_id);
+        $this->assertTrue((bool) $rubel->desk);
+        $this->assertSame(['Arif', false], [$arif->fresh()->name, (bool) $arif->fresh()->active]);
+
+        // other lists still come from billing
+        Livewire::test(ZoneList::class)->assertActionVisible('sync');
+        Livewire::test(\App\Filament\App\Resources\BillingConfig\Pages\TicketPriorityList::class)->assertActionHidden('sync');
+    }
+
     public function test_agents_cannot_open_the_lists(): void
     {
         $agent = User::factory()->create();

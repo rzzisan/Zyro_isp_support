@@ -573,7 +573,7 @@ def diagnose(api: ISPDigital, customer: dict, live: dict | None = None, onu: dic
             "payable": customer.get("PayabaleBill"),
             "paid": customer.get("PaidAmount"),
             "due": customer.get("BalanceDue"),
-            "payment_status": live.get("paymentStatus") or customer.get("PaymentStatus"),
+            "payment_status": live.get("paymentStatus") or customer.get("PaymentStatus") or due_status(customer),
             "last_paid_amount": live.get("lastPaidAmount") or (payments[0].get("paid") if payments else None),
         },
         "payments": payments,
@@ -592,6 +592,15 @@ def diagnose(api: ISPDigital, customer: dict, live: dict | None = None, onu: dic
             "deregister_reason": onu.get("DeregisterReason"),
         },
     }
+
+
+def due_status(customer: dict) -> str | None:
+    """Billing's live page words ("Due (520.00 ৳)" / "Paid") from the customer row's due, when that page isn't asked."""
+    due = customer.get("BalanceDue")
+    if due in (None, ""):
+        return None
+    d = _num(due)
+    return f"Due ({d:.2f} ৳)" if d > 0 else "Paid"
 
 
 def money(v: float) -> str:

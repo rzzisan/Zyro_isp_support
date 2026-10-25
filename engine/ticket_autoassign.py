@@ -198,6 +198,14 @@ def assign(t, api, complain_id, header_id=None, customer: dict | None = None, ca
     p = choose(t.company_id, header_id, customer, category_id, category_name)
     if not p:
         return None
+    from engine.desk_tickets import DeskTickets, desk_made
+    if not isinstance(api, DeskTickets):  # staff added in the Desk don't exist in billing
+        off = set(desk_made(t.company_id, "employees", p["employees"]))
+        if off:
+            keep = [i for i, e in enumerate(p["employees"]) if e not in off]
+            if not keep:
+                return None
+            p = {**p, "employees": [p["employees"][i] for i in keep], "names": [p["names"][i] for i in keep]}
     api.assign_ticket(int(complain_id), [int(e) for e in p["employees"]])
     log.info("ticket %s auto-assigned to %s (%s%s, last ticket %s)", complain_id, p["names"], p["level"],
              " pinned" if p["pinned"] else "", p["from_ticket"])
