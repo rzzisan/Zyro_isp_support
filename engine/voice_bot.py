@@ -1024,8 +1024,7 @@ async def warm_up(uid: str) -> None:
     try:
         prep = await asyncio.wrap_future(info["prep"])
         info["prep_result"] = prep
-        model = (info.get("settings") or {}).get("bot_model") or DEFAULT_MODEL
-        info["warm"] = await open_live(info["company_id"], model, prep)
+        info["warm"] = await open_model(info, prep)
     except Exception as e:
         log.warning("call %s: warm-up failed (%s), the bot connects on answer", uid, e)
         return
@@ -1050,6 +1049,22 @@ async def take_warm(info: dict):
     if w and getattr(w[0], "close_code", None) is None:
         return w
     return None
+
+
+async def open_model(info: dict, prep: dict):
+    """The Live session on the company's chosen model; when that model refuses our setup (e.g. the native-audio models
+    reject languageCode bn-IN), on the default one, so a bad pick in the settings never leaves calls unanswered."""
+    model = (info.get("settings") or {}).get("bot_model") or DEFAULT_MODEL
+    try:
+        ws, key_id = await open_live(info["company_id"], model, prep)
+    except Exception as e:
+        if model == DEFAULT_MODEL:
+            raise
+        log.warning("company %s: model %s did not open (%s), using %s", info["company_id"], model, e, DEFAULT_MODEL)
+        model = DEFAULT_MODEL
+        ws, key_id = await open_live(info["company_id"], model, prep)
+    info["model"] = model
+    return ws, key_id
 
 
 async def open_live(company_id: int, model: str, prep: dict):
@@ -1164,7 +1179,7 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         if ws:
             ws, key_id = ws
         else:
-            ws, key_id = await open_live(info["company_id"], model, prep)
+            ws, key_id = await open_model(info, prep)
         await ws.send(json.dumps({"clientContent": {"turns": [{"role": "user", "parts": [{"text":
             ("(কল ধরা হয়েছে। শুধু বলো \"জি ভাই, বলুন\"।)" if prep.get("staff") else
              "(কল ধরা হয়েছে। প্রথমে কোম্পানির নাম বলে শুভেচ্ছা জানাও, জানাও যে কলটি রেকর্ড করা হচ্ছে, তারপর জিজ্ঞেস করো কীভাবে সাহায্য করতে পারো।)")}]}],

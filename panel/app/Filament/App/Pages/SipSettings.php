@@ -134,13 +134,12 @@ class SipSettings extends CompanySettingsPage
         return $data;
     }
 
-    /** Gemini Live models (bidiGenerateContent) the paid key listed on 2026-10-25; a saved model not in the list stays. */
+    /** Gemini Live models that opened with the bot's setup on the paid key (2026-10-25). Not listed: the 2.5 native-audio
+     * models (reject languageCode bn-IN) and 3.8-live-extended-thinking (needs a thinking level). A model that fails to
+     * open falls back to the default in the engine. A saved model not in the list stays selectable. */
     public const LIVE_MODELS = [
         'gemini-3.1-flash-live-preview' => 'gemini-3.1-flash-live-preview (ডিফল্ট)',
         'gemini-3.8-live' => 'gemini-3.8-live',
-        'gemini-2.5-flash-native-audio-latest' => 'gemini-2.5-flash-native-audio-latest',
-        'gemini-2.5-flash-native-audio-preview-12-2025' => 'gemini-2.5-flash-native-audio-preview-12-2025',
-        'gemini-3.8-live-extended-thinking' => 'gemini-3.8-live-extended-thinking (ধীর)',
     ];
 
     public static function liveModels(?string $current): array
