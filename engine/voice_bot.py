@@ -1117,7 +1117,8 @@ def save_call(call: Call, company_id: int, caller: str, model: str, key_id: int 
         if r.returncode != 0:
             log.error("ffmpeg: %s", r.stderr[:300])
             rel = None
-    db.execute("""update call_logs set status = 'ended', ended_at = coalesce(ended_at, now()), bot_answered = true,
+    # ended_at = now(): the caller ID popup already wrote the end of the ringing on a hotline row (call 232)
+    db.execute("""update call_logs set status = 'ended', ended_at = now(), bot_answered = true,
                     bot_seconds = %s, recording_path = %s, transcript = %s, callback_reason = %s, bot_flag = %s,
                     bot_error = %s, updated_at = now() where id = %s""",
                (int(time.time() - call.started), rel, json.dumps(call.turns, ensure_ascii=False), call.callback,
