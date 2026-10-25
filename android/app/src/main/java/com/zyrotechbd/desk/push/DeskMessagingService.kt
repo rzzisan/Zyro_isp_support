@@ -61,7 +61,7 @@ class DeskMessagingService : FirebaseMessagingService() {
         NotificationManagerCompat.from(this).notify("chat", chatId.toInt(), n)
     }
 
-    /** A WhatsApp call ringing for staff: rings like a phone call, full screen when locked; stops when someone takes it. */
+    /** A WhatsApp or hotline call ringing for staff: rings like a phone call, full screen when locked; stops when someone takes it. */
     private fun incomingCall(d: Map<String, String>) {
         val uid = d["uid"] ?: return
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -70,12 +70,13 @@ class DeskMessagingService : FirebaseMessagingService() {
         val title = d["name"]?.takeIf { it.isNotBlank() } ?: d["caller"].orEmpty()
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         val number = d["caller"].orEmpty()
-        val ring = PendingIntent.getActivity(this, uid.hashCode(), CallActivity.incoming(this, company, uid, title, number, false), flags)
-        val take = PendingIntent.getActivity(this, uid.hashCode() + 1, CallActivity.incoming(this, company, uid, title, number, true), flags)
+        val channel = d["channel"] ?: "whatsapp"
+        val ring = PendingIntent.getActivity(this, uid.hashCode(), CallActivity.incoming(this, company, uid, title, number, false, channel), flags)
+        val take = PendingIntent.getActivity(this, uid.hashCode() + 1, CallActivity.incoming(this, company, uid, title, number, true, channel), flags)
         val n = NotificationCompat.Builder(this, Push.CALL_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_desk)
             .setColor(Primary.toArgb())
-            .setContentTitle("WhatsApp কল: $title")
+            .setContentTitle((if (channel == "hotline") "হটলাইনে কল: " else "WhatsApp কল: ") + title)
             .setContentText("ধরতে চাপ দিন")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)

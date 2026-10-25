@@ -145,9 +145,13 @@ private fun Header(a: CallActivity, line: CallerLine?) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).background(if (a.whatsapp) WhatsAppGreen else Color.White, CircleShape))
+            Box(Modifier.size(8.dp).background(if (a.whatsapp && !a.hotlineIn) WhatsAppGreen else Color.White, CircleShape))
             Spacer(Modifier.width(6.dp))
-            Text(if (a.whatsapp) "WhatsApp কল" else "হটলাইন থেকে কল", color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
+            Text(when {
+                a.hotlineIn -> "হটলাইনে কল"
+                a.whatsapp -> "WhatsApp কল"
+                else -> "হটলাইন থেকে কল"
+            }, color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
         }
         Spacer(Modifier.height(16.dp))
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(104.dp)) {
