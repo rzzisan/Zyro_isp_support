@@ -42,7 +42,7 @@ class AiUsage extends Page
 
     protected string $view = 'filament.app.ai-usage';
 
-    public const PURPOSES = ['customer' => 'কাস্টমার চ্যাট', 'technician' => 'টেকনিশিয়ান ডেস্ক', 'voice' => 'ভয়েস → লেখা', 'voice_reply' => 'ভয়েস উত্তর', 'image' => 'ছবি পড়া'];
+    public const PURPOSES = ['customer' => 'কাস্টমার চ্যাট', 'technician' => 'টেকনিশিয়ান ডেস্ক', 'voice' => 'ভয়েস → লেখা', 'voice_reply' => 'ভয়েস উত্তর', 'image' => 'ছবি পড়া', 'voice_call' => 'ফোন কল (অডিও)', 'voice_call_text' => 'ফোন কল (নির্দেশনা ও তথ্য)'];
 
     /** today | 7 | 30 */
     public string $period = 'today';

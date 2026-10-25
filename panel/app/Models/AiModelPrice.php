@@ -15,6 +15,10 @@ class AiModelPrice extends Model
         'groq|whisper-large-v3' => [30.83, 0], // $0.111 per audio hour
         'gemini|gemini-2.5-flash' => [0.30, 2.50],
         'gemini|gemini-2.5-flash-lite' => [0.10, 0.40],
+        'gemini|gemini-2.5-flash-preview-tts' => [0.50, 10.00],
+        // phone calls (Gemini Live): audio in/out; the prompt and tool results are the "(text)" rows
+        'gemini|gemini-3.1-flash-live-preview' => [3.00, 12.00],
+        'gemini|gemini-3.1-flash-live-preview (text)' => [0.75, 4.50],
         'claude|claude-haiku-5-5' => [0.10, 0.50],
         'claude|claude-sonnet-5-5' => [2.00, 10.00],
         'claude|claude-opus-5-5' => [4.00, 20.00],

@@ -31,6 +31,7 @@ import subprocess
 import time
 import uuid
 import wave
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
@@ -48,6 +49,15 @@ MODE_PORT, AUDIO_PORT = 8997, 9093
 LIVE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
 DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
 MAX_CALL = 600          # seconds
+DEFAULT_MAX_SECONDS = 180
+# caller audio quieter than this (RMS of 16-bit PCM) is not sent once the caller has been quiet for SILENCE_HANG frames:
+# Gemini Live bills every second of audio sent and keeps it in the context it bills again each turn. 0 = send all.
+SILENCE_RMS = int(os.environ.get("VOICE_SILENCE_RMS", "200"))
+SILENCE_HANG = 40       # 800 ms of quiet still go out, so Gemini hears the end of a sentence
+PREROLL = 10            # the 200 ms before speech starts again are sent with it (first syllable)
+# the context Gemini keeps: past this many tokens the oldest turns are dropped down to the target (long calls)
+CONTEXT_TRIGGER = int(os.environ.get("VOICE_CONTEXT_TRIGGER", "16000"))
+CONTEXT_TARGET = int(os.environ.get("VOICE_CONTEXT_TARGET", "8000"))
 REC_SPOOL = os.environ.get("VOICE_REC_SPOOL", "/var/spool/asterisk/zyro-rec")   # MixMonitor WAVs of staff calls
 FRAME = 320             # 20 ms of 8 kHz 16-bit audio
 PJSIP_FILE = os.path.join(STATE_DIR, "pjsip_zyro.conf")
@@ -71,6 +81,26 @@ FILLERS = {
 fillers: dict[str, bytes] = {}   # tool name -> 8 kHz PCM
 calls: dict[str, dict] = {}   # AudioSocket UUID -> {company_id, caller, settings, prep (future)}
 
+# the call's own short base prompt (2026-10-25): the WhatsApp prompt (~15k chars of chat rules, [[TICKET]] markers,
+# examples) was sent with every call and Gemini Live bills the whole context again on every turn
+VOICE_BASE = (
+    "তুমি {company} (একটি ISP)-এর কাস্টমার সাপোর্ট টিমের একজন মানুষ সদস্য। নিজেকে কখনো AI বা বট বলবে না। "
+    "কাস্টমার শুধু যা জানতে চেয়েছেন তার উত্তর দাও, বানিয়ে কিছু বলবে না। পাসওয়ার্ড, IP বা কারো মোবাইল নম্বর বলবে না।\n"
+    "নাম ধরে ডাকা জরুরি না; নাম দেখে নিশ্চিত হলে \"ভাই\" বা \"আপু\", না হলে শুধু \"জি\"। কলার নিজে যা বলেন সেটাই মানবে।\n"
+    "সমস্যা খোঁজার ক্রম: বিল বা লাইন বন্ধ (blocked/disabled) → ONU (অনলাইন/অফলাইন, LOS, Power Off/dying-gasp, অপটিক্যাল "
+    "পাওয়ার) → রাউটার (mikrotik অনলাইন কিনা, uptime)।\n"
+    "- ONU অফলাইন আর Power Off/dying-gasp: অনুর পাওয়ার বা চার্জার দেখতে বলো। LOS বা অপটিক্যাল পাওয়ার কম: তারের সমস্যা, টিকেট খোলো।\n"
+    "- ONU অনলাইন কিন্তু রাউটার অফলাইন: রাউটার একবার বন্ধ করে চালু, অনু থেকে রাউটারের তার ঠিকমতো লাগানো কিনা।\n"
+    "- লাইন চালু, তবু একটা ডিভাইসে চলে না: সেই ডিভাইসেই Wi-Fi forget করে আবার কানেক্ট, ডিভাইস রিস্টার্ট; রাউটার রিস্টার্ট না।\n"
+    "- মোবাইল ডেটা (সিমের নেট) আমাদের সার্ভিস না; সেটা চালু করতে বা তুলনা করতে বলবে না।\n"
+    "- স্লো নেটের অভিযোগ, কাস্টমার রেগে আছেন, টেকনিশিয়ান চান, বা ধাপ করেও হয়নি: আর ধাপ না দিয়ে টিকেট খোলো।\n"
+    "- রাউটারের সেটিং (Wi-Fi নাম/পাসওয়ার্ড) বদলের ধাপ নিজে দেবে না, \"রাউটার কনফিগার\" টিকেট খোলো।\n"
+    "বিল: বকেয়া, মাসের কত তারিখের মধ্যে দিতে হয় (bill_day) আর শেষ পেমেন্ট শুধু কাস্টমার তথ্য থেকে। আজকের তারিখ (today) "
+    "bill_day পার হলে \"এর মধ্যে দিলে চালু থাকবে\" বলবে না। বিল দিয়েছেন কিন্তু লাইন চালু হয়নি বললে payments দেখো: পেমেন্ট "
+    "থাকলে বলো পেয়েছি, কয়েক মিনিট লাগতে পারে; না থাকলে কত টাকা, কোন মাধ্যমে, কোন নম্বর থেকে জেনে Others Support টিকেট। "
+    "পেমেন্টের নিয়ম, অফিস, প্যাকেজ-অফার শুধু কোম্পানির নির্দেশনা বা FAQ থেকে; সেখানে না থাকলে বলো টিমের কাছ থেকে জেনে "
+    "জানানো হবে (request_callback)। ইন্টারনেট, বিল, সংযোগের বাইরের প্রশ্নে সাহায্য করা যায় না বলো।"
+)
 VOICE_RULES = (
     "\n\nএখন তুমি ফোন কলে কথা বলছ, WhatsApp-এ না। নিয়ম:\n"
     "- শুধু বাংলায়, ছোট ছোট বাক্যে, স্বাভাবিক ভদ্র গলায় কথা বলো। একবারে দুই-তিন বাক্যের বেশি না।\n"
@@ -107,10 +137,22 @@ VOICE_RULES = (
     "টিম কাজ করছে; আবার রিস্টার্টের ধাপ শেখাবে না।\n"
     "- লাইনের অবস্থা বাংলায় বলবে (\"বিলের কারণে বন্ধ\", \"চালু আছে\"), \"ডিসএবল্ড\" জাতীয় ইংরেজি শব্দে না।\n"
     "- কলারের কথা অন্য ভাষার মতো শোনালে বা অর্থ বোঝা না গেলে অনুমান করবে না, বলবে \"জি, আরেকবার বলবেন?\"\n"
+    "- কলার কাস্টমার আইডি বা মোবাইল নম্বর বললে অঙ্কগুলো একবার ফিরিয়ে বলে নিশ্চিত হও (\"শূন্য এক তিন এক, ঠিক আছে?\"), "
+    "তারপর lookup_customer।\n"
     "- কথা শেষ হলে বিদায় জানিয়ে end_call ডাকো।"
 )
 # the bot says it will open a ticket / tell the office (then it must have called create_complaint or request_callback)
 PROMISE = re.compile(r"টিকেট|টিকিট|জানাচ্ছি|জানিয়ে দিচ্ছি|জানানো হলো|জানিয়ে রাখছি|অভিযোগটা লিখে|টেকনিশিয়ান")
+FACTS = re.compile(r"টাকা|বকেয়া|বিল|টিকেট|টিকিট|অভিযোগ")
+BN_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+
+def numbers_in(text: str, least: int = 3) -> list[str]:
+    """Digit runs of `least`+ digits (Bangla digits too, "1,234" = 1234)."""
+    t = re.sub(r"(?<=\d)[,\s](?=\d)", "", (text or "").translate(BN_DIGITS))
+    return [x for x in re.findall(r"\d+", t) if len(x) >= least]
+
+
 SPOKEN_TOOL = re.compile(r"\s*\b(end[_ ]?call|lookup[_ ]?customer|create[_ ]?complaint|request[_ ]?callback)\b\.?", re.I)
 STAFF_RULES = (
     "তুমি {company}-এর অফিস সাপোর্ট ডেস্ক, ফোনে কথা বলছ কোম্পানির স্টাফ/টেকনিশিয়ান {tech}-এর সাথে (তিনি কাস্টমার নন)। "
@@ -310,6 +352,21 @@ def tenant_for(company_id: int):
     return tenants.by_phone_number_id(row["phone_number_id"]) if row else None
 
 
+def pruned(v):
+    """The value without empty fields (None, "", [], {}): every token of the caller's data is billed again each turn."""
+    if isinstance(v, dict):
+        v = {k: pruned(x) for k, x in v.items()}
+        return {k: x for k, x in v.items() if x not in (None, "", [], {})}
+    if isinstance(v, list):
+        return [pruned(x) for x in v]
+    return v
+
+
+def brief(v) -> str:
+    return json.dumps(pruned(json.loads(json.dumps(v, ensure_ascii=False, default=str))), ensure_ascii=False,
+                      separators=(",", ":"))
+
+
 def safe_view(context: dict) -> dict:
     """Like the WhatsApp bot's verified view: the caller's own number matched, but never IPs or MACs."""
     ctx = json.loads(json.dumps(context, ensure_ascii=False, default=str))
@@ -425,12 +482,13 @@ def prepare(company_id: int, caller: str, staff: dict | None = None, channel: st
         block = agent.knowledge(t) if t else ""
         prompt = STAFF_RULES.replace("{company}", company["name"]).replace("{tech}", staff["name"])
         return {"prompt": prompt + ("\n\n" + block if block else ""), "voice": voice, "tenant": t, "staff": staff}
-    # the WhatsApp rules without the photo rule (no photos on a call)
-    prompt = (agent.system_prompt(t).replace(agent.IMAGE_RULE, "") if t
-              else f"তুমি {company['name']} (একটি ISP)-এর কাস্টমার সাপোর্ট।") + VOICE_RULES
+    # the call's short rules plus the company's own instructions and FAQ (payment numbers, offers, office)
+    prompt = VOICE_BASE.replace("{company}", (t.name if t else "") or company["name"]) + VOICE_RULES
+    block = agent.knowledge(t) if t else ""
+    if block:
+        prompt += "\n\n" + block
     if channel == "whatsapp":
         prompt = prompt.replace("এখন তুমি ফোন কলে কথা বলছ, WhatsApp-এ না।", "এখন তুমি WhatsApp কলে (ভয়েসে) কথা বলছ, লেখা মেসেজে না।")
-    prompt = prompt.replace(agent.REPLY_RULES, "") if t else prompt   # WhatsApp-only rules
     number = normalize(caller)
     info = ("কলারের সংযোগ: পাওয়া যায়নি (CUSTOMER NOT FOUND)। কলারের নম্বর আমাদের কোনো কাস্টমারের সাথে মেলেনি, তাই "
             "এই কলারের কোনো বকেয়া, প্যাকেজ বা লাইনের অবস্থা তোমার জানা নেই। কাস্টমার আইডি জিজ্ঞেস করে lookup_customer দিয়ে খোঁজো।")
@@ -440,14 +498,14 @@ def prepare(company_id: int, caller: str, staff: dict | None = None, channel: st
             api = tenants.billing(t)
             row = customers.by_whatsapp(t, api, number)
             if row:
-                info = "কলারের নম্বরে মেলা সংযোগের তথ্য (JSON):\n" + json.dumps(line_context(t, api, row), ensure_ascii=False)
+                info = "কলারের নম্বরে মেলা সংযোগের তথ্য (JSON):\n" + brief(line_context(t, api, row))
         except Exception:
             log.exception("company %s: customer lookup for %s failed", company_id, caller)
     others = db.all_rows("select customer_id, name, zone, due, is_left from billing_customers"
                          " where company_id = %s and mobile_normalized = %s order by is_left, header_id desc limit 5",
                          (company_id, number)) if number else []
     if len(others) > 1:
-        info += "\nএই নম্বরে আরও সংযোগ: " + json.dumps(others, ensure_ascii=False, default=str)
+        info += "\nএই নম্বরে আরও সংযোগ: " + brief(others)
     return {"prompt": prompt + "\n\n" + info, "voice": voice, "tenant": t, "staff": None}
 
 
@@ -745,6 +803,9 @@ async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
             try:
                 body = await (loop.run_in_executor(pool, decide_wa, wa, caller) if wa is not None
                               else loop.run_in_executor(pool, decide, ep, caller))
+                if body.startswith("bot:") and body.split(":")[1] in calls:
+                    uid = body.split(":")[1]
+                    calls[uid]["warm_task"] = asyncio.create_task(warm_up(uid))
             except Exception:
                 log.exception("mode")
                 body = "ring" if wa is None else "busy"
@@ -768,10 +829,15 @@ class Call:
         self.hangup_after_drain = False
         self.done = asyncio.Event()
         self.up_state = self.down_state = None
-        self.usage = {"input": 0, "output": 0}
+        self.usage = {"audio_in": 0, "text_in": 0, "audio_out": 0, "text_out": 0, "cached": 0}
         self.started = time.time()
         self.tools_used: set[str] = set()
         self.end_refused = False
+        self.sent_bytes = self.heard_bytes = 0
+        # every number the bot may say: the caller's data, tool results and what the caller said (see check_numbers)
+        self.known: set[str] = set(numbers_in((info.get("prep_result") or {}).get("prompt", "")))
+        self.bot_turn_text = ""
+        self.corrections = 0
 
     def promised_without_tool(self) -> bool:
         """The bot said "টিকেট করছি / জানাচ্ছি" but never called create_complaint or request_callback (review
@@ -779,6 +845,20 @@ class Call:
         if self.info.get("staff") or {"create_complaint", "request_callback"} & self.tools_used:
             return False
         return any(x["who"] == "bot" and PROMISE.search(x["text"]) for x in self.turns)
+
+    def add_usage(self, u: dict) -> None:
+        """Live bills audio and text input at different prices (text = the prompt and tool results), so both are kept."""
+        def split(total, details):
+            text = sum(int(d.get("tokenCount") or 0) for d in details or [] if d.get("modality") == "TEXT")
+            return (max(int(total or 0) - text, 0), text) if details else (int(total or 0), 0)
+        a, t = split(u.get("promptTokenCount"), u.get("promptTokensDetails"))
+        self.usage["audio_in"] += a
+        self.usage["text_in"] += t
+        a, t = split(u.get("responseTokenCount") or u.get("candidatesTokenCount"),
+                     u.get("responseTokensDetails") or u.get("candidatesTokensDetails"))
+        self.usage["audio_out"] += a
+        self.usage["text_out"] += t
+        self.usage["cached"] += int(u.get("cachedContentTokenCount") or 0)
 
     def say(self, who: str, text: str) -> None:
         if not text:
@@ -793,6 +873,7 @@ class Call:
         await self.writer.drain()
 
     async def from_caller(self, ws) -> None:
+        quiet, paused, held = 0, False, deque(maxlen=PREROLL)
         while not self.done.is_set():
             head = await self.reader.readexactly(3)
             n = int.from_bytes(head[1:], "big")
@@ -802,10 +883,44 @@ class Call:
             if head[0] != 0x10:
                 continue
             self.caller_track += payload
+            self.heard_bytes += len(payload)
+            if SILENCE_RMS and audioop.rms(payload, 2) < SILENCE_RMS:
+                quiet += 1
+                if quiet > SILENCE_HANG:
+                    if not paused:   # Gemini's own speech detection is told the caller's audio stopped
+                        paused = True
+                        await ws.send(json.dumps({"realtimeInput": {"audioStreamEnd": True}}))
+                    held.append(payload)
+                    continue
+            else:
+                quiet = 0
+                if paused:
+                    paused = False
+                    payload = b"".join(held) + payload
+                    held.clear()
+            self.sent_bytes += len(payload)
             pcm16, self.up_state = audioop.ratecv(payload, 2, 1, 8000, 16000, self.up_state)
             await ws.send(json.dumps({"realtimeInput": {"audio": {"data": base64.b64encode(pcm16).decode(),
                                                                   "mimeType": "audio/pcm;rate=16000"}}}))
         self.done.set()
+
+    async def check_numbers(self, ws) -> None:
+        """After each bot turn: a number of 3+ digits the bot said that is in none of the caller's data, tool results
+        or the caller's own words was made up (reviews 2026-10-21/24: ticket "1234" before the tool answered, dues
+        for a caller not found). The bot is told at once to take it back; twice per call at most."""
+        said, self.bot_turn_text = self.bot_turn_text, ""
+        if not FACTS.search(said):   # only money and ticket numbers; an ID read back to the caller is fine
+            return
+        bad = [x for x in numbers_in(said) if not any(x in k for k in self.known)]
+        if not bad or self.corrections >= 2:
+            return
+        self.corrections += 1
+        log.warning("call %s: bot said unknown number(s) %s", self.uid, bad)
+        self.say("bot", f" [যাচাই হয়নি: {', '.join(bad)}]")
+        await ws.send(json.dumps({"clientContent": {"turns": [{"role": "user", "parts": [{"text":
+            f"(সিস্টেম: তুমি এইমাত্র {', '.join(bad)} বলেছ, কিন্তু এই অঙ্ক কাস্টমার তথ্যে বা টুলের ফলে নেই। কলারকে এক বাক্যে "
+            "বলো আগের অঙ্কটা ঠিক না, তারপর দরকার হলে lookup_customer বা create_complaint ডেকে শুধু ফল থেকে বলো।)"}]}],
+            "turnComplete": True}}, ensure_ascii=False))
 
     async def to_caller(self) -> None:
         """Every 20 ms one frame to Asterisk (silence when the bot is quiet), the same frame onto the recording."""
@@ -836,7 +951,9 @@ class Call:
                     self.out += pcm8
             if sc.get("interrupted"):
                 self.out.clear()           # the caller started talking: stop at once
-            self.say("caller", (sc.get("inputTranscription") or {}).get("text", ""))
+            heard = (sc.get("inputTranscription") or {}).get("text", "")
+            self.known.update(numbers_in(heard, 1))
+            self.say("caller", heard)
             spoken = (sc.get("outputTranscription") or {}).get("text", "")
             if SPOKEN_TOOL.search(spoken):
                 # it said "end_call" aloud instead of calling the tool (call 106 hung on until the caller hung up)
@@ -844,10 +961,12 @@ class Call:
                     self.hangup_after_drain = True
                 spoken = SPOKEN_TOOL.sub("", spoken)
             self.say("bot", spoken)
+            self.bot_turn_text += spoken
+            if sc.get("turnComplete") or sc.get("interrupted"):
+                await self.check_numbers(ws)
             u = m.get("usageMetadata")
             if u:
-                self.usage["input"] += int(u.get("promptTokenCount") or 0)
-                self.usage["output"] += int(u.get("responseTokenCount") or u.get("candidatesTokenCount") or 0)
+                self.add_usage(u)
             for fc in (m.get("toolCall") or {}).get("functionCalls", []):
                 name, args, result = fc.get("name"), fc.get("args") or {}, {"ok": True}
                 t = (self.info.get("prep_result") or {}).get("tenant")
@@ -883,11 +1002,50 @@ class Call:
                     result = {"error": str(e)[:200]}
                 if name:
                     self.tools_used.add(name)
+                self.known.update(numbers_in(json.dumps(result, ensure_ascii=False, default=str), 1))
                 log.info("call %s tool %s -> %s", self.uid, name, str(result)[:120])
                 await ws.send(json.dumps({"toolResponse": {"functionResponses": [
-                    {"id": fc.get("id"), "name": name, "response": json.loads(json.dumps(result, default=str))}]}},
+                    {"id": fc.get("id"), "name": name, "response": json.loads(brief(result))}]}},
                     ensure_ascii=False))
         self.done.set()
+
+
+async def warm_up(uid: str) -> None:
+    """While the call rings: the prompt is built and the Live session opened, so the bot greets the moment it answers
+    (review 2026-10-24, call 108: 14 s of silence first). The session is closed unused when staff take the call or
+    the caller hangs up; an open session with no turns costs nothing."""
+    info = calls.get(uid)
+    if not info:
+        return
+    try:
+        prep = await asyncio.wrap_future(info["prep"])
+        info["prep_result"] = prep
+        model = (info.get("settings") or {}).get("bot_model") or DEFAULT_MODEL
+        info["warm"] = await open_live(info["company_id"], model, prep)
+    except Exception as e:
+        log.warning("call %s: warm-up failed (%s), the bot connects on answer", uid, e)
+        return
+    for _ in range(120):   # the bot answers after at most 45 s of ringing
+        await asyncio.sleep(1)
+        if uid not in calls or info.get("state") in ("taken", "missed") or info.get("warm") is None:
+            break
+    w = info.pop("warm", None)
+    if w:
+        try:
+            await w[0].close()
+        except Exception:
+            pass
+
+
+async def take_warm(info: dict):
+    """The session warm_up opened for this call, when it is still open (else None: connect now)."""
+    task = info.get("warm_task")
+    if task and not task.done() and "warm" not in info:
+        await asyncio.wait({task}, timeout=3)   # opening right now: a few seconds at most
+    w = info.pop("warm", None)
+    if w and getattr(w[0], "close_code", None) is None:
+        return w
+    return None
 
 
 async def open_live(company_id: int, model: str, prep: dict):
@@ -907,6 +1065,9 @@ async def open_live(company_id: int, model: str, prep: dict):
                 "systemInstruction": {"parts": [{"text": prep["prompt"]}]},
                 "tools": STAFF_TOOLS if prep.get("staff") else TOOLS,
                 "inputAudioTranscription": {}, "outputAudioTranscription": {},
+                # long calls: the oldest turns go once the context passes the trigger (the prompt always stays)
+                "contextWindowCompression": {"triggerTokens": CONTEXT_TRIGGER,
+                                             "slidingWindow": {"targetTokens": CONTEXT_TARGET}},
             }}))
             first = json.loads(await asyncio.wait_for(ws.recv(), 8))
             if "setupComplete" in first:
@@ -966,7 +1127,12 @@ def save_call(call: Call, company_id: int, caller: str, model: str, key_id: int 
         info = calls.get(call.uid) or {}
         t = (info.get("prep_result") or {}).get("tenant")
         if t:
-            agent.record_usage(t, key_id, "gemini", model, "voice_call", None, call.usage, error=error)
+            u = call.usage
+            agent.record_usage(t, key_id, "gemini", model, "voice_call", None,
+                               {"input": u["audio_in"], "output": u["audio_out"]}, error=error)
+            if u["text_in"] or u["text_out"]:   # the prompt and tool results, billed at the text price
+                agent.record_usage(t, key_id, "gemini", f"{model} (text)", "voice_call_text", None,
+                                   {"input": u["text_in"], "output": u["text_out"], "cached": u["cached"]}, error=error)
     except Exception:
         log.exception("usage")
 
@@ -989,7 +1155,11 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         model = info["settings"].get("bot_model") or DEFAULT_MODEL
         info["model"] = model
         call = Call(uid, info, reader, writer)
-        ws, key_id = await open_live(info["company_id"], model, prep)
+        ws, key_id = await take_warm(info), None
+        if ws:
+            ws, key_id = ws
+        else:
+            ws, key_id = await open_live(info["company_id"], model, prep)
         await ws.send(json.dumps({"clientContent": {"turns": [{"role": "user", "parts": [{"text":
             ("(কল ধরা হয়েছে। শুধু বলো \"জি ভাই, বলুন\"।)" if prep.get("staff") else
              "(কল ধরা হয়েছে। প্রথমে কোম্পানির নাম বলে শুভেচ্ছা জানাও, জানাও যে কলটি রেকর্ড করা হচ্ছে, তারপর জিজ্ঞেস করো কীভাবে সাহায্য করতে পারো।)")}]}],
@@ -997,7 +1167,7 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         # Asterisk usually just closes the socket on hangup (no 0x00 frame): whichever side stops first ends the call
         tasks = [asyncio.create_task(c) for c in (call.from_caller(ws), call.to_caller(), call.from_gemini(ws),
                                                     call.done.wait())]
-        limit = min(int(info["settings"].get("bot_max_seconds") or 240), MAX_CALL)
+        limit = min(int(info["settings"].get("bot_max_seconds") or DEFAULT_MAX_SECONDS), MAX_CALL)
         finished, _ = await asyncio.wait(tasks, timeout=max(limit - 25, 10), return_when=asyncio.FIRST_COMPLETED)
         if not finished:
             # time is nearly up: the bot says a staff member will call and hangs up itself; cut it 45 s later at most
@@ -1010,7 +1180,8 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         call.done.set()
         for t in tasks:
             t.cancel()
-        log.info("call %s from %s: %ss with the bot", uid, info["caller"], int(time.time() - call.started))
+        log.info("call %s from %s: %ss with the bot, %.0f%% of the caller's audio sent", uid, info["caller"],
+                 int(time.time() - call.started), 100 * call.sent_bytes / max(call.heard_bytes, 1))
     except (asyncio.IncompleteReadError, ConnectionError):
         pass
     except Exception as e:

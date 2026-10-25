@@ -57,7 +57,7 @@ class SipSettings extends CompanySettingsPage
             'username' => $record->username, 'auth_user' => $record->auth_user, 'password' => null, 'enabled' => $record->enabled,
             'bot_mode' => $record->bot_mode ?? 'off', 'bot_delay' => $record->bot_delay ?? 20, 'bot_model' => $record->bot_model,
             'bot_test_numbers' => $record->bot_test_numbers, 'bot_blocked_numbers' => $record->bot_blocked_numbers,
-            'bot_max_seconds' => $record->bot_max_seconds ?? 240];
+            'bot_max_seconds' => $record->bot_max_seconds ?? 180];
     }
 
     public function form(Schema $schema): Schema
