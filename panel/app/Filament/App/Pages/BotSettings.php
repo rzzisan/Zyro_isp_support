@@ -8,6 +8,7 @@ use App\Services\Engine;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -79,7 +80,20 @@ class BotSettings extends CompanySettingsPage
                     ->helperText(__('কমা দিয়ে আলাদা; খালি রাখলে সবাইকে'))->rows(2),
                 Toggle::make('auto_ticket')->label(__('দরকার হলে বিলিং সফটওয়্যারে নিজে টিকেট খুলবে (SMS ছাড়া)')),
                 Toggle::make('self_reconnect')->label(__('কাস্টমার চাইলে বিলের কারণে বন্ধ লাইন বট মাসে একবার চালু করবে'))
-                    ->helperText(__('WhatsApp চ্যাট, WhatsApp কল ও হটলাইনে। শুধু বকেয়া এক মাসের বিলের বেশি না হলে; প্রতি কাস্টমার মাসে একবার। প্রতিটা অনুরোধ "লাইন চালু/বন্ধের রেকর্ড"-এ থাকে।')),
+                    ->helperText(__('WhatsApp চ্যাট, WhatsApp কল ও হটলাইনে। শুধু বকেয়া এক মাসের বিলের বেশি না হলে; প্রতি কাস্টমার মাসে একবার। প্রতিটা অনুরোধ "লাইন চালু/বন্ধের রেকর্ড"-এ থাকে।'))->live(),
+                TextInput::make('self_reconnect_per_number')->label(__('এক নম্বর থেকে মাসে সর্বোচ্চ কয়টা লাইন চালু করা যাবে'))
+                    ->numeric()->minValue(0)->maxValue(100)->default(2)->required()
+                    ->helperText(__('যত আলাদা কাস্টমার আইডিই বলুক, একই WhatsApp/ফোন নম্বর থেকে মাসে এর বেশি লাইন চালু হবে না।'))
+                    ->visible(fn ($get) => $this->isOwner() && (bool) $get('self_reconnect')),
+                Repeater::make('self_reconnect_number_limits')->label(__('নির্দিষ্ট নম্বরের আলাদা সীমা'))
+                    ->addActionLabel(__('নম্বর যোগ করুন'))->defaultItems(0)->columns(3)
+                    ->helperText(__('এই নম্বরগুলোর জন্য উপরের সীমার বদলে এখানকার সীমা খাটবে; 0 দিলে ওই নম্বর থেকে এভাবে লাইন চালু হবে না।'))
+                    ->schema([
+                        TextInput::make('number')->label(__('মোবাইল নম্বর'))->required()->regex('/^(\+?88)?01\d{9}$/')->placeholder('01XXXXXXXXX'),
+                        TextInput::make('limit')->label(__('মাসে সর্বোচ্চ লাইন'))->numeric()->minValue(0)->maxValue(100)->required(),
+                        TextInput::make('note')->label(__('নোট')),
+                    ])
+                    ->visible(fn ($get) => $this->isOwner() && (bool) $get('self_reconnect')),
                 TextInput::make('reply_signature')->label(__('প্রতিটা উত্তরের শেষে স্বাক্ষর')),
                 Textarea::make('extra_prompt')->label(__('অতিরিক্ত নির্দেশনা'))
                     ->helperText(__('পেমেন্টের নিয়ম (বিকাশ/নগদ নম্বর), অফিসের সময়, বিশেষ নোটিশ — বট এগুলো হুবহু মানবে'))
@@ -102,6 +116,14 @@ class BotSettings extends CompanySettingsPage
                         ->content(fn () => $this->promptBox('technician')),
                 ]),
         ]);
+    }
+
+    /** Only the Owner sets how many lines one number may have turned on (Zisan 2026-10-25). */
+    private function isOwner(): bool
+    {
+        $company = Filament::getTenant();
+
+        return $company instanceof Company && auth()->user()?->roleIn($company) === 'owner';
     }
 
     private ?array $prompts = null;

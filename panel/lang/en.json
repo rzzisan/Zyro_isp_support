@@ -1619,5 +1619,12 @@
     "বিলের কারণে বন্ধ না": "Not off for bill",
     "সুবিধা বন্ধ": "Feature off",
     "কাস্টমার চাইলে বিলের কারণে বন্ধ লাইন বট মাসে একবার চালু করবে": "On request, the bot turns a bill-disabled line on once a month",
-    "WhatsApp চ্যাট, WhatsApp কল ও হটলাইনে। শুধু বকেয়া এক মাসের বিলের বেশি না হলে; প্রতি কাস্টমার মাসে একবার। প্রতিটা অনুরোধ \"লাইন চালু/বন্ধের রেকর্ড\"-এ থাকে।": "In WhatsApp chat, WhatsApp calls and the hotline. Only when the due is not more than one month's bill; once per customer per month. Every request is kept in \"Line on/off records\"."
+    "WhatsApp চ্যাট, WhatsApp কল ও হটলাইনে। শুধু বকেয়া এক মাসের বিলের বেশি না হলে; প্রতি কাস্টমার মাসে একবার। প্রতিটা অনুরোধ \"লাইন চালু/বন্ধের রেকর্ড\"-এ থাকে।": "In WhatsApp chat, WhatsApp calls and the hotline. Only when the due is not more than one month's bill; once per customer per month. Every request is kept in \"Line on/off records\".",
+    "নম্বরের মাসিক সীমা শেষ": "Number's monthly limit reached",
+    "এক নম্বর থেকে মাসে সর্বোচ্চ কয়টা লাইন চালু করা যাবে": "Most lines one number may turn on a month",
+    "যত আলাদা কাস্টমার আইডিই বলুক, একই WhatsApp/ফোন নম্বর থেকে মাসে এর বেশি লাইন চালু হবে না।": "However many customer IDs it gives, one WhatsApp/phone number gets no more lines turned on a month than this.",
+    "নির্দিষ্ট নম্বরের আলাদা সীমা": "Limits for specific numbers",
+    "এই নম্বরগুলোর জন্য উপরের সীমার বদলে এখানকার সীমা খাটবে; 0 দিলে ওই নম্বর থেকে এভাবে লাইন চালু হবে না।": "These numbers use this limit instead of the one above; 0 means that number can't have lines turned on this way.",
+    "মোবাইল নম্বর": "Mobile number",
+    "মাসে সর্বোচ্চ লাইন": "Most lines a month"
 }

@@ -395,7 +395,7 @@ def safe_view(context: dict) -> dict:
     return ctx
 
 
-def line_context(t, api, row: dict, staff: bool = False) -> dict:
+def line_context(t, api, row: dict, staff: bool = False, caller: str | None = None) -> dict:
     """The WhatsApp bot's view of one line: bill, due, MikroTik/ONU status, open tickets.
     Staff see everything (PPPoE IP, MAC) like on the WhatsApp staff desk."""
     from engine import customers
@@ -411,7 +411,7 @@ def line_context(t, api, row: dict, staff: bool = False) -> dict:
         return ctx
     from engine import self_reconnect
     ctx = safe_view(ctx)
-    state = self_reconnect.status(t, row)
+    state = self_reconnect.status(t, row, caller)
     if state:
         ctx["self_reconnect"] = state
     return ctx
@@ -536,7 +536,7 @@ def prepare(company_id: int, caller: str, staff: dict | None = None, channel: st
             api = tenants.billing(t)
             row = customers.by_whatsapp(t, api, number)
             if row:
-                info = "কলারের নম্বরে মেলা সংযোগের তথ্য (JSON):\n" + brief(line_context(t, api, row))
+                info = "কলারের নম্বরে মেলা সংযোগের তথ্য (JSON):\n" + brief(line_context(t, api, row, caller=number))
         except Exception:
             log.exception("company %s: customer lookup for %s failed", company_id, caller)
     others = db.all_rows("select customer_id, name, zone, due, is_left from billing_customers"
