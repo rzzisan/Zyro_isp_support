@@ -78,6 +78,8 @@ class BotSettings extends CompanySettingsPage
                 Textarea::make('live_allowlist')->label(__('চালু মোডে শুধু এই নম্বরগুলোকে উত্তর দেবে'))
                     ->helperText(__('কমা দিয়ে আলাদা; খালি রাখলে সবাইকে'))->rows(2),
                 Toggle::make('auto_ticket')->label(__('দরকার হলে বিলিং সফটওয়্যারে নিজে টিকেট খুলবে (SMS ছাড়া)')),
+                Toggle::make('self_reconnect')->label(__('কাস্টমার চাইলে বিলের কারণে বন্ধ লাইন বট মাসে একবার চালু করবে'))
+                    ->helperText(__('WhatsApp চ্যাট, WhatsApp কল ও হটলাইনে। শুধু বকেয়া এক মাসের বিলের বেশি না হলে; প্রতি কাস্টমার মাসে একবার। প্রতিটা অনুরোধ "লাইন চালু/বন্ধের রেকর্ড"-এ থাকে।')),
                 TextInput::make('reply_signature')->label(__('প্রতিটা উত্তরের শেষে স্বাক্ষর')),
                 Textarea::make('extra_prompt')->label(__('অতিরিক্ত নির্দেশনা'))
                     ->helperText(__('পেমেন্টের নিয়ম (বিকাশ/নগদ নম্বর), অফিসের সময়, বিশেষ নোটিশ — বট এগুলো হুবহু মানবে'))

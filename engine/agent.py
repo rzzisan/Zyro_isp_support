@@ -130,10 +130,21 @@ REPLY_RULES = (
 )
 
 
+# added when the company lets customers have a bill-disabled line turned on once a month (engine/self_reconnect.py)
+RECONNECT_RULE = (
+    "লাইন চালু করে দেওয়ার অনুরোধ: কাস্টমার বিলের কারণে বন্ধ লাইনটা এখন চালু করে দিতে বললে (যেমন \"লাইনটা ছেড়ে দেন\", "
+    "\"কয়েকদিন পরে বিল দিব, লাইন চালু করে দেন\") উত্তরের একদম শেষে আলাদা লাইনে লেখো [[RECONNECT]]। লাইন চালু হলো কি "
+    "হলো না, কেন হবে না, মাসে কতবার পাওয়া যায়: এসব নিজে লিখবে না, সিস্টেম আসল ফলটা নিজে যোগ করে দেবে; তাই উত্তরের "
+    "বাকিটা ফাঁকাও রাখতে পারো। কাস্টমার নিজে না চাইলে [[RECONNECT]] দেবে না, আর এই সুবিধার কথা নিজে থেকে বলবে না।"
+)
+
+
 def system_prompt(t: Tenant, query: str | None = None) -> str:
     # the company may have edited the built-in rules (Bot settings); empty = the built-in text
     base = (t.bot.get("customer_prompt") or "").strip() or SYSTEM_PROMPT
     prompt = base.replace("Century Link Network (একটি ISP)", f"{t.name} (একটি ISP)") + "\n\n" + IMAGE_RULE + "\n\n" + REPLY_RULES
+    if t.bot.get("self_reconnect"):
+        prompt += "\n\n" + RECONNECT_RULE
     block = knowledge(t, query)
     if not block:
         return prompt
@@ -246,7 +257,7 @@ def draft_reply(t: Tenant, history: list[dict], context: dict | None,
 
 
 # words only the model's own reasoning has, never a reply to a customer
-LEAK = re.compile(r"live_data|bill_day|open_tickets|mikrotik|verified|নির্দেশনায় (?:কিছু )?(?:নেই|বলা)|বানিয়ে বলা যাবে না|"
+LEAK = re.compile(r"live_data|bill_day|open_tickets|mikrotik|verified|self_reconnect|can_reconnect|why_not|নির্দেশনায় (?:কিছু )?(?:নেই|বলা)|বানিয়ে বলা যাবে না|"
                   r"কাস্টমার বলছে|কাস্টমারের নাম \S+,|দিয়ে শুরু করব", re.I)
 RETRY_NOTE = ("\n\nজরুরি: আগের খসড়ায় তোমার নিজের চিন্তা আর ডেটার নাম লেখা ছিল, যা কাস্টমার দেখে ফেলত। এবার শুধু কাস্টমারকে "
               "পাঠানোর ছোট উত্তরটা লেখো, আর কিছু না।")

@@ -348,6 +348,10 @@ PAYMENT_WORDS = re.compile(r"পেমেন্ট|পরিশোধ|জমা|
                            r"pay|paid|bkash|bikash|nagad|rocket|diyechi|disi|dilam|joma|taka|month|history|receipt", re.I)
 
 
+# the model's own "line is being turned on / once a month" lines, dropped when the system states the real outcome
+RECONNECT_CLAIM = re.compile(r"চালু\s*(করে|করা|হয়ে)\s*(দিচ্ছি|দিলাম|দেওয়া|দেয়া|হচ্ছে|হয়েছে|গেছে|যাবে)|মাসে\s*(একবার|এক বার|১\s*বার)")
+
+
 def customer_view(context: dict, verified: bool, text: str = "") -> dict:
     """What the customer-facing bot may see: never mobile numbers, IPs or MACs; nothing about the bill,
     payments or the name unless the chat is verified."""
@@ -639,8 +643,13 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = 
         if not pending and _is_ack(text) and ack_already_answered(t, contact["id"]):
             return  # "ওকে" after our "ঠিক আছে, জানাবেন": nothing more to say
         api = tenants.billing(t)
-        context = customer_view(customers.live_context(t, api, customers.fresh(api, customer)), verified,
+        customer = customers.fresh(api, customer)
+        context = customer_view(customers.live_context(t, api, customer), verified,
                                 "\n".join(x for x in (pending, text) if x))
+        from engine import self_reconnect
+        reconnect_state = self_reconnect.status(t, customer) if verified else None
+        if reconnect_state:
+            context["self_reconnect"] = reconnect_state
         from engine.ticket_actions import open_tickets, solve_for_customer
         context["open_tickets"] = [{"no": x["complain_id"], "category": x["category"], "state": x["state"]}
                                    for x in open_tickets(t, customer.get("CustomerId"))]
@@ -688,6 +697,20 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = 
             # (otherwise two replies go out for one question)
             save_draft(t, contact["id"], message_id, "superseded", draft, context=context, provider=provider, model=model)
             return
+        if draft and "[[RECONNECT]]" in draft:
+            # the customer asked to have the bill-disabled line turned on: the system checks the rule and states the
+            # real outcome; the model's own "চালু করে দিচ্ছি" lines go
+            draft = "\n".join(x for x in draft.replace("[[RECONNECT]]", "").splitlines() if not RECONNECT_CLAIM.search(x)).strip()
+            if not verified:
+                outcome = "লাইন চালু করতে আপনার কাস্টমার আইডি বা সংযোগের মোবাইল নম্বরটা লিখে দিন।"
+            elif may_send(t, contact["wa_number"]):
+                res = self_reconnect.reconnect(t, customer, "whatsapp", contact["wa_number"], text)
+                outcome = res["say"]
+                ticket_note = "\n".join(x for x in (ticket_note, f"কাস্টমার লাইন চালু চেয়েছেন: {res['result']}") if x)
+            else:
+                verdict, info = self_reconnect.check(t, customer)
+                outcome = "(চুপ মোড: লাইন চালু করা হয়নি) " + self_reconnect.message("enabled" if verdict == "ok" else verdict, info)
+            draft = (draft + "\n" if draft else "") + outcome
         if draft:
             mode = deliver(t, contact, message_id, draft, ticket_note, context=context, provider=provider, model=model)
             if voice and mode == "sent" and t.bot.get("voice_reply"):
