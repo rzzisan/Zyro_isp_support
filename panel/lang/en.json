@@ -1604,5 +1604,12 @@
     "কাস্টমারকে SMS যাবে না।": "No SMS goes to the customer.",
     "নতুন টিকিট বিলিং সফটওয়্যারে খোলা হবে": "Open new tickets in the billing software",
     "বন্ধ করলে নতুন টিকিট (ডেস্ক, WhatsApp বট, ফোন বট) Desk-এই খোলা, অ্যাসাইন আর সমাধান হবে, বিলিং-এ যাবে না। আগের বিলিং টিকিট বিলিং-এই সমাধান হবে। যেকোনো সময় আবার চালু করা যায়।": "When off, new tickets (desk, WhatsApp bot, phone bot) are opened, assigned and solved in the Desk itself and never reach billing. Earlier billing tickets are still solved in billing. You can turn it back on at any time.",
-    "অ্যাসাইন": "Assigned"
+    "অ্যাসাইন": "Assigned",
+    ":nটা চালু · এই তালিকা এখন Desk-এই রাখা হয়, বিলিং থেকে Sync হয় না (সেটিংস → বিলিং সংযোগ)": ":n active · this list is now kept in the Desk and is not synced from billing (Settings → Billing connection)",
+    "Desk-এ যোগ করা": "Added in the Desk",
+    "নতুন যোগ করুন": "Add new",
+    "বন্ধ করলে তালিকাগুলো Desk-এই থাকবে: বিলিং কনফিগারেশন → সাপোর্ট তালিকা পেজে নতুন যোগ, নাম বদল আর বন্ধ করা যাবে, বিলিংয়ের Sync এগুলো আর ছোঁবে না। Desk-এ যোগ করা কর্মী বিলিংয়ে নেই, তাই নতুন টিকিটও Desk-এ খোলা ভালো।": "When off, these lists are kept in the Desk: add, rename and switch off entries on Billing configuration → Support lists, and billing's Sync no longer touches them. Staff added in the Desk don't exist in billing, so new tickets should open in the Desk too.",
+    "বন্ধ করলে নতুন টিকিটে আর দেখাবে না; পুরনো টিকিটে নাম থাকবে": "When off it is no longer offered for new tickets; old tickets keep the name",
+    "সমস্যার ধরন, কর্মী আর ডিপার্টমেন্টের তালিকা বিলিং থেকে Sync হবে": "Sync the problem type, staff and department lists from billing",
+    "বিলিং থেকে আসা নাম বদলানো যায় না (পুরনো টিকিট আর এলাকার কর্মী নাম দিয়ে মেলে); দরকার হলে বন্ধ করে নতুন যোগ করুন": "A name from billing can't be changed (old tickets and area staff match by name); switch it off and add a new one if needed"
 }

@@ -115,6 +115,7 @@ class StaffTeamResource extends Resource
             ])
             ->headerActions([
                 Action::make('syncEmployees')->label(__('বিলিং থেকে কর্মী লিস্ট আনুন'))->icon(Heroicon::OutlinedArrowPath)->color('gray')
+                    ->visible(fn () => ! \App\Models\BillingConnection::deskTicketLists((int) Filament::getTenant()->getKey()))
                     ->action(function () {
                         try {
                             Engine::syncBillingConfig((int) Filament::getTenant()->getKey(), 'employees');

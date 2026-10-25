@@ -1,7 +1,9 @@
 """Billing's lists (Configuration menu + the support page's lists) copied into the desk's billing_options.
 
 Kept until someone presses "Sync" on that list's desk page (billing config pages); there is no timer. Items that
-vanish from billing stay with active = false, so old tickets/customers still show their names.
+vanish from billing stay with active = false, so old tickets/customers still show their names. With the বিলিং সংযোগ
+page's ticket-lists switch off (billing_connections.ticket_lists_in_billing) the support page's lists are the Desk's
+own: billing is never asked for them, and entries made in the Desk (desk = true) are never switched off here.
   set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.billing_config [--company ID] [--kind zones]
 """
 import argparse
@@ -95,7 +97,8 @@ def save(company_id: int, kind: str, items: list[dict]) -> dict:
              Jsonb(i["extra"]) if i.get("extra") else None))
     gone = db.execute(
         """WITH u AS (UPDATE billing_options SET active = false, updated_at = now()
-                      WHERE company_id = %s AND kind = %s AND active AND NOT (option_id = ANY(%s)) RETURNING 1)
+                      WHERE company_id = %s AND kind = %s AND active AND NOT desk AND NOT (option_id = ANY(%s))
+                      RETURNING 1)
            SELECT count(*) AS n FROM u""", (company_id, kind, [i["option_id"] for i in items]))
     return {"total": len(items), "inactive": gone["n"]}
 
@@ -106,11 +109,21 @@ def save_support(company_id: int, options: dict) -> dict:
             for kind, items in options.items()}
 
 
+def desk_lists(company_id: int) -> bool:
+    """The ticket lists are kept in the Desk (no billing Sync for them)."""
+    row = db.one("SELECT ticket_lists_in_billing FROM billing_connections WHERE company_id = %s", (company_id,))
+    return not row or not row["ticket_lists_in_billing"]
+
+
 def sync(api, company_id: int, kinds: list[str] | None = None) -> dict:
     kinds = kinds or list(KINDS)
     bad = [k for k in kinds if k not in KINDS]
     if bad:
         raise ValueError(f"unknown list {', '.join(bad)}")
+    if desk_lists(company_id):
+        kinds = [k for k in kinds if k not in SUPPORT_KINDS]
+        if not kinds:
+            raise ValueError("এই তালিকা এখন Desk-এই রাখা হয়, বিলিং থেকে Sync হয় না")
     out = {}
     if any(k in SUPPORT_KINDS for k in kinds):
         support = api.support_options()

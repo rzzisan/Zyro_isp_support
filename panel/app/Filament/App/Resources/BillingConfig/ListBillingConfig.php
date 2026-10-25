@@ -23,6 +23,9 @@ abstract class ListBillingConfig extends ListRecords
     {
         $q = BillingOption::where('company_id', Filament::getTenant()->getKey())->where('kind', $this->kind());
         $last = (clone $q)->max('synced_at');
+        if (static::getResource()::deskOwned()) {
+            return __(':nটা চালু · এই তালিকা এখন Desk-এই রাখা হয়, বিলিং থেকে Sync হয় না (সেটিংস → বিলিং সংযোগ)', ['n' => (clone $q)->where('active', true)->count()]);
+        }
 
         return __(':nটা · বিলিং থেকে কপি করে ডেস্কে রাখা, নিজে থেকে বদলায় না; বিলিংয়ে বদলালে "Sync" চাপুন', ['n' => (clone $q)->where('active', true)->count()])
             .' · '.($last ? __('শেষ Sync :time', ['time' => \Illuminate\Support\Carbon::parse($last, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A')]) : __('এখনো Sync হয়নি'));
@@ -32,6 +35,8 @@ abstract class ListBillingConfig extends ListRecords
     {
         return [
             Action::make('sync')->label('Sync')->icon(Heroicon::OutlinedArrowPath)
+                ->visible(fn () => ! static::getResource()::deskOwned()
+                    && ! ($this->kind() === 'priorities' && \App\Models\BillingConnection::deskTicketLists((int) Filament::getTenant()->getKey())))
                 ->action(fn () => $this->sync($this->kind())),
             Action::make('syncAll')->label(__('সব তালিকা Sync'))->icon(Heroicon::OutlinedArrowPathRoundedSquare)->color('gray')
                 ->requiresConfirmation()->modalDescription(__('বিলিং থেকে ১৪টা তালিকাই (Zone, Box, Package, কর্মী, ...) নতুন করে আনা হবে।'))

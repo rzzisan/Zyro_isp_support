@@ -55,7 +55,8 @@ class BillingSettings extends CompanySettingsPage
         return ['provider' => $record->provider, 'base_url' => $record->base_url,
             'username' => $record->username, 'password' => null,
             'live_from_billing' => $record->live_from_billing ?? true, 'onu_from_billing' => $record->onu_from_billing ?? true,
-            'tickets_in_billing' => $record->tickets_in_billing ?? true];
+            'tickets_in_billing' => $record->tickets_in_billing ?? true,
+            'ticket_lists_in_billing' => $record->ticket_lists_in_billing ?? true];
     }
 
     public function form(Schema $schema): Schema
@@ -88,6 +89,8 @@ class BillingSettings extends CompanySettingsPage
                 ->schema([
                     Toggle::make('tickets_in_billing')->label(__('নতুন টিকিট বিলিং সফটওয়্যারে খোলা হবে'))->default(true)
                         ->helperText(fn () => __('বন্ধ করলে নতুন টিকিট (ডেস্ক, WhatsApp বট, ফোন বট) Desk-এই খোলা, অ্যাসাইন আর সমাধান হবে, বিলিং-এ যাবে না। আগের বিলিং টিকিট বিলিং-এই সমাধান হবে। যেকোনো সময় আবার চালু করা যায়।').' '.$this->ticketText()),
+                    Toggle::make('ticket_lists_in_billing')->label(__('সমস্যার ধরন, কর্মী আর ডিপার্টমেন্টের তালিকা বিলিং থেকে Sync হবে'))->default(true)
+                        ->helperText(__('বন্ধ করলে তালিকাগুলো Desk-এই থাকবে: বিলিং কনফিগারেশন → সাপোর্ট তালিকা পেজে নতুন যোগ, নাম বদল আর বন্ধ করা যাবে, বিলিংয়ের Sync এগুলো আর ছোঁবে না। Desk-এ যোগ করা কর্মী বিলিংয়ে নেই, তাই নতুন টিকিটও Desk-এ খোলা ভালো।')),
                 ]),
         ]);
     }
