@@ -474,7 +474,7 @@ def start(company_id: int, caller: str, settings: dict, delay: int, channel: str
         info["row_id"] = row["id"]
         if delay > 0:
             notify_staff(company_id, {"type": "call", "uid": uid, "caller": display_number(caller),
-                                      "name": caller_name(company_id, caller), "channel": "whatsapp"})
+                                      "name": caller_name(company_id, caller), "channel": "whatsapp"}, caller=caller)
     return f"bot:{uid}:{delay}"
 
 
@@ -498,16 +498,46 @@ PHONE_USERS = """select cu.user_id from company_user cu where cu.company_id = %s
         and not exists (select 1 from membership_permission_group mpg where mpg.membership_id = cu.id)))"""
 
 
+# an open ticket naming the technician whose customer is the caller: the ticket's mobile, its contact number
+# (billing's "Contact mobile", raw ComplainNumber) or the customer's own mobile; numbers compared by their last 10 digits
+TECH_CALLER = """select 1 from billing_tickets bt
+    left join billing_customers bc on bc.company_id = bt.company_id and bc.header_id = bt.customer_header_id
+    where bt.company_id = %s and bt.state in ('pending', 'processing') and bt.assigned_to ~* %s
+      and %s in (right(regexp_replace(coalesce(bt.mobile, ''), '\\D', '', 'g'), 10),
+                 right(regexp_replace(coalesce(bt.raw->>'ComplainNumber', ''), '\\D', '', 'g'), 10),
+                 right(coalesce(bc.mobile_normalized, ''), 10))
+    limit 1"""
+
+
+def may_ring(company_id: int, user_id: int, caller: str) -> bool:
+    """A field technician (agent ticked on the team page) gets only the calls of the customers on their open tickets;
+    everyone else allowed "phone" gets every call."""
+    m = db.one("""select cu.role, cu.field_technician, o.name from company_user cu
+                  left join billing_options o on o.company_id = cu.company_id and o.kind = 'employees'
+                       and o.option_id = cu.billing_employee_id
+                  where cu.company_id = %s and cu.user_id = %s""", (company_id, user_id))
+    if not m or m["role"] != "agent" or not m["field_technician"]:
+        return True
+    name, digits = (m["name"] or "").strip(), re.sub(r"\D", "", caller or "")[-10:]
+    if not name or len(digits) < 10:
+        return False
+    # the panel's BillingTicket::forEmployee: the name in the comma list, maybe followed by " (date)"
+    return bool(db.one(TECH_CALLER, (company_id, "(^|, )" + re.escape(name) + "( \\(|,|$)", digits)))
+
+
 def phone_allowed(company_id: int, user_id: int) -> bool:
     """The panel's Menu::allows(user, company, 'phone') in SQL (owner; own list; groups; admin defaults)."""
     return bool(db.one(PHONE_USERS + " and cu.user_id = %s", (company_id, user_id)))
 
 
-def notify_staff(company_id: int, data: dict) -> None:
-    """App push (engine/fcm.py) to the phones of the members allowed to take calls."""
+def notify_staff(company_id: int, data: dict, caller: str | None = None) -> None:
+    """App push (engine/fcm.py) to the phones of the members allowed to take calls; with [caller], a ringing call, only
+    to those who may take that caller's call (see may_ring)."""
     try:
         from engine import fcm
         users = [r["user_id"] for r in db.all_rows(PHONE_USERS, (company_id,))]
+        if caller is not None:
+            users = [u for u in users if may_ring(company_id, u, caller)]
         company = db.one("select slug from companies where id = %s", (company_id,)) or {}
         if users:
             fcm.send_users(company_id, users, {"company": company.get("slug") or "", **{k: str(v) for k, v in data.items()}})
@@ -526,7 +556,8 @@ def take(uid: str, ep: str) -> str:
     """A staff softphone dialed take-<uid>: "ok" for the first allowed member while the call still rings."""
     info, agent = calls.get(uid), agent_row(ep)
     if not info or not agent or agent["company_id"] != info["company_id"] \
-            or not phone_allowed(agent["company_id"], agent["user_id"]):
+            or not phone_allowed(agent["company_id"], agent["user_id"]) \
+            or not may_ring(agent["company_id"], agent["user_id"], info.get("caller") or ""):
         return "no"
     with lock:
         if info.get("state") != "waiting":
