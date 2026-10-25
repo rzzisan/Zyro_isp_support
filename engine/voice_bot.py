@@ -248,6 +248,8 @@ rtp_symmetric=yes
 force_rport=yes
 rewrite_contact=yes
 identify_by=ip
+; no audio for 2 minutes = the call is dead (hang up instead of staying open)
+rtp_timeout=120
 
 [{c}-identify]
 type=identify
@@ -287,6 +289,8 @@ direct_media=no
 force_rport=yes
 ; BYE etc. go back over Meta's own TLS connection: Meta's Contact says port 5061, which is blocked outbound from bsol
 rewrite_contact=yes
+; no audio for 2 minutes = the call is dead (Meta sent no BYE for the call stuck 29 h on 2026-10-24)
+rtp_timeout=120
 
 [meta-wa-identify]
 type=identify
@@ -1194,6 +1198,13 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
                 await ws.close()
             except Exception:
                 pass
+        try:
+            # Asterisk 20's AudioSocket can miss a bare socket close: the WhatsApp call of 2026-10-24 08:05 stayed up
+            # 29 h after the bot had finished. A hangup frame first ends the dialplan app for sure.
+            writer.write(b"\x00\x00\x00")
+            await asyncio.wait_for(writer.drain(), 2)
+        except Exception:
+            pass
         try:
             writer.close()
         except Exception:

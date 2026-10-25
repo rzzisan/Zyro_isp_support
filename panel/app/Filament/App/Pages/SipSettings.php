@@ -93,8 +93,9 @@ class SipSettings extends CompanySettingsPage
                         ->options(['off' => __('বন্ধ'), 'test' => __('শুধু টেস্ট নম্বরের কলে'), 'live' => __('সব কলে')]),
                     TextInput::make('bot_delay')->label(__('কত সেকেন্ড বাজার পর ধরবে'))->required()->integer()->minValue(0)->maxValue(25)
                         ->suffix(__('সেকেন্ড'))->helperText(__('রিং গ্রুপের টাইমআউটের চেয়ে কম রাখুন')),
-                    TextInput::make('bot_model')->label(__('Gemini Live মডেল'))->maxLength(80)->placeholder('gemini-3.1-flash-live-preview')
-                        ->rule('regex:/^[a-z0-9.\-]+$/'),
+                    Select::make('bot_model')->label(__('Gemini Live মডেল'))->placeholder(__('ডিফল্ট: gemini-3.1-flash-live-preview'))
+                        ->options(fn ($get) => self::liveModels($get('bot_model')))
+                        ->helperText(__('বদলালে পরের কল থেকে চলবে; ভালো না লাগলে ডিফল্টে ফিরিয়ে দিন')),
                     TextInput::make('bot_max_seconds')->label(__('একটা কলে বট সর্বোচ্চ কত সেকেন্ড'))->required()->integer()
                         ->minValue(60)->maxValue(600)->suffix(__('সেকেন্ড'))
                         ->helperText(__('সময় শেষের আগে বট "আমাদের একজন স্টাফ যোগাযোগ করবেন" বলে কল শেষ করে, কল লগে ফ্লাগ থাকে')),
@@ -131,5 +132,24 @@ class SipSettings extends CompanySettingsPage
         $data['status_at'] = null;
 
         return $data;
+    }
+
+    /** Gemini Live models (bidiGenerateContent) the paid key listed on 2026-10-25; a saved model not in the list stays. */
+    public const LIVE_MODELS = [
+        'gemini-3.1-flash-live-preview' => 'gemini-3.1-flash-live-preview (ডিফল্ট)',
+        'gemini-3.8-live' => 'gemini-3.8-live',
+        'gemini-2.5-flash-native-audio-latest' => 'gemini-2.5-flash-native-audio-latest',
+        'gemini-2.5-flash-native-audio-preview-12-2025' => 'gemini-2.5-flash-native-audio-preview-12-2025',
+        'gemini-3.8-live-extended-thinking' => 'gemini-3.8-live-extended-thinking (ধীর)',
+    ];
+
+    public static function liveModels(?string $current): array
+    {
+        $out = self::LIVE_MODELS;
+        if (filled($current) && ! isset($out[$current])) {
+            $out[$current] = $current;
+        }
+
+        return $out;
     }
 }
