@@ -248,6 +248,8 @@ rtp_symmetric=yes
 force_rport=yes
 rewrite_contact=yes
 identify_by=ip
+; no audio for 2 minutes = the call is dead (hang up instead of staying open)
+rtp_timeout=120
 
 [{c}-identify]
 type=identify
@@ -287,6 +289,8 @@ direct_media=no
 force_rport=yes
 ; BYE etc. go back over Meta's own TLS connection: Meta's Contact says port 5061, which is blocked outbound from bsol
 rewrite_contact=yes
+; no audio for 2 minutes = the call is dead (Meta sent no BYE for the call stuck 29 h on 2026-10-24)
+rtp_timeout=120
 
 [meta-wa-identify]
 type=identify
@@ -1020,8 +1024,7 @@ async def warm_up(uid: str) -> None:
     try:
         prep = await asyncio.wrap_future(info["prep"])
         info["prep_result"] = prep
-        model = (info.get("settings") or {}).get("bot_model") or DEFAULT_MODEL
-        info["warm"] = await open_live(info["company_id"], model, prep)
+        info["warm"] = await open_model(info, prep)
     except Exception as e:
         log.warning("call %s: warm-up failed (%s), the bot connects on answer", uid, e)
         return
@@ -1046,6 +1049,22 @@ async def take_warm(info: dict):
     if w and getattr(w[0], "close_code", None) is None:
         return w
     return None
+
+
+async def open_model(info: dict, prep: dict):
+    """The Live session on the company's chosen model; when that model refuses our setup (e.g. the native-audio models
+    reject languageCode bn-IN), on the default one, so a bad pick in the settings never leaves calls unanswered."""
+    model = (info.get("settings") or {}).get("bot_model") or DEFAULT_MODEL
+    try:
+        ws, key_id = await open_live(info["company_id"], model, prep)
+    except Exception as e:
+        if model == DEFAULT_MODEL:
+            raise
+        log.warning("company %s: model %s did not open (%s), using %s", info["company_id"], model, e, DEFAULT_MODEL)
+        model = DEFAULT_MODEL
+        ws, key_id = await open_live(info["company_id"], model, prep)
+    info["model"] = model
+    return ws, key_id
 
 
 async def open_live(company_id: int, model: str, prep: dict):
@@ -1117,7 +1136,8 @@ def save_call(call: Call, company_id: int, caller: str, model: str, key_id: int 
         if r.returncode != 0:
             log.error("ffmpeg: %s", r.stderr[:300])
             rel = None
-    db.execute("""update call_logs set status = 'ended', ended_at = coalesce(ended_at, now()), bot_answered = true,
+    # ended_at = now(): the caller ID popup already wrote the end of the ringing on a hotline row (call 232)
+    db.execute("""update call_logs set status = 'ended', ended_at = now(), bot_answered = true,
                     bot_seconds = %s, recording_path = %s, transcript = %s, callback_reason = %s, bot_flag = %s,
                     bot_error = %s, updated_at = now() where id = %s""",
                (int(time.time() - call.started), rel, json.dumps(call.turns, ensure_ascii=False), call.callback,
@@ -1159,7 +1179,7 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         if ws:
             ws, key_id = ws
         else:
-            ws, key_id = await open_live(info["company_id"], model, prep)
+            ws, key_id = await open_model(info, prep)
         await ws.send(json.dumps({"clientContent": {"turns": [{"role": "user", "parts": [{"text":
             ("(কল ধরা হয়েছে। শুধু বলো \"জি ভাই, বলুন\"।)" if prep.get("staff") else
              "(কল ধরা হয়েছে। প্রথমে কোম্পানির নাম বলে শুভেচ্ছা জানাও, জানাও যে কলটি রেকর্ড করা হচ্ছে, তারপর জিজ্ঞেস করো কীভাবে সাহায্য করতে পারো।)")}]}],
@@ -1193,6 +1213,13 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
                 await ws.close()
             except Exception:
                 pass
+        try:
+            # Asterisk 20's AudioSocket can miss a bare socket close: the WhatsApp call of 2026-10-24 08:05 stayed up
+            # 29 h after the bot had finished. A hangup frame first ends the dialplan app for sure.
+            writer.write(b"\x00\x00\x00")
+            await asyncio.wait_for(writer.drain(), 2)
+        except Exception:
+            pass
         try:
             writer.close()
         except Exception:
