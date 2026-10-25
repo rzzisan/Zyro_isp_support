@@ -60,14 +60,17 @@ class CallActivity : ComponentActivity() {
         private const val EXTRA_NUMBER = "number"
         private const val EXTRA_UID = "uid"
         private const val EXTRA_ANSWER = "answer"
+        private const val EXTRA_CHANNEL = "channel"
         private const val RING_SECONDS = 45_000L
 
-        /** A ringing WhatsApp call; answer = the notification's ধরুন was tapped. */
-        fun incoming(context: Context, company: String, uid: String, title: String, number: String, answer: Boolean): Intent =
+        /** A ringing WhatsApp or hotline call ([channel]); answer = the notification's ধরুন was tapped. */
+        fun incoming(context: Context, company: String, uid: String, title: String, number: String, answer: Boolean,
+                     channel: String = "whatsapp"): Intent =
             Intent(context, CallActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 .putExtra(EXTRA_COMPANY, company).putExtra(EXTRA_UID, uid).putExtra(EXTRA_NUMBER, number)
                 .putExtra(EXTRA_TARGET, "take-$uid").putExtra(EXTRA_TITLE, title).putExtra(EXTRA_ANSWER, answer)
+                .putExtra(EXTRA_CHANNEL, channel)
 
         fun outgoing(context: Context, company: String, number: String, title: String): Intent =
             Intent(context, CallActivity::class.java)
@@ -103,7 +106,9 @@ class CallActivity : ComponentActivity() {
     private val target get() = intent.getStringExtra(EXTRA_TARGET).orEmpty()
     val title get() = intent.getStringExtra(EXTRA_TITLE).orEmpty()
     val number get() = intent.getStringExtra(EXTRA_NUMBER) ?: target.takeUnless { it.startsWith("take-") }.orEmpty()
+    /** A ringing call taken from the Desk (WhatsApp or the hotline), not one this phone dials out. */
     val whatsapp get() = target.startsWith("take-")
+    val hotlineIn get() = whatsapp && intent.getStringExtra(EXTRA_CHANNEL) == "hotline"
     private val uid get() = intent.getStringExtra(EXTRA_UID)
 
     override fun onCreate(savedInstanceState: Bundle?) {

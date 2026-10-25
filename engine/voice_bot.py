@@ -10,8 +10,9 @@ context zyro-wa, which asks GET /mode?wa=<business number>; the company's WhatsA
 off/test/live, calling_test_numbers, calling_bot_delay) decide, and the same bot answers. call_logs.channel = whatsapp.
 
 Staff take calls themselves (Desk softphone: panel/public/softphone/phone.html in the browser or the Android app, WebRTC
-over wss://<desk>/sip-ws to endpoints "a<sip_agents.id>"). While a WhatsApp call rings, the members allowed "phone" get
-an app push and the panel popup; the first to dial take-<uid> gets it (GET /take, the dialplan bridges the two), and
+over wss://<desk>/sip-ws to endpoints "a<sip_agents.id>"). While a WhatsApp or hotline call rings, the members allowed
+"phone" get an app push (a field technician only for the customers of their open tickets, see may_ring) and the panel
+popup; the first to dial take-<uid> gets it (GET /take, the dialplan bridges the two), and
 when nobody has before the ring seconds run out the bot answers (GET /bot). Staff also call customers' mobiles out
 through the company's hotline extension (GET /out). Hangups come to GET /ended; staff calls are recorded by MixMonitor.
 
@@ -472,10 +473,38 @@ def start(company_id: int, caller: str, settings: dict, delay: int, channel: str
                          " values (%s, %s, %s, %s, 'ringing', now(), 'whatsapp', 'in', now(), now()) returning id",
                          (company_id, "wa-" + uid, caller[:80], normalize(caller)))
         info["row_id"] = row["id"]
-        if delay > 0:
-            notify_staff(company_id, {"type": "call", "uid": uid, "caller": display_number(caller),
-                                      "name": caller_name(company_id, caller), "channel": "whatsapp"}, caller=caller)
+    # rings in Desk for the staff allowed to take calls (a hotline call rings the office phones too)
+    if delay > 0:
+        notify_staff(company_id, {"type": "call", "uid": uid, "caller": display_number(caller),
+                                  "name": caller_name(company_id, caller), "channel": channel}, caller=caller)
     return f"bot:{uid}:{delay}"
+
+
+def ring_only(company_id: int, caller: str) -> str:
+    """A hotline call the bot leaves alone: "ring:<uid>", it rings in Desk (and on the office phones) until someone
+    takes it, the office picks it up or the caller hangs up."""
+    uid = str(uuid.uuid4())
+    calls[uid] = {"company_id": company_id, "caller": caller, "at": time.time(), "channel": "hotline", "state": "waiting"}
+    notify_staff(company_id, {"type": "call", "uid": uid, "caller": display_number(caller),
+                              "name": caller_name(company_id, caller), "channel": "hotline"}, caller=caller)
+    return f"ring:{uid}"
+
+
+def hotline_row(uid: str, info: dict) -> int:
+    """The call_logs row of a hotline call taken in Desk: the one the caller ID popup made (engine/sip_calls.py), or a
+    new one."""
+    if info.get("row_id"):
+        return info["row_id"]
+    caller, at = info.get("caller") or "", info.get("at") or time.time()
+    row = db.one("select id from call_logs where company_id = %s and channel = 'hotline' and not bot_answered"
+                 " and (caller = %s or caller_normalized = %s) and abs(extract(epoch from started_at) - %s) < 90"
+                 " order by abs(extract(epoch from started_at) - %s) limit 1",
+                 (info["company_id"], caller[:80], normalize(caller), at, at)) \
+        or db.execute("insert into call_logs (company_id, call_ref, caller, caller_normalized, status, started_at, channel,"
+                      " direction, created_at, updated_at) values (%s, %s, %s, %s, 'ringing', now(), 'hotline', 'in', now(), now())"
+                      " returning id", (info["company_id"], "ring-" + uid, caller[:80], normalize(caller)))
+    info["row_id"] = row["id"]
+    return row["id"]
 
 
 def display_number(raw: str) -> str:
@@ -563,8 +592,9 @@ def take(uid: str, ep: str) -> str:
         if info.get("state") != "waiting":
             return "gone"
         info.update(state="taken", agent=agent, taken_at=time.time())
+    row_id = hotline_row(uid, info) if info.get("channel") == "hotline" else info.get("row_id")
     db.execute("update call_logs set status = 'answered', answered_by = %s, updated_at = now() where id = %s",
-               (agent["user_id"], info.get("row_id")))
+               (agent["user_id"], row_id))
     notify_staff(info["company_id"], {"type": "call_taken", "uid": uid, "by": agent["name"]})
     log.info("call %s taken by %s", uid, agent["name"])
     return "ok"
@@ -581,8 +611,7 @@ def bot_turn(uid: str) -> str:
         if info.get("state") != "waiting" and not stale:
             return "no"
         info["state"] = "bot"
-    if info.get("channel") == "whatsapp":
-        notify_staff(info["company_id"], {"type": "call_taken", "uid": uid, "by": "bot"})
+    notify_staff(info["company_id"], {"type": "call_taken", "uid": uid, "by": "bot"})
     return "ok"
 
 
@@ -607,7 +636,7 @@ def call_out(ep: str, to: str) -> str:
 
 
 def ended(uid: str, secs: str = "") -> str:
-    """Asterisk hangup handler of a WhatsApp or outgoing call. Bot calls are saved by save_call instead."""
+    """Asterisk hangup handler of a hotline, WhatsApp or outgoing call. Bot calls are saved by save_call instead."""
     info = calls.get(uid)
     if not info:
         return "no"
@@ -658,16 +687,17 @@ def save_recording(uid: str, info: dict) -> None:
 
 
 def decide(ep: str, caller: str) -> str:
+    """A hotline call: "bot:<uid>:<seconds>" (rings in Desk, then the bot answers), "ring:<uid>" (rings in Desk until
+    taken) or "ring" (only rings here)."""
     if not ep.startswith("c") or not ep[1:].isdigit():
         return "ring"
     s = db.one("select * from sip_settings where company_id = %s and enabled", (int(ep[1:]),))
-    if not s or s["bot_mode"] not in ("test", "live"):
+    if not s:
         return "ring"
     number = normalize(caller) or caller
-    if number in numbers(s.get("bot_blocked_numbers")):
-        return "ring"   # blocked: the bot never takes these callers, the agents' phones ring as usual
-    if s["bot_mode"] == "test" and number not in numbers(s.get("bot_test_numbers")):
-        return "ring"
+    if s["bot_mode"] not in ("test", "live") or number in numbers(s.get("bot_blocked_numbers")) \
+            or (s["bot_mode"] == "test" and number not in numbers(s.get("bot_test_numbers"))):
+        return ring_only(s["company_id"], caller)   # the bot is off for this caller: staff and office phones only
     return start(s["company_id"], caller, s, int(s.get("bot_delay") or 20))
 
 
