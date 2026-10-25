@@ -1,12 +1,15 @@
 """A customer asks the bot (WhatsApp chat, WhatsApp call, hotline) to turn their line back on.
 
 Rule (Zisan 2026-10-25): only a line the billing software turned off for the bill, only while the due is at most one
-month's bill, and once per customer per calendar month (Bangladesh time). Every request, done or refused, is logged
+month's bill, and once per customer per calendar month (Bangladesh time). One phone number may have at most
+self_reconnect_per_number lines (default 2) turned on a month, whatever IDs it gives; the Owner sets other limits
+for single numbers (bot_settings.self_reconnect_number_limits). Every request, done or refused, is logged
 in line_enables (source customer_*), the same log as technicians' and the Desk's switches. Off unless the company
 turns it on (Bot settings: self_reconnect).
 """
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 from engine import db, tenant as tenants
@@ -34,6 +37,32 @@ def used_this_month(t: Tenant, customer: dict) -> datetime | None:
     return row["created_at"] + timedelta(hours=6) if row else None
 
 
+def _key(number: str | None) -> str:
+    """A phone number as its last 10 digits: 8801XXXXXXXXX, 01XXXXXXXXX and +880... are the same number."""
+    return re.sub(r"\D", "", number or "")[-10:]
+
+
+def number_limit(t: Tenant, number: str | None) -> int | None:
+    """How many lines this number may have turned on a month (None: no number to count, e.g. a hidden caller ID)."""
+    key = _key(number)
+    if len(key) != 10:
+        return None
+    for row in t.bot.get("self_reconnect_number_limits") or []:
+        if _key(str(row.get("number") or "")) == key and str(row.get("limit", "")).strip().isdigit():
+            return int(row["limit"])
+    per = t.bot.get("self_reconnect_per_number")
+    return 2 if per is None else int(per)
+
+
+def number_used(t: Tenant, number: str | None) -> int:
+    """Lines this number's requests turned on this month (BD time)."""
+    row = db.one("""SELECT count(*) AS n FROM line_enables WHERE company_id = %s AND source LIKE 'customer%%'
+                      AND result = 'enabled' AND created_at >= %s
+                      AND right(regexp_replace(coalesce(technician_number, ''), '\\D', '', 'g'), 10) = %s""",
+                 (t.company_id, _month_start_utc(), _key(number)))
+    return int(row["n"]) if row else 0
+
+
 def _stored_monthly(t: Tenant, customer: dict) -> float:
     """The monthly bill from our copy: billing's customer search (the fresh row) has no MonthlyBill, only the Billing
     list the customer sync reads does (hotline calls 239/240, 2026-10-25: every line came out "not_bill")."""
@@ -42,9 +71,9 @@ def _stored_monthly(t: Tenant, customer: dict) -> float:
     return _num(row["monthly_bill"]) if row else 0.0
 
 
-def check(t: Tenant, customer: dict) -> tuple[str, dict]:
-    """(verdict, numbers) for a fresh billing row. verdict: ok | off | already_active | not_bill | due_too_high |
-    used_this_month."""
+def check(t: Tenant, customer: dict, number: str | None = None) -> tuple[str, dict]:
+    """(verdict, numbers) for a fresh billing row, asked from `number`. verdict: ok | off | already_active | not_bill |
+    due_too_high | used_this_month | number_limit."""
     due, monthly = _num(customer.get("BalanceDue")), _num(customer.get("MonthlyBill")) or _stored_monthly(t, customer)
     info = {"due": round(due), "monthly_bill": round(monthly)}
     if not t.bot.get("self_reconnect"):
@@ -58,12 +87,17 @@ def check(t: Tenant, customer: dict) -> tuple[str, dict]:
     used = used_this_month(t, customer)
     if used:
         return "used_this_month", {**info, "used_on": used.strftime("%d-%m-%Y")}
+    limit = number_limit(t, number)
+    if limit is not None:
+        n = number_used(t, number)
+        if n >= limit:
+            return "number_limit", {**info, "number_used": n, "number_limit": limit}
     return "ok", info
 
 
-def status(t: Tenant, customer: dict) -> dict | None:
+def status(t: Tenant, customer: dict, number: str | None = None) -> dict | None:
     """For the bots' customer data: whether asking would turn this line on now (None = feature off / line on)."""
-    verdict, info = check(t, customer)
+    verdict, info = check(t, customer, number)
     if verdict in ("off", "already_active"):
         return None
     return {"can_reconnect_now": verdict == "ok", "why_not": None if verdict == "ok" else verdict, **info}
@@ -81,6 +115,11 @@ def message(verdict: str, info: dict) -> str:
     if verdict == "due_too_high":
         return (f"আপনার বকেয়া {due} টাকা, এক মাসের বিলের ({info.get('monthly_bill')} টাকা) বেশি। এক মাসের বেশি বকেয়া "
                 "থাকলে এভাবে লাইন চালু করা যায় না; বকেয়া পরিশোধ করলে লাইন চালু হয়ে যাবে।")
+    if verdict == "number_limit":
+        if not info.get("number_limit"):
+            return "এই নম্বর থেকে লাইন চালু করার সুবিধা নেই। বকেয়া পরিশোধ করলে লাইন চালু হয়ে যাবে।"
+        return (f"এই নম্বর থেকে এই মাসে {info.get('number_used')}টা লাইন চালু করা হয়েছে; এক নম্বর থেকে মাসে "
+                f"{info.get('number_limit')}টার বেশি লাইন এভাবে চালু করা যায় না। বকেয়া পরিশোধ করলে লাইন চালু হয়ে যাবে।")
     if verdict == "already_active":
         return "আপনার লাইন বিলের কারণে বন্ধ নেই, চালুই আছে।"
     if verdict == "not_bill":
@@ -104,7 +143,7 @@ def reconnect(t: Tenant, customer: dict, source: str, number: str | None, reques
             # billing's answer now (Disabled, BalanceDue) over what we had; fields it doesn't send keep our values
             fresh = {**customer, **{k: v for k, v in fresh.items() if v is not None}} \
                 if fresh and int(fresh.get("CustomerHeaderId") or 0) == hid else customer
-            verdict, info = check(t, fresh)
+            verdict, info = check(t, fresh, number)
             result, error = verdict, None
             if verdict == "ok":
                 if os.environ.get("ENGINE_DRY_RUN", "1") == "1":

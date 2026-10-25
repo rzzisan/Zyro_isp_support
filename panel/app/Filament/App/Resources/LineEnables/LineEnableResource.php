@@ -77,7 +77,7 @@ class LineEnableResource extends Resource
                 TextColumn::make('due')->label(__('তখন বকেয়া'))->placeholder('—')->suffix(__(' টাকা')),
                 TextColumn::make('result')->label(__('ফল'))->badge()
                     ->formatStateUsing(fn (string $state) => __(LineEnable::RESULTS[$state] ?? $state))
-                    ->color(fn (string $state) => ['enabled' => 'success', 'disabled' => 'success', 'failed' => 'danger', 'not_allowed' => 'danger', 'dry_run' => 'warning', 'used_this_month' => 'warning', 'due_too_high' => 'warning', 'not_bill' => 'warning'][$state] ?? 'gray'),
+                    ->color(fn (string $state) => ['enabled' => 'success', 'disabled' => 'success', 'failed' => 'danger', 'not_allowed' => 'danger', 'dry_run' => 'warning', 'used_this_month' => 'warning', 'due_too_high' => 'warning', 'not_bill' => 'warning', 'number_limit' => 'warning'][$state] ?? 'gray'),
                 TextColumn::make('request')->label(__('অনুরোধের মেসেজ'))->limit(60)->wrap()->toggleable(),
             ])
             ->filters([

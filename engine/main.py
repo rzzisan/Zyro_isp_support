@@ -647,7 +647,7 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = 
         context = customer_view(customers.live_context(t, api, customer), verified,
                                 "\n".join(x for x in (pending, text) if x))
         from engine import self_reconnect
-        reconnect_state = self_reconnect.status(t, customer) if verified else None
+        reconnect_state = self_reconnect.status(t, customer, contact["wa_number"]) if verified else None
         if reconnect_state:
             context["self_reconnect"] = reconnect_state
         from engine.ticket_actions import open_tickets, solve_for_customer
@@ -708,7 +708,7 @@ def _answer(t: Tenant, contact: dict, text: str, message_id: int, voice: bool = 
                 outcome = res["say"]
                 ticket_note = "\n".join(x for x in (ticket_note, f"কাস্টমার লাইন চালু চেয়েছেন: {res['result']}") if x)
             else:
-                verdict, info = self_reconnect.check(t, customer)
+                verdict, info = self_reconnect.check(t, customer, contact["wa_number"])
                 outcome = "(চুপ মোড: লাইন চালু করা হয়নি) " + self_reconnect.message("enabled" if verdict == "ok" else verdict, info)
             draft = (draft + "\n" if draft else "") + outcome
         if draft:
