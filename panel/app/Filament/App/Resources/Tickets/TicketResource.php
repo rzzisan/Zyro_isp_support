@@ -22,7 +22,10 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-/** Billing software support tickets, synced every 5 minutes. Open ones can be edited, assigned and solved (in billing). */
+/**
+ * Support tickets: the billing software's (synced every 5 minutes; edited, assigned and solved in billing) and, once the
+ * বিলিং সংযোগ page sends new tickets to the Desk, the Desk's own (worked in the Desk only).
+ */
 class TicketResource extends Resource
 {
     use \App\Filament\App\Concerns\QuickAccessible;
@@ -115,7 +118,8 @@ class TicketResource extends Resource
             ->defaultPaginationPageOption(50)
             ->defaultSort('opened_at', 'desc')
             ->columns([
-                TextColumn::make('complain_id')->label(__('টিকিট'))->prefix('#')->searchable()->sortable(),
+                TextColumn::make('complain_id')->label(__('টিকিট'))->prefix('#')->searchable()->sortable()
+                    ->description(fn (BillingTicket $r) => $r->isDesk() ? 'Desk' : null),
                 TextColumn::make('customer_name')->label(__('কাস্টমার'))
                     ->description(fn (BillingTicket $r) => trim('ID '.$r->customer_id.' · '.$r->mobile.(($c = $r->complainNumber()) && $c !== $r->mobile ? __(' · অভিযোগ: ').$c : ''), ' ·'))
                     ->searchable(['customer_name', 'customer_id', 'mobile', 'username']),

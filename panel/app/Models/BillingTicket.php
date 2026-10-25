@@ -5,7 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** A support ticket copied from the billing software (read-only here; engine/ticket_sync.py writes it). */
+/**
+ * A support ticket: copied from the billing software (engine/ticket_sync.py; source null or 'history'), or opened in
+ * the Desk itself (source 'desk', engine/desk_tickets.py). Either way the engine writes it, never the panel.
+ */
 class BillingTicket extends Model
 {
     public const STATES = ['pending' => 'অপেক্ষমাণ', 'processing' => 'কাজ চলছে', 'solved' => 'সমাধান', 'closed' => 'বন্ধ'];
@@ -50,6 +53,18 @@ class BillingTicket extends Model
         $n = trim((string) ($this->raw['ComplainNumber'] ?? ''));
 
         return $n !== '' ? $n : null;
+    }
+
+    public function isDesk(): bool
+    {
+        return $this->source === 'desk';
+    }
+
+    /** What was done on it from the Desk (open, assign, edit, solve), oldest first. */
+    public function events(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TicketEvent::class, 'complain_id', 'complain_id')
+            ->where('ticket_events.company_id', $this->company_id)->orderBy('id');
     }
 
     public function isOpen(): bool

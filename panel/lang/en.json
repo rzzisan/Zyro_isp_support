@@ -882,7 +882,7 @@
     "বিলিংয়ে নেই": "Not in billing",
     "বিলিংয়ে বা ডেস্ক থেকে এই কর্মীকে টিকিট assign করলে টিকিটের তথ্য এই টেকনিশিয়ানের WhatsApp-এ যাবে": "When a ticket is assigned to this employee in billing or from the Desk, its details go to this technician's WhatsApp",
     "বিলিংয়ে সার্ভার: ": "Servers in billing: ",
-    "বিলিংয়ের টিকিট": "Billing tickets",
+    "বিলিংয়ের টিকিট": "Billing ticket",
     "বিলিংয়ের পেজ থেকে এখনো আনা হয়নি; কিছু ঘর ফাঁকা থাকতে পারে": "Not fetched from the billing page yet; some fields may be empty",
     "বিলের অবস্থা": "Bill status",
     "বিলের এডিট-ইতিহাস": "Bill edit history",
@@ -1594,5 +1594,15 @@
     "বিলিং থেকে কী কী আনা হবে": "What may come from billing",
     "বিলিং থেকে লাইভ স্ট্যাটাস / MAC": "Live status / MAC from billing",
     "সংযোগ, MAC আর ONU সবসময় আগে আমাদের MikroTik ও OLT থেকে আসে। সুইচ চালু থাকলে যেটা আমাদের কাছে নেই শুধু সেটা বিলিং থেকে আনা হয়; বন্ধ থাকলে বিলিং-এ যাওয়াই হয় না।": "Connection, MAC and ONU always come from our own MikroTik and OLTs first. With a switch on, only what we don't have is taken from billing; off, billing is not asked at all.",
-    "সংযোগ: ": "Connection: "
+    "সংযোগ: ": "Connection: ",
+    "Desk টিকিটের নম্বর বিলিংয়ের নম্বরের পরের এক লাখের ঘর থেকে শুরু হবে (যেমন 100001), তাই কখনো মিলে যাবে না।": "Desk ticket numbers start in the next hundred-thousand range above billing's numbers (e.g. 100001), so they never clash.",
+    "Desk-এ খোলা টিকিট :open টা, শেষ নম্বর :last।": "Open Desk tickets: :open, last number :last.",
+    "Desk-এর টিকিট": "Desk ticket",
+    "ইতিহাস": "History",
+    "এখনো কিছু নেই": "Nothing yet",
+    "কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে Solved করা হবে।": "It is checked again that the customer is online on MikroTik, then marked Solved.",
+    "কাস্টমারকে SMS যাবে না।": "No SMS goes to the customer.",
+    "নতুন টিকিট বিলিং সফটওয়্যারে খোলা হবে": "Open new tickets in the billing software",
+    "বন্ধ করলে নতুন টিকিট (ডেস্ক, WhatsApp বট, ফোন বট) Desk-এই খোলা, অ্যাসাইন আর সমাধান হবে, বিলিং-এ যাবে না। আগের বিলিং টিকিট বিলিং-এই সমাধান হবে। যেকোনো সময় আবার চালু করা যায়।": "When off, new tickets (desk, WhatsApp bot, phone bot) are opened, assigned and solved in the Desk itself and never reach billing. Earlier billing tickets are still solved in billing. You can turn it back on at any time.",
+    "অ্যাসাইন": "Assigned"
 }

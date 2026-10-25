@@ -493,10 +493,12 @@ def send_voice_reply(t: Tenant, contact: dict, text: str) -> None:
 def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str | None = None) -> tuple[str, str | None]:
     if DRY_RUN or not t.bot.get("auto_ticket", True):
         return f"{note} → (টিকেট খোলা হয়নি: {'dry run' if DRY_RUN else 'বন্ধ'})", None
-    api = tenants.billing(t)
+    from engine.desk_tickets import for_new
     category, _, detail = note.partition("|")
     category, detail = category.strip(), (detail.strip() or category.strip())
     try:
+        api = for_new(t, actor=f"WhatsApp: {requested_by}" if requested_by else "WhatsApp বট",
+                      billing=lambda: tenants.billing(t))
         existing = api.open_tickets_for(customer.get("UserName") or "")
         if existing:
             no = existing[0].get("ComplainId")
@@ -506,8 +508,10 @@ def open_ticket(t: Tenant, customer: dict, wa: str, note: str, requested_by: str
             or cats.get("Others Support")
         mobile = normalize_bd_mobile(customer.get("MobileNumber") or "") or normalize_bd_mobile(wa)
         api.create_ticket(customer["CustomerHeaderId"], cid, 2, mobile, (f"[WhatsApp: {requested_by}] {detail}\nWhatsApp: {wa}" if requested_by else f"[WhatsApp বট] {detail}\nকাস্টমার WhatsApp: {wa}"))
-        created = api.open_tickets_for(customer.get("UserName") or "")
-        no = created[0].get("ComplainId") if created else None
+        no = getattr(api, "created_id", None)
+        if not no:
+            created = api.open_tickets_for(customer.get("UserName") or "")
+            no = created[0].get("ComplainId") if created else None
         staff = ""
         try:
             from engine.ticket_autoassign import assign, label
@@ -731,6 +735,9 @@ def billing_call(fn):
 def ticket_options(request: Request, company_id: int):
     """Only when the desk has no copy yet (first use): the support page's lists, saved so the desk keeps them."""
     t = internal_tenant(request, company_id)
+    if t.desk_tickets:  # the Desk's own lists
+        from engine.desk_tickets import DeskTickets
+        return DeskTickets(t).support_options()
     opts = billing_call(lambda: tenants.billing(t).support_options())
     from engine.billing_config import save_support
     save_support(company_id, opts)
@@ -777,6 +784,25 @@ def customer_search(request: Request, company_id: int, q: str = ""):
              "zone": r.get("ZoneName") or r.get("Zone")} for r in rows]
 
 
+def ticket_backend(t: Tenant, complain_id, b: dict, member_fallback: bool = False):
+    """A Desk ticket is worked in the Desk; a billing one with the member's billing login (else the company's)."""
+    from engine.desk_tickets import for_ticket
+    uid = int(b.get("user_id") or 0)
+    return for_ticket(t, complain_id, uid, billing=lambda: tenants.billing_for_user(t, uid, member_fallback=member_fallback))
+
+
+def in_billing(api) -> bool:
+    from engine.desk_tickets import DeskTickets
+    return not isinstance(api, DeskTickets)
+
+
+def log_billing_event(t: Tenant, complain_id, kind: str, b: dict, detail: dict | None = None) -> None:
+    """A Desk action on a billing ticket, in the ticket's history too (Desk tickets keep their own)."""
+    from engine.desk_tickets import log_event, member_name
+    uid = int(b.get("user_id") or 0)
+    log_event(t.company_id, complain_id, kind, uid, member_name(t.company_id, uid), detail)
+
+
 def refuse_mixed_teams(company_id: int, employees) -> None:
     """One ticket holds staff of one field team only (Desk → ফিল্ড টিম)."""
     from engine.ticket_autoassign import check_team
@@ -790,14 +816,19 @@ async def new_ticket(request: Request, company_id: int, background: BackgroundTa
     t = internal_tenant(request, company_id)
     b = await request.json()
     refuse_mixed_teams(company_id, b.get("employees"))
-    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
+    from engine.desk_tickets import for_new
+    api = billing_call(lambda: for_new(t, int(b.get("user_id") or 0)))
 
     def run():
         msg = api.create_ticket(int(b["header_id"]), str(b["category_id"]), int(b.get("priority") or 2),
                                 normalize_bd_mobile(b.get("mobile") or "") or (b.get("mobile") or ""),
                                 b.get("comment") or "", send_sms=False)  # the customer's SMS goes from the Desk
-        created = api.open_tickets_for(b.get("username") or "") if b.get("username") else []
-        complain_id = created[0].get("ComplainId") if created else None
+        complain_id = getattr(api, "created_id", None)
+        if not complain_id:
+            created = api.open_tickets_for(b.get("username") or "") if b.get("username") else []
+            complain_id = created[0].get("ComplainId") if created else None
+            if complain_id:
+                log_billing_event(t, complain_id, "open", b)
         auto = None
         if complain_id and b.get("employees"):
             api.assign_ticket(int(complain_id), [int(e) for e in b["employees"]], b.get("dept_id"), bool(b.get("sms_employees")))
@@ -810,7 +841,8 @@ async def new_ticket(request: Request, company_id: int, background: BackgroundTa
         return {"message": msg, "complain_id": complain_id, "auto_assigned": auto or None}
 
     res = await run_in_threadpool(billing_call, run)
-    background.add_task(refresh_tickets, t)
+    if not t.desk_tickets:
+        background.add_task(refresh_tickets, t)
     return res
 
 
@@ -821,10 +853,12 @@ async def assign(request: Request, company_id: int, complain_id: int, background
     if not b.get("employees"):
         raise HTTPException(status_code=400, detail="অন্তত একজন কর্মী বাছাই করুন")
     refuse_mixed_teams(company_id, b["employees"])
-    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
+    api = billing_call(lambda: ticket_backend(t, complain_id, b))
     await run_in_threadpool(billing_call, lambda: api.assign_ticket(complain_id, [int(e) for e in b["employees"]],
                                                                     b.get("dept_id"), bool(b.get("sms_employees"))))
-    background.add_task(refresh_tickets, t)  # also messages the newly assigned technicians
+    if in_billing(api):
+        log_billing_event(t, complain_id, "assign", b, {"employee_ids": b["employees"]})
+        background.add_task(refresh_tickets, t)  # also messages the newly assigned technicians
     return {"ok": True}
 
 
@@ -838,11 +872,11 @@ async def edit_ticket(request: Request, company_id: int, complain_id: int, backg
     if not row:
         raise HTTPException(status_code=404, detail="টিকিট পাওয়া যায়নি")
     if row["state"] not in ("pending", "processing"):
-        raise HTTPException(status_code=400, detail="সমাধান হওয়া টিকিট বিলিংয়ে এডিট করা যায় না")
+        raise HTTPException(status_code=400, detail="সমাধান হওয়া টিকিট এডিট করা যায় না")
     if not (b.get("category_id") and b.get("mobile") and (b.get("comment") or "").strip()):
         raise HTTPException(status_code=400, detail="সমস্যার ধরন, মোবাইল আর বিবরণ লাগবে")
     refuse_mixed_teams(company_id, b.get("employees"))
-    api = billing_call(lambda: tenants.billing_for_user(t, int(b.get("user_id") or 0)))
+    api = billing_call(lambda: ticket_backend(t, complain_id, b))
 
     def run():
         msg = api.update_ticket(complain_id, int(row["customer_header_id"]), str(b["category_id"]),
@@ -863,7 +897,10 @@ async def edit_ticket(request: Request, company_id: int, complain_id: int, backg
                 json.dumps({"ProblemCategoryId": int(b["category_id"]), "ProblemPriorityId": prio,
                             "ComplainNumber": normalize_bd_mobile(b["mobile"]) or b["mobile"]}),
                 company_id, str(complain_id)))
-    background.add_task(refresh_tickets, t)
+    if in_billing(api):
+        log_billing_event(t, complain_id, "edit", b, {"category": cat["name"] if cat else None,
+                                                     "priority": {1: "low", 2: "medium", 3: "high"}.get(prio)})
+        background.add_task(refresh_tickets, t)
     return {"ok": True, "message": msg}
 
 
@@ -892,24 +929,28 @@ async def solve(request: Request, company_id: int, complain_id: int, background:
             raise HTTPException(status_code=400, detail="কাস্টমার MikroTik-এ অফলাইন, লাইন চালু হলে Solve করুন")
     uid = int(b.get("user_id") or 0)
     remark = b.get("remark") or ""
+    api = billing_call(lambda: ticket_backend(t, complain_id, b, member_fallback=True))
     # a member without a personal billing login (field technicians) solves with the company login; the remark says who
+    # (a Desk ticket keeps who solved it in its history)
     own = db.one("SELECT billing_username, billing_password FROM company_user WHERE company_id = %s AND user_id = %s", (company_id, uid))
-    if own is not None and not (own["billing_username"] and own["billing_password"]):
+    if in_billing(api) and own is not None and not (own["billing_username"] and own["billing_password"]):
         who = db.one("SELECT name FROM users WHERE id = %s", (uid,))
         if who and who["name"]:
             remark = f"[{who['name']}] {remark}".strip()
-    api = billing_call(lambda: tenants.billing_for_user(t, uid, member_fallback=True))
     await run_in_threadpool(billing_call, lambda: api.solve_ticket(complain_id, remark[:500]))
-    db.execute("""UPDATE billing_tickets SET state = 'solved', solved_at = now(), solved_by = COALESCE(solved_by, assigned_to),
-                    updated_at = now() WHERE company_id = %s AND complain_id = %s""", (company_id, str(complain_id)))
-    background.add_task(refresh_tickets, t)
+    if in_billing(api):
+        db.execute("""UPDATE billing_tickets SET state = 'solved', solved_at = now(), solved_by = COALESCE(solved_by, assigned_to),
+                        updated_at = now() WHERE company_id = %s AND complain_id = %s""", (company_id, str(complain_id)))
+        log_billing_event(t, complain_id, "solve", b, {"remark": remark[:500]} if remark else None)
+        background.add_task(refresh_tickets, t)
     return {"ok": True, "uptime": mk.get("uptime")}
 
 
 @app.get("/internal/{company_id}/tickets/{complain_id}/solvers")
 def solvers(request: Request, company_id: int, complain_id: int):
     t = internal_tenant(request, company_id)
-    return billing_call(lambda: tenants.billing(t).ticket_solvers(complain_id))
+    from engine.desk_tickets import for_ticket
+    return billing_call(lambda: for_ticket(t, complain_id, billing=lambda: tenants.billing(t)).ticket_solvers(complain_id))
 
 
 @app.post("/internal/{company_id}/tickets/sync")

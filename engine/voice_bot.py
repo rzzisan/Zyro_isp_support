@@ -378,7 +378,7 @@ def staff_action(t, tech: dict, name: str, args: dict) -> dict:
 
 
 def create_complaint(t, caller: str, customer_id: str, problem: str, category: str | None = None) -> dict:
-    """Tool: a ticket in the billing software, like the WhatsApp bot's (one open ticket per line)."""
+    """Tool: a ticket (in the Desk or the billing software), like the WhatsApp bot's (one open ticket per line)."""
     from engine import customers
     from engine import tenant as tenants
     from engine.ispdigital import normalize_bd_mobile
@@ -386,10 +386,12 @@ def create_complaint(t, caller: str, customer_id: str, problem: str, category: s
         return {"error": "billing not connected"}
     if not t.bot.get("auto_ticket", True):
         return {"ok": False, "note": "বট দিয়ে টিকিট খোলা বন্ধ; request_callback দাও"}
-    api = tenants.billing(t)
-    row = find_line(t, api, customer_id)
+    billing_api = tenants.billing(t)
+    row = find_line(t, billing_api, customer_id)
     if not row:
         return {"ok": False, "note": "এই আইডিতে সংযোগ পাওয়া যায়নি"}
+    from engine.desk_tickets import for_new
+    api = for_new(t, actor="ফোন বট", billing=lambda: billing_api)
     existing = api.open_tickets_for(row.get("UserName") or "")
     if existing:
         return {"ok": True, "already_open": True, "ticket_no": existing[0].get("ComplainId")}
@@ -400,8 +402,10 @@ def create_complaint(t, caller: str, customer_id: str, problem: str, category: s
         or cats.get("Others Support") or next(iter(cats.values()))
     mobile = normalize_bd_mobile(row.get("MobileNumber") or "") or normalize(caller) or caller
     api.create_ticket(row["CustomerHeaderId"], cid, 2, mobile, f"[ফোন বট] {problem}\nকলার: {caller}")
-    created = api.open_tickets_for(row.get("UserName") or "")
-    no = created[0].get("ComplainId") if created else None
+    no = getattr(api, "created_id", None)
+    if not no:
+        created = api.open_tickets_for(row.get("UserName") or "")
+        no = created[0].get("ComplainId") if created else None
     try:
         from engine.ticket_autoassign import assign
         assign(t, api, no, row.get("CustomerHeaderId"), row, category_id=cid)

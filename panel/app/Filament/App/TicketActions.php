@@ -118,7 +118,7 @@ class TicketActions
         $prefill = fn (Action $action) => $customerId instanceof \Closure ? array_pad((array) $customerId($action->getRecord()), 2, null) : [$customerId, null];
 
         return Action::make('newTicket')->label(__('নতুন টিকিট'))->icon(Heroicon::OutlinedPlusCircle)
-            ->modalHeading(__('বিলিং সফটওয়্যারে নতুন টিকিট'))
+            ->modalHeading(fn () => \App\Models\BillingConnection::deskTickets(static::company()) ? __('নতুন টিকিট') : __('বিলিং সফটওয়্যারে নতুন টিকিট'))
             ->modalDescription(function (Action $action) use ($prefill) {
                 [$id] = $prefill($action);
                 $open = $id ? BillingTicket::where('company_id', static::company())->whereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$id])
@@ -185,7 +185,8 @@ class TicketActions
                             ->hintIcon('heroicon-o-information-circle', fn () => SmsSetting::forCompany(static::company())->eventReady('ticket_open')
                                 ? __('টিকিট খোলা হলে Desk-এর SMS গেটওয়ে দিয়ে "টিকিট খোলা" টেমপ্লেটের SMS যায় (যোগাযোগের মোবাইলে)')
                                 : __('চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "টিকিট খোলা" টেমপ্লেট সেট করুন')),
-                        Toggle::make('sms_employees')->label(__('কর্মীকে SMS')),
+                        Toggle::make('sms_employees')->label(__('কর্মীকে SMS'))
+                            ->visible(fn () => ! \App\Models\BillingConnection::deskTickets(static::company())),  // billing's staff SMS
                     ]),
                 ]),
             ])
@@ -198,7 +199,7 @@ class TicketActions
                         'mobile' => $data['mobile'], 'comment' => $data['comment'],
                         'sms_client' => false,  // never billing's SMS
                         'employees' => array_values($data['employees'] ?? []), 'dept_id' => $data['dept_id'] ?? null,
-                        'sms_employees' => (bool) $data['sms_employees'],
+                        'sms_employees' => (bool) ($data['sms_employees'] ?? false),
                     ]);
                 } catch (RuntimeException $e) {
                     Notification::make()->danger()->title(__('টিকিট খোলা যায়নি'))->body($e->getMessage())->send();
@@ -316,12 +317,13 @@ class TicketActions
                 static::teamSelect(),
                 Select::make('employees')->label(__('কর্মী'))->multiple()->searchable()->required()
                     ->options(fn () => static::options('employees')),
-                Toggle::make('sms_employees')->label(__('কর্মীকে SMS')),
+                Toggle::make('sms_employees')->label(__('কর্মীকে SMS'))
+                    ->visible(fn (BillingTicket $record) => ! $record->isDesk()),  // billing's staff SMS; Desk technicians get WhatsApp
             ])
             ->action(function (array $data, BillingTicket $record, Action $action) {
                 try {
                     Engine::assign(static::company(), $record->complain_id, $data['employees'], $data['dept_id'] ?? null,
-                        (bool) $data['sms_employees']);
+                        (bool) ($data['sms_employees'] ?? false));
                 } catch (RuntimeException $e) {
                     Notification::make()->danger()->title(__('Assign করা যায়নি'))->body($e->getMessage())->send();
                     $action->halt();
@@ -374,7 +376,8 @@ class TicketActions
         return Action::make('edit')->label(__('এডিট'))->icon(Heroicon::OutlinedPencilSquare)->color('gray')
             ->visible(fn (BillingTicket $record) => $record->isOpen())
             ->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id এডিট', ['id' => $record->complain_id]))
-            ->modalDescription(__('বিলিং সফটওয়্যারেও বদলাবে (আপনার নিজের বিলিং লগইনে)। কাস্টমারকে SMS যাবে না।'))
+            ->modalDescription(fn (BillingTicket $record) => $record->isDesk() ? __('কাস্টমারকে SMS যাবে না।')
+                : __('বিলিং সফটওয়্যারেও বদলাবে (আপনার নিজের বিলিং লগইনে)। কাস্টমারকে SMS যাবে না।'))
             ->modalWidth('2xl')
             ->modalSubmitActionLabel(__('সেভ করুন'))
             ->fillForm(function (BillingTicket $record) {
@@ -411,7 +414,8 @@ class TicketActions
                         ->helperText(__('খালি রাখলে কর্মী যেমন আছে থাকবে'))
                         ->options(fn () => static::options('employees')),
                 ]),
-                Toggle::make('sms_employees')->label(__('কর্মীকে SMS')),
+                Toggle::make('sms_employees')->label(__('কর্মীকে SMS'))
+                    ->visible(fn (BillingTicket $record) => ! $record->isDesk()),  // billing's staff SMS; Desk technicians get WhatsApp
             ])
             ->action(function (array $data, BillingTicket $record, Action $action) {
                 // re-assign only when the staff list really changed (AddSolver restarts the assignment)
@@ -464,7 +468,9 @@ class TicketActions
                 default => null,
             })
             ->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id সমাধান', ['id' => $record->complain_id]))
-            ->modalDescription(__('কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে বিলিংয়ে Solved করা হবে। বিলিং থেকে কোনো SMS যায় না।'))
+            ->modalDescription(fn (BillingTicket $record) => $record->isDesk()
+                ? __('কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে Solved করা হবে।')
+                : __('কাস্টমার এখন MikroTik-এ অনলাইন কিনা আবার যাচাই করে বিলিংয়ে Solved করা হবে। বিলিং থেকে কোনো SMS যায় না।'))
             ->modalSubmitActionLabel(__('Solve করুন'))
             ->fillForm(fn () => ['sms' => SmsSetting::forCompany(static::company())->eventOn('ticket_solved')])
             ->schema([

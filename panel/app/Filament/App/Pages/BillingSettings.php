@@ -54,7 +54,8 @@ class BillingSettings extends CompanySettingsPage
     {
         return ['provider' => $record->provider, 'base_url' => $record->base_url,
             'username' => $record->username, 'password' => null,
-            'live_from_billing' => $record->live_from_billing ?? true, 'onu_from_billing' => $record->onu_from_billing ?? true];
+            'live_from_billing' => $record->live_from_billing ?? true, 'onu_from_billing' => $record->onu_from_billing ?? true,
+            'tickets_in_billing' => $record->tickets_in_billing ?? true];
     }
 
     public function form(Schema $schema): Schema
@@ -83,6 +84,11 @@ class BillingSettings extends CompanySettingsPage
                     Toggle::make('onu_from_billing')->label(__('বিলিং থেকে ONU পাওয়ার'))->default(true)
                         ->helperText(fn () => __('কাস্টমারের MAC আমাদের কোনো OLT-এ না মিললে।').' '.$this->fallbackText('onu')),
                 ]),
+            Section::make(__('টিকিট'))
+                ->schema([
+                    Toggle::make('tickets_in_billing')->label(__('নতুন টিকিট বিলিং সফটওয়্যারে খোলা হবে'))->default(true)
+                        ->helperText(fn () => __('বন্ধ করলে নতুন টিকিট (ডেস্ক, WhatsApp বট, ফোন বট) Desk-এই খোলা, অ্যাসাইন আর সমাধান হবে, বিলিং-এ যাবে না। আগের বিলিং টিকিট বিলিং-এই সমাধান হবে। যেকোনো সময় আবার চালু করা যায়।').' '.$this->ticketText()),
+                ]),
         ]);
     }
 
@@ -98,6 +104,18 @@ class BillingSettings extends CompanySettingsPage
         $labels = ['no_router' => __('MikroTik উত্তর দেয়নি'), 'no_mac' => __('MAC জানা ছিল না'), 'not_on_own_olt' => __('OLT-এ ONU মেলেনি')];
 
         return __('গত ৭ দিনে বিলিং লেগেছে: ').$rows->map(fn ($n, $r) => ($labels[$r] ?? $r).' '.$n.' '.__('বার'))->implode(', ');
+    }
+
+    /** How many tickets live in the Desk now, and which number the next one gets. */
+    public function ticketText(): string
+    {
+        $companyId = Filament::getTenant()->getKey();
+        $open = DB::table('billing_tickets')->where('company_id', $companyId)->where('source', 'desk')
+            ->whereIn('state', ['pending', 'processing'])->count();
+        $last = DB::table('ticket_numbers')->where('company_id', $companyId)->value('last_no');
+
+        return $last ? __('Desk-এ খোলা টিকিট :open টা, শেষ নম্বর :last।', ['open' => $open, 'last' => $last])
+            : __('Desk টিকিটের নম্বর বিলিংয়ের নম্বরের পরের এক লাখের ঘর থেকে শুরু হবে (যেমন 100001), তাই কখনো মিলে যাবে না।');
     }
 
     protected function beforeSaving(array $data, Model $record): array

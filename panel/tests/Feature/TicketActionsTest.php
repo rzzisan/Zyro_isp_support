@@ -64,6 +64,29 @@ class TicketActionsTest extends TestCase
         Livewire::test(Dashboard::class)->callAction('newTicket', $data)->assertHasNoFormErrors();
     }
 
+    public function test_desk_ticket_shows_its_history_and_assigns_without_billing_sms(): void
+    {
+        $cid = $this->company->id;
+        \App\Models\BillingConnection::create(['company_id' => $cid, 'base_url' => 'https://demo.ispdigital.cloud',
+            'username' => 'bot', 'password' => 'secret', 'tickets_in_billing' => false]);
+        $t = BillingTicket::create(['company_id' => $cid, 'complain_id' => '100001', 'customer_id' => '5629',
+            'customer_name' => 'Rezaul', 'category' => 'Line Off', 'state' => 'pending', 'source' => 'desk', 'opened_at' => now()]);
+        \App\Models\TicketEvent::create(['company_id' => $cid, 'complain_id' => '100001', 'kind' => 'open', 'actor' => 'WhatsApp বট',
+            'detail' => ['category' => 'Line Off']]);
+        \App\Models\TicketEvent::create(['company_id' => $cid, 'complain_id' => '57301', 'kind' => 'open', 'actor' => 'অন্য টিকিট']);
+
+        $this->assertSame(['open'], $t->events->pluck('kind')->all());
+        $html = TicketActions::details($t)->render();
+        $this->assertStringContainsString('Desk-এর টিকিট', $html);
+        $this->assertStringContainsString('WhatsApp বট', $html);
+        $this->assertStringNotContainsString('অন্য টিকিট', $html);
+
+        Livewire::test(ListTickets::class)->mountAction('newTicket')->assertSee('নতুন টিকিট')->assertDontSee('বিলিং সফটওয়্যারে নতুন টিকিট');
+        Livewire::test(ListTickets::class)->callAction(TestAction::make('assign')->table($t), ['employees' => ['3']])
+            ->assertHasNoFormErrors();
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), "/tickets/100001/assign") && $r['sms_employees'] === false);
+    }
+
     /** Gateway set up, both ticket SMS on with the default templates; a customer and a technician to fill them. */
     private function ticketSmsReady(): void
     {
