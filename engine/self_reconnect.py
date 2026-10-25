@@ -34,10 +34,18 @@ def used_this_month(t: Tenant, customer: dict) -> datetime | None:
     return row["created_at"] + timedelta(hours=6) if row else None
 
 
+def _stored_monthly(t: Tenant, customer: dict) -> float:
+    """The monthly bill from our copy: billing's customer search (the fresh row) has no MonthlyBill, only the Billing
+    list the customer sync reads does (hotline calls 239/240, 2026-10-25: every line came out "not_bill")."""
+    row = db.one("SELECT monthly_bill FROM billing_customers WHERE company_id = %s AND header_id = %s",
+                 (t.company_id, int(customer.get("CustomerHeaderId") or 0)))
+    return _num(row["monthly_bill"]) if row else 0.0
+
+
 def check(t: Tenant, customer: dict) -> tuple[str, dict]:
     """(verdict, numbers) for a fresh billing row. verdict: ok | off | already_active | not_bill | due_too_high |
     used_this_month."""
-    due, monthly = _num(customer.get("BalanceDue")), _num(customer.get("MonthlyBill"))
+    due, monthly = _num(customer.get("BalanceDue")), _num(customer.get("MonthlyBill")) or _stored_monthly(t, customer)
     info = {"due": round(due), "monthly_bill": round(monthly)}
     if not t.bot.get("self_reconnect"):
         return "off", info
@@ -93,8 +101,9 @@ def reconnect(t: Tenant, customer: dict, source: str, number: str | None, reques
         c.execute("SELECT pg_advisory_lock(%s, %s)", (7301, hid))
         try:
             fresh = find_customer_by_text(api, customer.get("CustomerId") or "", allow_bare_id=True)
-            if not fresh or int(fresh.get("CustomerHeaderId") or 0) != hid:
-                fresh = customer
+            # billing's answer now (Disabled, BalanceDue) over what we had; fields it doesn't send keep our values
+            fresh = {**customer, **{k: v for k, v in fresh.items() if v is not None}} \
+                if fresh and int(fresh.get("CustomerHeaderId") or 0) == hid else customer
             verdict, info = check(t, fresh)
             result, error = verdict, None
             if verdict == "ok":
