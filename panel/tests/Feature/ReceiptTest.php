@@ -91,6 +91,24 @@ class ReceiptTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_advance_payment_shows_under_advance(): void
+    {
+        $this->fakeReceiptNo(null);
+        // 520 due, 1040 taken: billing keeps 520 as an advance (a negative balance)
+        $this->bill->update(['paid' => 1040]);
+        $html = $this->actingAs($this->owner)->get($this->url($this->bill, '?print=0'))->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/Total Bill:<\/td><td>520\.00/', $html);
+        $this->assertMatchesRegularExpression('/Due Amount:<\/td><td>0\.00/', $html);
+        $this->assertMatchesRegularExpression('/Advance:<\/td><td>520\.00/', $html);
+        // the same bill synced from billing, where the balance reads -520
+        \App\Models\BillingDailyBill::create(['company_id' => $this->company->id, 'daily_bill_id' => 170300, 'customer_header_id' => 15605,
+            'collected_at' => '2026-10-25 14:00:00', 'receive_amount' => 1040, 'discount_amount' => 0, 'balance_due' => -520,
+            'is_approved' => false]);
+        $html = $this->actingAs($this->owner)->get("/print/{$this->company->slug}/bill/170300?print=0")->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/Total Bill:<\/td><td>520\.00/', $html);
+        $this->assertMatchesRegularExpression('/Advance:<\/td><td>520\.00/', $html);
+    }
+
     public function test_engine_down_still_prints(): void
     {
         Http::fake(['engine.test/*' => Http::response(['detail' => 'down'], 500)]);

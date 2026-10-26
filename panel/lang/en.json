@@ -25,7 +25,6 @@
     ", শেষ অনলাইন ": ", last online ",
     "01XXXXXXXXX, কমা বা নতুন লাইন দিয়ে কয়েকটা": "01XXXXXXXXX, several separated by commas or new lines",
     "103.157.253.x বা 10.x.x.x": "103.157.253.x or 10.x.x.x",
-    ":amount বেশি নেওয়া হচ্ছে": ":amount taken in excess",
     ":chars অক্ষর · :parts SMS": ":chars characters · :parts SMS",
     ":countটা চ্যাট উত্তরের অপেক্ষায়": ":count chats waiting for a reply",
     ":h ঘণ্টা :m মি.": ":h h :m min",
@@ -1626,5 +1625,8 @@
     "নির্দিষ্ট নম্বরের আলাদা সীমা": "Limits for specific numbers",
     "এই নম্বরগুলোর জন্য উপরের সীমার বদলে এখানকার সীমা খাটবে; 0 দিলে ওই নম্বর থেকে এভাবে লাইন চালু হবে না।": "These numbers use this limit instead of the one above; 0 means that number can't have lines turned on this way.",
     "মোবাইল নম্বর": "Mobile number",
-    "মাসে সর্বোচ্চ লাইন": "Most lines a month"
+    "মাসে সর্বোচ্চ লাইন": "Most lines a month",
+    "অগ্রিম": "Advance",
+    "অগ্রিম :amount টাকা": "Advance :amount Tk",
+    "আংশিক, অগ্রিম বা ডিসকাউন্ট হলে লিখতে হবে": "Required for partial, advance or discounted payments"
 }
