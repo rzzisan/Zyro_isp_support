@@ -63,17 +63,18 @@ def form_info(api: ISPDigital, header_id: int) -> dict:
 
 
 def validate(payable: float, paid: float, discount: float, method_id: str, remarks: str, trx_no: str) -> None:
-    """Same rules as the billing form's ValidateDailyBillForm, plus no over-payment."""
+    """Same rules as the billing form's ValidateDailyBillForm. Paying more than the due is an advance (billing keeps a
+    negative balance); a discount can't go past the due."""
     if paid < 0 or discount < 0:
         raise BillError("টাকা বা ডিসকাউন্ট মাইনাস হতে পারে না")
     if paid == 0 and discount == 0:
         raise BillError("টাকা বা ডিসকাউন্ট অন্তত একটা দিন")
     if paid > 0 and not method_id:
         raise BillError("পেমেন্টের মাধ্যম বাছাই করুন")
-    if paid + discount > payable + 0.001:
-        raise BillError(f"বকেয়া {money(payable)} টাকা, এর বেশি নেওয়া যাবে না")
+    if discount > max(payable, 0) + 0.001:
+        raise BillError(f"বকেয়া {money(payable)} টাকা, ডিসকাউন্ট এর বেশি হতে পারে না")
     if (abs(paid + discount - payable) > 0.001 or discount > 0) and not remarks.strip():
-        raise BillError("আংশিক টাকা বা ডিসকাউন্ট হলে নোট লিখতে হবে")
+        raise BillError("আংশিক, অগ্রিম বা ডিসকাউন্ট হলে নোট লিখতে হবে")
     if trx_no and not re.fullmatch(r"\S+", trx_no):
         raise BillError("Transaction নম্বরে ফাঁকা জায়গা রাখা যাবে না")
 

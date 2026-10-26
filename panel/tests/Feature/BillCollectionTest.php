@@ -140,7 +140,10 @@ class BillCollectionTest extends TestCase
         $this->assertStringContainsString('0 টাকা', $html);
         $this->assertStringContainsString('#16a34a', $html);
         $html = view('filament.app.bills.summary', ['payable' => 525, 'discount' => 0, 'paid' => 600])->render();
-        $this->assertStringContainsString('75 টাকা বেশি নেওয়া হচ্ছে', $html);
+        // more than the due is an advance, not an error
+        $this->assertStringContainsString('অগ্রিম', $html);
+        $this->assertStringContainsString('75 টাকা', $html);
+        $this->assertStringNotContainsString('বেশি নেওয়া', $html);
     }
 
     public function test_customer_search_label_has_pppoe_and_place(): void

@@ -61,9 +61,10 @@ class Receipts
                 report($e); // billing unreachable: print with the bill's own number
             }
         }
-        // the receipt layout reads a collection; fill one (unsaved) from the synced bill
+        // the receipt layout reads a collection; fill one (unsaved) from the synced bill. Billing keeps an advance as a
+        // negative balance, so the bill was paid + discount + balance and the rest shows under Advance
         $c = new BillCollection(['customer_id' => $d->customer_id, 'customer_name' => $d->customer_name,
-            'username' => $d->username, 'payable' => round((float) $d->receive_amount + (float) $d->discount_amount + max(0, (float) $d->balance_due), 2),
+            'username' => $d->username, 'payable' => max(0, round((float) $d->receive_amount + (float) $d->discount_amount + (float) $d->balance_due, 2)),
             'paid' => $d->receive_amount, 'discount' => $d->discount_amount, 'payment_method' => $d->payment_method,
             'received_by' => $d->received_by, 'money_receipt_no' => $d->money_receipt_no]);
         $c->created_at = $d->collected_at;

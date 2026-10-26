@@ -153,7 +153,7 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
                         Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Good, modifier = Modifier.height(48.dp))
                         Spacer(Modifier.height(6.dp))
                         Text(s.billSaved, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
-                        Text(s.balanceLeft(Format.amount(res.balance)), fontSize = 13.sp, color = Muted)
+                        Text(if ((res.balance ?: 0.0) < -0.001) s.advanceNote(Format.amount(-(res.balance ?: 0.0))) else s.balanceLeft(Format.amount(res.balance)), fontSize = 13.sp, color = Muted)
                         res.message?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, color = Muted) }
                         res.sms?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, color = Muted) }
                         Spacer(Modifier.height(12.dp))
@@ -228,7 +228,9 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
                         }
                     }
                     Text(s.balanceAfter(Format.amount(f.payable), Format.amount(discountValue), Format.amount(paidValue), Format.amount(balance)),
-                        fontSize = 12.sp, color = if (balance < -0.001) Danger else Muted)
+                        fontSize = 12.sp, color = Muted)
+                    // more than the due: billing keeps it as an advance and the receipt shows it under Advance
+                    if (balance < -0.001) Text(s.advanceNote(Format.amount(-balance)), fontSize = 12.sp, color = Warn)
                     Field(s.methodLabel) { Picker(f.methods, methodId) { methodId = it } }
                     Field("Received By") { Picker(f.receivedBy, receivedById) { receivedById = it } }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -254,7 +256,6 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
             PrimaryButton(s.saveBill, enabled = !blockedByPending, loading = saving) {
                 saveError = when {
                     paidValue <= 0 && discountValue <= 0 -> s.enterAmount
-                    balance < -0.001 -> s.overPayment
                     methodId == null -> s.pickMethod
                     receivedById == null -> s.pickReceivedBy
                     remarksRequired && remarks.isBlank() -> s.remarksRequired

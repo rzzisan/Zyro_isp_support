@@ -9,7 +9,8 @@
     <span><span style="{{ $muted }}">{{ __('টাকা নিলেন') }}</span> <b>− {{ $tk($paid) }}</b></span>
     <span style="margin-left:auto"><b>{{ __('বাকি বকেয়া') }}</b>
         @if ($balance < 0)
-            <b style="color:#d97706">{{ __(':amount বেশি নেওয়া হচ্ছে', ['amount' => $tk(-$balance)]) }}</b>
+            {{-- more than the due: billing keeps it as an advance, the receipt shows it under Advance --}}
+            <b style="color:#16a34a">{{ $tk(0) }}</b> · <span style="{{ $muted }}">{{ __('অগ্রিম') }}</span> <b style="color:#2563eb">{{ $tk(-$balance) }}</b>
         @else
             <b style="color:{{ $balance > 0 ? '#dc2626' : '#16a34a' }}">{{ $tk($balance) }}</b>
         @endif

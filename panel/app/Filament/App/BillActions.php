@@ -208,7 +208,7 @@ class BillActions
                     TextInput::make('remarks')->label(__('নোট'))->maxLength(500)
                         ->required(fn ($get) => (float) $get('discount') > 0
                             || abs((float) $get('paid') + (float) $get('discount') - (float) $get('expected_payable')) > 0.001)
-                        ->placeholder(__('আংশিক টাকা বা ডিসকাউন্ট হলে লিখতে হবে')),
+                        ->placeholder(__('আংশিক, অগ্রিম বা ডিসকাউন্ট হলে লিখতে হবে')),
                     Grid::make(3)->schema([
                         Toggle::make('print')->label(__('জমার পর রিসিট প্রিন্ট'))->default(true),
                         // the customer's SMS goes only from the Desk's gateway; billing is always told not to send one
@@ -251,7 +251,9 @@ class BillActions
                 }
                 $smsNote = ($data['desk_sms'] ?? false) ? static::queueBillSms(static::company(), $headerId, $data, $res, $methodName) : null;
                 Notification::make()->success()->title(__('বিল জমা হয়েছে, বিলিং-এ approve বাকি').($smsNote ? ' · '.$smsNote : ''))
-                    ->body(trim(($res['message'] ?? '').' · '.__('বাকি বকেয়া :amount টাকা', ['amount' => $res['balance'] ?? 0]), ' ·'))
+                    ->body(trim(($res['message'] ?? '').' · '.((float) ($res['balance'] ?? 0) < 0
+                        ? __('অগ্রিম :amount টাকা', ['amount' => -(float) $res['balance']])
+                        : __('বাকি বকেয়া :amount টাকা', ['amount' => $res['balance'] ?? 0])), ' ·'))
                     ->actions(! empty($res['collection_id']) ? [Action::make('printReceipt')->label(__('রিসিট প্রিন্ট'))->button()
                         ->url(route('receipts.print', ['company' => Filament::getTenant()->slug, 'collection' => $res['collection_id']]))
                         ->openUrlInNewTab()] : [])

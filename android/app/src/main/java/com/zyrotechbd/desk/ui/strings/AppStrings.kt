@@ -98,7 +98,7 @@ abstract class AppStrings {
     abstract val printAfterSave: String
     abstract val saveBill: String
     abstract val enterAmount: String
-    abstract val overPayment: String
+    abstract fun advanceNote(amount: String): String
     abstract val pickMethod: String
     abstract val pickReceivedBy: String
     abstract val remarksRequired: String
@@ -504,7 +504,7 @@ object BengaliStrings : AppStrings() {
     override val printAfterSave = "জমার পর রিসিট প্রিন্ট"
     override val saveBill = "বিল জমা দিন"
     override val enterAmount = "টাকা বা ডিসকাউন্ট অন্তত একটা দিন"
-    override val overPayment = "বকেয়ার চেয়ে বেশি নেওয়া যাবে না"
+    override fun advanceNote(amount: String) = "বকেয়ার চেয়ে বেশি: $amount টাকা অগ্রিম হিসেবে জমা হবে"
     override val pickMethod = "মাধ্যম বাছুন"
     override val pickReceivedBy = "Received By বাছুন"
     override val remarksRequired = "আংশিক টাকা বা ডিসকাউন্টে নোট লিখতে হবে"
@@ -915,7 +915,7 @@ object EnglishStrings : AppStrings() {
     override val printAfterSave = "Print receipt after saving"
     override val saveBill = "Save bill"
     override val enterAmount = "Enter an amount or a discount"
-    override val overPayment = "Cannot take more than the due"
+    override fun advanceNote(amount: String) = "More than the due: $amount Tk goes in as an advance"
     override val pickMethod = "Pick a method"
     override val pickReceivedBy = "Pick Received By"
     override val remarksRequired = "A note is required for partial payment or discount"
