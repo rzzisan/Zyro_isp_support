@@ -43,7 +43,20 @@
                 const go = () => {
                     if (! window.L) { return setTimeout(go, 200); }
                     const map = L.map(this.$refs.map);
-                    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+                    const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+                    const bases = {
+                        '{{ __('ম্যাপ') }}': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }),
+                        '{{ __('স্যাটেলাইট') }}': L.layerGroup([
+                            L.tileLayer(esri + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 18, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }),
+                            L.tileLayer(esri + 'Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 18 }),
+                            L.tileLayer(esri + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 18 }),
+                        ]),
+                    };
+                    let pick = null;
+                    try { pick = localStorage.getItem('field_map_layer'); } catch (e) {}
+                    (bases[pick] || Object.values(bases)[0]).addTo(map);
+                    L.control.layers(bases, null, { collapsed: false }).addTo(map);
+                    map.on('baselayerchange', e => { try { localStorage.setItem('field_map_layer', e.name); } catch (err) {} });
                     const all = [];
                     if (data.line.length) {
                         const pts = data.line.map(p => [p[0], p[1]]);
