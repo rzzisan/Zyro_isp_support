@@ -1532,6 +1532,8 @@
     "ডিউটিতে, :t থেকে": "On duty since :t",
     "ডিউটির বাইরে": "Off duty",
     "নকল লোকেশন": "Fake location",
+    "ম্যাপ": "Map",
+    "স্যাটেলাইট": "Satellite",
     "ফোন বন্ধ, নেট নেই বা লোকেশন বন্ধ থাকলে লোকেশন বন্ধ দেখায়। নেট ফিরলে জমে থাকা লোকেশন পরে আসে।": "A gap shows when the phone was off, had no internet or location was turned off. Points saved offline arrive once the internet is back.",
     "ব্যাটারি": "Battery",
     "লোকেশন আসেনি": "No location",
