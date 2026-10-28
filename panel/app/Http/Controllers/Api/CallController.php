@@ -43,6 +43,9 @@ class CallController extends Controller
             'bot_seconds' => $c->bot_seconds === null ? null : (int) $c->bot_seconds,
             'flag' => $c->bot_flag ? __(CallLogs::FLAGS[$c->bot_flag] ?? $c->bot_flag) : null,
             'callback_reason' => $c->callback_reason,
+            'outcome' => $c->outcome,
+            'outcome_label' => $c->outcome ? __(CallLogs::OUTCOMES[$c->outcome][0] ?? $c->outcome) : null,
+            'outcome_text' => $c->outcome_text,
             'has_recording' => filled($c->recording_path),
             'customer' => $customer ? ['header_id' => (int) $customer->header_id, 'customer_id' => $customer->customer_id,
                 'name' => $customer->name, 'left' => (bool) $customer->is_left] : null,
@@ -83,6 +86,8 @@ class CallController extends Controller
             'transcript' => collect($c->transcript ?? [])->map(fn ($t) => ['who' => $t['who'] ?? '', 'text' => (string) ($t['text'] ?? ''),
                 'at' => (int) ($t['at'] ?? 0)])->values(),
             'bot_error' => $c->bot_error,
+            'actions' => collect($c->actions ?? [])->map(fn ($a) => ['at' => (int) ($a['at'] ?? 0), 'kind' => (string) ($a['kind'] ?? ''),
+                'text' => (string) ($a['text'] ?? ''), 'ok' => (bool) ($a['ok'] ?? true)])->values(),
         ]]);
     }
 

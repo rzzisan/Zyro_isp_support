@@ -17,6 +17,18 @@ class AiKey extends Model
         'openrouter' => ['OpenRouter', 'https://openrouter.ai/api/v1', ''],
     ];
 
+    /** job => [label, providers whose keys fit]; engine/agent.py JOBS uses the same names (table ai_key_jobs) */
+    public const JOBS = [
+        'chat' => ['WhatsApp লেখা চ্যাট (কাস্টমার/টেকনিশিয়ান)', ['claude', 'groq', 'gemini', 'grok', 'openai', 'openrouter']],
+        'voice_read' => ['WhatsApp ভয়েস মেসেজ পড়া', ['gemini', 'groq']],
+        'voice_reply' => ['WhatsApp ভয়েস উত্তর (কণ্ঠ)', ['gemini']],
+        'image' => ['ছবি পড়া', ['claude']],
+        'call_live' => ['ফোন কল: Gemini Live', ['gemini']],
+        'call_stt' => ['ফোন কল (লেখা-ভিত্তিক): শোনা', ['gemini']],
+        'call_llm' => ['ফোন কল (লেখা-ভিত্তিক): উত্তর', ['claude']],
+        'call_tts' => ['ফোন কল (লেখা-ভিত্তিক): কণ্ঠ', ['gemini']],
+    ];
+
     protected $fillable = ['company_id', 'provider', 'label', 'api_key', 'model', 'rate_limited_until',
         'last_checked_at', 'last_check_ok', 'quota', 'quota_at'];
 

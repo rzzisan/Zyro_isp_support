@@ -562,3 +562,9 @@
   - ডেস্কের `/tickets` endpoint দুই মোডেই এটা দিয়ে আটকায়, `DeskTickets.create_ticket`-ও আটকায় (বট, ফোন বট, অ্যাপ সব)।
   - প্যানেলের নতুন টিকিট ফর্ম engine-এ পাঠানোর আগেই আটকায়।
 - টিকিটের বিস্তারিত আর তালিকায় "ডিলিট" (`TicketActions::delete`) শুধু Owner দেখেন, আর শুধু Desk টিকিটে। টিকিটের সাথে ticket_events, ticket_notifications আর field_job (cascade) মুছে যায়। বিলিং টিকিট ডিলিট করা যায় না, কারণ sync সেটা আবার নিয়ে আসবে।
+
+## লেখা-ভিত্তিক ফোন বট, কাজভিত্তিক AI key, কল লগের ফলাফল (2026-10-28, প্ল্যান /mnt/project-files/voice-bot/voice-cascade-plan.md)
+- কল লগ: `call_logs.actions` (JSON [{at, kind, text, ok, customer_id?, ticket?}]) আর `outcome` (solved/info/ticket/open_ticket/callback/unclear/hung_up) + `outcome_text`; engine `voice_bot.greet_actions / tool_action / outcome_of` (AI ছাড়া)। প্যানেলে "ফলাফল" কলাম/ফিল্টার, ডিটেইলসে "যা করা হয়েছে"; API row-এ outcome, show-এ actions।
+- Live-এ কলারের লেখায় দেবনাগরী/আরবি হরফ এলে (`FOREIGN`) বটকে turnComplete=false নোট: আবার জিজ্ঞেস করো, অনুমান নয়।
+- AI key পাতা → "কোন কাজে কোন key" (`ai_key_jobs`; `AiKey::JOBS` = engine `agent.PURPOSE_JOB`): chat, voice_read, voice_reply, image, call_live, call_stt, call_llm, call_tts। `agent._keys(..., job=)` বাছা key আগে, বাকিরা fallback; chat-এ বাছা key-এর provider-ই চলে।
+- `engine/voice_cascade.py`: হটলাইন (SIP) → "বট চালানোর পদ্ধতি" (`sip_settings.bot_engine` live|cascade, `cascade_scope` test|all; test = bot_test_numbers)। নিজের RMS দিয়ে বাক্য শেষ (700 ms), Gemini generateContent দিয়ে বাংলা লেখা (অন্য হরফ এলে কড়া প্রম্পটে আবার, তারপর "[বোঝা যায়নি]"; দুবার → request_callback + end_call), Claude Haiku (`claude-haiku-5-5`, rules আর কলারের তথ্য cache_control; প্রতি পালায় শুধু মেলে এমন FAQ/নির্দেশনা `relevant`), বাক্য ধরে Gemini TTS। একই টুল (`Call.run_tool`), কল লগ, রেকর্ডিং; বলার আগে অঙ্ক যাচাই (`made_up`)। শুভেচ্ছা/বিদায় লাইন একবার বানিয়ে `/var/lib/zyro-voice/line-*.pcm`। খরচ ai_usage purpose call_stt / call_llm / call_tts।
