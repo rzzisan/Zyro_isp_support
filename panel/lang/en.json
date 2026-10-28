@@ -1639,5 +1639,6 @@
     "ডিফল্ট: gemini-3.1-flash-live-preview": "Default: gemini-3.1-flash-live-preview",
     "ফোন কল (অডিও)": "Phone calls (audio)",
     "ফোন কল (নির্দেশনা ও তথ্য)": "Phone calls (instructions and data)",
-    "বদলালে পরের কল থেকে চলবে; ভালো না লাগলে ডিফল্টে ফিরিয়ে দিন": "A change applies from the next call; switch back to the default if it doesn't work well"
+    "বদলালে পরের কল থেকে চলবে; ভালো না লাগলে ডিফল্টে ফিরিয়ে দিন": "A change applies from the next call; switch back to the default if it doesn't work well",
+    "কর্মী assign": "Assign staff"
 }
