@@ -121,9 +121,10 @@ class TicketResource extends Resource
                 TextColumn::make('complain_id')->label(__('টিকিট'))->prefix('#')->searchable()->sortable()
                     ->description(fn (BillingTicket $r) => $r->isDesk() ? 'Desk' : null),
                 TextColumn::make('customer_name')->label(__('কাস্টমার'))
-                    ->description(fn (BillingTicket $r) => trim('ID '.$r->customer_id.' · '.$r->mobile.(($c = $r->complainNumber()) && $c !== $r->mobile ? __(' · অভিযোগ: ').$c : ''), ' ·'))
-                    ->searchable(['customer_name', 'customer_id', 'mobile', 'username']),
-                TextColumn::make('zone')->label('Zone')->description(fn (BillingTicket $r) => $r->subzone)->toggleable(),
+                    ->description(fn (BillingTicket $r) => trim('ID '.$r->customer_id.' · '.$r->mobile.(($c = $r->complainNumber()) && $c !== $r->mobile ? __(' · অভিযোগ: ').\Illuminate\Support\Str::limit($c, 20) : ''), ' ·'))
+                    ->searchable(['customer_name', 'customer_id', 'mobile', 'username'])
+                    ->wrap()->width('15rem'),   // a long complaint number in the line under the name made it very wide
+                TextColumn::make('zone')->label('Zone')->description(fn (BillingTicket $r) => $r->subzone)->wrap()->toggleable(),
                 TextColumn::make('category')->label(__('সমস্যা'))->wrap(),
                 TextColumn::make('priority')->label('Priority')->badge()
                     ->formatStateUsing(fn (?string $state) => BillingTicket::PRIORITIES[$state] ?? $state)
@@ -135,7 +136,7 @@ class TicketResource extends Resource
                 TextColumn::make('person')->label(__('টেকনিশিয়ান'))
                     ->state(fn (BillingTicket $r) => $r->solved_by ?? $r->assigned_to)->placeholder(__('কেউ না'))->wrap(),
                 TextColumn::make('opened_at')->label(__('খোলা হয়েছে'))->dateTime('d M, g:i A', 'Asia/Dhaka')->sortable()
-                    ->description(fn (BillingTicket $r) => $r->created_by ? __('খুলেছেন :name', ['name' => $r->created_by]) : null),
+                    ->description(fn (BillingTicket $r) => $r->created_by ? __('খুলেছেন :name', ['name' => $r->created_by]) : null)->wrap(),
                 TextColumn::make('duration')->label(__('সময় লেগেছে'))
                     ->state(fn (BillingTicket $r) => $r->duration())
                     ->description(fn (BillingTicket $r) => $r->isOpen() ? __('এখনো খোলা') : null),
@@ -190,7 +191,8 @@ class TicketResource extends Resource
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
             ->deferFilters(false)
             ->filtersFormColumns(4)
-            ->recordActions([TicketActions::assign(), TicketActions::delete()->iconButton(), ViewAction::make()->label(__('বিস্তারিত'))->modalWidth('4xl')->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id', ['id' => $record->complain_id]))
+            ->recordActions([TicketActions::assign()->iconButton()->tooltip(__('কর্মী assign')), TicketActions::delete()->iconButton()->tooltip(__('ডিলিট')),
+                ViewAction::make()->iconButton()->tooltip(__('বিস্তারিত'))->label(__('বিস্তারিত'))->modalWidth('4xl')->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id', ['id' => $record->complain_id]))
                 ->extraModalFooterActions(fn () => [TicketActions::step(-1), TicketActions::solve(), TicketActions::edit()->button(), TicketActions::assign()->label(__('কর্মী যোগ / বাদ'))->button(), TicketActions::delete()->button(), TicketActions::step(1)])])
             ->recordAction('view');
     }
