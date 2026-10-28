@@ -127,6 +127,7 @@ class ExpireDates extends Page implements HasTable
             ->query(ExpireDateChange::query()->where('company_id', $company->getKey()))
             ->defaultSort('id')
             ->poll('5s')
+            ->deferFilters(false)
             ->paginated([50, 100, 500])
             ->columns([
                 ToggleColumn::make('selected')->label(__('বাছাই'))

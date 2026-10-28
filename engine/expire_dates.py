@@ -177,11 +177,15 @@ _running: set[int] = set()
 _running_lock = threading.Lock()
 
 
-def _verify(api, company_id: int, h: int, since: datetime) -> None:
+def _verify(api, company_id: int, h: int, since: datetime, day: int) -> None:
     """Re-read the change log and the line log: any change after `since` other than ExpireDate, or the line being
     switched on or off, stops the run."""
     customer_history.fetch_changes(api, company_id, h)
     customer_history.fetch_line(api, company_id, h)
+    last = db.one("""SELECT snapshot->>'ExpireDate' AS day FROM billing_customer_change_logs WHERE company_id = %s
+                     AND customer_header_id = %s ORDER BY changed_at DESC NULLS LAST, id DESC LIMIT 1""", (company_id, h))
+    if not last or str(last["day"] or "").strip() != str(int(day)):
+        raise StopRun(f"বিলিং-এ Expire Date {day} হয়নি (এখন {last and last['day']})")
     line = db.one("""SELECT action, remarks FROM billing_customer_line_logs WHERE company_id = %s
                      AND customer_header_id = %s AND changed_at >= %s ORDER BY changed_at DESC LIMIT 1""",
                   (company_id, h, since - timedelta(minutes=2)))
@@ -202,7 +206,7 @@ def write_one(t, api, row: dict, user_id: int | None) -> None:
     started = datetime.now(timezone.utc).replace(tzinfo=None)
     try:
         before = api.set_expire_day(h, row["new_day"], expect=_expected(t.company_id, h))
-        _verify(api, t.company_id, h, started)
+        _verify(api, t.company_id, h, started, row["new_day"])
     except StopRun as e:
         db.execute("""UPDATE expire_date_changes SET status = 'failed', error = %s, updated_at = now() WHERE id = %s""",
                    (str(e)[:500], row["id"]))
@@ -229,7 +233,7 @@ def _rollback_one(t, api, row: dict) -> None:
     h = row["customer_header_id"]
     started = datetime.now(timezone.utc).replace(tzinfo=None)
     api.set_expire_day(h, row["old_day"], expect=_expected(t.company_id, h))
-    _verify(api, t.company_id, h, started)
+    _verify(api, t.company_id, h, started, row["old_day"])
     db.execute("""UPDATE expire_date_changes SET status = 'rolled_back', rolled_back_at = now(), updated_at = now()
                   WHERE id = %s""", (row["id"],))
     db.execute("UPDATE billing_customers SET bill_day = %s, updated_at = now() WHERE company_id = %s AND header_id = %s",
