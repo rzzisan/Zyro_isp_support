@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Zyro Expire Date update every hour
+
+[Timer]
+OnBootSec=10min
+OnCalendar=*-*-* *:20:00
+Unit=zyro-expire-date.service
+
+[Install]
+WantedBy=timers.target

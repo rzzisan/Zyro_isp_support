@@ -240,6 +240,28 @@ class Engine
         return static::call('post', "/internal/{$companyId}/customers/{$headerId}/bill", $data + ['user_id' => auth()->id()]) ?? [];
     }
 
+    /** মেয়াদ বদল "তালিকা বানান": the one-time bulk list again (nothing is written to billing). */
+    public static function expirePreview(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/expire-dates/preview") ?? [];
+    }
+
+    /** run = every ticked bulk row, one = these rows, rollback = the old day back on these rows; in the background. */
+    public static function expireStart(int $companyId, string $mode, array $ids = []): void
+    {
+        static::call('post', "/internal/{$companyId}/expire-dates/start", ['mode' => $mode, 'ids' => array_values($ids),
+            'user_id' => auth()->id()]);
+    }
+
+    public static function expireRunning(int $companyId): bool
+    {
+        try {
+            return (bool) (static::http()->timeout(3)->get("/internal/{$companyId}/expire-dates/status")->json('running'));
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     /** New SMS in the queue: the engine starts sending now (otherwise its once-a-minute timer picks them up). */
     public static function kickSms(int $companyId): void
     {

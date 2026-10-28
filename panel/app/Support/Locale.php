@@ -74,6 +74,7 @@ class Locale
             ...Onu::PURPOSES, ...Onu::CONNECTION_TYPES, ...Onu::MATERIALS,
             ...array_values(\App\Models\LineEnable::RESULTS), ...array_values(\App\Models\LineEnable::ACTIONS),
             ...array_values(\App\Models\StockMovement::TYPES), ...array_values(\App\Models\BillCollection::RESULTS),
+            ...array_column(\App\Models\ExpireDateChange::STATUSES, 0), ...array_values(\App\Models\ExpireDateChange::RULES),
             ...array_values(\App\Models\BillingOption::KINDS), ...array_values(\App\Models\Company::MODULES), ...self::JS);
         $keys = array_values(array_unique(array_filter($keys, fn ($k) => preg_match('/[\x{0980}-\x{09FF}]/u', $k))));
         sort($keys);

@@ -1049,6 +1049,35 @@ def customers_sync_new(request: Request, company_id: int):
     return billing_call(lambda: sync_new(t))
 
 
+@app.post("/internal/{company_id}/expire-dates/preview")
+def expire_dates_preview(request: Request, company_id: int):
+    """মেয়াদ বদল page "তালিকা বানান": the one-time bulk list from the desk's copy (writes nothing to billing)."""
+    internal_tenant(request, company_id)
+    from engine import expire_dates
+    return billing_call(lambda: expire_dates.preview(company_id))
+
+
+@app.post("/internal/{company_id}/expire-dates/start")
+async def expire_dates_start(request: Request, company_id: int):
+    """mode run (every ticked bulk row), one (these ids) or rollback (old day back on these ids), in the background."""
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    from engine import expire_dates
+    if b.get("mode") not in ("run", "one", "rollback") or (b["mode"] != "run" and not b.get("ids")):
+        raise HTTPException(status_code=400, detail="কী চালাতে হবে বোঝা যায়নি")
+    ids = [int(i) for i in b.get("ids") or []] or None
+    if not expire_dates.start(t, b["mode"], ids, b.get("user_id")):
+        raise HTTPException(status_code=409, detail="আগের কাজটা এখনো চলছে")
+    return {"started": True}
+
+
+@app.get("/internal/{company_id}/expire-dates/status")
+def expire_dates_status(request: Request, company_id: int):
+    internal_key(request)
+    from engine import expire_dates
+    return {"running": expire_dates.is_running(company_id)}
+
+
 @app.post("/internal/{company_id}/customers/find")
 def customers_find(request: Request, company_id: int, q: str = ""):
     """Desk header search fallback: the billing header search, copying customers the desk doesn't have yet."""

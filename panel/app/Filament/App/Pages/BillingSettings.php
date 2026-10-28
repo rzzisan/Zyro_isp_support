@@ -56,7 +56,9 @@ class BillingSettings extends CompanySettingsPage
             'username' => $record->username, 'password' => null,
             'live_from_billing' => $record->live_from_billing ?? true, 'onu_from_billing' => $record->onu_from_billing ?? true,
             'tickets_in_billing' => $record->tickets_in_billing ?? true,
-            'ticket_lists_in_billing' => $record->ticket_lists_in_billing ?? true];
+            'ticket_lists_in_billing' => $record->ticket_lists_in_billing ?? true,
+            'expire_auto' => (bool) $record->expire_auto, 'expire_min_off_hours' => $record->expire_min_off_hours ?? 24,
+            'expire_min_paid_pct' => $record->expire_min_paid_pct ?? 85, 'expire_max_day' => $record->expire_max_day ?? 28];
     }
 
     public function form(Schema $schema): Schema
@@ -91,6 +93,16 @@ class BillingSettings extends CompanySettingsPage
                         ->helperText(fn () => __('বন্ধ করলে নতুন টিকিট (ডেস্ক, WhatsApp বট, ফোন বট) Desk-এই খোলা, অ্যাসাইন আর সমাধান হবে, বিলিং-এ যাবে না। আগের বিলিং টিকিট বিলিং-এই সমাধান হবে। যেকোনো সময় আবার চালু করা যায়।').' '.$this->ticketText()),
                     Toggle::make('ticket_lists_in_billing')->label(__('সমস্যার ধরন, কর্মী আর ডিপার্টমেন্টের তালিকা বিলিং থেকে Sync হবে'))->default(true)
                         ->helperText(__('বন্ধ করলে তালিকাগুলো Desk-এই থাকবে: বিলিং কনফিগারেশন → সাপোর্ট তালিকা পেজে নতুন যোগ, নাম বদল আর বন্ধ করা যাবে, বিলিংয়ের Sync এগুলো আর ছোঁবে না। Desk-এ যোগ করা কর্মী বিলিংয়ে নেই, তাই নতুন টিকিটও Desk-এ খোলা ভালো।')),
+                ]),
+            Section::make(__('মেয়াদ (Expire Date) বিল দেওয়ার দিনে'))
+                ->description(__('লাইন বন্ধ থেকে বিল দিয়ে চালু হলে বিলিং-এর Expire Date বিল দেওয়ার দিনে বসে। শুধু Expire Date বদলায়, MikroTik, Zone, SubZone, Box কিছুই না। প্রথমবার সবার একসাথে: মেয়াদ বদল পেজ।'))
+                ->schema([
+                    Toggle::make('expire_auto')->label(__('মেয়াদ নিজে বদলাবে (প্রতি ঘণ্টায়)'))
+                        ->helperText(__('অনলাইন, বিলিং ক্যাশ আর Desk-এর বিল দেখে। প্রতিটা বদল মেয়াদ বদল পেজে দেখা যায়। বিলিং-এ অন্য কিছু বদলালে নিজে থেকে বন্ধ হয়ে যায়।')),
+                    TextInput::make('expire_min_off_hours')->label(__('লাইন কমপক্ষে কত ঘণ্টা বন্ধ ছিল'))->numeric()->minValue(1)->maxValue(720)->required(),
+                    TextInput::make('expire_min_paid_pct')->label(__('দেয় টাকার কমপক্ষে কত % দিলে'))->numeric()->minValue(1)->maxValue(100)->required(),
+                    TextInput::make('expire_max_day')->label(__('সর্বোচ্চ তারিখ'))->numeric()->minValue(1)->maxValue(31)->required()
+                        ->helperText(__('এর পরের দিনে বিল দিলে এই তারিখ বসবে (২৮ হলে ছোট মাসেও ঠিক থাকে)।')),
                 ]),
         ]);
     }
