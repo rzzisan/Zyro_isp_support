@@ -443,8 +443,9 @@ class ISPDigital:
             raise RuntimeError("billing's customer edit form was not as expected")
         return form
 
-    def set_expire_day(self, header_id: int, day: int, expect: dict | None = None) -> int | None:
-        """Change only the customer's Expire Date (BillingLastDate, 1-31) and return the day it had.
+    def set_expire_day(self, header_id: int, day: int, expect: dict | None = None) -> dict:
+        """Change only the customer's Expire Date (BillingLastDate, 1-31). Returns {"before": the day it had,
+        "speed": the profile posted, "saved": False when it already was that day}.
         Everything else goes back exactly as billing showed it; "Mikrotik Impact" is never sent (with it, saving an
         Active customer whose line is off turns the line on). Refuses when the form doesn't match `expect`
         (the desk's copy: username, monthly_bill, subzone, box) or a JS-set value (Speed, SubZone, Box) is missing."""
@@ -455,8 +456,10 @@ class ISPDigital:
         if problems:
             raise BillingRefused("ফর্ম মেলেনি: " + ", ".join(problems))
         before = form["values"].get("BillingLastDate")
+        out = {"before": int(before) if before and before.isdigit() else None, "speed": form["values"].get("Speed"),
+               "saved": False}
         if before == str(int(day)):
-            return int(before)
+            return out
         data: dict[str, list[str]] = {}
         for n, v in form["fields"]:
             data.setdefault(n, []).append(str(int(day)) if n == "BillingLastDate" else v)
@@ -470,7 +473,7 @@ class ISPDigital:
             raise LoginError("billing session expired, the expire date was not saved")
         if r.status_code not in (301, 302, 303):
             raise BillingRefused(f"billing did not save the customer (HTTP {r.status_code})")
-        return int(before) if before and before.isdigit() else None
+        return {**out, "saved": True}
 
 
 def receive_payload(form: dict, paid: float, discount: float, method_id: str, received_by_id: str, remarks: str = "",
