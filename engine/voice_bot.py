@@ -99,7 +99,8 @@ VOICE_BASE = (
     "বিল: বকেয়া, মাসের কত তারিখের মধ্যে দিতে হয় (bill_day) আর শেষ পেমেন্ট শুধু কাস্টমার তথ্য থেকে। আজকের তারিখ (today) "
     "bill_day পার হলে \"এর মধ্যে দিলে চালু থাকবে\" বলবে না। বিল দিয়েছেন কিন্তু লাইন চালু হয়নি বললে payments দেখো: পেমেন্ট "
     "থাকলে বলো পেয়েছি, কয়েক মিনিট লাগতে পারে; না থাকলে কত টাকা, কোন মাধ্যমে, কোন নম্বর থেকে জেনে Others Support টিকেট। "
-    "পেমেন্টের নিয়ম, অফিস, প্যাকেজ-অফার শুধু কোম্পানির নির্দেশনা বা FAQ থেকে; সেখানে না থাকলে বলো টিমের কাছ থেকে জেনে "
+    "পেমেন্টের নিয়ম ও নম্বর, অফিস, প্যাকেজ-অফার, সার্ভার-লিংকের মতো কোম্পানির তথ্য শুধু কোম্পানির নির্দেশনা বা FAQ থেকে; "
+    "FAQ তোমার সামনে নেই, লাগলে আগে search_faq ডেকে খোঁজো। সেখানেও না থাকলে বলো টিমের কাছ থেকে জেনে "
     "জানানো হবে (request_callback)। ইন্টারনেট, বিল, সংযোগের বাইরের প্রশ্নে সাহায্য করা যায় না বলো।"
 )
 VOICE_RULES = (
@@ -199,6 +200,10 @@ TOOLS = [{"functionDeclarations": [
      "company's rule (due at most one month, once a month) and turns it on if allowed. Say the result's `say` text.",
      "parameters": {"type": "OBJECT", "properties": {"customer_id": {"type": "STRING", "description": "the line's customer ID"}},
                     "required": ["customer_id"]}},
+    {"name": "search_faq", "description": "Search the company's FAQ (payment numbers and rules, office, packages, offers, "
+     "servers) for what the caller asked; say the answer in your own short words.",
+     "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING", "description": "the question, short Bangla"}},
+                    "required": ["query"]}},
     {"name": "end_call", "description": "Hang up after saying goodbye, when the conversation is over."},
 ]}]
 # staff (the panel's technicians, by their number) also get what the WhatsApp staff desk does
@@ -411,6 +416,13 @@ def line_context(t, api, row: dict, staff: bool = False, caller: str | None = No
         return ctx
     from engine import self_reconnect
     ctx = safe_view(ctx)
+    # every token here is billed again on each Live turn: the last two payments, not the router's raw answer
+    if isinstance(ctx.get("payments"), list):
+        ctx["payments"] = ctx["payments"][:2]
+    mk = ctx.pop("mikrotik", None) or {}
+    if mk and not ctx.get("pppoe"):
+        ctx["router"] = {k: mk.get(k) for k in ("online", "blocked", "uptime")}
+    ctx.pop("sources", None)
     state = self_reconnect.status(t, row, caller)
     if state:
         ctx["self_reconnect"] = state
@@ -439,6 +451,17 @@ def lookup_customer(t, id_or_mobile: str, staff: bool = False) -> dict:
     if not row:
         return {"found": False, "note": "এই আইডি বা নম্বরে কোনো সংযোগ পাওয়া যায়নি; আবার আইডিটা বলতে বলো"}
     return {"found": True, **line_context(t, api, row, staff)}
+
+
+def search_faq(t, query: str) -> dict:
+    """Tool: the FAQ entries that match the caller's question (a small FAQ: all of it)."""
+    from engine import agent
+    if not t:
+        return {"found": False}
+    rows = agent.relevant_faqs(agent.faqs(t), query or "")
+    if not rows:
+        return {"found": False, "note": "FAQ-তে এ নিয়ে কিছু নেই; বানিয়ে বলবে না, দরকার হলে request_callback"}
+    return {"found": True, "faq": [{"q": r["question"], "a": r["answer"]} for r in rows]}
 
 
 def staff_action(t, tech: dict, name: str, args: dict) -> dict:
@@ -525,9 +548,11 @@ def prepare(company_id: int, caller: str, staff: dict | None = None, channel: st
     if channel == "whatsapp":
         rules = rules.replace("এখন তুমি ফোন কলে কথা বলছ, WhatsApp-এ না।", "এখন তুমি WhatsApp কলে (ভয়েসে) কথা বলছ, লেখা মেসেজে না।")
     prompt = rules
-    block = agent.knowledge(t) if t else ""
-    if block:
-        prompt += "\n\n" + block
+    # Live bills the whole prompt again on every turn: the company's instructions stay, its FAQ comes by search_faq
+    extra = ((t.bot.get("extra_prompt") or "").strip() if t else "")
+    if extra:
+        prompt += ("\n\n=== কোম্পানির নির্দেশনা (অ্যাডমিন লিখেছেন; এখানকার তথ্য সঠিক ও চূড়ান্ত, হুবহু মেনে চলবে) ===\n"
+                   f"{extra}\n=== নির্দেশনা শেষ ===")
     number = normalize(caller)
     matched = None
     info = ("কলারের সংযোগ: পাওয়া যায়নি (CUSTOMER NOT FOUND)। কলারের নম্বর আমাদের কোনো কাস্টমারের সাথে মেলেনি, তাই "
@@ -1107,6 +1132,8 @@ class Call:
                     self.ended_by = self.ended_by or "bot"
             elif name == "lookup_customer":
                 result = await loop.run_in_executor(pool, lookup_customer, t, args.get("id_or_mobile", ""), bool(staff))
+            elif name == "search_faq":
+                result = await loop.run_in_executor(pool, search_faq, t, args.get("query", ""))
             elif name == "create_complaint":
                 result = await loop.run_in_executor(pool, create_complaint, t, self.info["caller"],
                                                     args.get("customer_id", ""), args.get("problem", ""),
@@ -1222,6 +1249,15 @@ async def take_warm(info: dict):
     return None
 
 
+def context_window(prompt: str) -> dict:
+    """Old turns go once the call's context passes CONTEXT_TRIGGER, down to CONTEXT_TARGET (env, 6000/3000 since
+    2026-10-28: most of a Live call's cost is old audio billed again each turn). Never below the prompt itself plus
+    room for the last turns, or the bot would forget what the caller just said (rough Bangla token count: chars/2)."""
+    base = len(prompt) // 2
+    trigger = max(CONTEXT_TRIGGER, base + 3000)
+    return {"triggerTokens": trigger, "slidingWindow": {"targetTokens": min(max(CONTEXT_TARGET, base + 1200), trigger - 1000)}}
+
+
 async def open_model(info: dict, prep: dict):
     """The Live session on the company's chosen model; when that model refuses our setup (e.g. the native-audio models
     reject languageCode bn-IN), on the default one, so a bad pick in the settings never leaves calls unanswered."""
@@ -1260,8 +1296,7 @@ async def open_live(company_id: int, model: str, prep: dict):
                 "tools": STAFF_TOOLS if prep.get("staff") else TOOLS,
                 "inputAudioTranscription": {}, "outputAudioTranscription": {},
                 # long calls: the oldest turns go once the context passes the trigger (the prompt always stays)
-                "contextWindowCompression": {"triggerTokens": CONTEXT_TRIGGER,
-                                             "slidingWindow": {"targetTokens": CONTEXT_TARGET}},
+                "contextWindowCompression": context_window(prep["prompt"]),
             }}))
             first = json.loads(await asyncio.wait_for(ws.recv(), 8))
             if "setupComplete" in first:
