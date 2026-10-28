@@ -42,6 +42,22 @@ def desk_made(company_id: int, kind: str, ids) -> list[str]:
         (company_id, kind, ids))]
 
 
+def open_ticket_of(company_id: int, header_id=None, customer_id=None) -> str | None:
+    """The customer's open ticket (Desk or billing copy), if any: a customer has one open ticket at a time."""
+    if not header_id and not customer_id:
+        return None
+    row = db.one(
+        """SELECT complain_id FROM billing_tickets WHERE company_id = %s AND state = ANY(%s)
+             AND (customer_header_id = %s OR ltrim(customer_id, '0') = ltrim(%s, '0'))
+           ORDER BY opened_at DESC NULLS LAST, id DESC LIMIT 1""",
+        (company_id, list(OPEN), int(header_id) if header_id else None, str(customer_id) if customer_id else None))
+    return row["complain_id"] if row else None
+
+
+def already_open_text(no) -> str:
+    return f"এই কাস্টমারের টিকিট #{no} এখনো খোলা আছে; সেটা সমাধান হলে নতুন টিকিট খোলা যাবে"
+
+
 def member_name(company_id: int, user_id: int | None) -> str | None:
     if not user_id:
         return None
@@ -150,6 +166,9 @@ class DeskTickets:
                       WHERE company_id = %s AND header_id = %s""", (self.company_id, int(header_id)))
         if not c:
             raise RuntimeError("কাস্টমার পাওয়া যায়নি")
+        dup = open_ticket_of(self.company_id, c["header_id"], c["customer_id"])
+        if dup:
+            raise RuntimeError(already_open_text(dup))
         cats = self._options("categories")
         if str(category_id) not in cats:
             raise RuntimeError("এই সমস্যার ধরন তালিকায় নেই")

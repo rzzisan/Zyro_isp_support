@@ -851,6 +851,10 @@ async def new_ticket(request: Request, company_id: int, background: BackgroundTa
     b = await request.json()
     refuse_mixed_teams(company_id, b.get("employees"))
     from engine.desk_tickets import for_new
+    from engine.desk_tickets import already_open_text, open_ticket_of
+    dup = open_ticket_of(company_id, b.get("header_id"))  # one open ticket per customer, wherever it was opened
+    if dup:
+        raise HTTPException(status_code=400, detail=already_open_text(dup))
     api = billing_call(lambda: for_new(t, int(b.get("user_id") or 0)))
     refuse_desk_made(t, api, b)
 
