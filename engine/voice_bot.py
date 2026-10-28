@@ -860,7 +860,7 @@ async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
 
 
 # --- what the bot did on a call (call_logs.actions / outcome, shown on the panel's কল লগ) ---------------------------
-FOREIGN = re.compile(r"[\u0900-\u097F\u0600-\u06FF]")   # Devanagari, Arabic script: not the caller's Bangla
+FOREIGN = re.compile(r"[\u0900-\u0963\u0966-\u097F\u0600-\u06FF]")   # Devanagari (not । ॥: Bangla uses them too), Arabic
 FOREIGN_HINT = ("(সিস্টেম: কলারের শেষ কথাটা ঠিকমতো শোনা যায়নি, অন্য ভাষার মতো এসেছে। কলার বাংলাতেই বলছেন। এর ওপর ভিত্তি করে "
                 "অনুমানে কিছু বলবে না, অভিযোগও খুলবে না; ভদ্রভাবে বলো \"জি, একটু আরেকবার বলবেন?\")")
 OUTCOME_LABELS = {"solved": "সমাধান", "info": "তথ্য দেওয়া", "ticket": "টিকেট খোলা", "open_ticket": "আগের টিকেট জানানো",
