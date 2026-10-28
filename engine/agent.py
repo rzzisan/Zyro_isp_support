@@ -155,10 +155,32 @@ def system_prompt(t: Tenant, query: str | None = None) -> str:
     )
 
 
-def _keys(t: Tenant, provider: str, usable_only: bool = False) -> list[dict]:
+# which key does which job: panel AI key → "কোন কাজে কোন key" (AiKey::JOBS, table ai_key_jobs)
+PURPOSE_JOB = {"customer": "chat", "technician": "chat", "image": "image", "voice": "voice_read",
+               "voice_reply": "voice_reply", "voice_call": "call_live", "call_stt": "call_stt", "call_llm": "call_llm",
+               "call_tts": "call_tts"}
+
+
+def job_key(company_id: int, job: str | None) -> dict | None:
+    """The key the company picked for this job (id, provider), or None (the provider's keys in order, as before)."""
+    if not job:
+        return None
+    try:
+        return db.one("SELECT k.id, k.provider FROM ai_key_jobs j JOIN ai_keys k ON k.id = j.ai_key_id"
+                      " WHERE j.company_id = %s AND j.job = %s", (company_id, job))
+    except Exception:   # before the migration
+        return None
+
+
+def _keys(t: Tenant, provider: str, usable_only: bool = False, job: str | None = None) -> list[dict]:
+    """The company's keys of a provider; the one picked for `job` first, the others after it as the fallback."""
     extra = " AND (rate_limited_until IS NULL OR rate_limited_until <= now())" if usable_only else ""
-    return db.all_rows(f"SELECT * FROM ai_keys WHERE company_id = %s AND provider = %s{extra} ORDER BY id",
+    rows = db.all_rows(f"SELECT * FROM ai_keys WHERE company_id = %s AND provider = %s{extra} ORDER BY id",
                        (t.company_id, provider))
+    picked = job_key(t.company_id, job)
+    if picked:
+        rows.sort(key=lambda r: r["id"] != picked["id"])
+    return rows
 
 
 _DAILY = re.compile(r"on (tokens|requests) per (day|minute) \((\w+)\): Limit (\d+), Used (\d+)")
@@ -191,7 +213,7 @@ def record_usage(t: Tenant, key_id: int | None, provider: str, model: str, purpo
 def generate(t: Tenant, system: str, messages: list[dict], provider: str, model: str | None,
              purpose: str = "customer", contact_id: int | None = None) -> tuple[str | None, str, str]:
     """One provider, rotating the company's keys; a failing key cools down for a minute."""
-    rows = _keys(t, provider, usable_only=True)
+    rows = _keys(t, provider, usable_only=True, job=PURPOSE_JOB.get(purpose))
     if not rows:
         raise RuntimeError(f"no usable {provider} key")
     last = None
@@ -214,6 +236,9 @@ def generate_with_fallback(t: Tenant, system: str, messages: list[dict], purpose
                            contact_id: int | None = None) -> tuple[str | None, str, str]:
     active = t.bot.get("ai_provider") or "groq"
     model = t.bot.get("ai_model")
+    picked = job_key(t.company_id, PURPOSE_JOB.get(purpose))
+    if picked and picked["provider"] != active:   # the key picked for chat decides the AI; its own model
+        active, model = picked["provider"], None
     try:
         return generate(t, system, messages, active, model, purpose, contact_id)
     except RuntimeError as first:
@@ -298,7 +323,7 @@ def _transcribe_gemini(t: Tenant, audio: bytes, mime: str, contact_id: int | Non
                    {"inline_data": {"mime_type": mime.split(";")[0] or "audio/ogg",
                                     "data": base64.b64encode(audio).decode()}}]}],
                "generationConfig": {"temperature": 0}}
-    for row in _keys(t, "gemini", usable_only=True):
+    for row in _keys(t, "gemini", usable_only=True, job="voice_read"):
         for model in GEMINI_VOICE_MODELS:
             r = None
             for attempt in range(2):  # free tier: a 429/503 usually passes on a second try a few seconds later
@@ -344,7 +369,7 @@ def _transcribe_gemini(t: Tenant, audio: bytes, mime: str, contact_id: int | Non
 
 def _transcribe_groq(t: Tenant, audio: bytes, mime: str, contact_id: int | None) -> str | None:
     ext = "ogg" if "ogg" in mime else ("mp4" if "mp4" in mime else ("mpeg" if "mpeg" in mime else "ogg"))
-    for row in _keys(t, "groq", usable_only=True):
+    for row in _keys(t, "groq", usable_only=True, job="voice_read"):
         try:
             r = httpx.post(
                 "https://api.groq.com/openai/v1/audio/transcriptions",
@@ -376,7 +401,8 @@ VOICE_PROVIDERS = {"gemini": _transcribe_gemini, "groq": _transcribe_groq}
 
 def transcribe(t: Tenant, audio: bytes, mime: str, contact_id: int | None = None) -> str | None:
     """The company's voice AI first, every one of its keys in turn, then the other voice AIs the company has keys for."""
-    first = t.bot.get("voice_provider") or "gemini"
+    picked = job_key(t.company_id, "voice_read")
+    first = (picked or {}).get("provider") or t.bot.get("voice_provider") or "gemini"
     for provider in [first] + [p for p in VOICE_PROVIDERS if p != first]:
         fn = VOICE_PROVIDERS.get(provider)
         if not fn:
@@ -470,7 +496,7 @@ def speak(t: Tenant, text: str, contact_id: int | None = None) -> bytes | None:
     if not words:
         return None
     voice = t.bot.get("voice_reply_voice") or "Kore"
-    for row in _keys(t, "gemini", usable_only=True):
+    for row in _keys(t, "gemini", usable_only=True, job="voice_reply"):
         r = None
         for attempt in range(2):  # free tier: a 429/503 usually passes on a second try a few seconds later
             try:
