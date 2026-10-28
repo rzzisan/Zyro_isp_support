@@ -39,7 +39,7 @@ SPEECH_RMS = vb.SILENCE_RMS or 200
 MIN_SPEECH = 10      # 200 ms of voice before it counts as speech (a click or a cough doesn't)
 END_SILENCE = 35     # 700 ms of quiet ends what the caller said
 MAX_UTTERANCE = 750  # 15 s: a long sentence is cut there and answered
-BARGE_IN = 15        # 300 ms of the caller's voice while the bot talks stops the bot
+ECHO_TAIL = 0.4      # after the bot's last sound the line is listened to again
 PREROLL = 10
 HISTORY = 12         # messages kept for Claude (about 6 exchanges)
 SENTENCE_END = re.compile(r"(?<=[।?!])\s+")
@@ -277,8 +277,11 @@ class CascadeCall(vb.Call):
         return await asyncio.get_running_loop().run_in_executor(vb.pool, fn, *args)
 
     async def listen(self) -> None:
-        """The caller's audio: utterances by loudness; talking over the bot stops it."""
+        """The caller's audio → utterances. Half duplex: while the bot talks (and a moment after) the line is not
+        listened to, since its own voice comes back as echo; on call 606 echo/noise of 100-1000 RMS was taken for the
+        caller and cut every reply after 0.3 s. What counts as voice follows the line's own noise level."""
         voiced = quiet = 0
+        floor = last_out = 0.0
         speech, held = bytearray(), deque(maxlen=PREROLL)
         while not self.done.is_set():
             head = await self.reader.readexactly(3)
@@ -289,8 +292,18 @@ class CascadeCall(vb.Call):
             if head[0] != 0x10:
                 continue
             self.caller_track += payload
-            loud = audioop.rms(payload, 2) >= SPEECH_RMS
+            now = time.monotonic()
+            if self.out:
+                last_out = now
+            if now - last_out < ECHO_TAIL and not speech:
+                held.clear()
+                voiced = 0
+                continue
+            level = audioop.rms(payload, 2)
+            loud = level >= min(max(SPEECH_RMS, floor * 2), 1500)
             if not speech:
+                if not loud:
+                    floor = level if not floor else floor * 0.98 + level * 0.02
                 held.append(payload)
                 voiced = voiced + 1 if loud else 0
                 if voiced >= MIN_SPEECH:
@@ -300,10 +313,6 @@ class CascadeCall(vb.Call):
                 continue
             speech += payload
             quiet = 0 if loud else quiet + 1
-            if loud and self.out and len(speech) >= BARGE_IN * vb.FRAME:
-                self.out.clear()   # the caller talks over the bot: stop at once, answer the new words
-                if self.reply and not self.reply.done():
-                    self.reply.cancel()
             if quiet >= END_SILENCE or len(speech) >= MAX_UTTERANCE * vb.FRAME:
                 await self.utterances.put(bytes(speech))
                 speech, voiced = bytearray(), 0
