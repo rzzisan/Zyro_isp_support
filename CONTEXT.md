@@ -568,3 +568,12 @@
 - Live-এ কলারের লেখায় দেবনাগরী/আরবি হরফ এলে (`FOREIGN`) বটকে turnComplete=false নোট: আবার জিজ্ঞেস করো, অনুমান নয়।
 - AI key পাতা → "কোন কাজে কোন key" (`ai_key_jobs`; `AiKey::JOBS` = engine `agent.PURPOSE_JOB`): chat, voice_read, voice_reply, image, call_live, call_stt, call_llm, call_tts। `agent._keys(..., job=)` বাছা key আগে, বাকিরা fallback; chat-এ বাছা key-এর provider-ই চলে।
 - `engine/voice_cascade.py`: হটলাইন (SIP) → "বট চালানোর পদ্ধতি" (`sip_settings.bot_engine` live|cascade, `cascade_scope` test|all; test = bot_test_numbers)। নিজের RMS দিয়ে বাক্য শেষ (700 ms), Gemini generateContent দিয়ে বাংলা লেখা (অন্য হরফ এলে কড়া প্রম্পটে আবার, তারপর "[বোঝা যায়নি]"; দুবার → request_callback + end_call), Claude Haiku (`claude-haiku-5-5`, rules আর কলারের তথ্য cache_control; প্রতি পালায় শুধু মেলে এমন FAQ/নির্দেশনা `relevant`), বাক্য ধরে Gemini TTS। একই টুল (`Call.run_tool`), কল লগ, রেকর্ডিং; বলার আগে অঙ্ক যাচাই (`made_up`)। শুভেচ্ছা/বিদায় লাইন একবার বানিয়ে `/var/lib/zyro-voice/line-*.pcm`। খরচ ai_usage purpose call_stt / call_llm / call_tts।
+
+## 2026-10-28: লেখা-ভিত্তিক বটের দেরি কমানো
+- প্রথম টেস্ট কলে (call 601) কথা থামার পর ৬.৫-৮s লেগেছিল। এর ৪-৫s গিয়েছিল Gemini TTS-এ (প্রতি বাক্যে); STT ~1s, Claude ১.৩-২.৫s।
+- `voice_cascade.py`-তে যা বদলেছে:
+  - Claude-এর উত্তর stream হয়, আর প্রতিটা বাক্য শেষ হলেই তার TTS শুরু হয়।
+  - সব বাক্যের কণ্ঠ একসাথে বানানো হয়, বাজে ক্রমে (`Speech`)।
+  - অঙ্ক-যাচাই (`made_up`) এখন প্রতি বাক্যে হয়।
+  - কলারের কথা লেখা হলেই সঙ্গে সঙ্গে "জি," বাজে।
+  - ৪০ অক্ষরের ছোট বাক্য (অঙ্ক ছাড়া) একবার বানিয়ে রাখা হয়, পরে আবার ব্যবহার হয়।

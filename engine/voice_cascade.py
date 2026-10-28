@@ -40,6 +40,9 @@ MAX_UTTERANCE = 750  # 15 s: a long sentence is cut there and answered
 BARGE_IN = 15        # 300 ms of the caller's voice while the bot talks stops the bot
 PREROLL = 10
 HISTORY = 12         # messages kept for Claude (about 6 exchanges)
+SENTENCE_END = re.compile(r"(?<=[।?!])\s+")
+SHORT_LINE = 40      # sentences up to this long (no digits) are kept as audio and reused: "জি, বলুন।" isn't made twice
+ACK = "জি,"          # played as soon as the caller's words are written, so the wait for the answer isn't silent
 
 STT_PROMPT = (
     "এটা বাংলাদেশের একটা ইন্টারনেট সার্ভিস প্রোভাইডারের (ISP) হটলাইনে কাস্টমারের ফোন কলের একটা অংশ। কাস্টমার বাংলায় "
@@ -158,17 +161,34 @@ def claude_tools(staff: bool) -> list[dict]:
             for d in decls]
 
 
-def think(t, system: list[dict], messages: list[dict], tools: list[dict]):
-    """One Claude reply (the rules and the caller's data come from the prompt cache after the first turn)."""
+def think(t, system: list[dict], messages: list[dict], tools: list[dict], heard=None):
+    """One Claude reply (the rules and the caller's data come from the prompt cache after the first turn); streamed,
+    each finished sentence goes to heard() at once so its voice is made while Claude still writes the next."""
     last = None
     for row in agent._keys(t, "claude", usable_only=True, job="call_llm"):
         client = anthropic.Anthropic(api_key=db.decrypt(row["api_key"]), max_retries=1)
+        sent = False
         try:
-            r = client.messages.create(model=LLM_MODEL, max_tokens=400, system=system, messages=messages, tools=tools)
+            with client.messages.stream(model=LLM_MODEL, max_tokens=400, system=system, messages=messages,
+                                        tools=tools) as stream:
+                buf = ""
+                for ev in stream:
+                    if heard and ev.type == "content_block_delta" and getattr(ev.delta, "type", "") == "text_delta":
+                        buf += ev.delta.text
+                        *done, buf = SENTENCE_END.split(buf)
+                        for x in done:
+                            heard(x)
+                            sent = True
+                    elif heard and ev.type == "content_block_stop" and buf.strip():
+                        heard(buf)
+                        buf, sent = "", True
+                r = stream.get_final_message()
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.RateLimitError,
                 anthropic.InternalServerError, anthropic.APIConnectionError) as e:
             last = e
             agent.record_usage(t, row["id"], "claude", LLM_MODEL, "call_llm", None, error=str(e)[:300])
+            if sent:
+                raise   # half the answer is already on its way to the caller: no second answer from another key
             continue
         u = r.usage
         cached = int(getattr(u, "cache_read_input_tokens", 0) or 0)
@@ -219,6 +239,8 @@ class CascadeCall(vb.Call):
         self.utterances: asyncio.Queue = asyncio.Queue()
         self.reply: asyncio.Task | None = None
         self.unclear = 0
+        self.ack = b""       # ACK's audio, made while the greeting plays
+        self.acked = False
 
     async def in_pool(self, fn, *args):
         return await asyncio.get_running_loop().run_in_executor(vb.pool, fn, *args)
@@ -280,6 +302,7 @@ class CascadeCall(vb.Call):
         return text
 
     async def answer(self, pcm: bytes) -> None:
+        self.acked = False
         text = (await self.hear(pcm)).strip()
         if not text:
             return   # noise, a breath: nothing to answer
@@ -295,6 +318,9 @@ class CascadeCall(vb.Call):
         else:
             self.say("caller", text)
             self.known.update(vb.numbers_in(text, 1))
+            if self.ack and not self.out:
+                self.out += self.ack
+                self.acked = True
         query = " ".join(x["text"] for x in self.turns[-3:] if x["who"] == "caller")
         extra = await self.in_pool(relevant, self.t, query)
         self.tidy()
@@ -317,18 +343,23 @@ class CascadeCall(vb.Call):
     async def respond(self, retry_note: str | None = None) -> None:
         if retry_note:
             self.add_user(retry_note)
+        loop = asyncio.get_running_loop()
         for _ in range(4):   # a reply may need a tool or two first
-            r = await self.in_pool(think, self.t, self.system, self.messages, self.tools)
+            speech = Speech(self, check=not retry_note)
+            try:
+                r = await self.in_pool(think, self.t, self.system, self.messages, self.tools,
+                                       lambda x: loop.call_soon_threadsafe(speech.add, x))
+                await asyncio.sleep(0)   # the last sentence handed over from the worker thread lands first
+                await speech.finish()
+            finally:
+                speech.stop()
             self.messages.append({"role": "assistant", "content": [b.model_dump(exclude_none=True) for b in r.content]})
-            said = " ".join(b.text for b in r.content if b.type == "text").strip()
-            if said and not retry_note and self.made_up(said):
+            if speech.bad:
                 self.messages.pop()
                 self.corrections += 1
                 self.act("corrected", "উত্তরে যাচাই হয়নি এমন অঙ্ক ছিল, বলার আগেই আবার লেখানো হলো", ok=False)
                 return await self.respond("(সিস্টেম: তোমার উত্তরে এমন অঙ্ক ছিল যা কাস্টমার তথ্যে বা টুলের ফলে নেই। "
                                           "অঙ্ক অনুমান করবে না; দরকার হলে lookup_customer বা create_complaint ডেকে ফল থেকে বলো।)")
-            if said:
-                await self.utter(said)
             uses = [b for b in r.content if b.type == "tool_use"]
             if not uses:
                 break
@@ -348,13 +379,63 @@ class CascadeCall(vb.Call):
             return False
         return any(not any(x in k for k in self.known) for x in vb.numbers_in(said))
 
+    def voice_of(self, sentence: str):
+        """A sentence's audio, being made in the pool; short lines without numbers come from the kept audio."""
+        short = len(sentence) <= SHORT_LINE and not re.search(r"[0-9০-৯]", sentence)
+        return asyncio.ensure_future(self.in_pool(spoken if short else speak, self.t, sentence, self.voice))
+
     async def utter(self, text: str) -> None:
-        """Read sentence by sentence: the first one plays while the next is made."""
-        text = vb.SPOKEN_TOOL.sub("", re.sub(r"[*_#`•]", "", text)).strip()
-        for sentence in [s.strip() for s in re.split(r"(?<=[।?!])\s+", text) if s.strip()]:
-            pcm = await self.in_pool(speak, self.t, sentence, self.voice)
-            self.out += pcm
-            self.say("bot", sentence + " ")
+        speech = Speech(self, check=False)
+        try:
+            for sentence in SENTENCE_END.split(text):
+                speech.add(sentence)
+            await speech.finish()
+        finally:
+            speech.stop()
+
+
+def clean(text: str) -> str:
+    return vb.SPOKEN_TOOL.sub("", re.sub(r"[*_#`•]", "", text)).strip()
+
+
+class Speech:
+    """One reply read aloud: every sentence's voice starts being made as soon as the sentence is written (side by
+    side, not one after another), and they play in order. A sentence with a made-up number stops the reply there."""
+
+    def __init__(self, call: CascadeCall, check: bool):
+        self.call, self.check, self.bad = call, check, False
+        self.queue: asyncio.Queue = asyncio.Queue()
+        self.player: asyncio.Task | None = None
+        self.first = True
+
+    def add(self, sentence: str) -> None:
+        sentence = clean(sentence)
+        if self.first and self.call.acked:
+            sentence = re.sub(r"^জি(?:\s*[,।!]\s*|\s+)", "", sentence)   # "জি," was already said
+        if not sentence or self.bad:
+            return
+        if self.check and self.call.made_up(sentence):
+            self.bad = True
+            return
+        self.first = False
+        self.queue.put_nowait((sentence, self.call.voice_of(sentence)))
+        if not self.player:
+            self.player = asyncio.create_task(self.play())
+
+    async def play(self) -> None:
+        while (item := await self.queue.get()) is not None:
+            sentence, voice = item
+            self.call.out += await voice
+            self.call.say("bot", sentence + " ")
+
+    async def finish(self) -> None:
+        if self.player:
+            self.queue.put_nowait(None)
+            await self.player
+
+    def stop(self) -> None:
+        if self.player and not self.player.done():
+            self.player.cancel()
 
 
 async def run(uid: str, info: dict, reader, writer) -> None:
@@ -367,6 +448,7 @@ async def run(uid: str, info: dict, reader, writer) -> None:
         call.act("engine", "লেখা-ভিত্তিক বট (শোনা → Claude → কণ্ঠ)")
         call.out += await call.in_pool(spoken, call.t, greeting(prep, company), call.voice)
         call.say("bot", greeting(prep, company))
+        call.ack = await call.in_pool(spoken, call.t, ACK, call.voice)
         tasks = [asyncio.create_task(c) for c in (call.listen(), call.to_caller(), call.converse(), call.done.wait())]
         limit = min(int(info["settings"].get("bot_max_seconds") or vb.DEFAULT_MAX_SECONDS), vb.MAX_CALL)
         finished, _ = await asyncio.wait(tasks, timeout=max(limit - 20, 10), return_when=asyncio.FIRST_COMPLETED)
