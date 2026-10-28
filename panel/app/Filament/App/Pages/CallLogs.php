@@ -56,6 +56,17 @@ class CallLogs extends Page implements HasTable
         'time_up' => 'সময় শেষ',
     ];
 
+    /** the bot call's result (engine/voice_bot.py outcome): label and badge colour */
+    public const OUTCOMES = [
+        'solved' => ['সমাধান', 'success'],
+        'info' => ['তথ্য দেওয়া', 'success'],
+        'ticket' => ['টিকেট খোলা', 'info'],
+        'open_ticket' => ['আগের টিকেট জানানো', 'info'],
+        'callback' => ['কল ব্যাক দরকার', 'warning'],
+        'unclear' => ['বোঝা যায়নি', 'danger'],
+        'hung_up' => ['কলার কেটেছেন', 'gray'],
+    ];
+
     public static function canAccess(): bool
     {
         $company = Filament::getTenant();
@@ -101,6 +112,10 @@ class CallLogs extends Page implements HasTable
                 TextColumn::make('bot_seconds')->label(__('কথা'))
                     ->state(fn (CallLog $record) => $record->bot_seconds ?: $record->agent_seconds)
                     ->formatStateUsing(fn ($state) => $state ? gmdate($state >= 3600 ? 'G:i:s' : 'i:s', (int) $state) : ''),
+                TextColumn::make('outcome')->label(__('ফলাফল'))->badge()
+                    ->formatStateUsing(fn ($state) => __(self::OUTCOMES[$state][0] ?? $state))
+                    ->color(fn ($state) => self::OUTCOMES[$state][1] ?? 'gray')
+                    ->tooltip(fn (CallLog $record) => $record->outcome_text),
                 TextColumn::make('bot_flag')->label(__('ফ্লাগ'))->badge()->color('danger')
                     ->formatStateUsing(fn ($state) => __(self::FLAGS[$state] ?? $state)),
                 TextColumn::make('callback_reason')->label(__('কল ব্যাক'))->wrap()->color('warning')->limit(80),
@@ -109,6 +124,8 @@ class CallLogs extends Page implements HasTable
                 SelectFilter::make('channel')->label(__('লাইন'))
                     ->options(['hotline' => __('হটলাইন'), 'whatsapp' => 'WhatsApp']),
                 TernaryFilter::make('bot_answered')->label(__('বট ধরেছে')),
+                SelectFilter::make('outcome')->label(__('ফলাফল'))
+                    ->options(collect(self::OUTCOMES)->map(fn ($o) => __($o[0]))->all()),
                 TernaryFilter::make('callback')->label(__('কল ব্যাক লাগবে'))
                     ->queries(true: fn (Builder $q) => $q->whereNotNull('callback_reason'), false: fn (Builder $q) => $q->whereNull('callback_reason')),
             ])

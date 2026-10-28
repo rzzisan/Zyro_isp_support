@@ -5,6 +5,27 @@
     @else
         <div style="opacity:.7">{{ __('রেকর্ডিং নেই') }}</div>
     @endif
+    @if ($call->outcome_text)
+        <div><b>{{ __('ফলাফল') }}:</b> {{ $call->outcome_text }}</div>
+    @endif
+    @if (! empty($call->actions))
+        <div>
+            <div style="font-weight:600;margin-bottom:4px">{{ __('যা করা হয়েছে') }}</div>
+            <div style="display:flex;flex-direction:column;gap:3px;font-size:13px">
+                @foreach ($call->actions as $a)
+                    @php($cust = ! empty($a['customer_id']) ? \App\Models\BillingCustomer::where('company_id', $call->company_id)->where('customer_id', $a['customer_id'])->orderBy('is_left')->first() : null)
+                    <div style="color:{{ ($a['ok'] ?? true) ? 'inherit' : '#dc2626' }}">
+                        <span style="opacity:.6">{{ gmdate('i:s', (int) ($a['at'] ?? 0)) }}</span>
+                        {{ $a['text'] ?? '' }}
+                        @if ($cust)
+                            · <a href="{{ \App\Filament\App\Resources\Customers\CustomerResource::getUrl('view', ['record' => $cust]) }}"
+                                 style="color:#3b82f6">{{ __('কাস্টমার') }} {{ $cust->customer_id }}</a>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
     @if ($call->callback_reason)
         <div style="color:#d97706"><b>{{ __('কল ব্যাক') }}:</b> {{ $call->callback_reason }}</div>
     @endif
