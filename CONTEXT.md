@@ -584,3 +584,10 @@
 - তাই এখন কলের TTS `streamGenerateContent`-এ চলে, প্রথমে 3.8-flash-lite-tts, না চললে 2.5-flash-preview-tts।
 - কণ্ঠ টুকরো টুকরো আসার সঙ্গে সঙ্গেই বাজে।
 - zyro-voice restart সবসময় এক কমান্ডে কল-সংখ্যা ০ শর্ত দিয়ে করতে হবে (২০২৬-১০-২৮-এ restart-এ একটা কল কেটে গিয়েছিল)।
+- Call 604-এ কলার কিছুই শোনেননি। যা ঠিক করা হয়েছে:
+  - Haiku 5.5 নিজে থেকে thinking করে, ৪০০ token-এর সবটাই সেখানে চলে যেত। এখন `thinking: disabled`, max_tokens 800।
+  - FOREIGN regex-এ বাংলা দাঁড়ি "।" ধরা পড়ত, ফলে প্রতিটা কথা দুবার STT হতো। দাঁড়ি এখন বাদ।
+  - 2.5-flash STT thinking করত (প্রতি কথায় ~৪.৭s)। এখন thinkingBudget 0।
+  - 3.x TTS style নির্দেশটাও জোরে পড়ে ফেলত। এখন 3.x-এ শুধু মূল লেখা পাঠানো হয়।
+  - Line cache-এর key-তে model যোগ হয়েছে, তাই পুরোনো ভুল ফাইল আর ব্যবহার হবে না।
+  - Greeting আর ছোট লাইনও streaming-এ বাজে। Ack বানানো হয় background-এ।

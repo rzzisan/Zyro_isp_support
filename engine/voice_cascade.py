@@ -31,6 +31,8 @@ from engine import voice_bot as vb
 log = logging.getLogger("voice_cascade")
 
 STT_MODELS = list(agent.GEMINI_VOICE_MODELS)
+# 2.5-flash thinks by default: ~4.7 s per utterance on call 604; writing down words needs no thinking
+STT_EXTRA = {**agent.GEMINI_VOICE_EXTRA, "gemini-2.5-flash": {"thinkingConfig": {"thinkingBudget": 0}}}
 LLM_MODEL = "claude-haiku-5-5"
 TTS_MODELS = ["gemini-3.8-flash-lite-tts", agent.GEMINI_TTS_MODEL]   # fastest first (Zisan's key, 2026-10-28)
 SPEECH_RMS = vb.SILENCE_RMS or 200
@@ -89,7 +91,7 @@ def transcribe(t, pcm8: bytes, strict: bool = False) -> str:
                 r = httpx.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                                headers={"x-goog-api-key": db.decrypt(row["api_key"])}, timeout=20,
                                json={**body, "generationConfig": {**body["generationConfig"],
-                                                                  **agent.GEMINI_VOICE_EXTRA.get(model, {})}})
+                                                                  **STT_EXTRA.get(model, {})}})
             except httpx.TransportError as e:
                 agent.record_usage(t, row["id"], "gemini", model, "call_stt", None, error=f"{type(e).__name__}: {e}")
                 continue
@@ -110,11 +112,12 @@ def transcribe(t, pcm8: bytes, strict: bool = False) -> str:
 def speak(t, text: str, voice: str, chunk=None) -> bytes:
     """One sentence read by Gemini TTS, as 8 kHz 16-bit PCM for the call. Streamed: each piece goes to chunk() as it
     arrives (the first after ~1.3 s on 3.8-flash-lite-tts; the whole sentence took 4.3 s on 2.5-flash-preview-tts)."""
-    body = {"contents": [{"parts": [{"text": agent.TTS_STYLE + text}]}],
-            "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
-                "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}}
     for row in agent._keys(t, "gemini", usable_only=True, job="call_tts"):
         for model in TTS_MODELS:
+            # 3.x reads the style note aloud too (call 604: a 36-letter line came back as 10.5 s of audio)
+            body = {"contents": [{"parts": [{"text": text if model.startswith("gemini-3") else agent.TTS_STYLE + text}]}],
+                    "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
+                        "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}}
             got, state, odd, usage = bytearray(), None, b"", {}
             try:
                 with httpx.stream("POST", f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent",
@@ -154,12 +157,16 @@ def speak(t, text: str, voice: str, chunk=None) -> bytes:
     raise RuntimeError("no Gemini key could speak")
 
 
-def spoken(t, text: str, voice: str) -> bytes:
-    """A fixed line (greeting, wrap-up) made once and kept in the state dir."""
-    path = os.path.join(vb.STATE_DIR, f"line-{hashlib.sha1((voice + text).encode()).hexdigest()[:12]}.pcm")
+def spoken(t, text: str, voice: str, chunk=None) -> bytes:
+    """A fixed or short line (greeting, wrap-up, "জি, বলুন।") made once and kept in the state dir."""
+    key = "|".join([TTS_MODELS[0], voice, text])   # a new model makes the lines again
+    path = os.path.join(vb.STATE_DIR, f"line-{hashlib.sha1(key.encode()).hexdigest()[:12]}.pcm")
     if os.path.exists(path):
-        return open(path, "rb").read()
-    pcm = speak(t, text, voice)
+        pcm = open(path, "rb").read()
+        if chunk:
+            chunk(pcm)
+        return pcm
+    pcm = speak(t, text, voice, chunk)
     with open(path, "wb") as f:
         f.write(pcm)
     return pcm
@@ -190,8 +197,9 @@ def think(t, system: list[dict], messages: list[dict], tools: list[dict], heard=
         client = anthropic.Anthropic(api_key=db.decrypt(row["api_key"]), max_retries=1)
         sent = False
         try:
-            with client.messages.stream(model=LLM_MODEL, max_tokens=400, system=system, messages=messages,
-                                        tools=tools) as stream:
+            # Haiku 5.5 thinks by default (adaptive): on call 604 its 400 tokens went to thinking and nothing was said
+            with client.messages.stream(model=LLM_MODEL, max_tokens=800, system=system, messages=messages,
+                                        tools=tools, thinking={"type": "disabled"}) as stream:
                 buf = ""
                 for ev in stream:
                     if heard and ev.type == "content_block_delta" and getattr(ev.delta, "type", "") == "text_delta":
@@ -204,6 +212,8 @@ def think(t, system: list[dict], messages: list[dict], tools: list[dict], heard=
                         heard(buf)
                         buf, sent = "", True
                 r = stream.get_final_message()
+            if r.stop_reason not in ("end_turn", "tool_use"):
+                log.warning("claude stopped: %s, blocks %s", r.stop_reason, [b.type for b in r.content])
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.RateLimitError,
                 anthropic.InternalServerError, anthropic.APIConnectionError) as e:
             last = e
@@ -404,17 +414,12 @@ class CascadeCall(vb.Call):
         """A sentence's audio as it is made (pieces, then None); short lines without numbers come from the kept audio."""
         loop, q = asyncio.get_running_loop(), asyncio.Queue()
         short = len(sentence) <= SHORT_LINE and not re.search(r"[0-9০-৯]", sentence)
-        if short:
-            job = loop.run_in_executor(vb.pool, spoken, self.t, sentence, self.voice)
-        else:
-            job = loop.run_in_executor(vb.pool, speak, self.t, sentence, self.voice,
-                                       lambda pcm: loop.call_soon_threadsafe(q.put_nowait, pcm))
+        job = loop.run_in_executor(vb.pool, spoken if short else speak, self.t, sentence, self.voice,
+                                   lambda pcm: loop.call_soon_threadsafe(q.put_nowait, pcm))
 
         def done(f):
             if not f.cancelled() and f.exception():
                 log.warning("call %s: no voice for a sentence: %s", self.uid, f.exception())
-            elif short and not f.cancelled():
-                q.put_nowait(f.result())
             q.put_nowait(None)
         job.add_done_callback(done)
         return q
@@ -482,10 +487,19 @@ async def run(uid: str, info: dict, reader, writer) -> None:
         call = CascadeCall(uid, info, reader, writer)
         company = (prep.get("tenant").name if prep.get("tenant") else "") or ""
         call.act("engine", "লেখা-ভিত্তিক বট (শোনা → Claude → কণ্ঠ)")
-        call.out += await call.in_pool(spoken, call.t, greeting(prep, company), call.voice)
+        loop = asyncio.get_running_loop()
+        player = asyncio.create_task(call.to_caller())   # the greeting plays while it is still being made
+        await call.in_pool(spoken, call.t, greeting(prep, company), call.voice,
+                           lambda pcm: loop.call_soon_threadsafe(call.out.extend, pcm))
         call.say("bot", greeting(prep, company))
-        call.ack = await call.in_pool(spoken, call.t, ACK, call.voice)
-        tasks = [asyncio.create_task(c) for c in (call.listen(), call.to_caller(), call.converse(), call.done.wait())]
+        tasks = [asyncio.create_task(c) for c in (call.listen(), call.converse(), call.done.wait())] + [player]
+
+        async def load_ack():
+            try:
+                call.ack = await call.in_pool(spoken, call.t, ACK, call.voice)
+            except Exception as e:
+                log.warning("call %s: no ack voice: %s", uid, e)
+        asyncio.create_task(load_ack())
         limit = min(int(info["settings"].get("bot_max_seconds") or vb.DEFAULT_MAX_SECONDS), vb.MAX_CALL)
         finished, _ = await asyncio.wait(tasks, timeout=max(limit - 20, 10), return_when=asyncio.FIRST_COMPLETED)
         if not finished:
