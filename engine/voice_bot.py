@@ -519,14 +519,15 @@ def prepare(company_id: int, caller: str, staff: dict | None = None, channel: st
         prompt = STAFF_RULES.replace("{company}", company["name"]).replace("{tech}", staff["name"])
         return {"prompt": prompt + ("\n\n" + block if block else ""), "voice": voice, "tenant": t, "staff": staff}
     # the call's short rules plus the company's own instructions and FAQ (payment numbers, offers, office)
-    prompt = VOICE_BASE.replace("{company}", (t.name if t else "") or company["name"]) + VOICE_RULES
+    rules = VOICE_BASE.replace("{company}", (t.name if t else "") or company["name"]) + VOICE_RULES
     if t and t.bot.get("self_reconnect"):
-        prompt += RECONNECT_RULES
+        rules += RECONNECT_RULES
+    if channel == "whatsapp":
+        rules = rules.replace("এখন তুমি ফোন কলে কথা বলছ, WhatsApp-এ না।", "এখন তুমি WhatsApp কলে (ভয়েসে) কথা বলছ, লেখা মেসেজে না।")
+    prompt = rules
     block = agent.knowledge(t) if t else ""
     if block:
         prompt += "\n\n" + block
-    if channel == "whatsapp":
-        prompt = prompt.replace("এখন তুমি ফোন কলে কথা বলছ, WhatsApp-এ না।", "এখন তুমি WhatsApp কলে (ভয়েসে) কথা বলছ, লেখা মেসেজে না।")
     number = normalize(caller)
     matched = None
     info = ("কলারের সংযোগ: পাওয়া যায়নি (CUSTOMER NOT FOUND)। কলারের নম্বর আমাদের কোনো কাস্টমারের সাথে মেলেনি, তাই "
@@ -546,7 +547,9 @@ def prepare(company_id: int, caller: str, staff: dict | None = None, channel: st
                          (company_id, number)) if number else []
     if len(others) > 1:
         info += "\nএই নম্বরে আরও সংযোগ: " + brief(others)
-    return {"prompt": prompt + "\n\n" + info, "voice": voice, "tenant": t, "staff": None, "matched": matched}
+    # rules / info apart: the cascade (engine/voice_cascade.py) caches the rules and adds only the FAQ a turn needs
+    return {"prompt": prompt + "\n\n" + info, "voice": voice, "tenant": t, "staff": None, "matched": matched,
+            "rules": rules, "info": info}
 
 
 # --- GET /mode (asked by the Asterisk dialplan on every incoming call) -------------------------
@@ -843,7 +846,7 @@ async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
             try:
                 body = await (loop.run_in_executor(pool, decide_wa, wa, caller) if wa is not None
                               else loop.run_in_executor(pool, decide, ep, caller))
-                if body.startswith("bot:") and body.split(":")[1] in calls:
+                if body.startswith("bot:") and body.split(":")[1] in calls and not use_cascade(calls[body.split(":")[1]]):
                     uid = body.split(":")[1]
                     calls[uid]["warm_task"] = asyncio.create_task(warm_up(uid))
             except Exception:
@@ -907,6 +910,9 @@ def tool_action(call, name: str, args: dict, result: dict) -> None:
     elif name == "solve_ticket":
         call.act("solved", f"{args.get('customer_id')}: টিকেট সমাধান: {r.get('result') or ''}"[:200], ok=bool(r.get("ok")),
                  customer_id=args.get("customer_id"))
+    elif name == "reconnect_line":
+        call.act("reconnect", f"{args.get('customer_id')}: লাইন আবার চালুর চেষ্টা: {r.get('result') or r.get('note') or ''}"[:200],
+                 ok=bool(r.get("ok", True)), customer_id=args.get("customer_id"))
     elif name == "switch_line":
         call.act("switch", f"{args.get('customer_id')}: লাইন {'চালু' if args.get('action') == 'enable' else 'বন্ধ'}: "
                  f"{r.get('result') or ''}"[:200], customer_id=args.get("customer_id"))
@@ -1078,6 +1084,51 @@ class Call:
             nxt += 0.02
             await asyncio.sleep(max(0, nxt - time.monotonic()))
 
+    async def run_tool(self, name: str, args: dict) -> dict:
+        """One tool the bot called (Gemini Live or the cascade's Claude), with its line in the call log."""
+        result = {"ok": True}
+        t = (self.info.get("prep_result") or {}).get("tenant")
+        staff = self.info.get("staff")
+        loop = asyncio.get_running_loop()
+        if name in FILLERS and fillers.get(name):
+            self.out += fillers[name]   # the caller hears "একটু অপেক্ষা করুন..." at once, not silence
+        try:
+            if name == "request_callback":
+                self.callback = (args.get("reason") or "কল ব্যাক চেয়েছেন")[:300]
+                self.flag = args.get("flag") if args.get("flag") in FLAGS else "unsolved"
+            elif name == "end_call":
+                if not self.end_refused and self.promised_without_tool():
+                    self.end_refused = True   # once: never keep a caller on the line for this
+                    result = {"ok": False, "note": "কল এখনো শেষ হয়নি। তুমি টিকেট বা অফিসে জানানোর কথা বলেছ কিন্তু "
+                              "create_complaint বা request_callback ডাকোনি। এখনই সেটা ডাকো, ফল এলে অভিযোগ নম্বর "
+                              "বলো, তারপর বিদায় জানিয়ে end_call।"}
+                else:
+                    self.hangup_after_drain = True
+                    self.ended_by = self.ended_by or "bot"
+            elif name == "lookup_customer":
+                result = await loop.run_in_executor(pool, lookup_customer, t, args.get("id_or_mobile", ""), bool(staff))
+            elif name == "create_complaint":
+                result = await loop.run_in_executor(pool, create_complaint, t, self.info["caller"],
+                                                    args.get("customer_id", ""), args.get("problem", ""),
+                                                    args.get("category"))
+            elif name == "reconnect_line" and not staff:
+                channel = (calls.get(self.uid) or {}).get("channel") or "hotline"
+                result = await loop.run_in_executor(pool, reconnect_line, t, self.info["caller"],
+                                                    args.get("customer_id", ""), channel)
+            elif name in ("solve_ticket", "switch_line") and staff:
+                result = await loop.run_in_executor(pool, staff_action, t, staff, name, args)
+                if result.get("ticket_no"):
+                    self.say("bot", f" [টিকিট #{result['ticket_no']}]")
+        except Exception as e:
+            log.exception("tool %s", name)
+            result = {"error": str(e)[:200]}
+        if name:
+            self.tools_used.add(name)
+            tool_action(self, name, args, result)
+        self.known.update(numbers_in(json.dumps(result, ensure_ascii=False, default=str), 1))
+        log.info("call %s tool %s -> %s", self.uid, name, str(result)[:120])
+        return result
+
     async def from_gemini(self, ws) -> None:
         async for raw in ws:
             m = json.loads(raw)
@@ -1117,52 +1168,21 @@ class Call:
             if u:
                 self.add_usage(u)
             for fc in (m.get("toolCall") or {}).get("functionCalls", []):
-                name, args, result = fc.get("name"), fc.get("args") or {}, {"ok": True}
-                t = (self.info.get("prep_result") or {}).get("tenant")
-                staff = self.info.get("staff")
-                loop = asyncio.get_running_loop()
-                if name in FILLERS and fillers.get(name):
-                    self.out += fillers[name]   # the caller hears "একটু অপেক্ষা করুন..." at once, not silence
-                try:
-                    if name == "request_callback":
-                        self.callback = (args.get("reason") or "কল ব্যাক চেয়েছেন")[:300]
-                        self.flag = args.get("flag") if args.get("flag") in FLAGS else "unsolved"
-                    elif name == "end_call":
-                        if not self.end_refused and self.promised_without_tool():
-                            self.end_refused = True   # once: never keep a caller on the line for this
-                            result = {"ok": False, "note": "কল এখনো শেষ হয়নি। তুমি টিকেট বা অফিসে জানানোর কথা বলেছ কিন্তু "
-                                      "create_complaint বা request_callback ডাকোনি। এখনই সেটা ডাকো, ফল এলে অভিযোগ নম্বর "
-                                      "বলো, তারপর বিদায় জানিয়ে end_call।"}
-                        else:
-                            self.hangup_after_drain = True
-                            self.ended_by = self.ended_by or "bot"
-                    elif name == "lookup_customer":
-                        result = await loop.run_in_executor(pool, lookup_customer, t, args.get("id_or_mobile", ""),
-                                                            bool(staff))
-                    elif name == "create_complaint":
-                        result = await loop.run_in_executor(pool, create_complaint, t, self.info["caller"],
-                                                            args.get("customer_id", ""), args.get("problem", ""),
-                                                            args.get("category"))
-                    elif name == "reconnect_line" and not staff:
-                        channel = (calls.get(self.uid) or {}).get("channel") or "hotline"
-                        result = await loop.run_in_executor(pool, reconnect_line, t, self.info["caller"],
-                                                            args.get("customer_id", ""), channel)
-                    elif name in ("solve_ticket", "switch_line") and staff:
-                        result = await loop.run_in_executor(pool, staff_action, t, staff, name, args)
-                        if result.get("ticket_no"):
-                            self.say("bot", f" [টিকিট #{result['ticket_no']}]")
-                except Exception as e:
-                    log.exception("tool %s", name)
-                    result = {"error": str(e)[:200]}
-                if name:
-                    self.tools_used.add(name)
-                    tool_action(self, name, args, result)
-                self.known.update(numbers_in(json.dumps(result, ensure_ascii=False, default=str), 1))
-                log.info("call %s tool %s -> %s", self.uid, name, str(result)[:120])
+                name, args = fc.get("name"), fc.get("args") or {}
+                result = await self.run_tool(name, args)
                 await ws.send(json.dumps({"toolResponse": {"functionResponses": [
                     {"id": fc.get("id"), "name": name, "response": json.loads(brief(result))}]}},
                     ensure_ascii=False))
         self.done.set()
+
+
+def use_cascade(info: dict) -> bool:
+    """The cheaper cascade bot (engine/voice_cascade.py) answers this call: হটলাইন (SIP) → বট চালানোর পদ্ধতি."""
+    s = info.get("settings") or {}
+    if s.get("bot_engine") != "cascade":
+        return False
+    return s.get("cascade_scope") == "all" or (normalize(info.get("caller") or "") or info.get("caller")) \
+        in numbers(s.get("bot_test_numbers"))
 
 
 async def warm_up(uid: str) -> None:
@@ -1303,7 +1323,7 @@ def save_call(call: Call, company_id: int, caller: str, model: str, key_id: int 
         from engine import agent
         info = calls.get(call.uid) or {}
         t = (info.get("prep_result") or {}).get("tenant")
-        if t:
+        if t and not getattr(call, "cascade", False):   # the cascade records each of its steps itself
             u = call.usage
             agent.record_usage(t, key_id, "gemini", model, "voice_call", None,
                                {"input": u["audio_in"], "output": u["audio_out"]}, error=error)
@@ -1329,6 +1349,11 @@ async def audio_server(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         loop = asyncio.get_running_loop()
         prep = await loop.run_in_executor(None, info["prep"].result, 15)
         info["prep_result"] = prep
+        if use_cascade(info):
+            from engine import voice_cascade
+            await voice_cascade.run(uid, info, reader, writer)
+            uid = None   # saved there
+            return
         model = info["settings"].get("bot_model") or DEFAULT_MODEL
         info["model"] = model
         call = Call(uid, info, reader, writer)
