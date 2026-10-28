@@ -434,6 +434,44 @@ class ISPDigital:
         return [t for t in rows if (t.get("UserName") or "").lower() == username.lower()
                 and t.get("Status") in (0, 1)]
 
+    # --- write: Expire Date (customer edit form) ----------------------------------------
+    def edit_form(self, header_id: int) -> dict:
+        """The customer edit form (/customer/edit) as the browser would post it after the page's JS ran."""
+        page = self.page("/customer/edit", {"id": int(header_id), "isComeFrom": ""})
+        form = parse_edit_form(page)
+        if not form or form["values"].get("CustomerHeaderId") != str(int(header_id)):
+            raise RuntimeError("billing's customer edit form was not as expected")
+        return form
+
+    def set_expire_day(self, header_id: int, day: int, expect: dict | None = None) -> int | None:
+        """Change only the customer's Expire Date (BillingLastDate, 1-31) and return the day it had.
+        Everything else goes back exactly as billing showed it; "Mikrotik Impact" is never sent (with it, saving an
+        Active customer whose line is off turns the line on). Refuses when the form doesn't match `expect`
+        (the desk's copy: username, monthly_bill, subzone, box) or a JS-set value (Speed, SubZone, Box) is missing."""
+        if not 1 <= int(day) <= 31:
+            raise ValueError("day must be 1-31")
+        form = self.edit_form(header_id)
+        problems = edit_form_problems(form, expect or {})
+        if problems:
+            raise BillingRefused("ফর্ম মেলেনি: " + ", ".join(problems))
+        before = form["values"].get("BillingLastDate")
+        if before == str(int(day)):
+            return int(before)
+        data: dict[str, list[str]] = {}
+        for n, v in form["fields"]:
+            data.setdefault(n, []).append(str(int(day)) if n == "BillingLastDate" else v)
+        files = [(n, ("", b"", "application/octet-stream")) for n in form["files"]]
+        with self._lock:
+            r = self._client.post(form["action"], data=data, files=files, timeout=60, headers={
+                "Referer": f"{self.base_url}/customer/edit?id={int(header_id)}&isComeFrom="})
+        location = r.headers.get("location", "")
+        if "Account/Login" in location:
+            self._logged_in = False
+            raise LoginError("billing session expired, the expire date was not saved")
+        if r.status_code not in (301, 302, 303):
+            raise BillingRefused(f"billing did not save the customer (HTTP {r.status_code})")
+        return int(before) if before and before.isdigit() else None
+
 
 def receive_payload(form: dict, paid: float, discount: float, method_id: str, received_by_id: str, remarks: str = "",
                     trx_no: str = "", send_sms: bool = False, next_billing_date: bool = False,
@@ -699,3 +737,136 @@ def parse_bill_form(page: str) -> dict | None:
         "methods": {k: v for k, v in p.options.get("PaymentMethodId", {}).items() if k},
         "has_tokens": "FormSubmissionToken" in names and "__RequestVerificationToken" in names,
     }
+
+
+class _EditFormParser(HTMLParser):
+    """Every named control of one form, as a browser submits it: checked checkboxes/radios only, each selected option
+    of a (multi) select, textarea text. File inputs are listed apart (sent as empty parts)."""
+
+    def __init__(self, form_id: str):
+        super().__init__(convert_charrefs=True)
+        self.form_id, self.depth, self.action = form_id, 0, None
+        self.controls: list[dict] = []
+        self.files: list[str] = []
+        self._select = self._option = self._area = None
+        self._text = ""
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "form":
+            if self.depth:
+                self.depth += 1
+            elif a.get("id") == self.form_id:
+                self.depth, self.action = 1, html.unescape(a.get("action") or "")
+            return
+        if not self.depth:
+            return
+        name = a.get("name")
+        if tag == "input" and name and "disabled" not in a:
+            kind = (a.get("type") or "text").lower()
+            if kind == "file":
+                self.files.append(name)
+            elif kind in ("checkbox", "radio"):
+                if "checked" in a:
+                    self.controls.append({"name": name, "values": [a.get("value") or "on"], "kind": kind})
+            elif kind not in ("submit", "button", "reset", "image"):
+                self.controls.append({"name": name, "values": [a.get("value") or ""], "kind": kind})
+        elif tag == "select" and name and "disabled" not in a:
+            self._select = {"name": name, "values": [], "kind": "select", "multiple": "multiple" in a, "options": []}
+            self.controls.append(self._select)
+        elif tag == "option" and self._select is not None:
+            self._option, self._text = (a.get("value"), "selected" in a), ""
+        elif tag == "textarea" and name and "disabled" not in a:
+            self._area, self._text = {"name": name, "values": [""], "kind": "textarea"}, ""
+            self.controls.append(self._area)
+
+    def handle_data(self, data):
+        if self._option is not None or self._area is not None:
+            self._text += data
+
+    def handle_endtag(self, tag):
+        if tag == "form" and self.depth:
+            self.depth -= 1
+        elif tag == "option" and self._option is not None and self._select is not None:
+            val, sel = self._option
+            val = self._text.strip() if val is None else val
+            self._select["options"].append(val)
+            if sel:
+                self._select["values"].append(val)
+            self._option = None
+        elif tag == "select" and self._select is not None:
+            s = self._select
+            if not s["multiple"] and not s["values"] and s["options"]:
+                s["values"] = [s["options"][0]]   # a browser posts the first option when none is selected
+            self._select = None
+        elif tag == "textarea" and self._area is not None:
+            self._area["values"] = [self._text.removeprefix("\r").removeprefix("\n")]
+            self._area = None
+
+
+NEVER_POST = {"IsMikrotikChanged"}
+
+
+def _js_var(page: str, name: str) -> str | None:
+    m = re.search(r"\bvar\s+" + re.escape(name) + r"\s*=\s*'([^']*)'", page)
+    return m.group(1) if m else None
+
+
+def parse_edit_form(page: str) -> dict | None:
+    """frmClientEdit with the values the page's JS sets on load: Speed ($('#Speed').val('...')), SubZoneId/BoxId
+    (var subzoneid / boxid) and ConnectedByIds (var connectedByIds = [..])."""
+    p = _EditFormParser("frmClientEdit")
+    p.feed(page)
+    names = {c["name"] for c in p.controls}
+    if not p.action or not {"CustomerHeaderId", "BillingLastDate", "UserName", "__RequestVerificationToken"} <= names:
+        return None
+    js = {}
+    m = re.search(r"\$\(\s*['\"]#Speed['\"]\s*\)\.val\(\s*'([^']*)'\s*\)", page)
+    js["Speed"] = m.group(1) if m else None
+    js["SubZoneId"], js["BoxId"] = _js_var(page, "subzoneid"), _js_var(page, "boxid")
+    m = re.search(r"\bvar\s+connectedByIds\s*=\s*\[([^\]]*)\]", page)
+    js["ConnectedByIds"] = [x.strip().strip("'\"") for x in m.group(1).split(",")] if m else None
+    fields, values = [], {}
+    for c in p.controls:
+        n = c["name"]
+        if n in NEVER_POST:
+            continue
+        vals = c["values"]
+        if n in ("Speed", "SubZoneId", "BoxId") and js.get(n) is not None:
+            vals = [js[n]]
+        elif n == "ConnectedByIds" and js["ConnectedByIds"] is not None:
+            vals = [v for v in js["ConnectedByIds"] if v and v != "0"]
+        for v in vals:
+            fields.append((n, v))
+        values.setdefault(n, vals[0] if vals else "")
+    return {"action": p.action, "fields": fields, "values": values, "files": p.files, "js": js,
+            "options": {c["name"]: c.get("options", []) for c in p.controls if c["kind"] == "select"}}
+
+
+def edit_form_problems(form: dict, expect: dict) -> list[str]:
+    """Why posting this form could change more than the Expire Date (empty list = safe to post)."""
+    v, js, out = form["values"], form["js"], []
+    if js.get("Speed") is None or not v.get("Speed"):
+        out.append("Speed/প্রোফাইল পাওয়া যায়নি")
+    elif js["Speed"] not in form["options"].get("Speed", []):
+        out.append("Speed তালিকায় নেই")
+    for f, key in (("SubZoneId", "subzone"), ("BoxId", "box")):
+        if js.get(f) is None:
+            out.append(f"{f} পাওয়া যায়নি")
+        elif expect.get(key) and js[f] in ("", "0"):
+            out.append(f"{f} খালি, অথচ Desk-এ {expect[key]}")
+    if js.get("ConnectedByIds") is None and "ConnectedByIds" in v:
+        out.append("ConnectedByIds পাওয়া যায়নি")
+    if expect.get("username") and (v.get("UserName") or "").strip().lower() != str(expect["username"]).strip().lower():
+        out.append("UserName মেলেনি")
+    if expect.get("monthly_bill") is not None:
+        try:
+            if abs(float((v.get("MonthlyBillAmount") or "0").replace(",", "")) - float(expect["monthly_bill"])) > 0.5:
+                out.append("মাসিক বিল মেলেনি")
+        except ValueError:
+            out.append("মাসিক বিল পড়া যায়নি")
+    if not v.get("Password"):
+        out.append("Password ঘর খালি")
+    if not form["files"]:
+        out.append("ফর্ম অচেনা (ফাইল ঘর নেই)")
+    return out
