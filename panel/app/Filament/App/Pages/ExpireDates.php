@@ -164,21 +164,23 @@ class ExpireDates extends Page implements HasTable
                     ->options(collect(ExpireDateChange::STATUSES)->map(fn ($s) => __($s[0]))->all()),
                 SelectFilter::make('type')->label(__('ধরন'))
                     ->options(['student' => 'Student', 'home' => 'Home', 'other' => __('অন্য')])
-                    ->query(fn (Builder $q, array $data) => match ($data['value'] ?? null) {
-                        'student' => $q->whereRaw("lower(customer_type) LIKE 'student%'"),
-                        'home' => $q->whereRaw("lower(customer_type) LIKE 'home%'"),
-                        'other' => $q->whereRaw("coalesce(lower(customer_type), '') NOT LIKE 'student%' AND coalesce(lower(customer_type), '') NOT LIKE 'home%'"),
-                        default => $q,
+                    ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
+                        'student' => $query->whereRaw("lower(customer_type) LIKE 'student%'"),
+                        'home' => $query->whereRaw("lower(customer_type) LIKE 'home%'"),
+                        'other' => $query->whereRaw("coalesce(lower(customer_type), '') NOT LIKE 'student%' AND coalesce(lower(customer_type), '') NOT LIKE 'home%'"),
+                        default => $query,
                     }),
                 SelectFilter::make('rule')->label(__('নিয়ম'))
                     ->options(collect(ExpireDateChange::RULES)->map(fn ($r) => __($r))->all()),
                 TernaryFilter::make('is_online')->label(__('অনলাইনে দিয়েছেন')),
                 SelectFilter::make('shift')->label(__('কত দিন সরবে'))
                     ->options(['1-2' => __('১-২ দিন'), '3-7' => __('৩-৭ দিন'), '8+' => __('৮ দিনের বেশি')])
-                    ->query(function (Builder $q, array $data) {
+                    ->query(function (Builder $query, array $data) {
                         $range = ['1-2' => [1, 2], '3-7' => [3, 7], '8+' => [8, 31]][$data['value'] ?? ''] ?? null;
+                        // around the month end: 27 → 2 is 5 days, not 25
+                        $d = 'abs(new_day - coalesce(old_day, new_day))';
 
-                        return $range ? $q->whereRaw('abs(new_day - coalesce(old_day, new_day)) BETWEEN ? AND ?', $range) : $q;
+                        return $range ? $query->whereRaw("CASE WHEN {$d} > 15 THEN 30 - {$d} ELSE {$d} END BETWEEN ? AND ?", $range) : $query;
                     }),
             ])
             ->recordActions([

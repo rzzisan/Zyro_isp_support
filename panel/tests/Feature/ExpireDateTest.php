@@ -86,6 +86,8 @@ class ExpireDateTest extends TestCase
         $this->as($this->owner);
         Livewire::test(ExpireDates::class)->filterTable('type', 'home')
             ->assertCanSeeTableRecords([$this->r['home']])->assertCanNotSeeTableRecords([$this->r['student']]);
+        Livewire::test(ExpireDates::class)->filterTable('shift', '3-7')
+            ->assertCanSeeTableRecords([$this->r['student']])->assertCanNotSeeTableRecords([$this->r['home'], $this->r['done']]);
     }
 
     public function test_only_the_owner_runs_and_the_engine_gets_the_request(): void
