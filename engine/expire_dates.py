@@ -34,6 +34,10 @@ AUTO_DAYS = 3             # timer: payments of the last three days (cash receipt
 HOME_PLUS, HOME_CAP = 5, 20
 # a change log row may carry these besides ExpireDate without anything real having changed
 WRITE_OK = {"ExpireDate", "BillingLastDate"}
+# billing keeps its stored Speed at the block profile when an online payment turns the line back on, while the edit
+# form (and MikroTik) has the real profile; any save, by staff or by us, writes the real one back. Zisan OK'd that
+# one change (2026-10-28); any other Speed change still stops the run.
+BLOCK_PROFILES = {"blocked-profile", "duedisabled"}
 
 
 class StopRun(RuntimeError):
@@ -177,9 +181,19 @@ _running: set[int] = set()
 _running_lock = threading.Lock()
 
 
-def _verify(api, company_id: int, h: int, since: datetime, day: int) -> None:
+def _speed_fix_only(change, posted: str | None) -> bool:
+    try:
+        old, new = change
+    except (TypeError, ValueError):
+        return False
+    return (str(old or "").strip().lower() in BLOCK_PROFILES and bool(posted) and str(new or "").strip() == posted
+            and posted.strip().lower() not in BLOCK_PROFILES)
+
+
+def _verify(api, company_id: int, h: int, since: datetime, day: int, posted_speed: str | None = None) -> list[str]:
     """Re-read the change log and the line log: any change after `since` other than ExpireDate, or the line being
-    switched on or off, stops the run."""
+    switched on or off, stops the run. Returns notes on the one allowed extra change (a stale block-profile Speed)."""
+    notes: list[str] = []
     customer_history.fetch_changes(api, company_id, h)
     customer_history.fetch_line(api, company_id, h)
     last = db.one("""SELECT snapshot->>'ExpireDate' AS day FROM billing_customer_change_logs WHERE company_id = %s
@@ -194,9 +208,14 @@ def _verify(api, company_id: int, h: int, since: datetime, day: int) -> None:
     for r in db.all_rows("""SELECT changed FROM billing_customer_change_logs WHERE company_id = %s
                             AND customer_header_id = %s AND changed_at >= %s AND changed IS NOT NULL""",
                          (company_id, h, since - timedelta(minutes=2))):
-        other = set(r["changed"] or {}) - WRITE_OK
+        changed = r["changed"] or {}
+        other = set(changed) - WRITE_OK
+        if "Speed" in other and _speed_fix_only(changed["Speed"], posted_speed):
+            other.discard("Speed")
+            notes.append(f"Speed-এর লেখা ঠিক হলো: {changed['Speed'][0]} → {changed['Speed'][1]}")
         if other:
             raise StopRun("Expire Date ছাড়াও বদলেছে: " + ", ".join(sorted(other)))
+    return notes
 
 
 def write_one(t, api, row: dict, user_id: int | None) -> None:
@@ -205,8 +224,8 @@ def write_one(t, api, row: dict, user_id: int | None) -> None:
     db.execute("UPDATE expire_date_changes SET status = 'running', error = NULL, updated_at = now() WHERE id = %s", (row["id"],))
     started = datetime.now(timezone.utc).replace(tzinfo=None)
     try:
-        before = api.set_expire_day(h, row["new_day"], expect=_expected(t.company_id, h))
-        _verify(api, t.company_id, h, started, row["new_day"])
+        res = api.set_expire_day(h, row["new_day"], expect=_expected(t.company_id, h))
+        notes = _verify(api, t.company_id, h, started, row["new_day"], res["speed"])
     except StopRun as e:
         db.execute("""UPDATE expire_date_changes SET status = 'failed', error = %s, updated_at = now() WHERE id = %s""",
                    (str(e)[:500], row["id"]))
@@ -216,8 +235,11 @@ def write_one(t, api, row: dict, user_id: int | None) -> None:
         db.execute("""UPDATE expire_date_changes SET status = 'failed', error = %s, updated_at = now() WHERE id = %s""",
                    (str(e)[:500], row["id"]))
         return
-    db.execute("""UPDATE expire_date_changes SET status = 'done', old_day = COALESCE(%s, old_day), applied_by = %s, applied_at = now(),
-                  updated_at = now() WHERE id = %s""", (before, user_id, row["id"]))
+    # already that day in billing (e.g. an earlier try saved it before stopping): keep the day it replaced
+    before = res["before"] if res["saved"] else None
+    db.execute("""UPDATE expire_date_changes SET status = 'done', old_day = COALESCE(%s, old_day), applied_by = %s,
+                  applied_at = now(), error = %s, updated_at = now() WHERE id = %s""",
+               (before, user_id, "; ".join(notes) or None, row["id"]))
     db.execute("UPDATE billing_customers SET bill_day = %s, updated_at = now() WHERE company_id = %s AND header_id = %s",
                (row["new_day"], t.company_id, h))
 
@@ -232,8 +254,8 @@ def _expected(company_id: int, h: int) -> dict:
 def _rollback_one(t, api, row: dict) -> None:
     h = row["customer_header_id"]
     started = datetime.now(timezone.utc).replace(tzinfo=None)
-    api.set_expire_day(h, row["old_day"], expect=_expected(t.company_id, h))
-    _verify(api, t.company_id, h, started, row["old_day"])
+    res = api.set_expire_day(h, row["old_day"], expect=_expected(t.company_id, h))
+    _verify(api, t.company_id, h, started, row["old_day"], res["speed"])
     db.execute("""UPDATE expire_date_changes SET status = 'rolled_back', rolled_back_at = now(), updated_at = now()
                   WHERE id = %s""", (row["id"],))
     db.execute("UPDATE billing_customers SET bill_day = %s, updated_at = now() WHERE company_id = %s AND header_id = %s",
