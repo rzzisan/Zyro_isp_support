@@ -32,7 +32,7 @@ log = logging.getLogger("voice_cascade")
 
 STT_MODELS = list(agent.GEMINI_VOICE_MODELS)
 LLM_MODEL = "claude-haiku-5-5"
-TTS_MODEL = agent.GEMINI_TTS_MODEL
+TTS_MODELS = ["gemini-3.8-flash-lite-tts", agent.GEMINI_TTS_MODEL]   # fastest first (Zisan's key, 2026-10-28)
 SPEECH_RMS = vb.SILENCE_RMS or 200
 MIN_SPEECH = 10      # 200 ms of voice before it counts as speech (a click or a cough doesn't)
 END_SILENCE = 35     # 700 ms of quiet ends what the caller said
@@ -107,29 +107,50 @@ def transcribe(t, pcm8: bytes, strict: bool = False) -> str:
     raise RuntimeError("no Gemini key could transcribe")
 
 
-def speak(t, text: str, voice: str) -> bytes:
-    """One sentence read by Gemini TTS, as 8 kHz 16-bit PCM for the call."""
+def speak(t, text: str, voice: str, chunk=None) -> bytes:
+    """One sentence read by Gemini TTS, as 8 kHz 16-bit PCM for the call. Streamed: each piece goes to chunk() as it
+    arrives (the first after ~1.3 s on 3.8-flash-lite-tts; the whole sentence took 4.3 s on 2.5-flash-preview-tts)."""
+    body = {"contents": [{"parts": [{"text": agent.TTS_STYLE + text}]}],
+            "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
+                "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}}
     for row in agent._keys(t, "gemini", usable_only=True, job="call_tts"):
-        try:
-            r = httpx.post(f"https://generativelanguage.googleapis.com/v1beta/models/{TTS_MODEL}:generateContent",
-                           headers={"x-goog-api-key": db.decrypt(row["api_key"])}, timeout=30,
-                           json={"contents": [{"parts": [{"text": agent.TTS_STYLE + text}]}],
-                                 "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
-                                     "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}})
-        except httpx.TransportError as e:
-            agent.record_usage(t, row["id"], "gemini", TTS_MODEL, "call_tts", None, error=f"{type(e).__name__}: {e}")
-            continue
-        if r.status_code != 200:
-            agent.record_usage(t, row["id"], "gemini", TTS_MODEL, "call_tts", None, error=f"HTTP {r.status_code}: {r.text[:200]}")
-            continue
-        data = r.json()
-        u = data.get("usageMetadata") or {}
-        agent.record_usage(t, row["id"], "gemini", TTS_MODEL, "call_tts", None,
-                           {"input": u.get("promptTokenCount") or 0, "output": u.get("candidatesTokenCount") or 0})
-        parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
-        pcm = b"".join(base64.b64decode(p["inlineData"]["data"]) for p in parts if (p.get("inlineData") or {}).get("data"))
-        if pcm:
-            return audioop.ratecv(pcm, 2, 1, 24000, 8000, None)[0]
+        for model in TTS_MODELS:
+            got, state, odd, usage = bytearray(), None, b"", {}
+            try:
+                with httpx.stream("POST", f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent",
+                                  params={"alt": "sse"}, headers={"x-goog-api-key": db.decrypt(row["api_key"])},
+                                  json=body, timeout=30) as r:
+                    if r.status_code != 200:
+                        r.read()
+                        if r.status_code != 404:
+                            agent.record_usage(t, row["id"], "gemini", model, "call_tts", None,
+                                               error=f"HTTP {r.status_code}: {r.text[:200]}")
+                        continue
+                    for line in r.iter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = json.loads(line[5:])
+                        usage = data.get("usageMetadata") or usage
+                        for part in ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []:
+                            inline = part.get("inlineData") or {}
+                            if not inline.get("data"):
+                                continue
+                            rate = re.search(r"rate=(\d+)", inline.get("mimeType") or "")
+                            raw = odd + base64.b64decode(inline["data"])
+                            cut = len(raw) // 2 * 2
+                            raw, odd = raw[:cut], raw[cut:]
+                            pcm, state = audioop.ratecv(raw, 2, 1, int(rate.group(1)) if rate else 24000, 8000, state)
+                            got += pcm
+                            if chunk:
+                                chunk(pcm)
+            except httpx.TransportError as e:
+                agent.record_usage(t, row["id"], "gemini", model, "call_tts", None, error=f"{type(e).__name__}: {e}")
+                if not got:
+                    continue
+            agent.record_usage(t, row["id"], "gemini", model, "call_tts", None,
+                               {"input": usage.get("promptTokenCount") or 0, "output": usage.get("candidatesTokenCount") or 0})
+            if got:
+                return bytes(got)
     raise RuntimeError("no Gemini key could speak")
 
 
@@ -379,10 +400,24 @@ class CascadeCall(vb.Call):
             return False
         return any(not any(x in k for k in self.known) for x in vb.numbers_in(said))
 
-    def voice_of(self, sentence: str):
-        """A sentence's audio, being made in the pool; short lines without numbers come from the kept audio."""
+    def voice_of(self, sentence: str) -> asyncio.Queue:
+        """A sentence's audio as it is made (pieces, then None); short lines without numbers come from the kept audio."""
+        loop, q = asyncio.get_running_loop(), asyncio.Queue()
         short = len(sentence) <= SHORT_LINE and not re.search(r"[0-9০-৯]", sentence)
-        return asyncio.ensure_future(self.in_pool(spoken if short else speak, self.t, sentence, self.voice))
+        if short:
+            job = loop.run_in_executor(vb.pool, spoken, self.t, sentence, self.voice)
+        else:
+            job = loop.run_in_executor(vb.pool, speak, self.t, sentence, self.voice,
+                                       lambda pcm: loop.call_soon_threadsafe(q.put_nowait, pcm))
+
+        def done(f):
+            if not f.cancelled() and f.exception():
+                log.warning("call %s: no voice for a sentence: %s", self.uid, f.exception())
+            elif short and not f.cancelled():
+                q.put_nowait(f.result())
+            q.put_nowait(None)
+        job.add_done_callback(done)
+        return q
 
     async def utter(self, text: str) -> None:
         speech = Speech(self, check=False)
@@ -425,7 +460,8 @@ class Speech:
     async def play(self) -> None:
         while (item := await self.queue.get()) is not None:
             sentence, voice = item
-            self.call.out += await voice
+            while (pcm := await voice.get()) is not None:
+                self.call.out += pcm
             self.call.say("bot", sentence + " ")
 
     async def finish(self) -> None:
