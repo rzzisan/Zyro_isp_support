@@ -191,7 +191,15 @@ class TicketActions
                 ]),
             ])
             ->action(function (array $data, Action $action) {
-                [$headerId, , $username] = array_pad(explode('|', (string) $data['customer']), 4, null);
+                [$headerId, $customerId, $username] = array_pad(explode('|', (string) $data['customer']), 4, null);
+                // one open ticket per customer: a new one only after it is solved (the engine checks again)
+                if ($open = static::openTicketOf((int) $headerId, $customerId)) {
+                    Notification::make()->danger()->title(__('টিকিট খোলা যায়নি'))
+                        ->body(__('এই কাস্টমারের টিকিট #:id এখনো খোলা আছে; সেটা সমাধান হলে নতুন টিকিট খোলা যাবে', ['id' => $open]))->send();
+                    $action->halt();
+
+                    return;
+                }
                 try {
                     $res = Engine::createTicket(static::company(), [
                         'header_id' => (int) $headerId, 'username' => $username,
@@ -445,6 +453,41 @@ class TicketActions
                 }
                 Notification::make()->success()->title(__('টিকিট #:id আপডেট হয়েছে', ['id' => $record->complain_id]))->send();
             });
+    }
+
+    /** The customer's open ticket number, if any. */
+    public static function openTicketOf(int $headerId, ?string $customerId = null): ?string
+    {
+        return BillingTicket::where('company_id', static::company())->whereIn('state', ['pending', 'processing'])
+            ->where(fn ($q) => $q->where('customer_header_id', $headerId)
+                ->when(filled($customerId), fn ($w) => $w->orWhereRaw("ltrim(customer_id, '0') = ltrim(?, '0')", [$customerId])))
+            ->orderByDesc('id')->value('complain_id');
+    }
+
+    /**
+     * Owner only: delete a Desk ticket with its history and field job. A billing ticket lives in billing (the sync
+     * would bring it back), so it can't be deleted here.
+     */
+    public static function delete(): Action
+    {
+        return Action::make('delete')->label(__('ডিলিট'))->icon(Heroicon::OutlinedTrash)->color('danger')
+            ->visible(fn (BillingTicket $record) => $record->isDesk()
+                && auth()->user()?->roleIn(Filament::getTenant()) === 'owner')
+            ->requiresConfirmation()
+            ->modalHeading(fn (BillingTicket $record) => __('টিকিট #:id ডিলিট করবেন?', ['id' => $record->complain_id]))
+            ->modalDescription(__('টিকিট, এর ইতিহাস আর ফিল্ডের কাজ মুছে যাবে, ফেরানো যাবে না।'))
+            ->action(function (BillingTicket $record) {
+                abort_unless($record->isDesk() && auth()->user()?->roleIn(Filament::getTenant()) === 'owner', 403);
+                $no = $record->complain_id;
+                \Illuminate\Support\Facades\DB::transaction(function () use ($record) {
+                    \App\Models\TicketEvent::where('company_id', $record->company_id)->where('complain_id', $record->complain_id)->delete();
+                    \Illuminate\Support\Facades\DB::table('ticket_notifications')->where('company_id', $record->company_id)
+                        ->where('complain_id', $record->complain_id)->delete();
+                    $record->delete();   // field_jobs go with it (cascade)
+                });
+                Notification::make()->success()->title(__('টিকিট #:id ডিলিট হয়েছে', ['id' => $no]))->send();
+            })
+            ->cancelParentActions();   // the details modal of a ticket that's gone closes too
     }
 
     /** "Solve" in the ticket details: only while the customer is online on MikroTik (the engine checks again). */

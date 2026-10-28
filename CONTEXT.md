@@ -555,3 +555,10 @@
 - ভয়েস (WhatsApp কল + হটলাইন): কাস্টমার টুল `reconnect_line` (স্টাফ টুলে নেই, তাদের switch_line আছে), filler "একটু অপেক্ষা করুন, আপনার লাইনটা দেখছি।", `RECONNECT_RULES`; ফলের `say` লেখাটাই বলে।
 - লগ: প্রতিটা অনুরোধ (চালু, এই মাসে আগেই নিয়েছেন, এক মাসের বেশি বকেয়া, বিলের কারণে বন্ধ না, ব্যর্থ) `line_enables`-এ, technician_name = "কাস্টমার নিজে (WhatsApp চ্যাট/WhatsApp কল/হটলাইন কল)", source = customer_whatsapp/customer_wa_call/customer_hotline। প্যানেল "লাইন চালু/বন্ধের রেকর্ড" (কলাম "কে চাইলেন")।
 - 2026-10-25 নম্বর-সীমা (Zisan): এক WhatsApp/ফোন নম্বর থেকে মাসে সর্বোচ্চ `bot_settings.self_reconnect_per_number` (ডিফল্ট 2) টা লাইন, যত আলাদা আইডিই বলুক। Owner বট সেটিংসে কোনো নম্বরের আলাদা সীমা দেন (`self_reconnect_number_limits` JSON [{number, limit, note}], 0 = ওই নম্বর থেকে বন্ধ); Admin এই ঘরগুলো দেখেন না। গোনা: `line_enables.technician_number`-এর শেষ ১০ অঙ্ক, source customer_*, result enabled, এই মাসে। verdict `number_limit`। PR #57-এর বাগ: বিলিংয়ের সার্চ রো-তে MonthlyBill থাকে না, তাই সংরক্ষিত রো মিশিয়ে নেওয়া হয় আর না থাকলে `billing_customers.monthly_bill`।
+
+## এক কাস্টমার, একটাই খোলা টিকিট; মালিক Desk টিকিট ডিলিট করতে পারেন (2026-10-28)
+- Zisan-এর নিয়ম: একজন কাস্টমারের একসাথে একটাই খোলা (pending/processing) টিকিট থাকবে, সেটা সমাধান হলে তবেই নতুন টিকিট।
+  - `desk_tickets.open_ticket_of(company, header_id, customer_id)` Desk আর বিলিং দুই উৎসের টিকিটই দেখে।
+  - ডেস্কের `/tickets` endpoint দুই মোডেই এটা দিয়ে আটকায়, `DeskTickets.create_ticket`-ও আটকায় (বট, ফোন বট, অ্যাপ সব)।
+  - প্যানেলের নতুন টিকিট ফর্ম engine-এ পাঠানোর আগেই আটকায়।
+- টিকিটের বিস্তারিত আর তালিকায় "ডিলিট" (`TicketActions::delete`) শুধু Owner দেখেন, আর শুধু Desk টিকিটে। টিকিটের সাথে ticket_events, ticket_notifications আর field_job (cascade) মুছে যায়। বিলিং টিকিট ডিলিট করা যায় না, কারণ sync সেটা আবার নিয়ে আসবে।

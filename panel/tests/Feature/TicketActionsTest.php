@@ -64,6 +64,40 @@ class TicketActionsTest extends TestCase
         Livewire::test(Dashboard::class)->callAction('newTicket', $data)->assertHasNoFormErrors();
     }
 
+    public function test_a_customer_with_an_open_ticket_gets_no_second_one(): void
+    {
+        BillingTicket::create(['company_id' => $this->company->id, 'complain_id' => '100004', 'customer_id' => '5629',
+            'customer_header_id' => 15630, 'state' => 'processing', 'source' => 'desk']);
+        $data = ['customer' => '15630|5629|rz5629|01838216754', 'category_id' => '3804', 'priority' => '2',
+            'mobile' => '01838216754', 'comment' => 'আবার লাইন নেই', 'sms_client' => false];
+        Livewire::test(ListTickets::class)->callAction('newTicket', $data)->assertNotified('টিকিট খোলা যায়নি');
+        Http::assertNotSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/tickets");
+
+        BillingTicket::where('complain_id', '100004')->update(['state' => 'solved']);
+        Livewire::test(ListTickets::class)->callAction('newTicket', $data)->assertHasNoFormErrors();
+        Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/tickets");
+    }
+
+    public function test_only_the_owner_deletes_a_desk_ticket(): void
+    {
+        $cid = $this->company->id;
+        $desk = BillingTicket::create(['company_id' => $cid, 'complain_id' => '100002', 'customer_id' => '5629',
+            'state' => 'pending', 'source' => 'desk']);
+        $billing = BillingTicket::create(['company_id' => $cid, 'complain_id' => '57301', 'customer_id' => '5630', 'state' => 'pending']);
+        \App\Models\TicketEvent::create(['company_id' => $cid, 'complain_id' => '100002', 'kind' => 'open']);
+
+        Livewire::test(ListTickets::class)->assertActionHidden(TestAction::make('delete')->table($desk)); // agent
+
+        $owner = User::factory()->create();
+        $this->company->users()->attach($owner, ['role' => 'owner']);
+        $this->actingAs($owner);
+        Livewire::test(ListTickets::class)->assertActionHidden(TestAction::make('delete')->table($billing))
+            ->callAction(TestAction::make('delete')->table($desk));
+        $this->assertNull(BillingTicket::find($desk->id));
+        $this->assertSame(0, \App\Models\TicketEvent::where('complain_id', '100002')->count());
+        $this->assertNotNull(BillingTicket::find($billing->id));
+    }
+
     public function test_desk_ticket_shows_its_history_and_assigns_without_billing_sms(): void
     {
         $cid = $this->company->id;

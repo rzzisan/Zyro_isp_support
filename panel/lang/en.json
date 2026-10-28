@@ -1630,5 +1630,14 @@
     "মাসে সর্বোচ্চ লাইন": "Most lines a month",
     "অগ্রিম": "Advance",
     "অগ্রিম :amount টাকা": "Advance :amount Tk",
-    "আংশিক, অগ্রিম বা ডিসকাউন্ট হলে লিখতে হবে": "Required for partial, advance or discounted payments"
+    "আংশিক, অগ্রিম বা ডিসকাউন্ট হলে লিখতে হবে": "Required for partial, advance or discounted payments",
+    "এই কাস্টমারের টিকিট #:id এখনো খোলা আছে; সেটা সমাধান হলে নতুন টিকিট খোলা যাবে": "This customer's ticket #:id is still open; a new ticket can be opened once it is solved",
+    "ডিলিট": "Delete",
+    "টিকিট #:id ডিলিট করবেন?": "Delete ticket #:id?",
+    "টিকিট, এর ইতিহাস আর ফিল্ডের কাজ মুছে যাবে, ফেরানো যাবে না।": "The ticket, its history and its field job are deleted for good.",
+    "টিকিট #:id ডিলিট হয়েছে": "Ticket #:id deleted",
+    "ডিফল্ট: gemini-3.1-flash-live-preview": "Default: gemini-3.1-flash-live-preview",
+    "ফোন কল (অডিও)": "Phone calls (audio)",
+    "ফোন কল (নির্দেশনা ও তথ্য)": "Phone calls (instructions and data)",
+    "বদলালে পরের কল থেকে চলবে; ভালো না লাগলে ডিফল্টে ফিরিয়ে দিন": "A change applies from the next call; switch back to the default if it doesn't work well"
 }
