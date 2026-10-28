@@ -600,3 +600,8 @@
   - Session না খুললে পুরোনো `transcribe()`-এ চলে।
   - ২.৫s-এর মধ্যে লেখা না এলে ওই কথাটা পুরোনো `transcribe()` দিয়ে লেখা হয়।
   - বটের কথার সময় নীরবতা পাঠানো হয়, যাতে echo লেখায় না আসে।
+
+## 2026-10-28: Live voice bot cost cut
+- Context window env VOICE_CONTEXT_TRIGGER=6000 / VOICE_CONTEXT_TARGET=3000 (engine/.env); `context_window(prompt)` floors them at prompt size so recent turns are not forgotten.
+- FAQ no longer in the Live system prompt: new tool `search_faq(query)` returns relevant FAQ entries (agent.relevant_faqs).
+- Line lookup for customers slimmed: 2 payments only, MikroTik reduced to a short `router` status when PPPoE info exists, sources dropped.
