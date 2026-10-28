@@ -24,6 +24,7 @@ from collections import deque
 
 import anthropic
 import httpx
+import websockets
 
 from engine import agent, db
 from engine import voice_bot as vb
@@ -61,6 +62,13 @@ CALL_STYLE = ("\n\nউত্তরের ধরন: এটা ফোন কল, 
               "কথ্য বাংলায়। লিস্ট, চিহ্ন, ইমোজি, লিংক না। কলারের কথা \"[বোঝা যায়নি]\" হলে অনুমান করবে না, অভিযোগও খুলবে না: "
               "বলো \"জি, একটু আরেকবার বলবেন?\"।")
 UNCLEAR = "[বোঝা যায়নি]"
+# streaming speech-to-text (Zisan 2026-10-28, after call 610: sending each finished utterance to generateContent took
+# 3-4 s, and our loudness-only end detection lost a sentence): the caller's audio goes to the Live transcription model
+# as it is spoken, words come back while they talk. If it can't be opened, the call falls back to transcribe().
+TRANSCRIBE_MODEL = "gemini-3.5-transcribe-live"
+VOCAB = ["ONU", "অনু", "router", "রাউটার", "লাইন", "নেট", "স্লো", "বিল", "বকেয়া", "লাল বাতি", "লস", "বিকাশ", "নগদ",
+         "রকেট", "কাস্টমার আইডি", "পেমেন্ট", "টেকনিশিয়ান", "ফাইবার", "লাইন চালু", "লাইন বন্ধ", "পাসওয়ার্ড", "ওয়াইফাই"]
+STREAM_END_SILENCE = 25   # 500 ms of quiet: tell the transcriber the caller stopped, so it writes the final words now
 
 
 def greeting(prep: dict, company: str) -> str:
@@ -251,6 +259,96 @@ def relevant(t, query: str) -> str:
             + "\n\n".join(out)) if out else ""
 
 
+async def open_transcriber(company_id: int):
+    """A streaming transcription session on the company's Gemini key for call_stt (then the others)."""
+    keys = db.all_rows("select id, api_key from ai_keys where company_id = %s and provider = 'gemini'"
+                       " and (rate_limited_until is null or rate_limited_until <= now()) order by id", (company_id,))
+    picked = agent.job_key(company_id, "call_stt")
+    if picked:
+        keys.sort(key=lambda k: k["id"] != picked["id"])
+    last = "no Gemini key"
+    for k in keys:
+        try:
+            ws = await websockets.connect(vb.LIVE_URL, additional_headers={"x-goog-api-key": db.decrypt(k["api_key"])},
+                                          max_size=None, open_timeout=8)
+            await ws.send(json.dumps({"setup": {
+                "model": f"models/{TRANSCRIBE_MODEL}",
+                "generationConfig": {"responseModalities": ["TEXT"]},
+                "inputAudioTranscription": {"languageCodes": ["bn-BD"], "customVocabulary": VOCAB},
+            }}))
+            first = json.loads(await asyncio.wait_for(ws.recv(), 8))
+            if "setupComplete" in first:
+                return Transcriber(ws, k["id"])
+            last = str(first)[:200]
+            await ws.close()
+        except Exception as e:
+            last = f"{type(e).__name__}: {e}"
+    raise RuntimeError(f"no transcription session: {last}")
+
+
+class Transcriber:
+    """The caller's side of the line, streamed (16 kHz, 100 ms pieces); finished words collect in .pending."""
+
+    def __init__(self, ws, key_id: int):
+        self.ws, self.key_id = ws, key_id
+        self.alive, self.state, self.buf = True, None, bytearray()
+        self.pending: list[str] = []
+        self.last_final = 0.0
+        self.seconds = 0.0
+        self.usage = {"input": 0, "output": 0}
+
+    async def send(self, msg: dict) -> None:
+        if not self.alive:
+            return
+        try:
+            await self.ws.send(json.dumps(msg))
+        except Exception as e:
+            log.warning("transcriber send: %s", e)
+            self.alive = False
+
+    async def feed(self, pcm8: bytes) -> None:
+        pcm16, self.state = audioop.ratecv(pcm8, 2, 1, 8000, 16000, self.state)
+        self.buf += pcm16
+        self.seconds += len(pcm8) / 16000
+        if len(self.buf) >= 3200:
+            await self.flush()
+
+    async def flush(self) -> None:
+        if self.buf:
+            data, self.buf = bytes(self.buf), bytearray()
+            await self.send({"realtimeInput": {"audio": {"data": base64.b64encode(data).decode(),
+                                                         "mimeType": "audio/pcm;rate=16000"}}})
+
+    async def stopped(self) -> None:
+        """The caller went quiet: the final words now, not after the server's own silence wait."""
+        await self.flush()
+        await self.send({"realtimeInput": {"audioStreamEnd": True}})
+
+    async def read(self) -> None:
+        try:
+            async for raw in self.ws:
+                msg = json.loads(raw)
+                text = (((msg.get("serverContent") or {}).get("inputTranscription")) or {}).get("text") or ""
+                if text.strip():
+                    self.pending.append(text.strip())
+                    self.last_final = time.monotonic()
+                u = msg.get("usageMetadata") or {}
+                self.usage["input"] += int(u.get("promptTokenCount") or 0)
+                self.usage["output"] += int(u.get("responseTokenCount") or u.get("candidatesTokenCount") or 0)
+        except Exception as e:
+            log.warning("transcriber: %s", e)
+        finally:
+            self.alive = False
+
+    async def close(self, t) -> None:
+        self.alive = False
+        try:
+            await self.ws.close()
+        except Exception:
+            pass
+        agent.record_usage(t, self.key_id, "gemini", TRANSCRIBE_MODEL, "call_stt", None, self.usage)
+
+
 # --- one call ----------------------------------------------------------------------------------------
 class CascadeCall(vb.Call):
     cascade = True
@@ -270,6 +368,9 @@ class CascadeCall(vb.Call):
         self.utterances: asyncio.Queue = asyncio.Queue()
         self.reply: asyncio.Task | None = None
         self.unclear = 0
+        self.stt: Transcriber | None = None
+        self.speaking = False
+        self.waiting: tuple[bytes, float] | None = None   # an utterance whose streamed words haven't come yet
         self.ack = b""       # ACK's audio, made while the greeting plays
         self.acked = False
 
@@ -295,10 +396,15 @@ class CascadeCall(vb.Call):
             now = time.monotonic()
             if self.out:
                 last_out = now
+            streaming = self.stt and self.stt.alive
             if now - last_out < ECHO_TAIL and not speech:
                 held.clear()
                 voiced = 0
+                if streaming:
+                    await self.stt.feed(b"\x00" * len(payload))   # the bot's own echo is not sent to be written down
                 continue
+            if streaming:
+                await self.stt.feed(payload)
             level = audioop.rms(payload, 2)
             loud = level >= min(max(SPEECH_RMS, floor * 2), 1500)
             if not speech:
@@ -310,13 +416,33 @@ class CascadeCall(vb.Call):
                     speech += b"".join(held)
                     held.clear()
                     quiet = 0
+                    self.speaking = True
                 continue
             speech += payload
             quiet = 0 if loud else quiet + 1
-            if quiet >= END_SILENCE or len(speech) >= MAX_UTTERANCE * vb.FRAME:
+            if streaming and quiet >= STREAM_END_SILENCE:
+                await self.stt.stopped()   # its words arrive in self.stt.pending; gather() hands them on
+                self.waiting = (bytes(speech), time.monotonic())
+                speech, voiced, self.speaking = bytearray(), 0, False
+            elif quiet >= END_SILENCE or len(speech) >= MAX_UTTERANCE * vb.FRAME:
                 await self.utterances.put(bytes(speech))
-                speech, voiced = bytearray(), 0
+                speech, voiced, self.speaking = bytearray(), 0, False
         self.done.set()
+
+    async def gather(self) -> None:
+        """Streamed words → one utterance once the caller is quiet and nothing more came for a moment."""
+        while not self.done.is_set():
+            await asyncio.sleep(0.1)
+            stt = self.stt
+            if stt and stt.pending and not self.speaking and time.monotonic() - stt.last_final >= 0.25:
+                text = " ".join(stt.pending)
+                stt.pending.clear()
+                self.waiting = None
+                await self.utterances.put(text)
+            elif self.waiting and time.monotonic() - self.waiting[1] > 2.5 and not self.speaking:
+                log.info("call %s: no streamed words for an utterance, written down the old way", self.uid)
+                pcm, self.waiting = self.waiting[0], None
+                await self.utterances.put(pcm)
 
     async def converse(self) -> None:
         while not self.done.is_set():
@@ -341,9 +467,16 @@ class CascadeCall(vb.Call):
                 return UNCLEAR
         return text
 
-    async def answer(self, pcm: bytes) -> None:
+    async def answer(self, heard) -> None:
         self.acked = False
-        text = (await self.hear(pcm)).strip()
+        if isinstance(heard, str):   # streamed: already words; another script can't be asked again here
+            text = heard.strip()
+            if text and vb.FOREIGN.search(text):
+                log.info("call %s: streamed transcript in another script: %s", self.uid, text[:80])
+                self.act("unclear", "কলারের কথা অন্য ভাষার হরফে এসেছে, আবার বলতে বলা হলো", ok=False)
+                text = UNCLEAR
+        else:
+            text = (await self.hear(heard)).strip()
         if not text:
             return   # noise, a breath: nothing to answer
         if text == UNCLEAR:
@@ -497,11 +630,18 @@ async def run(uid: str, info: dict, reader, writer) -> None:
         company = (prep.get("tenant").name if prep.get("tenant") else "") or ""
         call.act("engine", "লেখা-ভিত্তিক বট (শোনা → Claude → কণ্ঠ)")
         loop = asyncio.get_running_loop()
+        opening = asyncio.create_task(open_transcriber(info["company_id"]))
         player = asyncio.create_task(call.to_caller())   # the greeting plays while it is still being made
         await call.in_pool(spoken, call.t, greeting(prep, company), call.voice,
                            lambda pcm: loop.call_soon_threadsafe(call.out.extend, pcm))
         call.say("bot", greeting(prep, company))
+        try:
+            call.stt = await opening
+        except Exception as e:
+            log.warning("call %s: no streaming transcription, utterances go to transcribe(): %s", uid, e)
         tasks = [asyncio.create_task(c) for c in (call.listen(), call.converse(), call.done.wait())] + [player]
+        if call.stt:
+            tasks += [asyncio.create_task(call.stt.read()), asyncio.create_task(call.gather())]
 
         async def load_ack():
             try:
@@ -531,6 +671,8 @@ async def run(uid: str, info: dict, reader, writer) -> None:
         error = f"{type(e).__name__}: {e}"
         log.exception("cascade call %s", uid)
     finally:
+        if call is not None and call.stt:
+            await call.stt.close(call.t)
         try:
             writer.write(b"\x00\x00\x00")
             await asyncio.wait_for(writer.drain(), 2)
