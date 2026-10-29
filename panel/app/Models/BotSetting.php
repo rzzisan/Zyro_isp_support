@@ -11,7 +11,8 @@ class BotSetting extends Model
         'auto_ticket', 'reply_signature', 'extra_prompt', 'customer_prompt', 'technician_prompt', 'voice_provider',
         'voice_reply', 'voice_reply_voice', 'self_reconnect', 'self_reconnect_per_number', 'self_reconnect_number_limits', 'auto_assign', 'auto_assign_exclude',
         'auto_assign_area_categories', 'auto_assign_category_staff', 'field_job_minutes', 'field_job_targets',
-        'field_office_lat', 'field_office_lng', 'field_office_radius', 'field_duty_start', 'field_duty_end'];
+        'field_office_lat', 'field_office_lng', 'field_office_radius', 'field_duty_start', 'field_duty_end',
+        'walkie_on_at', 'walkie_off_at', 'walkie_keep_days'];
 
     protected function casts(): array
     {

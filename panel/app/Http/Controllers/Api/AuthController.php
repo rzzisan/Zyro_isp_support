@@ -8,6 +8,7 @@ use App\Models\CallLog;
 use App\Models\User;
 use App\Support\Menu;
 use App\Support\Softphone;
+use App\Support\Walkie;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -106,10 +107,16 @@ class AuthController extends Controller
             // the call log needs a hotline (SIP) or WhatsApp calls set up, like the panel's page
             $hotline = CallLog::enabledFor($company->id);
 
-            return ['id' => $company->id, 'slug' => $company->slug, 'name' => $company->name, 'role' => $role,
+            $row = ['id' => $company->id, 'slug' => $company->slug, 'name' => $company->name, 'role' => $role,
                 'menus' => array_values(array_filter(array_keys(Menu::ITEMS),
                     fn ($k) => Menu::allows($user, $company, $k) && ($k !== 'calls' || $hotline)
                         && ($k !== 'phone' || Softphone::available($company))))];
+            // not a menu: the walkie-talkie is for the members the owner put in a group
+            if (Walkie::groupsFor($user, $company)->isNotEmpty()) {
+                $row['menus'][] = 'walkie';
+            }
+
+            return $row;
         })->values();
 
         return ['user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'locale' => $user->locale,

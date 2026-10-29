@@ -1720,5 +1720,22 @@
     "সমস্যা ঠিক করেছেন (রিচার্জ, key, IP whitelist)? এই গেটওয়ে আবার ব্যবহার হবে; মূল হলে এরপরের SMS এটা দিয়েই যাবে।": "Fixed the problem (recharge, key, IP whitelist)? This gateway is used again; if it is the main one, the next SMS go through it.",
     "SMS পাঠানো নিজে থেকে বন্ধ হয়ে গেছে: :why": "SMS sending stopped by itself: :why",
     "মূল SMS গেটওয়ে থেমে আছে: :why": "The main SMS gateway is stopped: :why",
-    "SMS গেটওয়ে সেটিংস দেখুন": "See SMS gateway settings"
+    "SMS গেটওয়ে সেটিংস দেখুন": "See SMS gateway settings",
+    "Desk অ্যাপের ওয়াকি-টকি। প্রতিদিন চালুর সময়ে সদস্যদের অ্যাপে নিজে থেকে চালু হয়; প্রত্যেকে নিজে বন্ধ/চালু করতে পারেন। সব কথা রেকর্ড থাকে (উপরে \"রেকর্ড\")।": "The Desk app's walkie-talkie. It turns on by itself in the members' app at the daily on time; each member can turn it off or on. Everything said is recorded (see \"Recordings\" above).",
+    "এঁরা অ্যাপে গ্রুপের সব কথা শুনবেন, চেপে ধরে কথা বলবেন, আর একে অপরকে প্রাইভেট কল দিতে পারবেন। আপনি নিজে থাকতে চাইলে নিজেকেও যোগ করুন।": "They hear everything said in the group in the app, hold to talk, and can call each other privately. Add yourself too if you want to be in it.",
+    "ওয়াকি-টকি": "Walkie-talkie",
+    "ওয়াকি-টকি গ্রুপ": "Walkie-talkie group",
+    "ওয়াকি-টকি রেকর্ড": "Walkie-talkie recordings",
+    "ওয়াকি-টকি সার্ভার (LiveKit) এখনো সেট করা হয়নি; গ্রুপ বানিয়ে রাখা যাবে, অ্যাপে দেখাবে সার্ভার চালু হলে।": "The walkie-talkie server (LiveKit) is not set up yet; groups can be made now and show in the app once it runs.",
+    "কলটা আর নেই": "The call is over",
+    "কে বললেন": "Who spoke",
+    "কোথায়": "Where",
+    "প্রতিদিন নিজে থেকে চালু": "Turns on by itself daily at",
+    "প্রতিদিন নিজে থেকে বন্ধ (খালি = বন্ধ হবে না)": "Turns off by itself daily at (empty = never)",
+    "প্রাইভেট কল": "Private call",
+    "যেমন লাইন টিম, অফিস": "e.g. Line team, Office",
+    "রেকর্ড": "Recordings",
+    "রেকর্ড কত দিন থাকবে": "Keep recordings for (days)",
+    "শুধু প্রাইভেট কল": "Private calls only",
+    "সময় ও রেকর্ড সেটিং": "Times and recordings"
 }

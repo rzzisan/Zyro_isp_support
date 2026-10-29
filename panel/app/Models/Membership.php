@@ -73,4 +73,10 @@ class Membership extends Model
     {
         return $this->belongsToMany(PermissionGroup::class, 'membership_permission_group');
     }
+
+    /** Walkie-talkie groups the member is in (App\Support\Walkie). */
+    public function walkieGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(WalkieGroup::class, 'membership_walkie_group');
+    }
 }

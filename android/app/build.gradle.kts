@@ -40,14 +40,16 @@ android {
         applicationId = "com.zyrotechbd.desk"
         minSdk = 26
         targetSdk = 34
-        versionCode = 28
-        versionName = "1.18.0"
+        versionCode = 29
+        versionName = "1.19.0"
         buildConfigField("String", "DESK_URL", "\"https://desk.zyrotechbd.com/\"")
         buildConfigField("String", "API_BASE_URL", "\"https://desk.zyrotechbd.com/api/v1/\"")
         listOf("APP_ID", "API_KEY", "PROJECT_ID", "SENDER_ID").forEach {
             buildConfigField("String", "FCM_$it", "\"${firebase[it] ?: ""}\"")
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // phones only: the walkie-talkie's WebRTC library is ~12 MB per CPU type
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -107,6 +109,8 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
+    // Firebase pulls fragment 1.0, which release lint rejects with registerForActivityResult (the call screens)
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
@@ -120,6 +124,8 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    // walkie-talkie: our own LiveKit server (wss://rtc.zyrotechbd.com); 2.10 still builds with Kotlin 1.9 / compileSdk 34
+    implementation("io.livekit:livekit-android:2.10.0")
     implementation(platform("com.google.firebase:firebase-bom:32.7.4"))
     implementation("com.google.firebase:firebase-messaging")
 

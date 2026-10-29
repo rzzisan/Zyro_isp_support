@@ -243,6 +243,16 @@ Route::get('/softphone/{company:slug}/config', function (\App\Models\Company $co
     return response()->json($cfg)->header('Cache-Control', 'no-store');
 })->middleware('web')->name('softphone.config');
 
+// a walkie-talkie recording (engine/walkie.py writes storage/app/walkie); the company's owner only
+Route::get('/walkie/{company:slug}/clip/{clip}', function (\App\Models\Company $company, \App\Models\WalkieClip $clip) {
+    $user = Auth::user();
+    abort_unless($user && $user->roleIn($company) === 'owner' && $clip->company_id === $company->id, 403);
+    $path = $clip->file();
+    abort_unless($path, 404);
+
+    return response()->file($path, ['Content-Type' => 'audio/mpeg', 'Cache-Control' => 'private, max-age=86400']);
+})->middleware('web')->name('walkie.clip');
+
 // a bot-answered hotline call's recording (engine/voice_bot.py writes storage/app/call-recordings); "কল লগ" menu users only
 Route::get('/calls/{company:slug}/recording/{call}', function (\App\Models\Company $company, \App\Models\CallLog $call) {
     $user = Auth::user();

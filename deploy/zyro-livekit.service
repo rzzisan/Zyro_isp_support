@@ -1,0 +1,13 @@
+[Unit]
+Description=LiveKit server (Desk walkie-talkie audio, /etc/livekit.yaml)
+After=network.target
+
+[Service]
+User=claude-dev
+ExecStart=/usr/local/bin/livekit-server --config /etc/livekit.yaml
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

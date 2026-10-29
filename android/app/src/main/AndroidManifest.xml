@@ -15,6 +15,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- walkie-talkie: listening all day with the phone locked, push-to-talk -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
@@ -47,6 +54,18 @@
             android:name=".location.LocationService"
             android:exported="false"
             android:foregroundServiceType="location" />
+        <service
+            android:name=".walkie.WalkieService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback|microphone" />
+        <activity
+            android:name=".walkie.WalkieCallActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity=".walkie"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
         <service
             android:name=".push.DeskMessagingService"
             android:exported="false">

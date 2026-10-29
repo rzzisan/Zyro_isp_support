@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.PhoneInTalk
+import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -70,6 +71,8 @@ import com.zyrotechbd.desk.data.network.ApiClient
 import com.zyrotechbd.desk.location.FieldTracker
 import com.zyrotechbd.desk.data.network.CompanyInfo
 import com.zyrotechbd.desk.push.Push
+import com.zyrotechbd.desk.walkie.Walkie
+import com.zyrotechbd.desk.walkie.WalkieService
 import com.zyrotechbd.desk.core.Badges
 import com.zyrotechbd.desk.ui.components.Warn
 import com.zyrotechbd.desk.ui.theme.Primary
@@ -103,6 +106,8 @@ private fun screensFor(company: CompanyInfo?, s: AppStrings): List<Tab> = buildL
     if (company?.can("field_jobs") == true) add(Tab(Routes.MyJobs, s.navMyJobs, Icons.Filled.Engineering))
     if (company?.can("inbox") == true) add(Tab(Routes.Inbox, s.navInbox, Icons.Filled.Forum))
     if (company?.can("tickets") == true) add(Tab(Routes.Tickets, s.navTickets, Icons.Filled.ConfirmationNumber))
+    // not a menu: the members the owner put in a walkie-talkie group
+    if (company?.can("walkie") == true) add(Tab(Routes.Walkie, s.navWalkie, Icons.Filled.SettingsInputAntenna))
     if (company?.can("customers") == true || company?.can("bills") == true) {
         add(Tab(Routes.Customers, s.navCustomers, Icons.Filled.People))
     }
@@ -126,6 +131,7 @@ private fun titleFor(route: String?, s: AppStrings): String? = when (route) {
     Routes.Monitoring -> s.navMonitoring
     Routes.Calls -> s.navCalls
     Routes.DialPad -> s.dialPad
+    Routes.Walkie -> s.navWalkie
     Routes.Call -> s.titleCall
     Routes.Chat -> s.titleChat
     Routes.Tickets -> s.navTickets
@@ -181,6 +187,16 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
 
         // a field technician: location during duty and work, as the privacy policy accepted at sign-in says
         if (company?.can("field_jobs") == true) FieldLocationSetup(companyKey)
+        // the walkie-talkie turns itself on within the company's hours (and gets the microphone while the app is open)
+        if (company?.can("walkie") == true) WalkieSetup(companyKey) else LaunchedEffect(companyKey) { WalkieService.stop(context) }
+
+        // a tapped walkie-talkie notification opens its screen
+        val walkieOpen by Walkie.open.collectAsState()
+        LaunchedEffect(walkieOpen) {
+            if (!walkieOpen) return@LaunchedEffect
+            Walkie.open.value = false
+            if (company?.can("walkie") == true) navController.navigate(Routes.Walkie) { launchSingleTop = true }
+        }
 
         // tab counts: on start, every few minutes, and right after a push
         LaunchedEffect(companyKey) {
@@ -332,6 +348,25 @@ private fun FieldLocationSetup(company: String) {
             }) { Text(s.locBgOk) }
         },
     )
+}
+
+/** On opening the app within the walkie-talkie's hours (and not turned off since they began): start listening. */
+@Composable
+private fun WalkieSetup(company: String) {
+    val context = LocalContext.current
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok && WalkieService.running) WalkieService.start(context, company, foreground = true)
+    }
+    LaunchedEffect(company) {
+        Walkie.watchPhoneCalls(context)
+        if (!Walkie.hasMic(context)) askMic.launch(Manifest.permission.RECORD_AUDIO)
+        if (WalkieService.running) {
+            WalkieService.start(context, company, foreground = true)   // the microphone, if a push started it
+            return@LaunchedEffect
+        }
+        val info = runCatching { ApiClient.service.walkie(company) }.getOrNull() ?: return@LaunchedEffect
+        if (info.groups.isNotEmpty() && Walkie.autoOn(info)) WalkieService.start(context, company, foreground = true)
+    }
 }
 
 /** The privacy policy for members signed in before it came: the app waits until it is accepted. */
