@@ -24,8 +24,7 @@ class VoiceTemplates
 
     public const CALL_PLACEHOLDERS = [
         'called_for' => 'বিকল্প নম্বরে কল হলে "[নাম]-এর সংযোগের ব্যাপারে"',
-        'reconnect_until' => 'লাইন চালু হলে কবে পর্যন্ত',
-        'reconnect_reason' => 'লাইন চালু না হওয়ার কারণ',
+        'reconnect_message' => 'লাইন চালু করার ফল (চালু হলো / কেন হলো না), কলের সময় বসে',
         'call_reason' => 'কলের কারণ',
         'pressed' => 'কাস্টমার যা চেপেছেন',
         'open_ticket' => 'খোলা টিকেট',
@@ -35,8 +34,7 @@ class VoiceTemplates
     /** What a preview says for the placeholders only a real call knows. */
     private const EXAMPLES = [
         'called_for' => '',
-        'reconnect_until' => '৫ নভেম্বর',
-        'reconnect_reason' => 'আপনার বকেয়া এক মাসের বিলের বেশি।',
+        'reconnect_message' => 'আপনার লাইন চালু করে দেওয়া হলো। এই সুবিধা মাসে শুধু একবার পাওয়া যায়। বকেয়া ৫২০ টাকা তাড়াতাড়ি পরিশোধ করে দেবেন।',
         'call_reason' => 'বিল রিমাইন্ডার',
         'pressed' => 'লাইন চালু করতে চেয়েছিলেন, বকেয়া বেশি',
         'open_ticket' => 'খোলা টিকেট নেই',
@@ -51,7 +49,7 @@ class VoiceTemplates
         $out = self::PLACEHOLDERS;
         $call = match ($type) {
             'reminder', 'line_off' => ['called_for'],
-            'result' => ['reconnect_until', 'reconnect_reason'],
+            'result' => ['reconnect_message'],
             'whisper' => ['call_reason', 'pressed', 'open_ticket', 'online', 'called_for'],
             'menu', 'hold' => [],
             default => array_keys(self::CALL_PLACEHOLDERS),

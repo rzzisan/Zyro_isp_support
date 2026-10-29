@@ -210,14 +210,17 @@ Route::get('/calls/{company:slug}/poll', function (\App\Models\Company $company)
     $user = Auth::user();
     abort_unless($user && \App\Support\Menu::allows($user, $company, 'customers'), 403);
     $phone = \App\Support\Menu::allows($user, $company, 'phone');
-    $items = \App\Models\CallLog::recent($company->id)->where('direction', 'in')->latest('started_at')->limit(5)->get()
+    // a voice reminder call shows only while the customer waits for staff (engine/voice_ivr.py sets it ringing)
+    $items = \App\Models\CallLog::recent($company->id)
+        ->where(fn ($q) => $q->where('direction', 'in')->orWhere(fn ($q) => $q->where('channel', 'reminder')->where(fn ($q) => $q->where('status', 'ringing')->orWhereNotNull('answered_by'))))
+        ->latest('started_at')->limit(5)->get()
         ->map(fn (\App\Models\CallLog $c) => [
             'id' => $c->id,
             'caller' => $c->caller_normalized ? '0'.substr($c->caller_normalized, 3) : $c->caller,
             'ringing' => $c->status === 'ringing',
             'channel' => $c->channel ?? 'hotline',
             // a ringing WhatsApp call can be taken from the softphone by members allowed "phone"
-            'take' => $c->channel === 'whatsapp' && $c->status === 'ringing' && $phone ? substr($c->call_ref, 3) : null,
+            'take' => in_array($c->channel, ['whatsapp', 'reminder'], true) && $c->status === 'ringing' && $phone ? substr($c->call_ref, strpos($c->call_ref, '-') + 1) : null,
             'answered_by' => $c->answeredBy?->name,
             'at' => $c->started_at->timezone('Asia/Dhaka')->format('g:i A'),
             'customers' => $c->customers()->map(fn (\App\Models\BillingCustomer $b) => [
