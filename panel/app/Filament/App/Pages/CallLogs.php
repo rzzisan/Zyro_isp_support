@@ -9,6 +9,7 @@ use App\Support\Menu;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -77,6 +78,20 @@ class CallLogs extends Page implements HasTable
         'no_answer' => ['ধরেননি', 'gray'],
     ];
 
+    /** Call-backs nobody has done yet. */
+    public static function getNavigationBadge(): ?string
+    {
+        $company = Filament::getTenant();
+        $n = $company ? CallLog::where('company_id', $company->getKey())->callbackPending()->count() : 0;
+
+        return $n ? (string) $n : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
     public static function canAccess(): bool
     {
         $company = Filament::getTenant();
@@ -132,7 +147,11 @@ class CallLogs extends Page implements HasTable
                     ->tooltip(fn (CallLog $record) => $record->outcome_text),
                 TextColumn::make('bot_flag')->label(__('ফ্লাগ'))->badge()->color('danger')
                     ->formatStateUsing(fn ($state) => __(self::FLAGS[$state] ?? $state)),
-                TextColumn::make('callback_reason')->label(__('কল ব্যাক'))->wrap()->color('warning')->limit(80),
+                TextColumn::make('callback_reason')->label(__('কল ব্যাক'))->wrap()->limit(80)
+                    ->color(fn (CallLog $record) => $record->callback_done_at ? 'gray' : 'warning')
+                    ->description(fn (CallLog $record) => $record->callback_done_at
+                        ? ($record->callback_done_by ? __('✓ কল ব্যাক করেছেন :n, :t', ['n' => $record->callbackDoneBy?->name ?? '', 't' => $record->callback_done_at->timezone('Asia/Dhaka')->format('d M, g:i A')]) : __('✓ পুরনো, তালিকা থেকে সরানো'))
+                        : null),
             ])
             ->filters([
                 SelectFilter::make('channel')->label(__('লাইন'))
@@ -140,10 +159,16 @@ class CallLogs extends Page implements HasTable
                 TernaryFilter::make('bot_answered')->label(__('বট ধরেছে')),
                 SelectFilter::make('outcome')->label(__('ফলাফল'))
                     ->options(collect(self::OUTCOMES)->map(fn ($o) => __($o[0]))->all()),
-                TernaryFilter::make('callback')->label(__('কল ব্যাক লাগবে'))
-                    ->queries(true: fn (Builder $q) => $q->whereNotNull('callback_reason'), false: fn (Builder $q) => $q->whereNull('callback_reason')),
+                TernaryFilter::make('callback')->label(__('কল ব্যাক বাকি'))
+                    ->queries(true: fn (Builder $q) => $q->callbackPending(), false: fn (Builder $q) => $q->where(fn ($w) => $w->whereNull('callback_reason')->orWhereNotNull('callback_done_at'))),
             ])
             ->recordActions([
+                Action::make('callbackDone')->label(__('কল ব্যাক হয়েছে'))->icon(Heroicon::OutlinedCheck)->color('success')
+                    ->visible(fn (CallLog $record) => filled($record->callback_reason) && ! $record->callback_done_at)
+                    ->action(function (CallLog $record) {
+                        $record->update(['callback_done_at' => now(), 'callback_done_by' => auth()->id()]);
+                        Notification::make()->title(__('কল ব্যাক তালিকা থেকে সরানো হয়েছে'))->success()->send();
+                    }),
                 Action::make('listen')->label(__('শুনুন'))->icon(Heroicon::OutlinedPlay)->color('gray')
                     ->visible(fn (CallLog $record) => $record->bot_answered || filled($record->recording_path))
                     ->modalHeading(fn (CallLog $record) => __('কল: :n', ['n' => $record->caller]))

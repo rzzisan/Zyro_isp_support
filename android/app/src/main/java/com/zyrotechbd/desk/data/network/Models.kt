@@ -556,6 +556,8 @@ data class CallRow(
     @Json(name = "bot_seconds") val botSeconds: Int? = null,
     val flag: String? = null,
     @Json(name = "callback_reason") val callbackReason: String? = null,
+    @Json(name = "callback_done") val callbackDone: Boolean = false,
+    @Json(name = "callback_done_by") val callbackDoneBy: String? = null,
     @Json(name = "has_recording") val hasRecording: Boolean = false,
     val customer: CallCustomer? = null,
     val transcript: List<CallLine>? = null,
@@ -567,6 +569,11 @@ data class CallLine(val who: String = "", val text: String = "", val at: Int = 0
 data class CallPage(val data: List<CallRow> = emptyList(), @Json(name = "next_page") val nextPage: Int? = null)
 
 data class CallResult(val call: CallRow)
+
+/** The app's "কল নিচ্ছি" switch: whether calls ring this phone, the member's duty hours (team page) and whether it's duty time now. */
+data class CallDuty(val taking: Boolean = true, val hours: String = "", @Json(name = "on_duty") val onDuty: Boolean = true)
+
+data class CallDutyRequest(val taking: Boolean)
 
 /** The call screen: the caller's lines (customers with this mobile, or named in their WhatsApp chat), open tickets each. */
 data class CallInfo(val lines: List<CallerLine> = emptyList(), val can: CallInfoCan = CallInfoCan())

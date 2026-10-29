@@ -62,6 +62,8 @@ Route::prefix('v1')->group(function () {
             Route::get('calls', [CallController::class, 'index']);
             Route::get('calls/{call}', [CallController::class, 'show'])->whereNumber('call');
             Route::get('calls/{call}/recording', [CallController::class, 'recording'])->whereNumber('call');
+            Route::post('calls/{call}/callback-done', [CallController::class, 'callbackDone'])->whereNumber('call');
+            Route::match(['get', 'post'], 'call-duty', [CallController::class, 'duty']);
             Route::get('softphone', [CallController::class, 'softphone']);
             Route::get('call-info', [CallController::class, 'callInfo']);
 

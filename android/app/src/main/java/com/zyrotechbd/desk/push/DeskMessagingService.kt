@@ -113,13 +113,17 @@ class DeskMessagingService : FirebaseMessagingService() {
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         val number = d["caller"].orEmpty()
         val channel = d["channel"] ?: "whatsapp"
-        val ring = PendingIntent.getActivity(this, uid.hashCode(), CallActivity.incoming(this, company, uid, title, number, false, channel), flags)
-        val take = PendingIntent.getActivity(this, uid.hashCode() + 1, CallActivity.incoming(this, company, uid, title, number, true, channel), flags)
+        val reminder = d["kind"] == "reminder"
+        val note = d["note"].orEmpty()
+        val ring = PendingIntent.getActivity(this, uid.hashCode(),
+            CallActivity.incoming(this, company, uid, title, number, false, channel, reminder, note), flags)
+        val take = PendingIntent.getActivity(this, uid.hashCode() + 1,
+            CallActivity.incoming(this, company, uid, title, number, true, channel, reminder, note), flags)
         val n = NotificationCompat.Builder(this, Push.CALL_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_desk)
             .setColor(Primary.toArgb())
-            .setContentTitle((if (channel == "hotline") "হটলাইনে কল: " else "WhatsApp কল: ") + title)
-            .setContentText("ধরতে চাপ দিন")
+            .setContentTitle((if (reminder) "রিমাইন্ডার কলে কথা চান: " else if (channel == "hotline") "হটলাইনে কল: " else "WhatsApp কল: ") + title)
+            .setContentText(note.ifBlank { "ধরতে চাপ দিন" })
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setOngoing(true)

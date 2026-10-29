@@ -11,7 +11,9 @@ and the customer. No AI runs on the call; only {reconnect_message} is read out w
   run:   agi_server() plays the steps and reads the keys (deploy/asterisk/extensions.conf, port 4574).
   staff: "স্টাফের সাথে কথা" rings Desk like a hotline call (voice_bot.calls + notify_staff; the softphone dials
          take-<uid> and the voice bot's /take puts the agent channel in AstDB zyrotake/<uid>) while the customer hears
-         the hold messages; nobody in max_wait seconds → voice message, call-back request or goodbye.
+         the hold messages. The app rings the members on call duty (ring_users), all at once or one by one (hold.ring),
+         with the flow's ring note on the call screen; nobody in max_wait seconds (or nobody on duty) → voice message,
+         call-back request or goodbye.
 """
 import asyncio
 import hashlib
@@ -476,23 +478,72 @@ def optout(c: dict) -> None:
 
 
 # --- talking to staff ---------------------------------------------------------------------------------------------
+_first: dict[int, int] = {}      # company -> the member a "one by one" ring started with last time
+
+
+def ring_note(c: dict) -> str:
+    """What the agent sees before taking the call (the flow's "ধরার আগে স্ক্রিনে যা দেখাবে")."""
+    parts = list(c["package"].get("whisper") or [])
+    if c["package"].get("whisper_pressed", True):
+        for a in c["actions"]:
+            if a["kind"] == "sms" and a["ok"]:
+                parts.append("SMS নিয়েছেন")
+            elif a["kind"] == "reconnect":
+                parts.append("৩ চেপে লাইন চালু হয়েছে" if a["ok"] else "লাইন চালুর চেষ্টা করেছিলেন, হয়নি")
+    return " · ".join(dict.fromkeys(p for p in parts if p))
+
+
+def ring_order(c: dict, hold: dict) -> list[list[int]]:
+    """Who to ring, in turns: everyone at once, or one member at a time (in turn, or the fewest calls today first).
+    On duty, allowed this caller, and not talking on another call right now."""
+    v = vb()
+    cid = c["company_id"]
+    busy = {i["agent"]["user_id"] for i in list(v.calls.values()) if i.get("state") == "taken" and i.get("agent")}
+    users = [u for u in v.ring_users(cid, c["number"]) if u not in busy]
+    how = hold.get("ring") or "all"
+    if not users or how == "all":
+        return [users] if users else []
+    users.sort()
+    if how == "least":
+        counts = {r["answered_by"]: r["n"] for r in db.all_rows(
+            "select answered_by, count(*) as n from call_logs where company_id = %s and answered_by = any(%s)"
+            " and started_at >= (now() at time zone 'Asia/Dhaka')::date at time zone 'Asia/Dhaka' group by answered_by",
+            (cid, users))}
+        users.sort(key=lambda u: counts.get(u, 0))
+    else:
+        last = _first.get(cid)
+        if last in users:
+            i = users.index(last) + 1
+            users = users[i:] + users[:i]
+        _first[cid] = users[0]
+    return [[u] for u in users]
+
+
 async def staff(agi: Agi, uid: str, c: dict, hold: dict) -> None:
     v = vb()
     loop = asyncio.get_running_loop()
     label = c["package"].get("label") or ""
-    v.calls[uid] = {"company_id": c["company_id"], "caller": c["number"], "at": time.time(), "channel": "hotline",
-                    "state": "waiting", "row_id": c["log_id"]}
-    await loop.run_in_executor(v.pool, lambda: (
-        db.execute("update call_logs set status = 'ringing', updated_at = now() where id = %s", (c["log_id"],)),
-        v.notify_staff(c["company_id"], {"type": "call", "uid": uid, "caller": v.display_number(c["number"]),
-                                         "name": (label + " · " if label else "") + "রিমাইন্ডার কল", "channel": "hotline"},
-                       caller=c["number"])))
     act(c, "staff", "স্টাফের সাথে কথা বলতে চেয়েছেন")
     c["result"] = "staff"
-    await say(agi, c, hold.get("start_template_id"))
+    note = ring_note(c)
+    turns = await loop.run_in_executor(v.pool, ring_order, c, hold)
+    push = {"type": "call", "uid": uid, "caller": v.display_number(c["number"]), "channel": "hotline", "kind": "reminder",
+            "name": label or "রিমাইন্ডার কল", "note": note}
+    v.calls[uid] = {"company_id": c["company_id"], "caller": c["number"], "at": time.time(), "channel": "hotline",
+                    "state": "waiting", "row_id": c["log_id"]}
+    await loop.run_in_executor(v.pool, lambda: db.execute(
+        "update call_logs set status = 'ringing', ring_note = %s, updated_at = now() where id = %s", (note or None, c["log_id"])))
     every, max_wait = max(10, int(hold.get("every") or 25)), max(20, int(hold.get("max_wait") or 90))
+    if not turns:   # nobody is taking calls now (duty hours, switched off, all busy): don't keep the customer waiting
+        act(c, "staff", "এখন কেউ কল নিচ্ছেন না", False)
+        max_wait = 0
+    else:
+        await say(agi, c, hold.get("start_template_id"))
+    # one at a time: each member rings ring_each seconds; everyone at once: rung again before the app's 45 s ring ends
+    each = 40 if (hold.get("ring") or "all") == "all" else min(60, max(10, int(hold.get("ring_each") or 20)))
     sound_on = {"ring": ("EXEC", "Playtones", "ring"), "music": ("MUSIC", None, None)}.get(hold.get("sound") or "ring")
     began, last_msg, agent = time.time(), time.time(), None
+    turn, ringing, next_ring = 0, None, 0.0
 
     async def on():
         if sound_on and sound_on[0] == "EXEC":
@@ -506,8 +557,18 @@ async def staff(agi: Agi, uid: str, c: dict, hold: dict) -> None:
         elif sound_on:
             await agi.cmd("SET MUSIC off")
 
-    await on()
+    def ring(stop: list[int] | None, now: list[int]) -> None:
+        if stop and stop != now:
+            v.notify_staff(c["company_id"], {"type": "call_taken", "uid": uid, "by": ""}, only=stop)
+        v.notify_staff(c["company_id"], push, caller=c["number"], only=now)
+
+    if max_wait:
+        await on()
     while time.time() - began < max_wait:
+        if time.time() >= next_ring:
+            now = turns[turn % len(turns)]
+            await loop.run_in_executor(v.pool, ring, ringing, now)
+            ringing, turn, next_ring = now, turn + 1, time.time() + each
         res, data = await agi.cmd(f"DATABASE GET zyrotake {uid}")
         if res == 1:
             agent = data.strip().strip("()")

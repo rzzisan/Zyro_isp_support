@@ -105,6 +105,10 @@ class VoiceFlowTest extends TestCase
         $this->assertStringContainsString('প্রিয় Alif Hasan, আপনার বকেয়া 520 টাকা', $sms['text']);
         $this->assertSame(['header_id' => 77, 'customer_id' => '0042', 'name' => 'Alif Hasan'], $p['customer']);
         $this->assertSame('Alif Hasan (ID 0042)', $p['label']);
+        $this->assertSame(['লাইন বন্ধের কল', 'বকেয়া ৫২০ টাকা', 'লাইন বন্ধ', 'মেয়াদ ৩১ অক্টোবর'], $p['whisper']);
+        $this->assertTrue($p['whisper_pressed']);
+        $flow->update(['hold' => ['whisper' => ['due']] + $flow->hold]);
+        $this->assertSame(['বকেয়া ৫২০ টাকা'], VoiceCalls::package($flow->fresh(), $this->customer)['whisper']);
     }
 
     public function test_test_call_queues_and_kicks_the_voice_bot(): void

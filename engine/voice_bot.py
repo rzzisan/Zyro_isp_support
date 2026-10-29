@@ -686,14 +686,57 @@ def phone_allowed(company_id: int, user_id: int) -> bool:
     return bool(db.one(PHONE_USERS + " and cu.user_id = %s", (company_id, user_id)))
 
 
-def notify_staff(company_id: int, data: dict, caller: str | None = None) -> None:
+BD = timezone(timedelta(hours=6))
+
+
+def in_call_hours(hours, at: datetime | None = None) -> bool:
+    """The panel's App\\Support\\CallDuty::inHours: {days: [ISO weekdays], from, to} in Dhaka time; none = any time;
+    a night shift (from after to) belongs to the day it starts."""
+    if isinstance(hours, str):
+        try:
+            hours = json.loads(hours)
+        except ValueError:
+            hours = None
+    hours = hours or {}
+    days = [int(d) for d in hours.get("days") or []]
+    start, end = (hours.get("from") or "")[:5], (hours.get("to") or "")[:5]
+    if not days and not start and not end:
+        return True
+    at = (at or datetime.now(timezone.utc)).astimezone(BD)
+    hm = at.strftime("%H:%M")
+    start, end = start or "00:00", end or "24:00"
+    day = (at - timedelta(days=1)).isoweekday() if start > end and hm < end else at.isoweekday()
+    if days and day not in days:
+        return False
+    return start <= hm < end if start <= end else (hm >= start or hm < end)
+
+
+def on_call_duty(company_id: int, users: list[int]) -> list[int]:
+    """Of these members, the ones taking calls now: duty hours from the team page, the app's "কল নিচ্ছি" switch."""
+    if not users:
+        return []
+    rows = db.all_rows("select user_id, call_hours, calls_paused from company_user where company_id = %s and user_id = any(%s)",
+                       (company_id, list(users)))
+    ok = {r["user_id"] for r in rows if not r["calls_paused"] and in_call_hours(r["call_hours"])}
+    return [u for u in users if u in ok]
+
+
+def ring_users(company_id: int, caller: str) -> list[int]:
+    """Whose phones ring for this caller now: allowed "phone", may take this caller (technicians), on duty."""
+    users = [r["user_id"] for r in db.all_rows(PHONE_USERS, (company_id,))]
+    return on_call_duty(company_id, [u for u in users if may_ring(company_id, u, caller)])
+
+
+def notify_staff(company_id: int, data: dict, caller: str | None = None, only: list[int] | None = None) -> None:
     """App push (engine/fcm.py) to the phones of the members allowed to take calls; with [caller], a ringing call, only
-    to those who may take that caller's call (see may_ring)."""
+    to those who may take that caller's call (see may_ring) and are on call duty; [only] narrows it to these members."""
     try:
         from engine import fcm
         users = [r["user_id"] for r in db.all_rows(PHONE_USERS, (company_id,))]
         if caller is not None:
-            users = [u for u in users if may_ring(company_id, u, caller)]
+            users = on_call_duty(company_id, [u for u in users if may_ring(company_id, u, caller)])
+        if only is not None:
+            users = [u for u in users if u in only]
         company = db.one("select slug from companies where id = %s", (company_id,)) or {}
         if users:
             fcm.send_users(company_id, users, {"company": company.get("slug") or "", **{k: str(v) for k, v in data.items()}})

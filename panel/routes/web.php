@@ -222,6 +222,7 @@ Route::get('/calls/{company:slug}/poll', function (\App\Models\Company $company)
             // a ringing WhatsApp call can be taken from the softphone by members allowed "phone"
             'take' => in_array($c->channel, ['whatsapp', 'reminder'], true) && $c->status === 'ringing' && $phone ? substr($c->call_ref, strpos($c->call_ref, '-') + 1) : null,
             'answered_by' => $c->answeredBy?->name,
+            'note' => $c->ring_note,
             'at' => $c->started_at->timezone('Asia/Dhaka')->format('g:i A'),
             'customers' => $c->customers()->map(fn (\App\Models\BillingCustomer $b) => [
                 'name' => $b->name,

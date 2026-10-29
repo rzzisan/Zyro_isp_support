@@ -148,6 +148,7 @@ private fun Header(a: CallActivity, line: CallerLine?) {
             Box(Modifier.size(8.dp).background(if (a.whatsapp && !a.hotlineIn) WhatsAppGreen else Color.White, CircleShape))
             Spacer(Modifier.width(6.dp))
             Text(when {
+                a.reminder -> "রিমাইন্ডার কল: কথা বলতে চান"
                 a.hotlineIn -> "হটলাইনে কল"
                 a.whatsapp -> "WhatsApp কল"
                 else -> "হটলাইন থেকে কল"
@@ -168,6 +169,11 @@ private fun Header(a: CallActivity, line: CallerLine?) {
             maxLines = 2, overflow = TextOverflow.Ellipsis)
         val sub = listOfNotNull(c?.customerId?.let { "ID $it" }, a.number.takeIf { it.isNotBlank() }).joinToString("  ·  ")
         if (sub.isNotEmpty()) Text(sub, color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp)
+        if (a.note.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Text(a.note, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().background(Danger, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 8.dp))
+        }
         Spacer(Modifier.height(14.dp))
         AnimatedContent(a.phase, label = "phase") { phase ->
             if (phase == CallPhase.Talking) Timer(a.talkingSince)

@@ -8,8 +8,10 @@ use App\Models\BillingCustomer;
 use App\Models\BillingTicket;
 use App\Models\CallLog;
 use App\Models\Company;
+use App\Models\Membership;
 use App\Models\Technician;
 use App\Models\WaContact;
+use App\Support\CallDuty;
 use App\Support\Menu;
 use App\Support\Softphone;
 use Illuminate\Http\JsonResponse;
@@ -43,6 +45,9 @@ class CallController extends Controller
             'bot_seconds' => $c->bot_seconds === null ? null : (int) $c->bot_seconds,
             'flag' => $c->bot_flag ? __(CallLogs::FLAGS[$c->bot_flag] ?? $c->bot_flag) : null,
             'callback_reason' => $c->callback_reason,
+            'callback_done' => $c->callback_done_at !== null,
+            'callback_done_by' => $c->callbackDoneBy?->name,
+            'ring_note' => $c->ring_note,
             'outcome' => $c->outcome,
             'outcome_label' => $c->outcome ? __(CallLogs::OUTCOMES[$c->outcome][0] ?? $c->outcome) : null,
             'outcome_text' => $c->outcome_text,
@@ -64,7 +69,7 @@ class CallController extends Controller
             default => null,
         };
         if ($request->boolean('callback')) {
-            $q->whereNotNull('callback_reason');
+            $q->callbackPending();
         }
         if (($digits = preg_replace('/\D/', '', (string) $request->query('q'))) !== '') {
             $q->where(fn ($w) => $w->where('caller', 'like', "%{$digits}%")
@@ -89,6 +94,31 @@ class CallController extends Controller
             'actions' => collect($c->actions ?? [])->map(fn ($a) => ['at' => (int) ($a['at'] ?? 0), 'kind' => (string) ($a['kind'] ?? ''),
                 'text' => (string) ($a['text'] ?? ''), 'ok' => (bool) ($a['ok'] ?? true)])->values(),
         ]]);
+    }
+
+    /** "কল ব্যাক হয়েছে": the customer was called back; the call leaves the call-back list. */
+    public function callbackDone(Request $request, Company $company, int $call): JsonResponse
+    {
+        $this->allow($request, $company);
+        $c = CallLog::where('company_id', $company->id)->whereNotNull('callback_reason')->findOrFail($call);
+        if (! $c->callback_done_at) {
+            $c->update(['callback_done_at' => now(), 'callback_done_by' => $request->user()->id]);
+        }
+
+        return response()->json(['call' => self::row($c->fresh())]);
+    }
+
+    /** The app's "কল নিচ্ছি" switch: whether this phone rings for calls now (duty hours from the team page). */
+    public function duty(Request $request, Company $company): JsonResponse
+    {
+        abort_unless(Menu::allows($request->user(), $company, 'phone'), 403);
+        $m = Membership::where('company_id', $company->id)->where('user_id', $request->user()->id)->firstOrFail();
+        if ($request->isMethod('post')) {
+            $m->update(['calls_paused' => ! $request->boolean('taking')]);
+        }
+
+        return response()->json(['taking' => ! $m->calls_paused, 'hours' => CallDuty::label($m->call_hours),
+            'on_duty' => CallDuty::inHours($m->call_hours)]);
     }
 
     /** Desk softphone login for the app's call screen (WebView of public/softphone/phone.html). */

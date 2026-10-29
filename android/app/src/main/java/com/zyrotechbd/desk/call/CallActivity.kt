@@ -61,16 +61,21 @@ class CallActivity : ComponentActivity() {
         private const val EXTRA_UID = "uid"
         private const val EXTRA_ANSWER = "answer"
         private const val EXTRA_CHANNEL = "channel"
+        private const val EXTRA_REMINDER = "reminder"
+        private const val EXTRA_NOTE = "note"
         private const val RING_SECONDS = 45_000L
 
-        /** A ringing WhatsApp or hotline call ([channel]); answer = the notification's ধরুন was tapped. */
+        /**
+         * A ringing WhatsApp or hotline call ([channel]); answer = the notification's ধরুন was tapped. [reminder]: the
+         * customer asked for staff on a voice reminder call; [note] is what the flow shows before taking it.
+         */
         fun incoming(context: Context, company: String, uid: String, title: String, number: String, answer: Boolean,
-                     channel: String = "whatsapp"): Intent =
+                     channel: String = "whatsapp", reminder: Boolean = false, note: String = ""): Intent =
             Intent(context, CallActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 .putExtra(EXTRA_COMPANY, company).putExtra(EXTRA_UID, uid).putExtra(EXTRA_NUMBER, number)
                 .putExtra(EXTRA_TARGET, "take-$uid").putExtra(EXTRA_TITLE, title).putExtra(EXTRA_ANSWER, answer)
-                .putExtra(EXTRA_CHANNEL, channel)
+                .putExtra(EXTRA_CHANNEL, channel).putExtra(EXTRA_REMINDER, reminder).putExtra(EXTRA_NOTE, note)
 
         fun outgoing(context: Context, company: String, number: String, title: String): Intent =
             Intent(context, CallActivity::class.java)
@@ -110,6 +115,9 @@ class CallActivity : ComponentActivity() {
     val whatsapp get() = target.startsWith("take-")
     val hotlineIn get() = whatsapp && intent.getStringExtra(EXTRA_CHANNEL) == "hotline"
     private val uid get() = intent.getStringExtra(EXTRA_UID)
+    /** A voice reminder call where the customer asked for staff, and what the agent should know first. */
+    val reminder get() = intent.getBooleanExtra(EXTRA_REMINDER, false)
+    val note get() = intent.getStringExtra(EXTRA_NOTE).orEmpty()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

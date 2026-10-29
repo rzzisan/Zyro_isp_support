@@ -50,6 +50,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.PhoneInTalk
+import com.zyrotechbd.desk.data.network.ApiClient
+import com.zyrotechbd.desk.data.network.CallDuty
+import com.zyrotechbd.desk.data.network.CallDutyRequest
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import com.zyrotechbd.desk.ui.components.SectionTitle
 import com.zyrotechbd.desk.ui.strings.LocalStrings
 import com.zyrotechbd.desk.ui.theme.Ink
@@ -112,6 +120,8 @@ fun MoreScreen(
             var chats by remember { mutableStateOf(NotifySettings.chats) }
             ToggleRow(s.notifyChats, Icons.Filled.Notifications, chats) { chats = it; NotifySettings.chats = it }
             if (company?.can("phone") == true) {
+                HorizontalDivider(color = Line)
+                CallDutyRow(company.slug)
                 var calls by remember { mutableStateOf(NotifySettings.calls) }
                 HorizontalDivider(color = Line)
                 ToggleRow(s.notifyCalls, Icons.Filled.Call, calls) { calls = it; NotifySettings.calls = it }
@@ -146,6 +156,29 @@ fun MoreScreen(
         Spacer(Modifier.height(16.dp))
         Text("Zyro Desk · ${s.version} ${BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = Muted,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+/** "কল নিচ্ছি": the server stops ringing this member's phones when off; duty hours come from the team page. */
+@Composable
+private fun CallDutyRow(company: String) {
+    val s = LocalStrings.current
+    val scope = rememberCoroutineScope()
+    var duty by remember(company) { mutableStateOf<CallDuty?>(null) }
+    LaunchedEffect(company) {
+        duty = try { ApiClient.service.callDuty(company) } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+    }
+    val d = duty ?: return
+    Column {
+        ToggleRow(s.takingCalls, Icons.Filled.PhoneInTalk, d.taking) { on ->
+            duty = d.copy(taking = on)
+            scope.launch {
+                duty = try { ApiClient.service.setCallDuty(company, CallDutyRequest(on)) }
+                catch (e: CancellationException) { throw e } catch (e: Exception) { d }
+            }
+        }
+        Text("${s.takingCallsHint} ${d.hours}" + if (!d.onDuty) " · ${s.offDutyNow}" else "", fontSize = 12.sp,
+            color = if (d.onDuty) Muted else Danger, modifier = Modifier.padding(start = 48.dp, end = 16.dp, bottom = 8.dp))
     }
 }
 
