@@ -315,12 +315,15 @@ class Engine
             ['action' => $on ? 'enable' : 'disable', 'user_id' => auth()->id(), 'by' => auth()->user()?->name]) ?? [];
     }
 
-    /** Phone push (FCM, data only) to these users' phones, like a ringing call; best effort (never throws). */
-    public static function push(int $companyId, array $userIds, array $data): void
+    /**
+     * Phone push (FCM, data only) to these users' phones, like a ringing call; with $web ({title, body, tag, url})
+     * also to their subscribed browsers. Best effort (never throws).
+     */
+    public static function push(int $companyId, array $userIds, array $data, ?array $web = null): void
     {
         try {
             static::http()->timeout(5)->post("/internal/{$companyId}/push", ['user_ids' => array_values($userIds),
-                'data' => array_map('strval', $data)])->throw();
+                'data' => array_map('strval', $data)] + ($web ? ['web' => array_map('strval', $web)] : []))->throw();
         } catch (\Throwable $e) {
             report($e);
         }

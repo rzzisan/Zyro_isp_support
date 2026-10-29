@@ -70,7 +70,7 @@ class WalkieGroupResource extends Resource
             Select::make('memberships')->label(__('সদস্য'))->multiple()->preload()->searchable()
                 ->relationship('memberships', 'id', fn (Builder $query) => $query->where('company_user.company_id', Filament::getTenant()->getKey())->with('user'))
                 ->getOptionLabelFromRecordUsing(fn (Membership $m) => $m->user?->name.' ('.(Membership::ROLES[$m->role] ?? $m->role).')')
-                ->helperText(__('এঁরা অ্যাপে গ্রুপের সব কথা শুনবেন, চেপে ধরে কথা বলবেন, আর একে অপরকে প্রাইভেট কল দিতে পারবেন। আপনি নিজে থাকতে চাইলে নিজেকেও যোগ করুন।')),
+                ->helperText(__('এঁরা অ্যাপে গ্রুপের সব কথা শুনবেন, চেপে ধরে কথা বলবেন, আর একে অপরকে প্রাইভেট কল দিতে পারবেন। টিম চ্যাটেও এটা এঁদের গ্রুপ চ্যাট। আপনি নিজে থাকতে চাইলে নিজেকেও যোগ করুন।')),
         ]);
     }
 

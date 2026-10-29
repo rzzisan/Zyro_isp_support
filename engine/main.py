@@ -1398,13 +1398,17 @@ def internal_key(request: Request) -> None:
 
 @app.post("/internal/{company_id}/push")
 async def push_users(request: Request, company_id: int):
-    """A phone push from the panel to some members (walkie-talkie calls): {"user_ids": [..], "data": {..}}."""
+    """A phone push from the panel to some members (walkie-talkie calls, team chat): {"user_ids": [..], "data": {..}},
+    and with "web": {title, body, tag, url} the same to their subscribed browsers."""
     internal_key(request)
     body = await request.json()
     users = [int(u) for u in body.get("user_ids") or []]
     data = {str(k): str(v) for k, v in (body.get("data") or {}).items()}
     if users and data:
         fcm.send_users(company_id, users, data)
+    web = body.get("web")
+    if users and isinstance(web, dict) and web.get("title"):
+        webpush.send_users(company_id, users, {str(k): str(v) for k, v in web.items()})
     return {"ok": True}
 
 

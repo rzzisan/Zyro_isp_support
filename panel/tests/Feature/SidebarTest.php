@@ -37,7 +37,7 @@ class SidebarTest extends TestCase
         $this->assertSame([
             'ড্যাশবোর্ড',
             '# কুইক অ্যাক্সেস: ইনবক্স টিকিট বিল কালেকশন কাস্টমার',
-            '# সাপোর্ট: এলাকার কর্মী ফিল্ড টিম টেকনিশিয়ান লোকেশন',
+            '# সাপোর্ট: টিম চ্যাট এলাকার কর্মী ফিল্ড টিম টেকনিশিয়ান লোকেশন',
             '# কাস্টমার ও বিল: অনলাইন পেমেন্ট লাইন চালু/বন্ধের রেকর্ড',
             '# SMS ও WhatsApp: SMS পাঠান SMS লগ SMS টেমপ্লেট WhatsApp পাঠান WhatsApp লগ',
             '# নেটওয়ার্ক: MikroTik MikroTik ব্যাকআপ OLT নেটওয়ার্ক সেটিংস',
@@ -58,7 +58,8 @@ class SidebarTest extends TestCase
 
     public function test_agent_does_not_see_admin_menus(): void
     {
-        $sidebar = implode("\n", $this->sidebar('agent'));
+        // "টিম চ্যাট" is for everyone; the admin-only one is the "টিম" page
+        $sidebar = str_replace('টিম চ্যাট', '', implode("\n", $this->sidebar('agent')));
         foreach (['বিলিং কনফিগারেশন', 'MikroTik', 'AI খরচ', 'টিম'] as $adminOnly) {
             $this->assertStringNotContainsString($adminOnly, $sidebar);
         }
