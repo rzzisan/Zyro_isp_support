@@ -263,6 +263,26 @@ Route::get('/calls/{company:slug}/recording/{call}', function (\App\Models\Compa
     return response()->file($path, ['Content-Type' => 'audio/mpeg', 'Cache-Control' => 'private, max-age=3600']);
 })->middleware('web')->name('calls.recording');
 
+// voice reminder audio (engine/voice_tts.py writes storage/app/voice-audio/{company}/{hash}.mp3) and a voice
+// template's uploaded recording; "ভয়েস রিমাইন্ডার" menu users of that company only
+Route::get('/voice/{company:slug}/audio/{file}', function (\App\Models\Company $company, string $file) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'voice_reminder'), 403);
+    abort_unless(preg_match('/^(\d+)-([0-9a-f]{20})$/', $file, $m) && (int) $m[1] === $company->id, 404);
+    $path = storage_path("app/voice-audio/{$m[1]}/{$m[2]}.mp3");
+    abort_unless(is_file($path), 404);
+
+    return response()->file($path, ['Content-Type' => 'audio/mpeg', 'Cache-Control' => 'private, max-age=86400']);
+})->middleware('web')->name('voice.audio');
+Route::get('/voice/{company:slug}/upload/{template}', function (\App\Models\Company $company, \App\Models\VoiceTemplate $template) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'voice_reminder') && $template->company_id === $company->id, 403);
+    $path = $template->file();
+    abort_unless($path, 404);
+
+    return response()->file($path, ['Cache-Control' => 'private, max-age=3600']);
+})->middleware('web')->name('voice.upload');
+
 // whole-Desk backups (super admin): Google Drive sign-in, the recovery sheet, a prepared (decrypted) backup download
 Route::middleware('web')->prefix('system-backup')->group(function () {
     Route::get('/google/connect', [\App\Http\Controllers\SystemBackupController::class, 'connect'])->name('system-backup.connect');

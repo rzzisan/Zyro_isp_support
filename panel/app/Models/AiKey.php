@@ -27,6 +27,7 @@ class AiKey extends Model
         'call_stt' => ['ফোন কল (লেখা-ভিত্তিক): শোনা', ['gemini']],
         'call_llm' => ['ফোন কল (লেখা-ভিত্তিক): উত্তর', ['claude']],
         'call_tts' => ['ফোন কল (লেখা-ভিত্তিক): কণ্ঠ', ['gemini']],
+        'voice_reminder' => ['ভয়েস রিমাইন্ডার: মেসেজের কণ্ঠ', ['gemini']],
     ];
 
     protected $fillable = ['company_id', 'provider', 'label', 'api_key', 'model', 'rate_limited_until',

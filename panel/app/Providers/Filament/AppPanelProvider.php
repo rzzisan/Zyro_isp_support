@@ -29,7 +29,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 /** Company panel: every page is scoped to the current company (tenant). */
 class AppPanelProvider extends PanelProvider
 {
-    public const NAV_GROUPS = ['কুইক অ্যাক্সেস', 'সাপোর্ট', 'কাস্টমার ও বিল', 'ONU ও স্টক', 'SMS ও WhatsApp', 'নেটওয়ার্ক', 'বিলিং কনফিগারেশন', 'WhatsApp ও AI', 'সেটিংস'];
+    public const NAV_GROUPS = ['কুইক অ্যাক্সেস', 'সাপোর্ট', 'কাস্টমার ও বিল', 'ONU ও স্টক', 'SMS ও WhatsApp', 'ভয়েস রিমাইন্ডার', 'নেটওয়ার্ক', 'বিলিং কনফিগারেশন', 'WhatsApp ও AI', 'সেটিংস'];
 
     public function panel(Panel $panel): Panel
     {
