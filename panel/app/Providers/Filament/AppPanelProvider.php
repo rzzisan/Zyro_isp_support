@@ -52,6 +52,12 @@ class AppPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString('<link rel="stylesheet" href="'.asset('css/zyro-theme.css').'?v='.filemtime(public_path('css/zyro-theme.css')).'">'.Locale::jsScript()))
             ->renderHook(PanelsRenderHook::BODY_END, fn () => new HtmlString('<script src="'.asset('js/zyro-page-info.js').'?v='.filemtime(public_path('js/zyro-page-info.js')).'"></script>'))
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn () => view('filament.notify-bell'))
+            // SMS stopped by itself (gateway refused, too many failures): visible everywhere until someone looks
+            ->renderHook(PanelsRenderHook::CONTENT_START, function () {
+                $why = \App\Filament\App\Pages\SmsSettings::warning();
+
+                return $why ? new HtmlString('<a href="'.e(\App\Filament\App\Pages\SmsSettings::getUrl()).'" style="display:block;margin:0 0 12px;padding:10px 14px;border-radius:10px;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;font-size:.9rem">⚠️ '.e($why).' · '.e(__('SMS গেটওয়ে সেটিংস দেখুন')).'</a>') : '';
+            })
             ->renderHook(PanelsRenderHook::BODY_END, fn () => view('filament.call-popup'))
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, fn () => view('filament.sidebar-accordion'))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn () => view('filament.header-shortcuts'))

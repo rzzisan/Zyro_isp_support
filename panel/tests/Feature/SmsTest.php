@@ -271,6 +271,19 @@ class SmsTest extends TestCase
         $this->assertNull($main->fresh()->failed_at);
     }
 
+    public function test_sending_stopped_by_itself_is_shown_on_every_page_until_saved(): void
+    {
+        $this->smsGateway($this->company->id);
+        SmsSetting::forCompany($this->company)->fill(['enabled' => false, 'last_error' => 'গেটওয়ে Khudebarta: -4 Insufficient Balance'])->save();
+        $this->actingAs($this->owner)->get("/app/{$this->company->slug}/sms-log")->assertOk()
+            ->assertSee('SMS পাঠানো নিজে থেকে বন্ধ হয়ে গেছে')->assertSee('Insufficient Balance');
+        $this->actingAs($this->agent)->get("/app/{$this->company->slug}/sms")->assertDontSee('SMS পাঠানো নিজে থেকে বন্ধ হয়ে গেছে');
+        $this->as($this->owner);
+        Livewire::test(SmsSettings::class)->call('save');
+        $this->assertNull(SmsSetting::forCompany($this->company)->last_error);
+        $this->actingAs($this->owner)->get("/app/{$this->company->slug}/sms-log")->assertDontSee('SMS পাঠানো নিজে থেকে বন্ধ হয়ে গেছে');
+    }
+
     public function test_test_sms_goes_now_through_the_engine(): void
     {
         $g = $this->smsGateway($this->company->id);

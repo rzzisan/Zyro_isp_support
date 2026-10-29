@@ -36,6 +36,8 @@ LOCK_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 BATCH = 100              # claimed at a time
 WORKERS = 4              # parallel requests to the gateway
 MAX_FAIL_STREAK = 10
+STALE_HOURS = 6          # an SMS waiting longer than this (sending was off) is cancelled, never sent late
+MAX_THROTTLED = 5        # batches in a row the gateway said "too many requests" before this run gives up
 MAX_UNREACHABLE = 3      # batches in a row the gateway could not be reached before the fallback takes over
 UNREACHABLE_WAIT = 5     # seconds between those tries
 BALANCE_EVERY = 300      # seconds
@@ -219,7 +221,12 @@ def send_queue(company_id: int) -> dict:
         db.execute("""UPDATE sms_messages SET status = 'unknown', error = 'পাঠানোর সময় থেমে গিয়েছিল; আবার পাঠানো হয়নি',
                       updated_at = now() WHERE company_id = %s AND status = 'sending' AND updated_at < now() - interval '10 minutes'""",
                    (company_id,))
-        streak, kind = 0, None
+        # waited too long (sending was off or no gateway): a day-old bill or ticket SMS only confuses the customer
+        db.execute("""UPDATE sms_messages SET status = 'cancelled', updated_at = now(),
+                          error = 'অনেকক্ষণ অপেক্ষায় ছিল (পাঠানো বন্ধ ছিল), পুরনো হয়ে যাওয়ায় পাঠানো হয়নি'
+                      WHERE company_id = %s AND status = 'queued' AND created_at < now() - make_interval(hours => %s)""",
+                   (company_id, STALE_HOURS))
+        streak, kind, throttled_runs = 0, None, 0
         while not stats["stopped"]:
             s = settings(company_id)
             if not (s and s["enabled"]):
@@ -237,11 +244,11 @@ def send_queue(company_id: int) -> dict:
                 break
             size = bulk.setdefault(g["id"], ad.BULK)
             jobs = _jobs(batch, size)
-            with gw.client(g) as client, ThreadPoolExecutor(WORKERS) as pool:
+            with gw.client(g) as client, ThreadPoolExecutor(getattr(ad, "WORKERS", WORKERS)) as pool:
                 results = list(pool.map(lambda job: (job, ad.send(g, [m["mobile"] for m in job], job[0]["text"], client)), jobs))
             stats["requests"] += len(results)
             back: list[int] = []
-            refused, down = None, 0
+            refused, down, throttled = None, 0, 0
             for job, res in results:
                 st = res.get("status")
                 if res["ok"]:
@@ -256,6 +263,9 @@ def send_queue(company_id: int) -> dict:
                 elif res.get("account"):                      # nothing went out; keep them queued
                     back += [m["id"] for m in job]
                     refused = refused or res
+                elif res.get("throttled"):                    # "too many requests": nothing went out, later
+                    back += [m["id"] for m in job]
+                    throttled += 1
                 elif res.get("unreachable"):                  # never reached the gateway; keep them queued
                     back += [m["id"] for m in job]
                     down += 1
@@ -268,6 +278,14 @@ def send_queue(company_id: int) -> dict:
                     log.warning("sms %s failed: %s", [m["id"] for m in job], st)
             if back:
                 _requeue(back)
+            if throttled:
+                throttled_runs = throttled_runs + 1 if throttled == len(results) else 0
+                if throttled_runs >= MAX_THROTTLED:
+                    stats["stopped"] = "throttled"          # the next run (timer, every minute) goes on
+                else:
+                    time.sleep(getattr(ad, "THROTTLE_WAIT", 10))
+            else:
+                throttled_runs = 0
             if down and down == len(results):
                 unreachable[g["id"]] = unreachable.get(g["id"], 0) + 1
                 if unreachable[g["id"]] >= MAX_UNREACHABLE:
