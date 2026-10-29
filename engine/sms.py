@@ -373,6 +373,8 @@ def check_status(company_id: int, limit: int = 300) -> dict:
                 if st is None:
                     continue
                 if st["stop"]:
+                    # ask about this one again only after STATUS_EVERY, else it is first in line every minute
+                    db.execute("UPDATE sms_messages SET status_checked_at = now() WHERE id = %s", (r["id"],))
                     log.info("company %s: delivery query refused by gateway %s (%s)", company_id, g["id"], st["text"])
                     break
                 state, text = st["state"], st["text"] or ""
