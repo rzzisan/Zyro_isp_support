@@ -94,6 +94,15 @@ interface ApiService {
         @Query("page") page: Int? = null,
     ): CallPage
 
+    @POST("c/{company}/calls/{id}/callback-done")
+    suspend fun callbackDone(@Path("company") company: String, @Path("id") id: Long): CallResult
+
+    @GET("c/{company}/call-duty")
+    suspend fun callDuty(@Path("company") company: String): CallDuty
+
+    @POST("c/{company}/call-duty")
+    suspend fun setCallDuty(@Path("company") company: String, @Body request: CallDutyRequest): CallDuty
+
     @GET("c/{company}/softphone")
     suspend fun softphone(@Path("company") company: String): SoftphoneConfig
 

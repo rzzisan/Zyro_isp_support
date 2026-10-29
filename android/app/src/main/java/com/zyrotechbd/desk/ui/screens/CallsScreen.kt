@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PhoneCallback
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.PlayArrow
@@ -65,6 +66,7 @@ import com.zyrotechbd.desk.core.Format
 import com.zyrotechbd.desk.data.auth.SessionStore
 import com.zyrotechbd.desk.data.media.MediaCache
 import com.zyrotechbd.desk.data.network.ApiClient
+import com.zyrotechbd.desk.ui.components.Good
 import com.zyrotechbd.desk.data.network.CallLine
 import com.zyrotechbd.desk.data.network.CallRow
 import com.zyrotechbd.desk.ui.components.Chip
@@ -232,7 +234,8 @@ private fun CallRowView(c: CallRow, s: AppStrings, onClick: () -> Unit) {
                     .ifEmpty { s.cUnknown }, fontSize = 12.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 c.callbackReason?.let {
                     Spacer(Modifier.height(4.dp))
-                    Text("${s.cCallbackLabel}: $it", fontSize = 12.sp, color = Warn, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text((if (c.callbackDone) "✓ " else "") + "${s.cCallbackLabel}: $it", fontSize = 12.sp,
+                        color = if (c.callbackDone) Muted else Warn, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             Spacer(Modifier.width(8.dp))
@@ -298,7 +301,23 @@ fun CallDetailScreen(navController: NavHostController, company: String, callId: 
                     }
                     c.callbackReason?.let {
                         Spacer(Modifier.height(8.dp))
-                        Text("${s.cCallbackLabel}: $it", fontSize = 14.sp, color = Warn, fontWeight = FontWeight.Medium)
+                        Text("${s.cCallbackLabel}: $it", fontSize = 14.sp, color = if (c.callbackDone) Muted else Warn,
+                            fontWeight = FontWeight.Medium)
+                        if (c.callbackDone) Text("✓ ${s.cCallbackDoneBy} ${c.callbackDoneBy.orEmpty()}", fontSize = 12.sp, color = Muted)
+                    }
+                    if (c.callbackReason != null && !c.callbackDone) {
+                        Spacer(Modifier.height(10.dp))
+                        SmallAction(s.cCallbackDone, Icons.Filled.Check, color = Good) {
+                            scope.launch {
+                                try {
+                                    call = ApiClient.service.callbackDone(company, c.id).call
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    error = ApiClient.errorMessage(e, s.loadFailed, s.offline)
+                                }
+                            }
+                        }
                     }
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

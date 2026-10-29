@@ -6,6 +6,7 @@ use App\Filament\App\Resources\Memberships\Pages\ManageMemberships;
 use App\Models\BillingDailyBill;
 use App\Models\Membership;
 use App\Models\User;
+use App\Support\CallDuty;
 use App\Support\Menu;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -16,6 +17,7 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -105,6 +107,18 @@ class MembershipResource extends Resource
                 ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())
                 ->dehydrated(fn () => self::isOwner())
                 ->helperText(__('চালু থাকলে এই সদস্যের পাঠানো প্রতিটা WhatsApp উত্তরের নিচে "- নাম" যাবে। শুধু Owner বদলাতে পারেন।')),
+            // which phones ring for calls (engine/voice_bot.py on_call_duty); the member can pause it in the app
+            CheckboxList::make('call_hours.days')->label(__('কল ধরার দিন'))->options(CallDuty::DAYS)->columns(7)->gridDirection('row')
+                ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())->dehydrated(fn () => self::isOwner())
+                ->helperText(__('অ্যাপে কল (হটলাইন, WhatsApp, রিমাইন্ডার কলে কথা বলতে চাওয়া) শুধু এই দিন আর সময়ে রিং হবে। কিছু না বাছলে সবসময়।')),
+            TimePicker::make('call_hours.from')->label(__('কল ধরা শুরু'))->seconds(false)
+                ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())->dehydrated(fn () => self::isOwner()),
+            TimePicker::make('call_hours.to')->label(__('কল ধরা শেষ'))->seconds(false)
+                ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())->dehydrated(fn () => self::isOwner())
+                ->helperText(__('রাতের শিফট হলে শুরু বেশি, শেষ কম দিন (যেমন 22:00 থেকে 06:00)।')),
+            Toggle::make('calls_paused')->label(__('এখন কল নিচ্ছেন না'))
+                ->visible(fn (string $operation) => $operation === 'edit' && self::isOwner())->dehydrated(fn () => self::isOwner())
+                ->helperText(__('সদস্য নিজেও অ্যাপের "আরও" থেকে "কল নিচ্ছি" বন্ধ/চালু করতে পারেন।')),
             Select::make('groups')->label(__('পারমিশন গ্রুপ'))->visibleOn('edit')->multiple()->preload()->live()
                 ->visible(fn ($get) => $get('role') !== 'owner')
                 ->relationship('groups', 'name', fn (Builder $query) => $query->where('permission_groups.company_id', Filament::getTenant()->getKey()))
@@ -138,6 +152,9 @@ class MembershipResource extends Resource
                 TextColumn::make('groups.name')->label(__('পারমিশন গ্রুপ'))->badge()->placeholder('-'),
                 \Filament\Tables\Columns\IconColumn::make('field_technician')->label(__('টেকনিশিয়ান'))->boolean()
                     ->trueIcon('heroicon-o-wrench-screwdriver')->falseIcon('heroicon-o-minus')->trueColor('success')->falseColor('gray'),
+                TextColumn::make('call_duty')->label(__('কল ধরা'))->badge()
+                    ->state(fn (Membership $r) => $r->calls_paused ? __('বন্ধ') : CallDuty::label($r->call_hours))
+                    ->color(fn (Membership $r) => ! CallDuty::taking($r) ? 'gray' : 'success'),
                 TextColumn::make('menus')->label(__('মেনু'))
                     ->state(fn (Membership $r) => $r->role === 'owner' ? __('সব')
                         : count(Menu::keys($r)).'/'.count(Menu::ITEMS).($r->permissions === null && $r->groups->isEmpty() ? __(' (ডিফল্ট)') : ''))

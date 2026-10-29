@@ -55,7 +55,8 @@
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
                 <span style="font-size:12px;opacity:.8">${esc(label(c))} · ${esc(c.at)}</span>
                 <button type="button" data-close aria-label="${esc(T.close)}" style="border:0;background:none;color:inherit;font-size:18px;line-height:1;cursor:pointer">×</button></div>
-            <div style="font-size:20px;font-weight:600;letter-spacing:.5px;margin:2px 0 4px">${esc(c.caller)}</div>${people}
+            <div style="font-size:20px;font-weight:600;letter-spacing:.5px;margin:2px 0 4px">${esc(c.caller)}</div>
+            ${c.note ? `<div style="margin:4px 0 6px;padding:6px 8px;border-radius:8px;background:#dc2626;color:#fff;font-size:12px;font-weight:600">${esc(c.note)}</div>` : ''}${people}
             ${c.take ? `<button type="button" data-take style="margin-top:8px;width:100%;padding:8px;border:0;border-radius:8px;background:#16a34a;color:#fff;font-weight:600;cursor:pointer">${esc(T.take)}</button>` : ''}`;
     }
 

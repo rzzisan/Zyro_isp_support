@@ -369,6 +369,11 @@ abstract class AppStrings {
     abstract val notifications: String
     abstract val notifyChats: String
     abstract val notifyCalls: String
+    abstract val takingCalls: String
+    abstract val takingCallsHint: String
+    abstract val offDutyNow: String
+    abstract val cCallbackDone: String
+    abstract val cCallbackDoneBy: String
     abstract val doTomorrow: String
     abstract val doToday: String
     abstract val laterNote: String
@@ -824,6 +829,11 @@ object BengaliStrings : AppStrings() {
     override val notifications = "নোটিফিকেশন"
     override val notifyChats = "মেসেজ নোটিফিকেশন"
     override val notifyCalls = "WhatsApp কল বাজবে"
+    override val takingCalls = "কল নিচ্ছি"
+    override val takingCallsHint = "বন্ধ করলে হটলাইন, WhatsApp আর রিমাইন্ডার কল এই ফোনে বাজবে না। ডিউটি:"
+    override val offDutyNow = "এখন ডিউটির সময় নয়"
+    override val cCallbackDone = "কল ব্যাক হয়েছে"
+    override val cCallbackDoneBy = "কল ব্যাক করেছেন"
     override val doTomorrow = "আগামীকাল করব"
     override val doToday = "আজই করব"
     override val laterNote = "এই কাজ আগামীকাল করা হবে"
@@ -1279,6 +1289,11 @@ object EnglishStrings : AppStrings() {
     override val notifications = "Notifications"
     override val notifyChats = "Message notifications"
     override val notifyCalls = "Ring for WhatsApp calls"
+    override val takingCalls = "Taking calls"
+    override val takingCallsHint = "Off: hotline, WhatsApp and reminder calls won't ring this phone. Duty:"
+    override val offDutyNow = "Off duty now"
+    override val cCallbackDone = "Called back"
+    override val cCallbackDoneBy = "Called back by"
     override val doTomorrow = "Do it tomorrow"
     override val doToday = "Do it today"
     override val laterNote = "This job will be done tomorrow"

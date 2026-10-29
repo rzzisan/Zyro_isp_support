@@ -16,6 +16,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -139,9 +140,14 @@ class VoiceFlowResource extends Resource
                         ]),
                 ]),
             Section::make(__('স্টাফের সাথে কথা: অপেক্ষার সময়'))->columnSpanFull()->statePath('hold')->collapsible()
-                ->description(__('কাস্টমার "স্টাফের সাথে কথা" চাইলে Desk অ্যাপ/ওয়েবে রিং হয় (যাদের "ফোন" অনুমতি আছে); ততক্ষণ কাস্টমার যা শোনেন'))
+                ->description(__('কাস্টমার "স্টাফের সাথে কথা" চাইলে Desk অ্যাপ/ওয়েবে রিং হয় (যাদের "ফোন" অনুমতি আছে, ডিউটিতে আছেন আর অ্যাপে "কল নিচ্ছি" চালু); ততক্ষণ কাস্টমার যা শোনেন'))
                 ->schema([
                     Grid::make(3)->schema([
+                        Select::make('ring')->label(__('কার অ্যাপে রিং'))->options(array_map('__', VoiceFlow::RINGS))->default('all')->selectablePlaceholder(false)->live(),
+                        TextInput::make('ring_each')->label(__('একেকজনকে কত সেকেন্ড'))->numeric()->minValue(10)->maxValue(60)->default(20)
+                            ->visible(fn (Get $get) => ($get('ring') ?? 'all') !== 'all'),
+                        CheckboxList::make('whisper')->label(__('ধরার আগে স্ক্রিনে যা দেখাবে'))->options(array_map('__', VoiceFlow::WHISPER))
+                            ->default(array_keys(VoiceFlow::WHISPER))->columns(2)->columnSpanFull(),
                         Select::make('start_template_id')->label(__('শুরুতে বলবে'))->options(fn () => static::voiceOptions()),
                         Select::make('sound')->label(__('তারপর শব্দ'))->options(array_map('__', VoiceFlow::SOUNDS))->default('ring')->selectablePlaceholder(false),
                         Select::make('repeat_template_id')->label(__('মাঝে মাঝে বলবে'))->options(fn () => static::voiceOptions()),

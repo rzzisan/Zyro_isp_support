@@ -51,7 +51,18 @@ class VoiceCalls
             $sms[$s->id] = ['text' => $text, 'parts' => $p['parts'], 'unicode' => $p['unicode']];
         }
 
+        // the agent's ring note: what the flow's settings pick; what the customer did on the call the engine adds
+        $show = $flow->hold['whisper'] ?? array_keys(VoiceFlow::WHISPER);
+        $whisper = array_values(array_filter([
+            in_array('flow', $show, true) ? $flow->name : null,
+            $c && in_array('due', $show, true) && (float) $c->due > 0 ? 'বকেয়া '.$values['due'].' টাকা' : null,
+            $c && in_array('line', $show, true) ? 'লাইন '.$values['line_status'] : null,
+            $c && in_array('expire', $show, true) && $values['expire_date'] !== '' ? 'মেয়াদ '.$values['expire_date'] : null,
+        ]));
+
         return [
+            'whisper' => $whisper,
+            'whisper_pressed' => in_array('pressed', $show, true),
             'flow' => ['id' => $flow->id, 'name' => $flow->name, 'steps' => $flow->steps ?? [], 'hold' => $flow->hold ?? [],
                 'goodbye_template_id' => $flow->goodbye_template_id],
             'audio' => $audio,

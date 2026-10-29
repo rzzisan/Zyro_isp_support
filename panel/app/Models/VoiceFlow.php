@@ -13,7 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *   keys: [{digit, action, say (template id), say_fail, sms_template_id, problem, next (step name), next_fail}]}
  * actions: replay | goto | sms | reconnect | staff | ticket | optout | end.
  * hold (JSON): while staff are rung: {start_template_id, repeat_template_id, every (s), sound ring|music|silence,
- *   max_wait (s), after voicemail|callback|end, voicemail_template_id, callback_template_id}.
+ *   max_wait (s), after voicemail|callback|end, voicemail_template_id, callback_template_id, ring all|one|least,
+ *   ring_each (s), whisper: [WHISPER keys]}.
  */
 class VoiceFlow extends Model
 {
@@ -33,6 +34,13 @@ class VoiceFlow extends Model
     public const SOUNDS = ['ring' => 'রিং টোন', 'music' => 'মিউজিক', 'silence' => 'চুপ'];
 
     public const AFTER = ['voicemail' => 'কাস্টমার ভয়েস মেসেজ রাখবেন', 'callback' => 'কল-ব্যাক তালিকায় তুলে কল শেষ', 'end' => 'বিদায় বলে কল শেষ'];
+
+    /** Whose app rings when the customer asks for staff (on duty, "কল নিচ্ছি" on, not on another call). */
+    public const RINGS = ['all' => 'সবার একসাথে (যে আগে ধরে)', 'one' => 'একজন একজন করে পালাক্রমে', 'least' => 'আজ যিনি কম কল ধরেছেন তার আগে'];
+
+    /** What the agent's screen shows about the customer before taking the call (the ring note). */
+    public const WHISPER = ['flow' => 'কোন কল থেকে (ফ্লোর নাম)', 'due' => 'বকেয়া', 'line' => 'লাইন চালু/বন্ধ', 'expire' => 'মেয়াদ',
+        'pressed' => 'কলে কী করেছেন (SMS নিয়েছেন, লাইন চালুর চেষ্টা)'];
 
     public const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '*', '#'];
 
@@ -141,7 +149,8 @@ class VoiceFlow extends Model
             'body' => 'প্রিয় {name}, আপনার বকেয়া {due} টাকা। বিকাশ/নগদে বিল দেওয়ার নিয়ম দেখুন: (এখানে ভিডিও লিংক দিন)। আইডি {id}। {company}']);
         $hold = [
             'start_template_id' => $t('অপেক্ষা: শুরু', 'hold'), 'repeat_template_id' => $t('অপেক্ষা: মাঝে মাঝে', 'hold'),
-            'every' => 25, 'sound' => 'ring', 'max_wait' => 90, 'after' => 'voicemail',
+            'every' => 25, 'sound' => 'ring', 'max_wait' => 90, 'after' => 'voicemail', 'ring' => 'all', 'ring_each' => 20,
+            'whisper' => array_keys(self::WHISPER),
             'voicemail_template_id' => $t('ভয়েস মেসেজ রাখুন', 'hold', 'এই মুহূর্তে কেউ ধরতে পারছেন না। বিপ শব্দের পর আপনার কথা বলুন, শেষ হলে ফোন রেখে দিন। আমরা শুনে আপনাকে কল করব।'),
             'callback_template_id' => $t('পরে কল করব', 'hold', 'এই মুহূর্তে কেউ ধরতে পারছেন না। আমরা আপনাকে একটু পরে কল করব। ধন্যবাদ।'),
         ];

@@ -19,7 +19,20 @@ class CallLog extends Model
 
     protected function casts(): array
     {
-        return ['started_at' => 'datetime', 'ended_at' => 'datetime', 'bot_answered' => 'boolean', 'transcript' => 'array', 'actions' => 'array'];
+        return ['started_at' => 'datetime', 'ended_at' => 'datetime', 'bot_answered' => 'boolean', 'transcript' => 'array', 'actions' => 'array',
+            'callback_done_at' => 'datetime'];
+    }
+
+    /** Who called the customer back (the "কল ব্যাক হয়েছে" button). */
+    public function callbackDoneBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'callback_done_by');
+    }
+
+    /** Calls the customer is waiting to be called back on. */
+    public function scopeCallbackPending(Builder $q): Builder
+    {
+        return $q->whereNotNull('callback_reason')->whereNull('callback_done_at');
     }
 
     /** The staff member who talked (took a WhatsApp call, or called the customer out). */
