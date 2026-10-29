@@ -622,3 +622,63 @@ data class WalkieCallInfo(
     val url: String? = null,
     val token: String? = null,
 )
+
+// --- টিম চ্যাট: Desk users message each other; a chat is "g{group}" or "u{other user}" ---
+
+data class TeamChatList(
+    val me: Long = 0,
+    val unread: Int = 0,
+    val chats: List<TeamChatRow> = emptyList(),
+    val members: List<TeamMember> = emptyList(),
+)
+
+data class TeamChatRow(
+    val ref: String,
+    val kind: String,
+    val title: String,
+    val members: Int = 0,
+    val last: TeamLast? = null,
+    val unread: Int = 0,
+    val muted: Boolean = false,
+)
+
+data class TeamLast(val text: String = "", val at: String? = null, val mine: Boolean = false, val sender: String? = null)
+
+data class TeamMember(val id: Long, val name: String, val role: String? = null)
+
+data class TeamChatDetail(
+    val chat: TeamChatInfo,
+    val messages: List<TeamMessage> = emptyList(),
+    @Json(name = "has_older") val hasOlder: Boolean = false,
+)
+
+data class TeamChatInfo(
+    val ref: String,
+    val kind: String,
+    val title: String,
+    val members: List<String> = emptyList(),
+    val muted: Boolean = false,
+    @Json(name = "seen_up_to") val seenUpTo: Long = 0,
+)
+
+data class TeamMessage(
+    val id: Long,
+    @Json(name = "sender_id") val senderId: Long? = null,
+    val sender: String = "",
+    val mine: Boolean = false,
+    val text: String? = null,
+    val media: TeamMedia? = null,
+    val deleted: Boolean = false,
+    val seen: Boolean = false,
+    @Json(name = "can_delete") val canDelete: Boolean = false,
+    val at: String? = null,
+)
+
+/** type: image or voice; gone = the file was deleted after the keep days. */
+data class TeamMedia(val type: String, val seconds: Int? = null, val gone: Boolean = false)
+
+data class TeamSent(val message: TeamMessage)
+
+data class TeamTextRequest(val body: String)
+
+data class TeamMuted(val muted: Boolean)

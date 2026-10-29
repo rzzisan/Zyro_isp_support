@@ -7,8 +7,11 @@ self.addEventListener('push', (e) => {
     let d = {};
     try { d = e.data ? e.data.json() : {}; } catch (x) {}
     e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then((tabs) => {
-        // a panel tab on screen shows its own alert (toast + sound)
-        if (tabs.some((t) => t.visibilityState === 'visible' && new URL(t.url).pathname.startsWith('/app'))) return;
+        // a panel tab on screen shows its own WhatsApp alert (toast + sound); a team chat message only skips the
+        // notification when the team chat page itself is on screen
+        const team = (d.tag || '').startsWith('team-');
+        if (tabs.some((t) => t.visibilityState === 'visible' && new URL(t.url).pathname.startsWith('/app')
+            && (! team || new URL(t.url).pathname.endsWith('/team-chat')))) return;
         return self.registration.showNotification(d.title || 'নতুন WhatsApp মেসেজ', {
             body: d.body || '', tag: d.tag || 'wa', renotify: true, icon: '/favicon.ico', data: {url: d.url || '/app'},
         });

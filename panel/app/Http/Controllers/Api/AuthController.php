@@ -111,6 +111,8 @@ class AuthController extends Controller
                 'menus' => array_values(array_filter(array_keys(Menu::ITEMS),
                     fn ($k) => Menu::allows($user, $company, $k) && ($k !== 'calls' || $hotline)
                         && ($k !== 'phone' || Softphone::available($company))))];
+            // not a menu: every member may use the team chat
+            $row['menus'][] = 'team_chat';
             // not a menu: the walkie-talkie is for the members the owner put in a group
             if (Walkie::groupsFor($user, $company)->isNotEmpty()) {
                 $row['menus'][] = 'walkie';

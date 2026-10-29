@@ -273,3 +273,15 @@ Route::middleware('web')->prefix('system-backup')->group(function () {
 
 // the app's privacy policy (shown and accepted at sign-in; location recording for field technicians)
 Route::view('/privacy', 'legal.privacy')->middleware('web')->name('privacy');
+
+// a team chat photo or voice message (App\Support\StaffChat, storage/app/staff-chat); only the people of that chat
+Route::get('/team-chat/{company:slug}/media/{message}', function (\App\Models\Company $company, \App\Models\StaffChatMessage $message) {
+    $user = Auth::user();
+    abort_unless($user && $message->company_id === $company->id && ! $message->deleted_at && $user->canAccessTenant($company), 403);
+    $chat = \App\Support\StaffChat::resolve($user, $company, \App\Support\StaffChat::refOf($message->chat, $user->id));
+    abort_unless($chat && $chat[0] === $message->chat, 403);
+    $path = $message->file();
+    abort_unless($path, 404);
+
+    return response()->file($path, ['Content-Type' => $message->media_mime ?: 'application/octet-stream', 'Cache-Control' => 'private, max-age=604800']);
+})->middleware('web')->name('team-chat.media');

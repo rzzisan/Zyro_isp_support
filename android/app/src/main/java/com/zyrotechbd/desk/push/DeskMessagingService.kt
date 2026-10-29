@@ -22,7 +22,7 @@ import com.zyrotechbd.desk.walkie.WalkieCallActivity
 import com.zyrotechbd.desk.walkie.WalkieService
 import androidx.compose.ui.graphics.toArgb
 
-/** Draws the Desk's data-only pushes (one notification per chat, replaced by its next message; a tap opens it) and rings WhatsApp calls. */
+/** Draws the Desk's data-only pushes (one notification per chat or team chat, replaced by its next message; a tap opens it) and rings WhatsApp calls. */
 class DeskMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) = Push.register(token)
 
@@ -45,6 +45,7 @@ class DeskMessagingService : FirebaseMessagingService() {
                 WalkieCallActivity.ended.tryEmit(id)
                 return
             }
+            "team_chat" -> return teamChat(d)
             "chat" -> Unit
             else -> return
         }
@@ -72,6 +73,34 @@ class DeskMessagingService : FirebaseMessagingService() {
             .setContentIntent(tap)
             .build()
         NotificationManagerCompat.from(this).notify("chat", chatId.toInt(), n)
+    }
+
+    /** A team chat message from another Desk user: one notification per chat, replaced by its next message. */
+    private fun teamChat(d: Map<String, String>) {
+        val ref = d["chat"] ?: return
+        Push.teamEvents.tryEmit(ref)
+        val company = d["company"].orEmpty()
+        if (Push.visibleTeamChat == ref && SessionStore.company()?.slug == company) return  // already reading it
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val intent = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(MainActivity.EXTRA_COMPANY, company)
+            .putExtra(MainActivity.EXTRA_TEAM_CHAT, ref)
+        val id = ("$company/$ref").hashCode()
+        val tap = PendingIntent.getActivity(this, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = NotificationCompat.Builder(this, Push.TEAM_CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_desk)
+            .setColor(Primary.toArgb())
+            .setContentTitle(d["title"].orEmpty())
+            .setContentText(d["body"].orEmpty())
+            .setStyle(NotificationCompat.BigTextStyle().bigText(d["body"].orEmpty()))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setAutoCancel(true)
+            .setContentIntent(tap)
+            .build()
+        NotificationManagerCompat.from(this).notify("team", id, n)
     }
 
     /** A WhatsApp or hotline call ringing for staff: rings like a phone call, full screen when locked; stops when someone takes it. */

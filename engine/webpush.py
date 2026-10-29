@@ -52,6 +52,37 @@ def _display(wa: str, username: str | None = None) -> str:
     return "0" + wa[3:] if wa.startswith("880") else wa
 
 
+def send_users(company_id: int, user_ids: list[int], payload: dict[str, str]) -> None:
+    """Push {title, body, tag, url} to these users' subscribed browsers in this company (team chat), in the background."""
+    threading.Thread(target=_send_users, args=(company_id, user_ids, payload), daemon=True).start()
+
+
+def _send_users(company_id: int, user_ids: list[int], payload: dict[str, str]) -> None:
+    try:
+        subs = db.all_rows("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE company_id = %s AND user_id = ANY(%s)",
+                           (company_id, list(user_ids)))
+        if subs:
+            _deliver(subs, json.dumps(payload, ensure_ascii=False))
+    except Exception:
+        log.exception("web push failed for company %s", company_id)
+
+
+def _deliver(subs: list[dict], payload: str) -> None:
+    from pywebpush import WebPushException, webpush
+    _, priv = keys()
+    for s in subs:
+        try:
+            webpush({"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}}, payload,
+                    vapid_private_key=priv, vapid_claims={"sub": SUBJECT}, ttl=3600,
+                    headers={"Urgency": "high"}, timeout=10)
+        except WebPushException as e:
+            status = getattr(e.response, "status_code", None)
+            if status in (404, 410):  # the browser dropped this subscription
+                db.execute("DELETE FROM push_subscriptions WHERE id = %s", (s["id"],))
+            else:
+                log.warning("web push to subscription %s failed: %s", s["id"], str(e)[:200])
+
+
 def new_message(company_id: int, contact: dict, mtype: str | None, body: str | None, staff: bool) -> None:
     """Push one incoming message to the company's subscribed browsers (in the background)."""
     threading.Thread(target=_send_all, args=(company_id, contact, mtype, body, staff), daemon=True).start()
@@ -74,24 +105,11 @@ def _send_all(company_id: int, contact: dict, mtype: str | None, body: str | Non
             (company_id, int(contact["id"])))
         if not subs:
             return
-        from pywebpush import WebPushException, webpush
-        _, priv = keys()
-        payload = json.dumps({
+        _deliver(subs, json.dumps({
             "title": title,
             "body": text[:140],
             "tag": f"wa-{contact['id']}",
             "url": f"/app/{subs[0]['slug']}/inbox/{contact['id']}",
-        }, ensure_ascii=False)
-        for s in subs:
-            try:
-                webpush({"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}}, payload,
-                        vapid_private_key=priv, vapid_claims={"sub": SUBJECT}, ttl=3600,
-                        headers={"Urgency": "high"}, timeout=10)
-            except WebPushException as e:
-                status = getattr(e.response, "status_code", None)
-                if status in (404, 410):  # the browser dropped this subscription
-                    db.execute("DELETE FROM push_subscriptions WHERE id = %s", (s["id"],))
-                else:
-                    log.warning("web push to subscription %s failed: %s", s["id"], str(e)[:200])
+        }, ensure_ascii=False))
     except Exception:
         log.exception("web push failed for company %s", company_id)

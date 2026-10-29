@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\FieldJobController;
 use App\Http\Controllers\Api\FieldLocationController;
 use App\Http\Controllers\Api\InboxController;
 use App\Http\Controllers\Api\MonitoringController;
+use App\Http\Controllers\Api\TeamChatController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\WalkieController;
 use App\Http\Middleware\ApiCompany;
@@ -79,6 +80,13 @@ Route::prefix('v1')->group(function () {
                 Route::post("my-jobs/{ticket}/{$step}", [FieldJobController::class, $step])->whereNumber('ticket')->middleware('throttle:30,1');
             }
             Route::post('my-jobs/{ticket}/solve', [FieldJobController::class, 'solve'])->whereNumber('ticket')->middleware('throttle:20,1');
+            Route::get('team-chat', [TeamChatController::class, 'index']);
+            Route::get('team-chat/media/{message}', [TeamChatController::class, 'media'])->whereNumber('message');
+            Route::get('team-chat/{chat}', [TeamChatController::class, 'show'])->where('chat', '[gu]\d+');
+            Route::post('team-chat/{chat}', [TeamChatController::class, 'send'])->where('chat', '[gu]\d+')->middleware('throttle:60,1');
+            Route::post('team-chat/{chat}/mute', [TeamChatController::class, 'mute'])->where('chat', '[gu]\d+');
+            Route::delete('team-chat/{chat}/messages/{message}', [TeamChatController::class, 'delete'])->where('chat', '[gu]\d+')->whereNumber('message');
+
             Route::get('walkie', [WalkieController::class, 'index']);
             Route::get('walkie/groups/{group}/clips', [WalkieController::class, 'clips'])->whereNumber('group');
             Route::get('walkie/clips/{clip}', [WalkieController::class, 'clip'])->whereNumber('clip');

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Engineering
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.People
@@ -105,6 +106,8 @@ private fun screensFor(company: CompanyInfo?, s: AppStrings): List<Tab> = buildL
     if (company?.fieldOnly != true) add(Tab(Routes.Dashboard, s.navDashboard, Icons.Filled.Home))
     if (company?.can("field_jobs") == true) add(Tab(Routes.MyJobs, s.navMyJobs, Icons.Filled.Engineering))
     if (company?.can("inbox") == true) add(Tab(Routes.Inbox, s.navInbox, Icons.Filled.Forum))
+    // not a menu: every member can message the others (older servers don't send it)
+    if (company?.can("team_chat") == true) add(Tab(Routes.TeamChats, s.navTeamChat, Icons.Filled.Groups))
     if (company?.can("tickets") == true) add(Tab(Routes.Tickets, s.navTickets, Icons.Filled.ConfirmationNumber))
     // not a menu: the members the owner put in a walkie-talkie group
     if (company?.can("walkie") == true) add(Tab(Routes.Walkie, s.navWalkie, Icons.Filled.SettingsInputAntenna))
@@ -132,6 +135,8 @@ private fun titleFor(route: String?, s: AppStrings): String? = when (route) {
     Routes.Calls -> s.navCalls
     Routes.DialPad -> s.dialPad
     Routes.Walkie -> s.navWalkie
+    Routes.TeamChats -> s.navTeamChat
+    Routes.TeamChat -> s.navTeamChat
     Routes.Call -> s.titleCall
     Routes.Chat -> s.titleChat
     Routes.Tickets -> s.navTickets
@@ -176,6 +181,8 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
     val pushOpen by Push.open.collectAsState()
     val waitingChats by Badges.waitingChats.collectAsState()
     val openTickets by Badges.openTickets.collectAsState()
+    val teamUnread by Badges.teamUnread.collectAsState()
+    val pushTeam by Push.openTeam.collectAsState()
 
     val companyKey = company?.slug ?: ""
     key(companyKey) {
@@ -208,6 +215,25 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
                 withTimeoutOrNull(180_000) { Push.events.first() }
                 delay(2_000)  // let a burst of messages settle
             }
+        }
+        LaunchedEffect(companyKey) {
+            while (companyKey.isNotEmpty() && company?.can("team_chat") == true) {
+                runCatching { ApiClient.service.teamChats(companyKey) }.getOrNull()?.let { Badges.teamUnread.value = it.unread }
+                withTimeoutOrNull(180_000) { Push.teamEvents.first() }
+                delay(1_500)
+            }
+        }
+
+        // a tapped team chat notification: switch company first if needed (this block then starts over), then open it
+        LaunchedEffect(pushTeam) {
+            val p = pushTeam ?: return@LaunchedEffect
+            if (p.company.isNotEmpty() && p.company != companyKey && companies.any { it.slug == p.company }) {
+                SessionStore.selectCompany(p.company)
+                company = SessionStore.company()
+                return@LaunchedEffect
+            }
+            navController.navigate(Routes.teamChat(p.ref)) { launchSingleTop = true }
+            Push.openTeam.value = null
         }
 
         // a tapped chat notification: switch to its company first (this block then starts over), then open the chat
@@ -267,10 +293,11 @@ fun MainAppShell(onLogout: () -> Unit, onToggleLang: () -> Unit) {
                                         val count = when (tab.route) {
                                             Routes.Inbox -> waitingChats
                                             Routes.Tickets -> openTickets
+                                            Routes.TeamChats -> teamUnread
                                             else -> 0
                                         }
                                         BadgedBox(badge = {
-                                            if (count > 0) Badge(containerColor = if (tab.route == Routes.Inbox) Primary else Warn,
+                                            if (count > 0) Badge(containerColor = if (tab.route == Routes.Inbox || tab.route == Routes.TeamChats) Primary else Warn,
                                                 contentColor = Color.White) { Text(if (count > 99) "99+" else count.toString(), fontSize = 10.sp) }
                                         }) { Icon(tab.icon, contentDescription = null) }
                                     },

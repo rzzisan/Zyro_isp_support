@@ -244,4 +244,33 @@ interface ApiService {
 
     @POST("c/{company}/walkie/calls/{id}/end")
     suspend fun walkieEnd(@Path("company") company: String, @Path("id") id: Long): WalkieCallInfo
+
+    @GET("c/{company}/team-chat")
+    suspend fun teamChats(@Path("company") company: String): TeamChatList
+
+    /** after = only newer messages (the open chat polls with it), before = 50 older ones. */
+    @GET("c/{company}/team-chat/{chat}")
+    suspend fun teamChat(@Path("company") company: String, @Path("chat") chat: String,
+                         @Query("after") after: Long? = null, @Query("before") before: Long? = null): TeamChatDetail
+
+    @POST("c/{company}/team-chat/{chat}")
+    suspend fun teamSend(@Path("company") company: String, @Path("chat") chat: String, @Body request: TeamTextRequest): TeamSent
+
+    /** A photo (kind image, optional caption) or a voice message (kind voice, seconds). */
+    @Multipart
+    @POST("c/{company}/team-chat/{chat}")
+    suspend fun teamSendFile(
+        @Path("company") company: String,
+        @Path("chat") chat: String,
+        @Part file: MultipartBody.Part,
+        @Part("kind") kind: RequestBody,
+        @Part("body") body: RequestBody?,
+        @Part("seconds") seconds: RequestBody?,
+    ): TeamSent
+
+    @POST("c/{company}/team-chat/{chat}/mute")
+    suspend fun teamMute(@Path("company") company: String, @Path("chat") chat: String, @Body request: MuteRequest): TeamMuted
+
+    @DELETE("c/{company}/team-chat/{chat}/messages/{message}")
+    suspend fun teamDelete(@Path("company") company: String, @Path("chat") chat: String, @Path("message") message: Long): Unit
 }
