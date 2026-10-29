@@ -1412,6 +1412,20 @@ async def push_users(request: Request, company_id: int):
     return {"ok": True}
 
 
+@app.post("/internal/{company_id}/voice/tts")
+async def voice_tts(request: Request, company_id: int):
+    """ভয়েস টেমপ্লেট preview (and later the reminder calls): {text, voice, speed} → {"file": "{company}/{hash}"},
+    the audio in panel storage/app/voice-audio (engine/voice_tts.py; made once per text)."""
+    internal_key(request)
+    from engine import voice_tts as vt
+    body = await request.json()
+    try:
+        return await run_in_threadpool(vt.make, company_id, str(body.get("text") or ""), str(body.get("voice") or "Kore"),
+                                       float(body.get("speed") or 1))
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=400, detail=str(e)[:300])
+
+
 @app.post("/internal/{company_id}/sms/kick")
 def sms_kick(request: Request, company_id: int):
     """New SMS queued from the panel: send them now in a background thread (the minute timer is the fallback)."""

@@ -158,7 +158,7 @@ def system_prompt(t: Tenant, query: str | None = None) -> str:
 # which key does which job: panel AI key → "কোন কাজে কোন key" (AiKey::JOBS, table ai_key_jobs)
 PURPOSE_JOB = {"customer": "chat", "technician": "chat", "image": "image", "voice": "voice_read",
                "voice_reply": "voice_reply", "voice_call": "call_live", "call_stt": "call_stt", "call_llm": "call_llm",
-               "call_tts": "call_tts"}
+               "call_tts": "call_tts", "voice_reminder_tts": "voice_reminder"}
 
 
 def job_key(company_id: int, job: str | None) -> dict | None:
