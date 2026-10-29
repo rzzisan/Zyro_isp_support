@@ -426,6 +426,29 @@ abstract class AppStrings {
     abstract val walkieMicNeeded: String
     abstract val walkieNoGroup: String
     abstract fun walkieTalks(name: String): String
+    abstract val navTeamChat: String
+    abstract val teamNewChat: String
+    abstract val teamNoChats: String
+    abstract val teamPickMember: String
+    abstract val teamNoMembers: String
+    abstract val teamMe: String
+    abstract val teamPrivate: String
+    abstract val teamDeleted: String
+    abstract val teamDeleteAsk: String
+    abstract val teamFileGone: String
+    abstract val teamHoldToRecord: String
+    abstract val teamRecording: String
+    abstract val teamMicFailed: String
+    abstract val teamMicNeeded: String
+    abstract val teamSeen: String
+    abstract val teamMute: String
+    abstract val teamUnmute: String
+    abstract val teamMutedLabel: String
+    abstract val teamOlder: String
+    abstract val teamHint: String
+    abstract val teamPhotoCaption: String
+    abstract val teamSending: String
+    abstract fun teamMembers(n: Int): String
 }
 
 object BengaliStrings : AppStrings() {
@@ -858,6 +881,29 @@ object BengaliStrings : AppStrings() {
     override val walkieMicNeeded = "কথা বলতে মাইক্রোফোনের অনুমতি দিন"
     override val walkieNoGroup = "আপনি কোনো ওয়াকি-টকি গ্রুপে নেই"
     override fun walkieTalks(name: String) = "$name কথা বলছেন"
+    override val navTeamChat = "টিম চ্যাট"
+    override val teamNewChat = "নতুন চ্যাট"
+    override val teamNoChats = "এখনো কোনো চ্যাট নেই। \"নতুন চ্যাট\" চেপে কাউকে মেসেজ দিন।"
+    override val teamPickMember = "কাকে মেসেজ দেবেন"
+    override val teamNoMembers = "কোম্পানিতে আর কোনো সদস্য নেই"
+    override val teamMe = "আমি"
+    override val teamPrivate = "একান্ত চ্যাট"
+    override val teamDeleted = "মেসেজ মুছে ফেলা হয়েছে"
+    override val teamDeleteAsk = "মেসেজটা সবার কাছ থেকে মুছে ফেলবেন?"
+    override val teamFileGone = "ফাইলের মেয়াদ শেষ"
+    override val teamHoldToRecord = "ভয়েস পাঠাতে মাইক চেপে ধরে কথা বলুন"
+    override val teamRecording = "রেকর্ড হচ্ছে… ছেড়ে দিলে যাবে"
+    override val teamMicFailed = "মাইক্রোফোন চালু করা যায়নি"
+    override val teamMicNeeded = "ভয়েস পাঠাতে মাইক্রোফোনের অনুমতি দিন"
+    override val teamSeen = "দেখেছে"
+    override val teamMute = "এই চ্যাটের নোটিফিকেশন বন্ধ"
+    override val teamUnmute = "এই চ্যাটের নোটিফিকেশন চালু"
+    override val teamMutedLabel = "নোটিফিকেশন বন্ধ"
+    override val teamOlder = "আগের মেসেজ"
+    override val teamHint = "মেসেজ লিখুন…"
+    override val teamPhotoCaption = "ছবির সাথে লেখা (ইচ্ছা হলে)"
+    override val teamSending = "পাঠানো হচ্ছে…"
+    override fun teamMembers(n: Int) = "${n.toString().map { if (it.isDigit()) '০' + (it - '0') else it }.joinToString("")} জন সদস্য"
 }
 
 object EnglishStrings : AppStrings() {
@@ -1290,4 +1336,27 @@ object EnglishStrings : AppStrings() {
     override val walkieMicNeeded = "Allow the microphone to talk"
     override val walkieNoGroup = "You are in no walkie-talkie group"
     override fun walkieTalks(name: String) = "$name is talking"
+    override val navTeamChat = "Team chat"
+    override val teamNewChat = "New chat"
+    override val teamNoChats = "No chats yet. Tap \"New chat\" to message someone."
+    override val teamPickMember = "Message whom"
+    override val teamNoMembers = "No other members in the company"
+    override val teamMe = "Me"
+    override val teamPrivate = "Private chat"
+    override val teamDeleted = "Message deleted"
+    override val teamDeleteAsk = "Delete this message for everyone?"
+    override val teamFileGone = "File expired"
+    override val teamHoldToRecord = "Hold the mic and talk to send a voice message"
+    override val teamRecording = "Recording… release to send"
+    override val teamMicFailed = "Couldn't start the microphone"
+    override val teamMicNeeded = "Allow the microphone to send voice"
+    override val teamSeen = "Seen"
+    override val teamMute = "Mute this chat"
+    override val teamUnmute = "Unmute this chat"
+    override val teamMutedLabel = "Muted"
+    override val teamOlder = "Earlier messages"
+    override val teamHint = "Write a message…"
+    override val teamPhotoCaption = "Caption (optional)"
+    override val teamSending = "Sending…"
+    override fun teamMembers(n: Int) = if (n == 1) "1 member" else "$n members"
 }

@@ -24,6 +24,13 @@ object MediaCache {
     suspend fun recording(context: Context, company: String, callId: Long): File =
         fetch(File(dir(context), "$company-call-$callId.mp3"), "c/$company/calls/$callId/recording")
 
+    /** A team chat photo or voice message from /c/{company}/team-chat/media/{id}. */
+    suspend fun teamFile(context: Context, company: String, messageId: Long, extension: String): File =
+        fetch(File(dir(context), "$company-team-$messageId.$extension"), "c/$company/team-chat/media/$messageId")
+
+    suspend fun teamImage(context: Context, company: String, messageId: Long, maxPx: Int = 1024): Bitmap? =
+        decode(teamFile(context, company, messageId, "jpg"), maxPx)
+
     private suspend fun fetch(file: File, path: String): File = withContext(Dispatchers.IO) {
         if (file.length() > 0) return@withContext file
         val request = Request.Builder().url(ApiClient.baseUrl + path).build()
@@ -38,7 +45,10 @@ object MediaCache {
 
     /** A photo scaled down to about [maxPx] on its long side, for showing in the chat. */
     suspend fun image(context: Context, company: String, messageId: Long, maxPx: Int = 1024): Bitmap? {
-        val file = file(context, company, messageId, "img")
+        return decode(file(context, company, messageId, "img"), maxPx)
+    }
+
+    private suspend fun decode(file: File, maxPx: Int): Bitmap? {
         return withContext(Dispatchers.IO) {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(file.path, bounds)

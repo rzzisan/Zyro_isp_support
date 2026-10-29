@@ -23,6 +23,9 @@ import kotlinx.coroutines.launch
 /** A chat a tapped notification asks to open: company slug and chat id. */
 data class OpenChat(val company: String, val chatId: Long)
 
+/** A team chat a tapped notification asks to open: company slug and chat ref ("g12", "u7"). */
+data class OpenTeamChat(val company: String, val ref: String)
+
 /**
  * Phone push for new WhatsApp messages (Firebase Cloud Messaging). The Firebase settings come in at build time
  * (BuildConfig.FCM_*); an APK built without them simply has no push.
@@ -30,6 +33,7 @@ data class OpenChat(val company: String, val chatId: Long)
 object Push {
     const val CHANNEL = "chats"
     const val CALL_CHANNEL = "calls"
+    const val TEAM_CHANNEL = "team"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Set when a notification is tapped; the app shell opens the chat and clears it. */
@@ -40,6 +44,15 @@ object Push {
 
     /** A WhatsApp call (uid) that stopped ringing: someone took it, the bot answered or the caller hung up. */
     val callTaken = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    /** Set when a team chat notification is tapped; the app shell opens it and clears it. */
+    val openTeam = MutableStateFlow<OpenTeamChat?>(null)
+
+    /** A team chat (ref) that just got a message, so the open list, chat and tab badge refresh at once. */
+    val teamEvents = MutableSharedFlow<String>(extraBufferCapacity = 16)
+
+    /** The team chat on screen right now (app in front): its messages need no notification. */
+    @Volatile var visibleTeamChat: String? = null
 
     /** The chat on screen right now (app in front), whose own messages need no notification. */
     @Volatile var visibleChat: Long? = null
@@ -58,6 +71,7 @@ object Push {
         }
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, channelName, NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(TEAM_CHANNEL, "টিম চ্যাট", NotificationManager.IMPORTANCE_HIGH))
         // WhatsApp calls ring with the phone's ringtone
         nm.createNotificationChannel(NotificationChannel(CALL_CHANNEL, "WhatsApp কল", NotificationManager.IMPORTANCE_HIGH).apply {
             setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),

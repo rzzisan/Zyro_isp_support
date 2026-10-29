@@ -12,6 +12,7 @@ object Routes {
     const val Calls = "calls"
     const val DialPad = "dial"
     const val Walkie = "walkie"
+    const val TeamChats = "team-chat"
     const val More = "more"                  // printers, company, language, sign out
 
     const val CustomerDetail = "customers/{headerId}"
@@ -32,6 +33,9 @@ object Routes {
 
     const val Chat = "chats/{chatId}"
     fun chat(id: Long) = "chats/$id"
+
+    const val TeamChat = "team-chat/{ref}"
+    fun teamChat(ref: String) = "team-chat/$ref"
 
     const val BillForm = "bill/{headerId}"
     fun billForm(headerId: Long) = "bill/$headerId"
