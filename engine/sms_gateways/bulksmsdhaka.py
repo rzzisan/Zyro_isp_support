@@ -16,6 +16,8 @@ keeps the raw answer (keys blanked) in the log when it can't tell.
 """
 import logging
 import re
+import threading
+import time
 
 import httpx
 
@@ -23,6 +25,9 @@ from engine.sms_gateways.common import GatewayError, as_json, http_failure, numb
 
 NEEDS_SECRET = False
 BULK = 1                      # one number per request until a comma list is confirmed to work
+WORKERS = 1                   # they answer HTTP 429 to a burst (4 parallel requests did, 2026-10-29)
+MIN_GAP = 0.4                 # seconds between two requests
+THROTTLE_WAIT = 15            # after a 429
 FIRST_STATUS_AFTER = 900      # seconds after sending before the (possibly only) delivery query
 STATUS_EVERY = 1800
 
@@ -46,6 +51,18 @@ ID_KEYS = ("message_id", "messageid", "messageId", "msg_id", "sms_id", "id")
 
 # the request URLs of balance/status carry the key: never let httpx log them
 logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+_pace_lock = threading.Lock()
+_last = [0.0]
+
+
+def _pace() -> None:
+    with _pace_lock:
+        wait = _last[0] + MIN_GAP - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last[0] = time.monotonic()
 
 
 def base(g: dict) -> str:
@@ -122,10 +139,14 @@ def parse_send(status_code: int, body: str) -> dict:
 def send(g: dict, mobiles: list[str], text: str, client: httpx.Client) -> dict:
     body = {"apikey": g["api_key"], "callerID": g["caller_id"], "number": ",".join(local(m) for m in mobiles),
             "message": text}
+    _pace()
     try:
         r = client.post(f"{base(g)}/sendtext", json=body)
     except httpx.HTTPError as e:
         return http_failure(e, g)
+    if r.status_code == 429:      # nothing was taken; engine/sms.py keeps it queued and slows down
+        return {"ok": False, "account": False, "throttled": True, "status": "429", "text": "Too Many Requests",
+                "description": None, "message_ids": [], "error": "HTTP 429 Too Many Requests"}
     res = parse_send(r.status_code, r.text)
     if not res["ok"]:
         res["error"] = short(f"{res['status']} {res['description'] or ''} {res['text'] or ''}".strip()

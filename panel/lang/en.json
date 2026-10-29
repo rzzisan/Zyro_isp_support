@@ -1717,5 +1717,8 @@
     "মূল গেটওয়ে": "Main gateway",
     "যেমন Bulk SMS Dhaka মূল": "e.g. Bulk SMS Dhaka main",
     "সব SMS মূল গেটওয়ে দিয়ে যায়। মূল গেটওয়ে অ্যাকাউন্টের কারণে ফিরিয়ে দিলে (ব্যালান্স কম, key ভুল, IP whitelist নেই) সেটা থামানো হয় আর বাকি SMS ব্যাকআপ দিয়ে যায়। টাইমআউট বা একটা নম্বরের সমস্যায় ব্যাকআপে যায় না, তাই কেউ একই SMS দুইবার পায় না।": "Every SMS goes through the main gateway. When it refuses for an account reason (low balance, wrong key, IP not whitelisted) it is stopped and the rest goes through the fallback. A timeout or a problem with one number never goes to the fallback, so nobody gets the same SMS twice.",
-    "সমস্যা ঠিক করেছেন (রিচার্জ, key, IP whitelist)? এই গেটওয়ে আবার ব্যবহার হবে; মূল হলে এরপরের SMS এটা দিয়েই যাবে।": "Fixed the problem (recharge, key, IP whitelist)? This gateway is used again; if it is the main one, the next SMS go through it."
+    "সমস্যা ঠিক করেছেন (রিচার্জ, key, IP whitelist)? এই গেটওয়ে আবার ব্যবহার হবে; মূল হলে এরপরের SMS এটা দিয়েই যাবে।": "Fixed the problem (recharge, key, IP whitelist)? This gateway is used again; if it is the main one, the next SMS go through it.",
+    "SMS পাঠানো নিজে থেকে বন্ধ হয়ে গেছে: :why": "SMS sending stopped by itself: :why",
+    "মূল SMS গেটওয়ে থেমে আছে: :why": "The main SMS gateway is stopped: :why",
+    "SMS গেটওয়ে সেটিংস দেখুন": "See SMS gateway settings"
 }

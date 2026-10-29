@@ -83,6 +83,28 @@ class SmsSettings extends CompanySettingsPage
         return $out;
     }
 
+    /** Shown at the top of every company page to Owner/Admin while sending stopped by itself or a gateway is stopped. */
+    public static function warning(): ?string
+    {
+        $company = Filament::getTenant();
+        if (! $company || ! auth()->user()?->managesCompany($company)) {
+            return null;
+        }
+        $s = SmsSetting::where('company_id', $company->getKey())->first();
+        if (! $s || ! $s->primary_gateway_id) {
+            return null;
+        }
+        if (! $s->enabled && filled($s->last_error)) {
+            return __('SMS পাঠানো নিজে থেকে বন্ধ হয়ে গেছে: :why', ['why' => mb_substr($s->last_error, 0, 200)]);
+        }
+        $main = $s->primaryGateway;
+        if ($s->enabled && $main?->failed_at) {
+            return __('মূল SMS গেটওয়ে থেমে আছে: :why', ['why' => mb_substr((string) $main->last_error, 0, 200)]);
+        }
+
+        return null;
+    }
+
     public function getSubheading(): ?string
     {
         return __('Desk-এর সব SMS এই গেটওয়ে দিয়ে যায় (বিলিং সফটওয়্যার দিয়ে নয়)। "SMS পাঠানো চালু" বন্ধ থাকলে SMS তালিকায় অপেক্ষা করে, কিছুই যায় না।');
@@ -162,6 +184,7 @@ class SmsSettings extends CompanySettingsPage
             $data[$k] = in_array((int) ($data[$k] ?? 0), $own, true) ? (int) $data[$k] : null;
         }
         $data['reminder_days'] = implode(',', BillReminders::days($data['reminder_days'] ?? '3')) ?: '3';
+        $data['last_error'] = null;   // saved by a person: the "switched off by itself" warning is answered
         $data['company_id'] = Filament::getTenant()->id;
 
         return $data;

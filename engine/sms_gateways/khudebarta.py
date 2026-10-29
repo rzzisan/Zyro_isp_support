@@ -119,7 +119,9 @@ def status(g: dict, message_id: str, client: httpx.Client) -> dict | None:
     if not isinstance(j, dict):
         return None
     code, text = str(j.get("Status", "")).strip(), str(j.get("Text") or "").upper().strip()
-    if code in ("101", "108", "109", "114"):      # the query itself was refused (doc: delivery query codes)
+    if code == "114":       # answered per SMS ("114 REJECTD", e.g. for every SMS of the day before): no more about it
+        return {"state": None, "text": f"{code} {text}".strip(), "at": None, "final": True, "stop": False}
+    if code in ("101", "108", "109"):             # the query itself was refused (doc: delivery query codes)
         return {"state": None, "text": f"{code} {text}".strip(), "at": None, "final": False, "stop": True}
     state = "delivered" if code == "0" or text in DELIVERED else "failed" if code == "1" or text in UNDELIVERED else None
     ms = number(j.get("Delivery Time"))
