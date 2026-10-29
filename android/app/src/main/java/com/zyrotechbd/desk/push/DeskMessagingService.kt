@@ -16,6 +16,10 @@ import com.zyrotechbd.desk.R
 import com.zyrotechbd.desk.call.CallActivity
 import com.zyrotechbd.desk.call.CallNotifications
 import com.zyrotechbd.desk.ui.theme.Primary
+import com.zyrotechbd.desk.data.auth.SessionStore
+import com.zyrotechbd.desk.walkie.Walkie
+import com.zyrotechbd.desk.walkie.WalkieCallActivity
+import com.zyrotechbd.desk.walkie.WalkieService
 import androidx.compose.ui.graphics.toArgb
 
 /** Draws the Desk's data-only pushes (one notification per chat, replaced by its next message; a tap opens it) and rings WhatsApp calls. */
@@ -30,6 +34,15 @@ class DeskMessagingService : FirebaseMessagingService() {
                 val uid = d["uid"] ?: return
                 Push.callTaken.tryEmit(uid)
                 CallNotifications.cancel(this, uid)
+                return
+            }
+            "walkie_on" -> return walkieOn(d)
+            "walkie_off" -> return WalkieService.stop(this)
+            "walkie_call" -> return walkieCall(d)
+            "walkie_call_end" -> {
+                val id = d["call_id"]?.toLongOrNull() ?: return
+                NotificationManagerCompat.from(this).cancel("walkie_call", WalkieCallActivity.notifyTag(id))
+                WalkieCallActivity.ended.tryEmit(id)
                 return
             }
             "chat" -> Unit
@@ -88,5 +101,40 @@ class DeskMessagingService : FirebaseMessagingService() {
             .build()
         n.flags = n.flags or Notification.FLAG_INSISTENT
         NotificationManagerCompat.from(this).notify("call", uid.hashCode(), n)
+    }
+
+    /** The company's daily on time: listen (a push may start the service from the background). */
+    private fun walkieOn(d: Map<String, String>) {
+        val company = d["company"].orEmpty()
+        if (company.isEmpty() || WalkieService.running || SessionStore.company()?.slug != company) return
+        if (Walkie.offRecently()) return
+        WalkieService.start(this, company, foreground = false)
+    }
+
+    /** A group member calls this phone privately: rings like a call, full screen when locked. */
+    private fun walkieCall(d: Map<String, String>) {
+        val id = d["call_id"]?.toLongOrNull() ?: return
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val company = d["company"].orEmpty()
+        val name = d["name"].orEmpty()
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val ring = PendingIntent.getActivity(this, 5000 + id.toInt() * 2, WalkieCallActivity.incoming(this, company, id, name, false), flags)
+        val take = PendingIntent.getActivity(this, 5001 + id.toInt() * 2, WalkieCallActivity.incoming(this, company, id, name, true), flags)
+        val n = NotificationCompat.Builder(this, Push.CALL_CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_desk)
+            .setColor(Primary.toArgb())
+            .setContentTitle("ওয়াকি-টকি কল: $name")
+            .setContentText("ধরতে চাপ দিন")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setOngoing(true)
+            .setTimeoutAfter(45_000)
+            .setContentIntent(ring)
+            .setFullScreenIntent(ring, true)
+            .addAction(0, "ধরুন", take)
+            .build()
+        n.flags = n.flags or Notification.FLAG_INSISTENT
+        NotificationManagerCompat.from(this).notify("walkie_call", WalkieCallActivity.notifyTag(id), n)
     }
 }

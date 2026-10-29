@@ -584,3 +584,41 @@ data class SoftphoneConfig(
     val name: String = "",
     @Json(name = "can_call_out") val canCallOut: Boolean = false,
 )
+
+// ── Walkie-talkie ─────────────────────────────────────────────────────────────
+
+/** The member's walkie-talkie groups, each with a token for its LiveKit room, and the daily on/off times (Asia/Dhaka). */
+data class WalkieInfo(
+    val url: String? = null,
+    val me: Long = 0,
+    @Json(name = "on_at") val onAt: String = "10:00",
+    @Json(name = "off_at") val offAt: String? = null,
+    val groups: List<WalkieGroup> = emptyList(),
+)
+
+data class WalkieGroup(val id: Long, val name: String, val room: String, val token: String, val members: List<WalkieMember> = emptyList())
+
+data class WalkieMember(val id: Long, val name: String)
+
+data class WalkieClip(
+    val id: Long,
+    val user: String? = null,
+    @Json(name = "user_id") val userId: Long? = null,
+    @Json(name = "started_at") val startedAt: String,
+    val seconds: Double = 0.0,
+)
+
+data class WalkieClipPage(val data: List<WalkieClip> = emptyList(), @Json(name = "next_page") val nextPage: Int? = null)
+
+data class WalkieCallStart(@Json(name = "user_id") val userId: Long)
+
+/** A private call: its room and a token while it is ringing or talking. */
+data class WalkieCallInfo(
+    val id: Long,
+    val status: String,
+    val room: String,
+    val outgoing: Boolean = false,
+    val other: WalkieMember? = null,
+    val url: String? = null,
+    val token: String? = null,
+)

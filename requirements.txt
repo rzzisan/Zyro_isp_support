@@ -9,3 +9,5 @@ cryptography
 psycopg[binary]>=3.2
 pywebpush>=2.0
 paramiko>=3.4
+livekit>=1.0
+livekit-api>=1.0

@@ -314,4 +314,15 @@ class Engine
         return static::call('post', "/internal/{$companyId}/customers/{$headerId}/line",
             ['action' => $on ? 'enable' : 'disable', 'user_id' => auth()->id(), 'by' => auth()->user()?->name]) ?? [];
     }
+
+    /** Phone push (FCM, data only) to these users' phones, like a ringing call; best effort (never throws). */
+    public static function push(int $companyId, array $userIds, array $data): void
+    {
+        try {
+            static::http()->timeout(5)->post("/internal/{$companyId}/push", ['user_ids' => array_values($userIds),
+                'data' => array_map('strval', $data)])->throw();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
 }

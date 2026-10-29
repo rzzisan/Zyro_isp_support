@@ -405,6 +405,27 @@ abstract class AppStrings {
     abstract val startFirst: String
     abstract val jobFinished: String
     abstract val minutesShort: String
+    abstract val navWalkie: String
+    abstract val walkieSwitch: String
+    abstract val walkieOffHint: String
+    abstract val walkieConnecting: String
+    abstract val walkieListening: String
+    abstract val walkieHold: String
+    abstract val walkieWait: String
+    abstract val walkieOnAir: String
+    abstract val walkieBusy: String
+    abstract val walkieMuted: String
+    abstract val walkieMembers: String
+    abstract val walkieOnline: String
+    abstract val walkieOffline: String
+    abstract val walkieTalkingNow: String
+    abstract val walkieYou: String
+    abstract val walkieCall: String
+    abstract val walkieRecordings: String
+    abstract val walkieNoRecordings: String
+    abstract val walkieMicNeeded: String
+    abstract val walkieNoGroup: String
+    abstract fun walkieTalks(name: String): String
 }
 
 object BengaliStrings : AppStrings() {
@@ -816,6 +837,27 @@ object BengaliStrings : AppStrings() {
     override val startFirst = "কাজ শেষ করতে আগে \"কাজ শুরু করুন\" চাপুন"
     override val jobFinished = "কাজ শেষ, টিকিট সমাধান হয়েছে"
     override val minutesShort = "মিনিট"
+    override val navWalkie = "ওয়াকি-টকি"
+    override val walkieSwitch = "ওয়াকি-টকি চালু"
+    override val walkieOffHint = "বন্ধ আছে। চালু করলে গ্রুপের সব কথা শুনবেন; প্রতিদিন নির্দিষ্ট সময়ে নিজে থেকে চালু হয়।"
+    override val walkieConnecting = "সংযোগ হচ্ছে…"
+    override val walkieListening = "শুনছে"
+    override val walkieHold = "চেপে ধরে কথা বলুন"
+    override val walkieWait = "একটু ধরে রাখুন…"
+    override val walkieOnAir = "কথা বলুন, ছাড়লে বন্ধ"
+    override val walkieBusy = "একজন কথা বলছেন, শেষ হলে বলুন"
+    override val walkieMuted = "কলে আছেন, গ্রুপ বন্ধ"
+    override val walkieMembers = "সদস্য"
+    override val walkieOnline = "অনলাইন"
+    override val walkieOffline = "অফলাইন"
+    override val walkieTalkingNow = "কথা বলছেন"
+    override val walkieYou = "আপনি"
+    override val walkieCall = "কল"
+    override val walkieRecordings = "আগের কথা"
+    override val walkieNoRecordings = "এখনো কিছু রেকর্ড হয়নি"
+    override val walkieMicNeeded = "কথা বলতে মাইক্রোফোনের অনুমতি দিন"
+    override val walkieNoGroup = "আপনি কোনো ওয়াকি-টকি গ্রুপে নেই"
+    override fun walkieTalks(name: String) = "$name কথা বলছেন"
 }
 
 object EnglishStrings : AppStrings() {
@@ -1227,4 +1269,25 @@ object EnglishStrings : AppStrings() {
     override val startFirst = "Tap \"Start work\" before finishing"
     override val jobFinished = "Done, the ticket is solved"
     override val minutesShort = "min"
+    override val navWalkie = "Walkie-talkie"
+    override val walkieSwitch = "Walkie-talkie on"
+    override val walkieOffHint = "Off. Turn it on to hear the group; it also turns on by itself each day."
+    override val walkieConnecting = "Connecting…"
+    override val walkieListening = "Listening"
+    override val walkieHold = "Hold to talk"
+    override val walkieWait = "Hold on…"
+    override val walkieOnAir = "Talk now, release to stop"
+    override val walkieBusy = "Someone is talking, wait for them"
+    override val walkieMuted = "On a call, group paused"
+    override val walkieMembers = "Members"
+    override val walkieOnline = "Online"
+    override val walkieOffline = "Offline"
+    override val walkieTalkingNow = "Talking"
+    override val walkieYou = "You"
+    override val walkieCall = "Call"
+    override val walkieRecordings = "Earlier messages"
+    override val walkieNoRecordings = "Nothing recorded yet"
+    override val walkieMicNeeded = "Allow the microphone to talk"
+    override val walkieNoGroup = "You are in no walkie-talkie group"
+    override fun walkieTalks(name: String) = "$name is talking"
 }

@@ -96,7 +96,7 @@ def _send_all(company_id: int, data: dict[str, str], user_ids: list[int] | None 
         with httpx.Client(timeout=10) as client:
             for row in rows:
                 # a ringing call is useless a minute later
-                ttl = "60s" if data.get("type", "").startswith("call") else "3600s"
+                ttl = "60s" if data.get("type", "").startswith(("call", "walkie_call")) else "3600s"
                 msg = {"message": {"token": row["token"], "data": data,
                                    "android": {"priority": "high", "ttl": ttl}}}
                 r = client.post(url, json=msg, headers=headers)

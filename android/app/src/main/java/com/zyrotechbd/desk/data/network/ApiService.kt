@@ -226,4 +226,22 @@ interface ApiService {
 
     @POST("c/{company}/field/locations")
     suspend fun fieldLocations(@Path("company") company: String, @Body request: LocationBatch): LocationState
+
+    @GET("c/{company}/walkie")
+    suspend fun walkie(@Path("company") company: String): WalkieInfo
+
+    @GET("c/{company}/walkie/groups/{group}/clips")
+    suspend fun walkieClips(@Path("company") company: String, @Path("group") group: Long, @Query("page") page: Int? = null): WalkieClipPage
+
+    @POST("c/{company}/walkie/calls")
+    suspend fun walkieCall(@Path("company") company: String, @Body request: WalkieCallStart): WalkieCallInfo
+
+    @GET("c/{company}/walkie/calls/{id}")
+    suspend fun walkieCallInfo(@Path("company") company: String, @Path("id") id: Long): WalkieCallInfo
+
+    @POST("c/{company}/walkie/calls/{id}/answer")
+    suspend fun walkieAnswer(@Path("company") company: String, @Path("id") id: Long): WalkieCallInfo
+
+    @POST("c/{company}/walkie/calls/{id}/end")
+    suspend fun walkieEnd(@Path("company") company: String, @Path("id") id: Long): WalkieCallInfo
 }

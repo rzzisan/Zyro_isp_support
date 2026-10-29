@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_COMPANY = "push_company"
         const val EXTRA_CHAT = "push_chat"
+        const val EXTRA_WALKIE = "walkie"
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -57,6 +58,8 @@ class MainActivity : ComponentActivity() {
         val chat = intent?.getLongExtra(EXTRA_CHAT, 0L) ?: 0L
         if (chat > 0) Push.open.value = OpenChat(intent?.getStringExtra(EXTRA_COMPANY).orEmpty(), chat)
         intent?.removeExtra(EXTRA_CHAT)
+        if (intent?.getBooleanExtra(EXTRA_WALKIE, false) == true) com.zyrotechbd.desk.walkie.Walkie.open.value = true
+        intent?.removeExtra(EXTRA_WALKIE)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,6 +108,7 @@ private fun AuthRoot(onToggleLang: () -> Unit) {
         ApiClient.onUnauthorized = {
             SessionStore.clear()
             FieldTracker.stop(AppContext.app)
+                    com.zyrotechbd.desk.walkie.WalkieService.stop(AppContext.app)
             scope.launch { signedIn = false }
         }
         onDispose { ApiClient.onUnauthorized = null }
@@ -149,6 +153,7 @@ private fun AuthRoot(onToggleLang: () -> Unit) {
                     runCatching { ApiClient.service.logout() }
                     SessionStore.clear()
                     FieldTracker.stop(AppContext.app)
+                    com.zyrotechbd.desk.walkie.WalkieService.stop(AppContext.app)
                     signedIn = false
                 }
             },

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\FieldLocationController;
 use App\Http\Controllers\Api\InboxController;
 use App\Http\Controllers\Api\MonitoringController;
 use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\WalkieController;
 use App\Http\Middleware\ApiCompany;
 use Illuminate\Support\Facades\Route;
 
@@ -78,6 +79,14 @@ Route::prefix('v1')->group(function () {
                 Route::post("my-jobs/{ticket}/{$step}", [FieldJobController::class, $step])->whereNumber('ticket')->middleware('throttle:30,1');
             }
             Route::post('my-jobs/{ticket}/solve', [FieldJobController::class, 'solve'])->whereNumber('ticket')->middleware('throttle:20,1');
+            Route::get('walkie', [WalkieController::class, 'index']);
+            Route::get('walkie/groups/{group}/clips', [WalkieController::class, 'clips'])->whereNumber('group');
+            Route::get('walkie/clips/{clip}', [WalkieController::class, 'clip'])->whereNumber('clip');
+            Route::post('walkie/calls', [WalkieController::class, 'startCall'])->middleware('throttle:20,1');
+            Route::get('walkie/calls/{call}', [WalkieController::class, 'showCall'])->whereNumber('call');
+            Route::post('walkie/calls/{call}/answer', [WalkieController::class, 'answer'])->whereNumber('call');
+            Route::post('walkie/calls/{call}/end', [WalkieController::class, 'end'])->whereNumber('call');
+
             Route::get('field/location', [FieldLocationController::class, 'show']);
             Route::post('field/locations', [FieldLocationController::class, 'store'])->middleware('throttle:30,1');
         });

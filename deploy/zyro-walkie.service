@@ -1,0 +1,17 @@
+[Unit]
+Description=Zyro Desk walkie-talkie (records LiveKit rooms, daily on/off push)
+After=network.target postgresql.service zyro-livekit.service
+
+[Service]
+User=claude-dev
+SupplementaryGroups=www-data
+UMask=0027
+WorkingDirectory=/var/www/zyro_isp_support
+EnvironmentFile=/var/www/zyro_isp_support/engine/.env
+Environment=PYTHONPATH=/var/www/zyro_isp_support
+ExecStart=/var/www/zyro_isp_support/.venv/bin/python -m engine.walkie
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -47,4 +47,12 @@ return [
         'key' => env('ENGINE_INTERNAL_KEY'),
     ],
 
+    'livekit' => [
+        // walkie-talkie (App\Support\Walkie): the app's wss address, the server's own API, and the key pair of /etc/livekit.yaml
+        'url' => env('LIVEKIT_URL'),
+        'api_url' => env('LIVEKIT_API_URL', 'http://127.0.0.1:7880'),
+        'key' => env('LIVEKIT_API_KEY'),
+        'secret' => env('LIVEKIT_API_SECRET'),
+    ],
+
 ];

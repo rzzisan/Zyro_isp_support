@@ -19,7 +19,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 
-from engine import customers, db, tenant as tenants, wa_campaign, webpush
+from engine import customers, db, fcm, tenant as tenants, wa_campaign, webpush
 from engine.agent import UNRELATED_PHOTO
 from engine.ispdigital import find_customer_by_text, find_customer_by_whatsapp, normalize_bd_mobile
 from engine.tenant import Tenant
@@ -1394,6 +1394,18 @@ def internal_key(request: Request) -> None:
     key = request.headers.get("x-internal-key", "")
     if not INTERNAL_KEY or not hmac.compare_digest(key, INTERNAL_KEY):
         raise HTTPException(status_code=403)
+
+
+@app.post("/internal/{company_id}/push")
+async def push_users(request: Request, company_id: int):
+    """A phone push from the panel to some members (walkie-talkie calls): {"user_ids": [..], "data": {..}}."""
+    internal_key(request)
+    body = await request.json()
+    users = [int(u) for u in body.get("user_ids") or []]
+    data = {str(k): str(v) for k, v in (body.get("data") or {}).items()}
+    if users and data:
+        fcm.send_users(company_id, users, data)
+    return {"ok": True}
 
 
 @app.post("/internal/{company_id}/sms/kick")

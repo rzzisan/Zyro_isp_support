@@ -1,0 +1,23 @@
+# LiveKit server for the Desk app's walkie-talkie (engine/walkie.py, panel App\Support\Walkie).
+# Copy to /etc/livekit.yaml (root:claude-dev 0640) and put a fresh key pair under keys (never in git):
+#   key:    openssl rand -hex 8   ->  APIxxxxxxxx
+#   secret: openssl rand -hex 32
+# The same pair goes into panel/.env (LIVEKIT_API_KEY/SECRET) and engine/.env.
+port: 7880                 # signalling, 127.0.0.1 only; nginx serves it as wss://rtc.zyrotechbd.com
+bind_addresses: ["127.0.0.1"]
+rtc:
+  tcp_port: 7881           # audio over TCP when UDP is blocked on the phone's network
+  udp_port: 7882           # all audio over this one UDP port
+  node_ip: 103.157.253.197
+  use_external_ip: false
+room:
+  empty_timeout: 60
+  max_participants: 60
+  enabled_codecs:
+    - mime: audio/opus
+turn:
+  enabled: false           # phase 0 test decides: networks that block UDP 7882 and TCP 7881 need TURN/TLS on 443
+logging:
+  level: info
+keys:
+  APIchangeme: changeme-secret-at-least-32-characters-long

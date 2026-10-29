@@ -25,6 +25,7 @@ import com.zyrotechbd.desk.ui.screens.NewTicketScreen
 import com.zyrotechbd.desk.ui.screens.PrintersScreen
 import com.zyrotechbd.desk.ui.screens.TicketDetailScreen
 import com.zyrotechbd.desk.ui.screens.TicketsScreen
+import com.zyrotechbd.desk.ui.screens.WalkieScreen
 
 @Composable
 fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: Modifier = Modifier,
@@ -41,6 +42,7 @@ fun AppNavGraph(navController: NavHostController, companyKey: String, modifier: 
         composable(Routes.Monitoring) { MonitoringScreen(navController, companyKey) }
         composable(Routes.Calls) { CallsScreen(navController, companyKey) }
         composable(Routes.DialPad) { DialPadScreen() }
+        composable(Routes.Walkie) { WalkieScreen(companyKey) }
         composable(Routes.Call, arguments = listOf(navArgument("callId") { type = NavType.LongType })) {
             CallDetailScreen(navController, companyKey, it.arguments?.getLong("callId") ?: 0L)
         }
