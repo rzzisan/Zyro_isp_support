@@ -282,22 +282,30 @@ class Engine
         }
     }
 
-    /** Test SMS: the engine sends this queued message now, even while sending is off; returns ok/status/text/error. */
-    public static function sendSmsNow(int $companyId, int $messageId): array
+    /**
+     * Test SMS: the engine sends this queued message now through that gateway (null = the one in use), even while
+     * sending is off; returns ok/status/text/error.
+     */
+    public static function sendSmsNow(int $companyId, int $messageId, ?int $gatewayId = null): array
     {
-        return static::call('post', "/internal/{$companyId}/sms/messages/{$messageId}/send") ?? [];
+        return static::call('post', "/internal/{$companyId}/sms/messages/{$messageId}/send".static::gatewayQuery($gatewayId)) ?? [];
     }
 
-    /** The gateway's /validateclient: ['client' => name, 'balance' => ...]; throws when the keys are refused. No SMS. */
-    public static function validateSms(int $companyId): array
+    /** Are the gateway's keys accepted: ['client' => name, 'balance' => ...]; throws when refused. No SMS. */
+    public static function validateSms(int $companyId, ?int $gatewayId = null): array
     {
-        return static::call('post', "/internal/{$companyId}/sms/validate") ?? [];
+        return static::call('post', "/internal/{$companyId}/sms/validate".static::gatewayQuery($gatewayId)) ?? [];
     }
 
-    /** Ask the SMS gateway for the balance (saved in sms_settings); throws with the gateway's error. */
-    public static function smsBalance(int $companyId): array
+    /** Ask the SMS gateway for the balance (saved in sms_gateways); throws with the gateway's error. */
+    public static function smsBalance(int $companyId, ?int $gatewayId = null): array
     {
-        return static::call('post', "/internal/{$companyId}/sms/balance") ?? [];
+        return static::call('post', "/internal/{$companyId}/sms/balance".static::gatewayQuery($gatewayId)) ?? [];
+    }
+
+    private static function gatewayQuery(?int $gatewayId): string
+    {
+        return $gatewayId ? '?gateway='.$gatewayId : '';
     }
 
     /** Turn a customer's line on/off in billing with the member's own login (customer list M.Status). */

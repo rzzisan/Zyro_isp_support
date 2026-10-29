@@ -1412,32 +1412,33 @@ def wa_campaign_kick(request: Request, company_id: int):
 
 
 @app.post("/internal/{company_id}/sms/messages/{message_id}/send")
-def sms_send_now(request: Request, company_id: int, message_id: int):
-    """Test SMS from the gateway settings page: send this one now and answer with the gateway's reply."""
+def sms_send_now(request: Request, company_id: int, message_id: int, gateway: int | None = None):
+    """Test SMS from the gateway settings page: send this one now (through ?gateway=, else the one in use) and answer
+    with the gateway's reply."""
     internal_key(request)
     from engine import sms
     try:
-        return sms.send_now(company_id, message_id)
+        return sms.send_now(company_id, message_id, gateway)
     except sms.GatewayError as e:
         raise HTTPException(status_code=400, detail=str(e)[:300])
 
 
 @app.post("/internal/{company_id}/sms/validate")
-def sms_validate(request: Request, company_id: int):
-    """Settings page "কানেকশন যাচাই": the gateway's /validateclient (client name + balance), no SMS is sent."""
+def sms_validate(request: Request, company_id: int, gateway: int | None = None):
+    """Settings page "কানেকশন যাচাই": are the gateway's keys accepted (client name / balance)? No SMS is sent."""
     internal_key(request)
     from engine import sms
     try:
-        return sms.validate_client(company_id)
+        return sms.validate_client(company_id, gateway)
     except sms.GatewayError as e:
         raise HTTPException(status_code=400, detail=str(e)[:300])
 
 
 @app.post("/internal/{company_id}/sms/balance")
-def sms_balance(request: Request, company_id: int):
+def sms_balance(request: Request, company_id: int, gateway: int | None = None):
     internal_key(request)
     from engine import sms
     try:
-        return sms.check_balance(company_id)
+        return sms.check_balance(company_id, gateway)
     except sms.GatewayError as e:
         raise HTTPException(status_code=400, detail=str(e)[:300])

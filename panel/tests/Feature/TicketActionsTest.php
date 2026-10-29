@@ -125,8 +125,9 @@ class TicketActionsTest extends TestCase
     private function ticketSmsReady(): void
     {
         $cid = $this->company->id;
+        $this->smsGateway($cid);
         $s = SmsSetting::forCompany($this->company);
-        $s->fill(['api_key' => 'a', 'secret_key' => 'b', 'caller_id' => 'CLN', 'ticket_open_sms' => true, 'ticket_solved_sms' => true,
+        $s->fill(['ticket_open_sms' => true, 'ticket_solved_sms' => true,
             'ticket_open_template_id' => array_key_first(SmsTemplate::optionsFor($cid, 'ticket_open')),
             'ticket_solved_template_id' => array_key_first(SmsTemplate::optionsFor($cid, 'ticket_solved'))])->save();
         BillingCustomer::create(['company_id' => $cid, 'header_id' => 15630, 'customer_id' => '5629', 'name' => 'Rezaul',

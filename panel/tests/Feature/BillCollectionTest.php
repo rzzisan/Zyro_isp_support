@@ -101,7 +101,8 @@ class BillCollectionTest extends TestCase
         Http::fake(['engine.test/internal/*/sms/kick' => Http::response(['started' => true])]);
         $template = SmsTemplate::create(['company_id' => $this->company->id, 'type' => 'bill_paid', 'name' => 'Paid',
             'body' => 'প্রিয় {name}, {months} মাসের {paid} টাকা পেয়েছি ({method}), ছাড় {discount}, বকেয়া {due} (মোট ছিল {payable})। {company}']);
-        SmsSetting::forCompany($this->company)->fill(['api_key' => 'a', 'secret_key' => 'b', 'caller_id' => 'CLN',
+        $this->smsGateway($this->company->id);
+        SmsSetting::forCompany($this->company)->fill([
             'bill_sms' => true, 'bill_template_id' => $template->id])->save();
         $this->as($this->owner);
         Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])

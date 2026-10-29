@@ -1,206 +1,129 @@
-"""Desk SMS: sends the queue (sms_messages) through each company's SMS gateway (Khudebarta), reads the balance and
-delivery reports. The panel only writes the queue (App\\Support\\Sms::queue) and wakes us (/internal/{c}/sms/kick).
+"""Desk SMS: sends the queue (sms_messages) through each company's SMS gateways (sms_gateways: Khudebarta, Bulk SMS
+Dhaka; adapters in engine/sms_gateways), reads balances and delivery reports. The panel only writes the queue
+(App\\Support\\Sms::queue) and wakes us (/internal/{c}/sms/kick).
 
-Khudebarta "SMS HTTP API Published" v5.4.0 (docs/billing-sms-service.md):
-- send: POST http://<host>:3775/sendtext, Content-Type application/json, {apikey, secretkey, callerID,
-  toUser (880XXXXXXXXXX, several comma separated = bulk), messageContent} -> {"Status":"0","StatusDescription":"",
-  "Text":"ACCEPTD","Message_ID":"31771702[,31771704]"}; any other Status = refused (table ACCOUNT_ERRORS / NUMBER_ERRORS).
-  The same text to many numbers goes in one request (BULK numbers); a text with the customer's own details goes alone.
-- delivery: GET /getstatus?apikey&secretkey&messageid -> Status 0 DELIVRD, 4 SENT, 2 PENDING, 1 REJECTD.
-- balance: POST /api/v3/balance {apikey, secretkey} -> {"statusInfo": {"statusCode": "0", "availablebalance": "797.88"}}.
+Main and fallback: SMS go through the company's main gateway (sms_settings.primary_gateway_id). When it refuses for an
+account reason (keys, balance, IP whitelist, sender ID; nothing went out) it gets failed_at and the rest of the queue
+goes through the fallback gateway (fallback_gateway_id), if there is one. Any other failure, a timeout included, stays
+with that SMS and is never sent again through the other gateway, so nobody gets the same SMS twice. A failed gateway is
+used again only after someone clears it in the panel (saving the gateway, "আবার চালু", or switching sending back on).
 
 Safety: nothing goes out while the company's "SMS পাঠানো চালু" (sms_settings.enabled) is off. A message caught in
-'sending' when a run dies becomes 'unknown' and is never sent again (no double SMS). An account error (wrong keys,
-no balance, IP not allowed, sender ID blocked ...) switches sending off at once and keeps the rest in the queue;
-10 other failures of the same kind in a row do the same. Keys are never logged; logs carry message ids only.
+'sending' when a run dies becomes 'unknown' and is never sent again (no double SMS). When no gateway is left, sending
+is switched off and the rest stays in the queue; 10 other failures of the same kind in a row do the same. Keys are never
+logged; logs carry message ids only.
 
 Run every minute by zyro-sms-send.timer (send + balance every 5 min + delivery reports):
   set -a; . engine/.env; set +a; PYTHONPATH=. .venv/bin/python -m engine.sms [--company ID] [--status-only]
 """
 import argparse
 import fcntl
-import json
 import logging
 import os
 import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import urlsplit, urlunsplit
-
-import httpx
 
 from engine import db
+from engine import sms_gateways as gw
+from engine.sms_gateways.common import GatewayError, number
+
+__all__ = ["GatewayError", "run", "kick", "send_now", "check_balance", "validate_client"]
 
 log = logging.getLogger("zyro-sms")
 LOCK_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 BATCH = 100              # claimed at a time
-BULK = 50                # numbers per request when they get the same text
 WORKERS = 4              # parallel requests to the gateway
 MAX_FAIL_STREAK = 10
+MAX_UNREACHABLE = 3      # batches in a row the gateway could not be reached before the fallback takes over
+UNREACHABLE_WAIT = 5     # seconds between those tries
 BALANCE_EVERY = 300      # seconds
-ERROR_WORDS = re.compile(r"error|failed|invalid|unauthori[sz]ed|rejectd|rejected", re.I)
-DELIVERED = {"DELIVRD", "DELIVERED"}
-UNDELIVERED = {"UNDELIV", "UNDELIVERED", "REJECTD", "REJECTED", "EXPIRED", "FAILED", "DELETED"}
-
-# submit Status codes (API doc "Code descriptions"); account-level ones stop the whole queue
-ACCOUNT_ERRORS = {
-    "-1": "Org Client Not Found", "-4": "Insufficient Balance", "-5": "Org Rate Not Found", "-6": "Org Blocked",
-    "-7": "Invalid Sender ID", "-36": "Invalid Request Type", "-42": "Authorization Failed",
-    "-52": "License Limit Exceeded", "-54": "Sender ID Empty", "-59": "IP Not Allowed", "-60": "Invalid Hash value",
-    "-61": "Invalid parameter", "-64": "Sender ID Block", "-66": "Invalid API Key", "-67": "Invalid Secret Key",
-}
-NUMBER_ERRORS = {
-    "-3": "Invalid Dest No.", "-44": "ContactNo Blocked", "-45": "ContactNo Blocked by Admin", "-46": "Dipping Failed",
-    "-47": "Content not Whitelisted", "-48": "URL Blocked", "-49": "Content is Blocked", "-55": "Destination ID Empty",
-    "-56": "Message Content Empty", "-58": "HLR Request Failed", "-62": "Internal Server Error",
-    "-63": "Invalid Transaction ID", "-65": "Bulk Limit Exceeded", "-68": "Duplicate Transaction ID",
-}
-
-
-class GatewayError(RuntimeError):
-    pass
 
 
 def settings(company_id: int) -> dict | None:
     s = db.one("SELECT * FROM sms_settings WHERE company_id = %s", (company_id,))
+    return dict(s) if s else None
+
+
+def _decrypted(g) -> dict | None:
+    if not g:
+        return None
+    g = dict(g)
+    for k in ("api_key", "secret_key"):
+        g[k] = db.decrypt(g[k]) if g.get(k) else None
+    return g
+
+
+def gateway(company_id: int, gateway_id: int | None) -> dict | None:
+    if not gateway_id:
+        return None
+    return _decrypted(db.one("SELECT * FROM sms_gateways WHERE id = %s AND company_id = %s", (gateway_id, company_id)))
+
+
+def gateways(company_id: int) -> list[dict]:
+    return [_decrypted(g) for g in db.all_rows("SELECT * FROM sms_gateways WHERE company_id = %s ORDER BY id", (company_id,))]
+
+
+def usable(g: dict | None) -> bool:
+    return gw.configured(g) and g.get("failed_at") is None
+
+
+def active(company_id: int, s: dict | None = None) -> dict | None:
+    """The gateway SMS go through now: the main one, else the fallback; None when neither can be used."""
+    s = s or settings(company_id)
     if not s:
         return None
-    s = dict(s)
-    s["api_key"] = db.decrypt(s["api_key"]) if s["api_key"] else None
-    s["secret_key"] = db.decrypt(s["secret_key"]) if s["secret_key"] else None
-    for k in ("portal_password", "portal_token", "portal_refresh_token"):
-        s[k] = db.decrypt(s[k]) if s.get(k) else None
-    return s
+    for key in ("primary_gateway_id", "fallback_gateway_id"):
+        g = gateway(company_id, s.get(key))
+        if usable(g):
+            return g
+    return None
+
+
+def chosen(company_id: int, gateway_id: int | None = None) -> dict:
+    """The gateway a settings-page button means: the one given, else the one in use, else the main one."""
+    s = settings(company_id) or {}
+    g = gateway(company_id, gateway_id) if gateway_id else (active(company_id, s) or gateway(company_id, s.get("primary_gateway_id")))
+    if not gw.configured(g):
+        raise GatewayError("SMS গেটওয়ে সেট করা হয়নি")
+    return g
 
 
 def configured(s: dict | None) -> bool:
-    return bool(s and s.get("endpoint_url") and s.get("api_key") and s.get("secret_key") and s.get("caller_id"))
-
-
-def _client(s: dict) -> httpx.Client:
-    return httpx.Client(timeout=30, verify=bool(s.get("verify_tls", True)), follow_redirects=True)
-
-
-def same_host(s: dict, path: str) -> str:
-    """http://host:3775/<path> from the send URL (balance and delivery live next to /sendtext)."""
-    u = urlsplit(s["endpoint_url"])
-    return urlunsplit((u.scheme, u.netloc, path, "", ""))
-
-
-def _short(text: str, keys: tuple = ()) -> str:
-    """A gateway answer safe to store/show: keys blanked, at most 300 characters."""
-    for k in keys:
-        if k:
-            text = text.replace(k, "***")
-    return re.sub(r"\s+", " ", text).strip()[:300]
-
-
-def _json(text: str):
-    try:
-        return json.loads(text)
-    except ValueError:
-        return None
-
-
-def parse_send(status_code: int, body: str) -> dict:
-    """Gateway answer -> {ok, status, text, description, message_ids (one per number, in order)}."""
-    j = _json(body)
-    if isinstance(j, list) and j:
-        j = j[0]
-    if isinstance(j, dict):
-        st = str(j.get("Status", j.get("status", ""))).strip()
-        desc = str(j.get("StatusDescription") or "").strip() or ACCOUNT_ERRORS.get(st) or NUMBER_ERRORS.get(st) or ""
-        txt = str(j.get("Text") or "").strip()
-        ids = [i.strip() for i in str(j.get("Message_ID") or "").split(",") if i.strip() and i.strip() != "-1"]
-        ok = 200 <= status_code < 300 and st == "0"
-        return {"ok": ok, "status": st or None, "text": txt or None, "description": desc or None, "message_ids": ids}
-    ok = 200 <= status_code < 300 and not ERROR_WORDS.search(body or "")
-    return {"ok": ok, "status": str(status_code), "text": (body or "")[:200] or None, "description": None,
-            "message_ids": []}
-
-
-def send_request(s: dict, mobiles: list[str], text: str, client: httpx.Client | None = None) -> dict:
-    """One /sendtext call (JSON POST) for one or several numbers getting the same text."""
-    body = {"apikey": s["api_key"], "secretkey": s["secret_key"], "callerID": s["caller_id"],
-            "toUser": ",".join(mobiles), "messageContent": text}
-    c = client or _client(s)
-    try:
-        r = c.post(s["endpoint_url"], json=body)
-    except httpx.HTTPError as e:
-        return {"ok": False, "status": None, "text": None, "description": None, "message_ids": [],
-                "error": _short(f"{type(e).__name__}: {e}", (s["api_key"], s["secret_key"]))}
-    finally:
-        if client is None:
-            c.close()
-    res = parse_send(r.status_code, r.text)
-    if not res["ok"]:
-        res["error"] = _short(f"{res['status']} {res['description'] or res['text'] or ''}".strip()
-                              if res["status"] and res["status"] != str(r.status_code) else f"HTTP {r.status_code}: {r.text}",
-                              (s["api_key"], s["secret_key"]))
-    return res
-
-
-def send_one(s: dict, mobile: str, text: str, client: httpx.Client | None = None) -> dict:
-    res = send_request(s, [mobile], text, client)
-    res["message_id"] = res["message_ids"][0] if res["message_ids"] else None
-    return res
+    """Some gateway of the company is set up (used by the timer to skip companies without SMS)."""
+    return bool(s) and any(gw.configured(gateway(s["company_id"], s.get(k))) for k in ("primary_gateway_id", "fallback_gateway_id"))
 
 
 # --- balance / validate --------------------------------------------------------------------------------------------
-def _number(v) -> float | None:
+def _balance_saved(g: dict, value: float | None, sms: int | None) -> None:
+    db.execute("""UPDATE sms_gateways SET balance = coalesce(%s, balance), balance_sms = %s, balance_checked_at = now(),
+                  last_check_ok = true, last_error = CASE WHEN failed_at IS NULL THEN NULL ELSE last_error END,
+                  updated_at = now() WHERE id = %s""", (value, sms, g["id"]))
+
+
+def check_balance(company_id: int, gateway_id: int | None = None) -> dict:
+    """The gateway's balance, saved in sms_gateways; raises GatewayError with the gateway's answer."""
+    g = chosen(company_id, gateway_id)
     try:
-        return round(float(str(v).replace(",", "").strip()), 2)   # the gateway sends e.g. 1490.6500000000033
-    except (TypeError, ValueError):
-        return None
+        with gw.client(g) as c:
+            got = gw.adapter(g).balance(g, c)
+    except GatewayError as e:
+        db.execute("""UPDATE sms_gateways SET balance_checked_at = now(), last_check_ok = false, last_error = %s,
+                      updated_at = now() WHERE id = %s""", (str(e)[:500], g["id"]))
+        raise GatewayError(f"ব্যালান্স পাওয়া যায়নি: {e}")
+    _balance_saved(g, got["balance"], got.get("sms"))
+    return {"balance": got["balance"], "sms": got.get("sms"), "gateway": g["id"]}
 
 
-def check_balance(company_id: int) -> dict:
-    """POST /api/v3/balance {apikey, secretkey} -> statusInfo.availablebalance; saved in sms_settings."""
-    s = settings(company_id)
-    if not configured(s):
-        raise GatewayError("SMS গেটওয়ে সেট করা হয়নি")
-    value, err = None, None
-    try:
-        with _client(s) as c:
-            r = c.post(same_host(s, "/api/v3/balance"), json={"apikey": s["api_key"], "secretkey": s["secret_key"],
-                                                               "clienttransid": f"desk-{int(time.time())}"})
-        info = (_json(r.text) or {}).get("statusInfo") if isinstance(_json(r.text), dict) else None
-        if isinstance(info, dict) and str(info.get("statusCode")) == "0":
-            value = _number(info.get("availablebalance"))
-        if value is None:
-            code = str((info or {}).get("statusCode") or "")
-            err = f"statusCode {code} {(info or {}).get('errordescription') or ''}".strip() if code else f"HTTP {r.status_code}: {r.text}"
-    except httpx.HTTPError as e:
-        err = f"{type(e).__name__}: {e}"
-    if value is None:
-        err = _short(err or "no answer", (s["api_key"], s["secret_key"]))
-        db.execute("""UPDATE sms_settings SET balance_checked_at = now(), last_check_ok = false, last_error = %s,
-                      updated_at = now() WHERE company_id = %s""", (err, company_id))
-        raise GatewayError(f"ব্যালান্স পাওয়া যায়নি: {err}")
-    db.execute("""UPDATE sms_settings SET balance = %s, balance_checked_at = now(), last_check_ok = true, last_error = NULL,
-                  updated_at = now() WHERE company_id = %s""", (value, company_id))
-    return {"balance": value}
-
-
-def validate_client(company_id: int) -> dict:
-    """POST /validateclient {apikey, secretkey} -> {clientName, clientBalance, status SUCCESS}; no SMS is sent."""
-    s = settings(company_id)
-    if not configured(s):
-        raise GatewayError("SMS গেটওয়ে সেট করা হয়নি")
-    try:
-        with _client(s) as c:
-            r = c.post(same_host(s, "/validateclient"), json={"apikey": s["api_key"], "secretkey": s["secret_key"]})
-    except httpx.HTTPError as e:
-        raise GatewayError(_short(f"গেটওয়েতে সংযোগ হয়নি: {type(e).__name__}: {e}", (s["api_key"], s["secret_key"])))
-    j = _json(r.text)
-    if not (isinstance(j, dict) and str(j.get("status")).upper() == "SUCCESS"):
-        raise GatewayError(_short(f"গেটওয়ে key গ্রহণ করেনি (HTTP {r.status_code}: {r.text})", (s["api_key"], s["secret_key"])))
-    balance = _number(j.get("clientBalance"))
-    if balance is not None:
-        db.execute("""UPDATE sms_settings SET balance = %s, balance_checked_at = now(), last_check_ok = true,
-                      last_error = NULL, updated_at = now() WHERE company_id = %s""", (balance, company_id))
-    return {"client": j.get("clientName"), "balance": balance}
+def validate_client(company_id: int, gateway_id: int | None = None) -> dict:
+    """Are the keys accepted? No SMS is sent."""
+    g = chosen(company_id, gateway_id)
+    with gw.client(g) as c:
+        r = gw.adapter(g).validate(g, c)
+    if r.get("balance") is not None:
+        _balance_saved(g, r["balance"], r.get("sms"))
+    return {"client": r.get("client"), "balance": r.get("balance"), "sms": r.get("sms"), "gateway": g["id"]}
 
 
 # --- sending -------------------------------------------------------------------------------------------------------
@@ -222,18 +145,22 @@ def _claim(company_id: int) -> list[dict]:
                         LEFT JOIN sms_campaigns c ON c.id = m.campaign_id
                         WHERE m.company_id = %s AND m.status = 'queued' AND coalesce(c.status, 'queued') <> 'cancelled'
                         ORDER BY m.id LIMIT %s FOR UPDATE OF m SKIP LOCKED)
-           RETURNING id, campaign_id, mobile, text""", (company_id, BATCH))
+           RETURNING id, campaign_id, mobile, text, parts""", (company_id, BATCH))
 
 
-def _save(msg_id: int, res: dict, message_id: str | None = None) -> None:
+def _save(m: dict, res: dict, g: dict, message_id: str | None = None) -> None:
+    """The gateway's answer for one SMS; a sent one also gets its cost (parts x the gateway's rate)."""
     text = res.get("text") or ""
     if res.get("description") and res["description"] not in text:
         text = f"{text} {res['description']}".strip()
+    rate = number(g.get("rate"))
+    cost = round((m.get("parts") or 1) * rate, 4) if res["ok"] and rate is not None else None
     db.execute(
         """UPDATE sms_messages SET status = %s, gateway_status = %s, gateway_text = %s, message_id = %s, error = %s,
+               gateway_id = %s, provider = %s, cost = %s,
                sent_at = CASE WHEN %s THEN now() ELSE sent_at END, updated_at = now() WHERE id = %s""",
         ("sent" if res["ok"] else "failed", res.get("status"), text[:250] or None, message_id,
-         None if res["ok"] else res.get("error"), res["ok"], msg_id))
+         None if res["ok"] else res.get("error"), g["id"], g["provider"], cost, res["ok"], m["id"]))
 
 
 def _requeue(ids: list[int]) -> None:
@@ -272,13 +199,21 @@ def _switch_off(company_id: int, reason: str) -> None:
     log.error("company %s: sms sending switched off", company_id)
 
 
+def _gateway_failed(g: dict, reason: str) -> None:
+    """Refused for an account reason: not used again until cleared in the panel."""
+    db.execute("""UPDATE sms_gateways SET failed_at = now(), last_check_ok = false, last_error = %s, updated_at = now()
+                  WHERE id = %s""", (reason[:500], g["id"]))
+    log.error("company %s: sms gateway %s (%s) stopped", g["company_id"], g["id"], g["provider"])
+
+
 def send_queue(company_id: int) -> dict:
     """Sends everything queued for one company (one runner per company at a time)."""
     lock = _lock(company_id)
     if not lock:
         return {"running": True}
-    stats = {"sent": 0, "failed": 0, "requests": 0, "stopped": None}
-    bulk = BULK
+    stats = {"sent": 0, "failed": 0, "requests": 0, "stopped": None, "fallback": None}
+    bulk: dict[int, int] = {}
+    unreachable: dict[int, int] = {}
     try:
         # cut off by a restart: never resend, the gateway may have taken it
         db.execute("""UPDATE sms_messages SET status = 'unknown', error = 'পাঠানোর সময় থেমে গিয়েছিল; আবার পাঠানো হয়নি',
@@ -287,41 +222,76 @@ def send_queue(company_id: int) -> dict:
         streak, kind = 0, None
         while not stats["stopped"]:
             s = settings(company_id)
-            if not (configured(s) and s["enabled"]):
+            if not (s and s["enabled"]):
                 stats["stopped"] = "disabled"
                 break
+            g = active(company_id, s)
+            if not g:
+                stats["stopped"] = "no gateway"
+                if configured(s):          # every gateway is stopped: say so where the owner looks
+                    _switch_off(company_id, "কোনো SMS গেটওয়ে চালু নেই (সব গেটওয়ে থেমে আছে) — পাঠানো বন্ধ, বাকি SMS অপেক্ষায় আছে")
+                break
+            ad = gw.adapter(g)
             batch = _claim(company_id)
             if not batch:
                 break
-            jobs = _jobs(batch, bulk)
-            with _client(s) as client, ThreadPoolExecutor(WORKERS) as pool:
-                results = list(pool.map(lambda job: (job, send_request(s, [m["mobile"] for m in job], job[0]["text"], client)), jobs))
+            size = bulk.setdefault(g["id"], ad.BULK)
+            jobs = _jobs(batch, size)
+            with gw.client(g) as client, ThreadPoolExecutor(WORKERS) as pool:
+                results = list(pool.map(lambda job: (job, ad.send(g, [m["mobile"] for m in job], job[0]["text"], client)), jobs))
             stats["requests"] += len(results)
             back: list[int] = []
+            refused, down = None, 0
             for job, res in results:
                 st = res.get("status")
                 if res["ok"]:
                     ids = res["message_ids"] if len(res["message_ids"]) == len(job) else [None] * len(job)
                     for m, mid in zip(job, ids):
-                        _save(m["id"], res, mid)
+                        _save(m, res, g, mid)
                     stats["sent"] += len(job)
                     streak, kind = 0, None
-                elif st == "-65" and len(job) > 1:          # Bulk Limit Exceeded: smaller groups next time
+                elif st and st == getattr(ad, "BULK_LIMIT", None) and len(job) > 1:   # smaller groups next time
                     back += [m["id"] for m in job]
-                    bulk = max(1, len(job) // 2)
-                elif st in ACCOUNT_ERRORS:                    # nothing went out; keep them queued, stop sending
+                    bulk[g["id"]] = max(1, len(job) // 2)
+                elif res.get("account"):                      # nothing went out; keep them queued
                     back += [m["id"] for m in job]
-                    stats["stopped"] = f"account {st}"
-                    _switch_off(company_id, f"গেটওয়ে: {st} {ACCOUNT_ERRORS[st]} — পাঠানো বন্ধ করা হয়েছে, বাকি SMS অপেক্ষায় আছে")
+                    refused = refused or res
+                elif res.get("unreachable"):                  # never reached the gateway; keep them queued
+                    back += [m["id"] for m in job]
+                    down += 1
                 else:
                     for m in job:
-                        _save(m["id"], res)
+                        _save(m, res, g)
                     stats["failed"] += len(job)
-                    k = f"{st}:{re.sub(r'[0-9]+', '#', (res.get('error') or '')[:60])}"
+                    k = f"{g['id']}:{st}:{re.sub(r'[0-9]+', '#', (res.get('error') or '')[:60])}"
                     streak, kind = (streak + 1 if k == kind else 1), k
                     log.warning("sms %s failed: %s", [m["id"] for m in job], st)
             if back:
                 _requeue(back)
+            if down and down == len(results):
+                unreachable[g["id"]] = unreachable.get(g["id"], 0) + 1
+                if unreachable[g["id"]] >= MAX_UNREACHABLE:
+                    other = next((x for x in (gateway(company_id, s.get(k)) for k in ("primary_gateway_id", "fallback_gateway_id"))
+                                  if usable(x) and x["id"] != g["id"]), None)
+                    if other:
+                        refused = results[-1][1]
+                    else:                                # no other gateway: wait for the next run, nothing is lost
+                        stats["stopped"] = "unreachable"
+                else:
+                    time.sleep(UNREACHABLE_WAIT)
+            elif not down:
+                unreachable.pop(g["id"], None)
+            if refused:
+                name = g.get("label") or g["provider"]
+                _gateway_failed(g, f"{name}: {refused.get('error') or refused.get('status')} — এই গেটওয়ে থামানো হয়েছে")
+                nxt = active(company_id)
+                if nxt:
+                    stats["fallback"] = nxt["id"]
+                    log.warning("company %s: sms now through fallback gateway %s", company_id, nxt["id"])
+                    streak, kind = 0, None
+                else:
+                    stats["stopped"] = f"account {refused.get('status')}"
+                    _switch_off(company_id, f"গেটওয়ে {name}: {refused.get('error') or refused.get('status')} — পাঠানো বন্ধ করা হয়েছে, বাকি SMS অপেক্ষায় আছে")
             refresh_campaigns(company_id)
             if streak >= MAX_FAIL_STREAK and not stats["stopped"]:
                 stats["stopped"] = "failures"
@@ -335,20 +305,23 @@ def send_queue(company_id: int) -> dict:
     return stats
 
 
-def send_now(company_id: int, message_id: int) -> dict:
-    """The settings page's test SMS: this one queued message goes now, even while sending is switched off."""
-    s = settings(company_id)
-    if not configured(s):
-        raise GatewayError("SMS গেটওয়ে সেট করা হয়নি")
+def send_now(company_id: int, message_id: int, gateway_id: int | None = None) -> dict:
+    """The settings page's test SMS: this one queued message goes now through the gateway given (else the one in
+    use), even while sending is switched off or that gateway is stopped."""
+    g = chosen(company_id, gateway_id)
     m = db.one("""UPDATE sms_messages SET status = 'sending', updated_at = now()
-                  WHERE id = %s AND company_id = %s AND status = 'queued' RETURNING id, mobile, text""", (message_id, company_id))
+                  WHERE id = %s AND company_id = %s AND status = 'queued' RETURNING id, mobile, text, parts""",
+               (message_id, company_id))
     if not m:
         raise GatewayError("SMS-টা আর অপেক্ষায় নেই")
-    res = send_one(s, m["mobile"], m["text"])
-    _save(m["id"], res, res.get("message_id"))
+    with gw.client(g) as c:
+        res = gw.adapter(g).send(g, [m["mobile"]], m["text"], c)
+    mid = res["message_ids"][0] if res["message_ids"] else None
+    _save(m, res, g, mid)
     refresh_campaigns(company_id)
     return {"ok": res["ok"], "status": res.get("status"), "text": res.get("text"),
-            "description": res.get("description"), "error": res.get("error"), "message_id": res.get("message_id")}
+            "description": res.get("description"), "error": res.get("error"), "message_id": mid,
+            "gateway": g["id"], "provider": g["provider"]}
 
 
 _running: set[int] = set()
@@ -376,48 +349,41 @@ def kick(company_id: int) -> bool:
 
 
 # --- delivery reports ----------------------------------------------------------------------------------------------
-def status_url(s: dict) -> str:
-    return s.get("status_url") or same_host(s, "/getstatus")
-
-
 def check_status(company_id: int, limit: int = 300) -> dict:
-    """GET /getstatus?apikey&secretkey&messageid for SMS the gateway took in the last 48 hours:
-    0 DELIVRD -> delivered, 1 REJECTD -> failed, 4 SENT / 2 PENDING -> asked again later (every 10 minutes)."""
-    s = settings(company_id)
-    if not configured(s):
-        return {"checked": 0}
-    rows = db.all_rows(
-        """SELECT id, message_id FROM sms_messages WHERE company_id = %s AND status = 'sent' AND message_id IS NOT NULL
-               AND sent_at > now() - interval '48 hours' AND sent_at < now() - interval '1 minute'
-               AND (status_checked_at IS NULL OR status_checked_at < now() - interval '10 minutes')
-           ORDER BY sent_at LIMIT %s""", (company_id, limit))
+    """Asks each gateway about the SMS it took in the last 48 hours, at that gateway's pace (FIRST_STATUS_AFTER,
+    then every STATUS_EVERY seconds) until delivered / failed / final."""
+    s = settings(company_id) or {}
     done = 0
-    url = status_url(s)
-    with _client(s) as c:
-        for r in rows:
-            try:
-                resp = c.get(url, params={"apikey": s["api_key"], "secretkey": s["secret_key"], "messageid": r["message_id"]})
-            except httpx.HTTPError:
-                continue
-            j = _json(resp.text)
-            j = j[0] if isinstance(j, list) and j else j
-            if not isinstance(j, dict):
-                continue
-            code, text = str(j.get("Status", "")).strip(), str(j.get("Text") or "").upper().strip()
-            if code in ("101", "108", "109", "114"):      # the query itself was refused (doc: delivery query codes)
-                log.info("company %s: delivery query refused (%s %s)", company_id, code, text)
-                break
-            state = "delivered" if code == "0" or text in DELIVERED else "failed" if code == "1" or text in UNDELIVERED else None
-            ms = _number(j.get("Delivery Time"))
-            at = ms / 1000 if ms and ms > 0 else None
-            db.execute(
-                """UPDATE sms_messages SET status = coalesce(%s, status), gateway_text = coalesce(nullif(%s, ''), gateway_text),
-                       delivered_at = CASE WHEN %s = 'delivered'
-                           THEN coalesce(to_timestamp(%s) AT TIME ZONE 'UTC', now()) ELSE delivered_at END,
-                       error = CASE WHEN %s = 'failed' THEN 'গেটওয়ে: পৌঁছায়নি (' || %s || ')' ELSE error END,
-                       status_checked_at = now(), updated_at = now() WHERE id = %s""",
-                (state, text, state, at, state, text or code, r["id"]))
-            done += 1
+    for g in gateways(company_id):
+        if not gw.configured(g):
+            continue
+        ad = gw.adapter(g)
+        rows = db.all_rows(
+            """SELECT id, message_id FROM sms_messages WHERE company_id = %s AND status = 'sent' AND message_id IS NOT NULL
+                   AND NOT status_final AND (gateway_id = %s OR (gateway_id IS NULL AND %s))
+                   AND sent_at > now() - interval '48 hours' AND sent_at < now() - make_interval(secs => %s)
+                   AND (status_checked_at IS NULL OR status_checked_at < now() - make_interval(secs => %s))
+               ORDER BY sent_at LIMIT %s""",
+            (company_id, g["id"], g["id"] == s.get("primary_gateway_id"), ad.FIRST_STATUS_AFTER, ad.STATUS_EVERY, limit))
+        if not rows:
+            continue
+        with gw.client(g) as c:
+            for r in rows:
+                st = ad.status(g, r["message_id"], c)
+                if st is None:
+                    continue
+                if st["stop"]:
+                    log.info("company %s: delivery query refused by gateway %s (%s)", company_id, g["id"], st["text"])
+                    break
+                state, text = st["state"], st["text"] or ""
+                db.execute(
+                    """UPDATE sms_messages SET status = coalesce(%s, status), gateway_text = coalesce(nullif(%s, ''), gateway_text),
+                           delivered_at = CASE WHEN %s = 'delivered'
+                               THEN coalesce(to_timestamp(%s) AT TIME ZONE 'UTC', now()) ELSE delivered_at END,
+                           error = CASE WHEN %s = 'failed' THEN 'গেটওয়ে: পৌঁছায়নি (' || %s || ')' ELSE error END,
+                           status_final = status_final OR %s, status_checked_at = now(), updated_at = now() WHERE id = %s""",
+                    (state, text, state, st["at"], state, text, st["final"], r["id"]))
+                done += 1
     if done:
         refresh_campaigns(company_id)
     return {"checked": done}
@@ -430,21 +396,26 @@ def companies(company_id: int | None = None) -> list[int]:
     return [r["company_id"] for r in rows]
 
 
+def balance_due(company_id: int) -> list[int]:
+    """Gateways whose balance is older than BALANCE_EVERY (stopped ones too, so the page shows when they work again)."""
+    return [r["id"] for r in db.all_rows(
+        """SELECT id FROM sms_gateways WHERE company_id = %s
+               AND (balance_checked_at IS NULL OR balance_checked_at < now() - make_interval(secs => %s)) ORDER BY id""",
+        (company_id, BALANCE_EVERY))]
+
+
 def run(company_id: int | None = None, status_only: bool = False) -> None:
     for cid in companies(company_id):
         try:
-            s = settings(cid)
-            if not configured(s):
+            if not configured(settings(cid)):
                 continue
             if not status_only:
                 send_queue(cid)
-                due = db.one("""SELECT 1 FROM sms_settings WHERE company_id = %s AND (balance_checked_at IS NULL
-                                OR balance_checked_at < now() - make_interval(secs => %s))""", (cid, BALANCE_EVERY))
-                if due:
+                for gid in balance_due(cid):
                     try:
-                        check_balance(cid)
+                        check_balance(cid, gid)
                     except GatewayError as e:
-                        log.info("company %s: %s", cid, e)
+                        log.info("company %s gateway %s: %s", cid, gid, e)
             check_status(cid)
         except Exception:
             log.exception("sms run failed for company %s", cid)
@@ -452,6 +423,7 @@ def run(company_id: int | None = None, status_only: bool = False) -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     p = argparse.ArgumentParser()
     p.add_argument("--company", type=int)
     p.add_argument("--status-only", action="store_true")

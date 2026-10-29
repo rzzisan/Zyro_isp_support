@@ -2,12 +2,13 @@
 
 namespace App\Filament\App\Pages;
 
+use App\Filament\App\Resources\SmsGateways\SmsGatewayResource;
 use App\Models\Company;
+use App\Models\SmsGateway;
 use App\Models\SmsSetting;
 use App\Models\SmsTemplate;
 use App\Services\Engine;
 use App\Support\BillReminders;
-use App\Support\Sms;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -15,16 +16,16 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Notifications\Notification;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
-use RuntimeException;
 
-/** The company's SMS gateway (Khudebarta). Keys are stored encrypted and never shown again. Owner/Admin only. */
+/**
+ * The company's SMS settings: main and fallback gateway (the accounts and their keys: SmsGatewayResource), sending
+ * on/off, the automatic SMS and the bill reminder. Owner/Admin only.
+ */
 class SmsSettings extends CompanySettingsPage
 {
     use \App\Filament\App\Concerns\QuickAccessible;
@@ -47,9 +48,6 @@ class SmsSettings extends CompanySettingsPage
 
     protected static ?int $navigationSort = 6;
 
-    /** "new-password" is the value Chrome respects; "off" alone is ignored for password fields. */
-    private const NO_AUTOFILL = ['autocomplete' => 'new-password', 'data-lpignore' => 'true', 'data-1p-ignore' => 'true'];
-
     protected function record(Company $company): Model
     {
         return SmsSetting::forCompany($company);
@@ -58,9 +56,8 @@ class SmsSettings extends CompanySettingsPage
     protected function fillData(Model $record): array
     {
         /** @var SmsSetting $record */
-        return ['endpoint_url' => $record->endpoint_url, 'status_url' => $record->status_url, 'caller_id' => $record->caller_id,
-            'verify_tls' => $record->verify_tls, 'enabled' => $record->enabled, 'rate' => $record->rate,
-            'api_key' => null, 'secret_key' => null, 'reminder_days' => $record->reminder_days ?? '3',
+        return ['primary_gateway_id' => $record->primary_gateway_id, 'fallback_gateway_id' => $record->fallback_gateway_id,
+            'enabled' => $record->enabled, 'reminder_days' => $record->reminder_days ?? '3',
             'reminder_hour' => $record->reminder_hour ?? 10, 'reminder_due_only' => $record->reminder_due_only ?? true]
             + static::eventData($record);
     }
@@ -95,26 +92,36 @@ class SmsSettings extends CompanySettingsPage
     {
         /** @var SmsSetting $s */
         $s = $this->record(Filament::getTenant());
+        $gateways = fn () => SmsGateway::where('company_id', Filament::getTenant()->getKey())->orderBy('id')->get()
+            ->mapWithKeys(fn (SmsGateway $g) => [$g->id => $g->name().' ('.$g->caller_id.')'])->all();
 
         return $schema->components([
-            TextInput::make('endpoint_url')->label(__('SMS পাঠানোর URL'))->required()->url()->maxLength(250)
-                ->helperText(__('Khudebarta HTTP API-র send URL, যেমন :url। ব্যালান্স (/api/v3/balance), কানেকশন যাচাই (/validateclient) আর ডেলিভারি (/getstatus) একই ঠিকানায়', ['url' => SmsSetting::KHUDEBARTA_SEND_URL])),
-            Grid::make(2)->schema([
-                // the browser would autofill the Desk login here; these are the gateway's own keys
-                TextInput::make('api_key')->label('API Key')->password()->revealable()->maxLength(200)->extraInputAttributes(self::NO_AUTOFILL)
-                    ->required(! filled($s->api_key))
-                    ->helperText(filled($s->api_key) ? __('এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে, পরে আর দেখা যাবে না')),
-                TextInput::make('secret_key')->label('Secret Key')->password()->revealable()->maxLength(200)->extraInputAttributes(self::NO_AUTOFILL)
-                    ->required(! filled($s->secret_key))
-                    ->helperText(filled($s->secret_key) ? __('এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে, পরে আর দেখা যাবে না')),
-                TextInput::make('caller_id')->label('Sender ID / Caller ID')->required()->maxLength(50)
-                    ->helperText(__('Khudebarta-য় অনুমোদিত মাস্কিং নাম বা নম্বর')),
-                TextInput::make('rate')->label(__('প্রতি SMS-এর দাম'))->numeric()->minValue(0)->step(0.0001)->suffix(__('টাকা'))
-                    ->helperText(__('শুধু খরচের হিসাব দেখাতে (বাংলা SMS ৭০ অক্ষরে ১টা, ইংরেজি ১৬০-এ)')),
-            ]),
-            TextInput::make('status_url')->label(__('ডেলিভারি রিপোর্ট URL (ঐচ্ছিক)'))->url()->maxLength(250)
-                ->placeholder(__('খালি = send URL-এর ঠিকানায় /getstatus'))
-                ->helperText(__('গেটওয়ে নেওয়া প্রতিটা SMS-এর অবস্থা (পৌঁছেছে / ব্যর্থ) ১০ মিনিট পরপর ৪৮ ঘণ্টা পর্যন্ত জিজ্ঞেস করা হয়')),
+            Section::make(__('গেটওয়ে'))->columns(2)
+                ->description(__('সব SMS মূল গেটওয়ে দিয়ে যায়। মূল গেটওয়ে অ্যাকাউন্টের কারণে ফিরিয়ে দিলে (ব্যালান্স কম, key ভুল, IP whitelist নেই) সেটা থামানো হয় আর বাকি SMS ব্যাকআপ দিয়ে যায়। টাইমআউট বা একটা নম্বরের সমস্যায় ব্যাকআপে যায় না, তাই কেউ একই SMS দুইবার পায় না।'))
+                ->schema([
+                    Select::make('primary_gateway_id')->label(__('মূল গেটওয়ে'))->options($gateways)->required(fn () => filled($gateways()))
+                        ->helperText(fn () => blank($gateways()) ? __('আগে "গেটওয়ে তালিকা" থেকে একটা গেটওয়ে যোগ করুন') : null),
+                    Select::make('fallback_gateway_id')->label(__('ব্যাকআপ গেটওয়ে (ঐচ্ছিক)'))->options($gateways)
+                        ->placeholder(__('নেই'))->different('primary_gateway_id'),
+                    Placeholder::make('status')->label(__('এখন যাচ্ছে'))->columnSpanFull()
+                        ->content(function () use ($s) {
+                            $g = $s->activeGateway();
+                            if (! $g) {
+                                return __('কোনো গেটওয়ে সেট করা হয়নি');
+                            }
+                            $state = match (true) {
+                                $g->failed_at !== null => '⛔ '.__('থামানো').': '.$g->last_error,
+                                $g->balance_checked_at === null => __('এখনো পরীক্ষা করা হয়নি'),
+                                $g->last_check_ok => '✅ '.__('সংযোগ ঠিক আছে').($g->balance !== null ? ' · '.__('ব্যালান্স :amount', ['amount' => number_format((float) $g->balance, 2)]) : '')
+                                    .($g->lowBalance() ? ' · '.__('ব্যালান্স কম, রিচার্জ করুন') : ''),
+                                default => '❌ '.($g->last_error ?: __('সংযোগ হয়নি')),
+                            };
+
+                            $off = ! $s->enabled && filled($s->last_error) ? '⛔ '.$s->last_error.' · ' : '';
+
+                            return $off.$g->name().' · '.$state.($g->id !== $s->primary_gateway_id ? ' · '.__('(মূল গেটওয়ে থেমে আছে, ব্যাকআপ দিয়ে যাচ্ছে)') : '');
+                        }),
+                ]),
             Section::make(__('কখন কাস্টমারকে নিজে থেকে SMS যাবে'))->columns(2)
                 ->description(__('চালু থাকলে ফর্মে "কাস্টমারকে SMS" ডিফল্টে চালু থাকে; প্রতিবার ফর্মে বন্ধ করা যায়। SMS যায় শুধু এই গেটওয়ে দিয়ে, বিলিং থেকে কখনো নয়। টেমপ্লেটের লেখা: SMS → SMS টেমপ্লেট।'))
                 ->schema(collect(static::EVENTS)->flatMap(fn ($label, $type) => [
@@ -143,31 +150,17 @@ class SmsSettings extends CompanySettingsPage
                                 .($s->eventOn('bill_reminder') ? '' : __(' (রিমাইন্ডার এখন বন্ধ)')) : '—';
                         }),
                 ]),
-            Toggle::make('verify_tls')->label(__('SSL সার্টিফিকেট যাচাই'))->default(true)
-                ->helperText(__('গেটওয়ের সার্টিফিকেটের মেয়াদ শেষ হলে সংযোগ হবে না; তখন সাময়িকভাবে বন্ধ করা যায়')),
             Toggle::make('enabled')->label(__('SMS পাঠানো চালু'))
                 ->helperText(__('বন্ধ = কোনো SMS যায় না (তালিকায় অপেক্ষা করে)। চালুর আগে "কানেকশন যাচাই" আর টেস্ট SMS করে নিন।')),
-            Placeholder::make('status')->label(__('শেষ পরীক্ষা'))
-                ->content(fn () => $s->balance_checked_at
-                    ? ($s->last_check_ok ? __('✅ সংযোগ ঠিক আছে').($s->balance !== null ? ' · '.__('ব্যালান্স :amount', ['amount' => number_format((float) $s->balance, 2)]) : '')
-                        : '❌ '.($s->last_error ?: __('সংযোগ হয়নি'))).' · '.$s->balance_checked_at->diffForHumans()
-                    : __('এখনো পরীক্ষা করা হয়নি')),
         ]);
     }
 
     protected function beforeSaving(array $data, Model $record): array
     {
-        foreach (['api_key', 'secret_key'] as $k) {
-            if (blank($data[$k] ?? null)) {
-                unset($data[$k]);
-            } else {
-                $data[$k] = trim($data[$k]);
-            }
+        $own = SmsGateway::where('company_id', Filament::getTenant()->id)->pluck('id')->all();
+        foreach (['primary_gateway_id', 'fallback_gateway_id'] as $k) {
+            $data[$k] = in_array((int) ($data[$k] ?? 0), $own, true) ? (int) $data[$k] : null;
         }
-        foreach (['endpoint_url', 'status_url'] as $k) {
-            $data[$k] = filled($data[$k] ?? null) ? trim($data[$k]) : null;
-        }
-        $data['caller_id'] = trim($data['caller_id']);
         $data['reminder_days'] = implode(',', BillReminders::days($data['reminder_days'] ?? '3')) ?: '3';
         $data['company_id'] = Filament::getTenant()->id;
 
@@ -178,63 +171,18 @@ class SmsSettings extends CompanySettingsPage
     {
         /** @var SmsSetting $record */
         if ($record->enabled) {
+            if ($record->wasChanged('enabled')) {   // switched back on: stopped gateways get another chance
+                SmsGateway::where('company_id', $record->company_id)->whereNotNull('failed_at')->update(['failed_at' => null]);
+            }
             Engine::kickSms($record->company_id);  // SMS waiting while it was off go now
         }
     }
 
     protected function getHeaderActions(): array
     {
-        $s = fn () => SmsSetting::forCompany(Filament::getTenant());
-
         return [
-            Action::make('validate')->label(__('কানেকশন যাচাই'))->icon(Heroicon::OutlinedShieldCheck)->color('gray')
-                ->visible(fn () => $s()->configured())
-                ->action(function () {
-                    try {
-                        $r = Engine::validateSms(Filament::getTenant()->getKey());
-                        Notification::make()->success()->title(__('কানেকশন ঠিক আছে'))
-                            ->body(trim(($r['client'] ?? '').' · '.__('ব্যালান্স :amount', ['amount' => $r['balance'] ?? '—']), ' ·'))->persistent()->send();
-                    } catch (RuntimeException $e) {
-                        Notification::make()->danger()->title(__('কানেকশন হয়নি'))->body($e->getMessage())->persistent()->send();
-                    }
-                    $this->redirect(static::getUrl());
-                }),
-            Action::make('testSms')->label(__('টেস্ট SMS পাঠান'))->icon(Heroicon::OutlinedPaperAirplane)
-                ->visible(fn () => $s()->configured())
-                ->modalHeading(__('টেস্ট SMS'))->modalSubmitActionLabel(__('পাঠান'))
-                ->modalDescription(__('এই নম্বরে এখনই একটা SMS যাবে ("SMS পাঠানো চালু" বন্ধ থাকলেও), গেটওয়ের উত্তর দেখানো হবে।'))
-                ->schema([
-                    TextInput::make('mobile')->label(__('মোবাইল'))->required()->tel()
-                        ->rule(fn () => fn ($attr, $value, $fail) => Sms::mobile($value) ? null : $fail(__('সঠিক মোবাইল নম্বর দিন'))),
-                    TextInput::make('text')->label(__('লেখা'))->required()->maxLength(300)->default(__('Desk থেকে টেস্ট SMS')),
-                ])
-                ->action(function (array $data) {
-                    $cid = (int) Filament::getTenant()->getKey();
-                    $campaign = Sms::queue($cid, auth()->id(), 'single', trim($data['text']), [], [Sms::mobile($data['mobile'])]);
-                    try {
-                        $r = Engine::sendSmsNow($cid, (int) $campaign->messages()->value('id'));
-                    } catch (RuntimeException $e) {
-                        Notification::make()->danger()->title(__('টেস্ট SMS যায়নি'))->body($e->getMessage())->persistent()->send();
-
-                        return;
-                    }
-                    $reply = trim(($r['status'] !== null ? 'Status '.$r['status'].' ' : '').($r['text'] ?? '').' '.($r['description'] ?? '')
-                        .(! empty($r['message_id']) ? ' · Message ID '.$r['message_id'] : ''));
-                    ($r['ok'] ?? false)
-                        ? Notification::make()->success()->title(__('গেটওয়ে SMS নিয়েছে'))->body($reply)->persistent()->send()
-                        : Notification::make()->danger()->title(__('গেটওয়ে নেয়নি'))->body($r['error'] ?? $reply)->persistent()->send();
-                }),
-            Action::make('test')->label(__('ব্যালান্স দেখুন'))->icon(Heroicon::OutlinedSignal)->color('gray')
-                ->visible(fn () => $s()->configured())
-                ->action(function () {
-                    try {
-                        $r = Engine::smsBalance(Filament::getTenant()->getKey());
-                        Notification::make()->success()->title(__('সংযোগ ঠিক আছে'))->body(__('ব্যালান্স: :amount', ['amount' => $r['balance'] ?? '—']))->send();
-                    } catch (RuntimeException $e) {
-                        Notification::make()->danger()->title(__('সংযোগ হয়নি'))->body($e->getMessage())->send();
-                    }
-                    $this->redirect(static::getUrl());
-                }),
+            Action::make('gateways')->label(__('গেটওয়ে তালিকা'))->icon(Heroicon::OutlinedSignal)->color('gray')
+                ->url(fn () => SmsGatewayResource::getUrl()),
         ];
     }
 }

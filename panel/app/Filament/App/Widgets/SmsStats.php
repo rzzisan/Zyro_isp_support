@@ -28,6 +28,7 @@ class SmsStats extends StatsOverviewWidget
     {
         $cid = Filament::getTenant()->getKey();
         $s = SmsSetting::forCompany($cid);
+        $g = $s->activeGateway();
         $today = Carbon::now('Asia/Dhaka')->startOfDay()->utc();
         $month = Carbon::now('Asia/Dhaka')->startOfMonth()->utc();
         $row = SmsMessage::where('company_id', $cid)->where('created_at', '>=', $month)->toBase()
@@ -37,21 +38,24 @@ class SmsStats extends StatsOverviewWidget
                 count(*) FILTER (WHERE status IN ('queued','sending')) AS waiting", [$today])->first();
         $state = ! $s->configured() ? __('গেটওয়ে সেট করা হয়নি') : ($s->enabled ? __('পাঠানো চালু') : __('পাঠানো বন্ধ'));
         $balance = match (true) {
-            $s->balance !== null && $s->last_check_ok !== false => number_format((float) $s->balance, 2),
-            $s->balance_checked_at !== null => __('পাওয়া যায়নি'),
+            $g?->balance !== null && $g->last_check_ok !== false => number_format((float) $g->balance, 2),
+            $g?->balance_checked_at !== null => __('পাওয়া যায়নি'),
             default => '—',
         };
-        $checked = $s->balance_checked_at
-            ? ($s->last_check_ok === false ? mb_substr((string) $s->last_error, 0, 80).' · ' : __('দেখা হয়েছে '))
-                .$s->balance_checked_at->diffForHumans().' · '
-            : '';
+        $checked = ($g ? $g->name().' · ' : '').($g?->balance_checked_at
+            ? ($g->last_check_ok === false ? mb_substr((string) $g->last_error, 0, 80).' · ' : ($g->lowBalance() ? __('ব্যালান্স কম, রিচার্জ করুন').' · ' : __('দেখা হয়েছে ')))
+                .$g->balance_checked_at->diffForHumans().' · '
+            : '');
+        $cost = SmsMessage::where('company_id', $cid)->where('sent_at', '>=', $month)->sum('cost');
 
         return [
             Stat::make(__('গেটওয়ে ব্যালান্স'), $balance)->icon(Heroicon::OutlinedWallet)
-                ->color($s->configured() && $s->enabled ? 'success' : 'warning')->description($checked.$state),
+                ->color($g?->lowBalance() || $g?->failed_at ? 'danger' : ($s->configured() && $s->enabled ? 'success' : 'warning'))
+                ->description($checked.$state),
             Stat::make(__('আজ গেছে'), number_format((int) $row->today))->icon(Heroicon::OutlinedPaperAirplane),
             Stat::make(__('এই মাসে (SMS ভাগ)'), number_format((int) $row->month))->icon(Heroicon::OutlinedCalendar)
-                ->description($s->rate !== null ? __('আনুমানিক :amount টাকা', ['amount' => number_format((int) $row->month * (float) $s->rate, 2)]) : null),
+                ->description((float) $cost > 0 ? __('খরচ :amount টাকা', ['amount' => number_format((float) $cost, 2)])
+                    : ($s->rate() !== null ? __('আনুমানিক :amount টাকা', ['amount' => number_format((int) $row->month * $s->rate(), 2)]) : null)),
             Stat::make(__('এই মাসে ব্যর্থ'), number_format((int) $row->failed))->icon(Heroicon::OutlinedExclamationTriangle)->color('danger')
                 ->description($row->waiting ? __(':nটি এখনো অপেক্ষায়', ['n' => number_format((int) $row->waiting)]) : null),
         ];
