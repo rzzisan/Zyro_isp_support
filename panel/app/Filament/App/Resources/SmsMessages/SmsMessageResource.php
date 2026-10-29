@@ -6,6 +6,7 @@ use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Filament\App\Resources\SmsMessages\Pages\ListSmsMessages;
 use App\Models\BillingCustomer;
 use App\Models\SmsCampaign;
+use App\Models\SmsGateway;
 use App\Models\SmsMessage;
 use App\Support\Menu;
 use BackedEnum;
@@ -71,6 +72,10 @@ class SmsMessageResource extends Resource
                     ->searchable(['name', 'mobile', 'customer_id']),
                 TextColumn::make('text')->label(__('লেখা'))->wrap()->limit(160)->searchable(),
                 TextColumn::make('parts')->label(__('ভাগ'))->numeric()->toggleable(),
+                TextColumn::make('provider')->label(__('গেটওয়ে'))->placeholder('—')->toggleable()
+                    ->formatStateUsing(fn ($state) => SmsGateway::PROVIDERS[$state][0] ?? $state),
+                TextColumn::make('cost')->label(__('খরচ'))->placeholder('—')->toggleable(isToggledHiddenByDefault: true)
+                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2)),
                 TextColumn::make('status')->label(__('অবস্থা'))->badge()
                     ->formatStateUsing(fn (string $state) => __(SmsMessage::STATUSES[$state] ?? $state))
                     ->color(fn (string $state) => SmsMessage::COLORS[$state] ?? 'gray')
@@ -83,6 +88,7 @@ class SmsMessageResource extends Resource
             ->filters([
                 SelectFilter::make('status')->label(__('অবস্থা'))->options(array_map('__', SmsMessage::STATUSES))->multiple(),
                 SelectFilter::make('user_id')->label(__('কে পাঠালেন'))->relationship('user', 'name'),
+                SelectFilter::make('provider')->label(__('গেটওয়ে'))->options(SmsGateway::providerOptions()),
                 SelectFilter::make('campaign_id')->label(__('পাঠানো (ক্রম)'))
                     ->options(fn () => SmsCampaign::where('company_id', Filament::getTenant()?->getKey() ?? 0)
                         ->latest('id')->limit(50)->get()

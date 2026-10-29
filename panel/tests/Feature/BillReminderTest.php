@@ -31,7 +31,8 @@ class BillReminderTest extends TestCase
         $cid = $this->company->id;
         $tpl = array_key_first(SmsTemplate::optionsFor($cid, 'bill_reminder'));
         SmsTemplate::whereKey($tpl)->update(['body' => '{name}: মেয়াদ {expire_date}, আর {days_left} দিন, বকেয়া {due}']);
-        SmsSetting::forCompany($cid)->fill(['api_key' => 'a', 'secret_key' => 'b', 'caller_id' => 'CLN', 'enabled' => true,
+        $this->smsGateway($cid);
+        SmsSetting::forCompany($cid)->fill(['enabled' => true,
             'reminder_sms' => true, 'reminder_template_id' => $tpl, 'reminder_days' => '3,0', 'reminder_hour' => 10,
             'reminder_due_only' => true])->save();
         $c = fn (int $h, string $name, int $day, float $due, array $x = []) => BillingCustomer::create(['company_id' => $cid,

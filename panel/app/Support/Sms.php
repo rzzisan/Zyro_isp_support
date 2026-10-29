@@ -268,10 +268,9 @@ class Sms
         } else {
             $parts = $n * static::parts($body)['parts'];
         }
-        $rate = SmsSetting::where('company_id', $companyId)->value('rate');
+        $rate = SmsSetting::forCompany($companyId)->rate();
 
-        return ['count' => $n, 'parts' => $parts, 'rate' => $rate !== null ? (float) $rate : null,
-            'cost' => $rate !== null ? round($parts * (float) $rate, 2) : null];
+        return ['count' => $n, 'parts' => $parts, 'rate' => $rate, 'cost' => $rate !== null ? round($parts * $rate, 2) : null];
     }
 
     /**

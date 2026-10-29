@@ -6,10 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * The company's SMS gateway (Khudebarta "SMS HTTP API Published" v5.4.0): send URL, keys (encrypted), sender ID,
- * on/off, rate for the cost estimate, optional delivery-report URL. Balance and validation use the same host.
- * One row per company. (The portal_* / balance_url / provider_id columns of the first version are no longer used:
- * the web portal refuses non-browser logins.)
+ * The company's SMS settings: sending on/off, which gateway is the main one and which the fallback (SmsGateway),
+ * the automatic SMS (bill, ticket, reminder). One row per company. The gateway columns of the first version
+ * (endpoint_url, api_key, secret_key, caller_id, rate, balance ...) moved to sms_gateways and are no longer read.
  */
 class SmsSetting extends Model
 {
@@ -32,6 +31,36 @@ class SmsSetting extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function primaryGateway(): BelongsTo
+    {
+        return $this->belongsTo(SmsGateway::class, 'primary_gateway_id');
+    }
+
+    public function fallbackGateway(): BelongsTo
+    {
+        return $this->belongsTo(SmsGateway::class, 'fallback_gateway_id');
+    }
+
+    /** The gateway SMS go through now: the main one, or the fallback while the main one is stopped. */
+    public function activeGateway(): ?SmsGateway
+    {
+        $main = $this->primaryGateway;
+        if ($main?->usable()) {
+            return $main;
+        }
+        $fallback = $this->fallbackGateway;
+
+        return $fallback?->usable() && $fallback->company_id === $this->company_id ? $fallback : $main;
+    }
+
+    /** Taka per SMS part of the gateway in use (for the cost estimate). */
+    public function rate(): ?float
+    {
+        $rate = $this->activeGateway()?->rate;
+
+        return $rate !== null ? (float) $rate : null;
     }
 
     public static function forCompany(Company|int $company): self
@@ -62,8 +91,9 @@ class SmsSetting extends Model
         return $this->eventReady('bill_paid');
     }
 
+    /** A gateway is set up (the main one, or a usable fallback). */
     public function configured(): bool
     {
-        return filled($this->endpoint_url) && filled($this->api_key) && filled($this->secret_key) && filled($this->caller_id);
+        return (bool) $this->activeGateway()?->configured();
     }
 }

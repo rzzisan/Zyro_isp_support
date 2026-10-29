@@ -5,11 +5,13 @@ namespace Tests\Feature;
 use App\Filament\App\Pages\SmsSettings;
 use App\Filament\App\Resources\Customers\Pages\ViewCustomer;
 use App\Filament\App\Resources\SmsCampaigns\Pages\ListSmsCampaigns;
+use App\Filament\App\Resources\SmsGateways\Pages\ManageSmsGateways;
 use App\Filament\App\Resources\SmsTemplates\Pages\ManageSmsTemplates;
 use App\Models\BillingCustomer;
 use App\Models\Company;
 use App\Models\Membership;
 use App\Models\SmsCampaign;
+use App\Models\SmsGateway;
 use App\Models\SmsMessage;
 use App\Models\SmsSetting;
 use App\Models\SmsTemplate;
@@ -39,8 +41,8 @@ class SmsTest extends TestCase
         parent::setUp();
         config(['services.engine.url' => 'http://engine.test', 'services.engine.key' => 'k']);
         Http::fake([
-            'engine.test/internal/*/sms/messages/*/send' => Http::response(['ok' => true, 'status' => '0', 'text' => 'ACCEPTD', 'error' => null]),
-            'engine.test/internal/*/sms/validate' => Http::response(['client' => 'centurylinknetwork', 'balance' => 797.88]),
+            'engine.test/internal/*/sms/messages/*/send*' => Http::response(['ok' => true, 'status' => '0', 'text' => 'ACCEPTD', 'error' => null]),
+            'engine.test/internal/*/sms/validate*' => Http::response(['client' => 'centurylinknetwork', 'balance' => 797.88]),
             'engine.test/*' => Http::response(['started' => true]),
         ]);
         $this->company = Company::create(['name' => 'Century Link Network']);
@@ -120,7 +122,7 @@ class SmsTest extends TestCase
 
     public function test_bulk_send_queues_one_sms_per_number_and_wakes_the_engine(): void
     {
-        SmsSetting::forCompany($this->company)->fill(['rate' => 0.35])->save();
+        $this->smsGateway($this->company->id, ['rate' => 0.35]);
         $this->as($this->owner);
         Livewire::test(ListSmsCampaigns::class)
             ->callAction('sendSms', ['mode' => 'bulk', 'list' => 'current', 'zone' => ['Binodpur', 'Zisan'], 'due' => 'due',
@@ -213,44 +215,92 @@ class SmsTest extends TestCase
     public function test_gateway_keys_are_encrypted_and_never_shown_again(): void
     {
         $this->as($this->owner);
-        Livewire::test(SmsSettings::class)
-            ->fillForm(['endpoint_url' => 'https://portal.example.test:3775/sendtext', 'api_key' => 'AK-123', 'secret_key' => 'SK-456',
-                'caller_id' => 'CenturyLink', 'rate' => 0.35, 'enabled' => false, 'verify_tls' => true])
-            ->call('save')->assertHasNoFormErrors();
-        $raw = DB::table('sms_settings')->first();
+        Livewire::test(ManageSmsGateways::class)
+            ->callAction(TestAction::make('create')->table(), ['provider' => 'khudebarta', 'endpoint_url' => 'https://portal.example.test:3775/sendtext',
+                'api_key' => 'AK-123', 'secret_key' => 'SK-456', 'caller_id' => 'CenturyLink', 'rate' => 0.35, 'verify_tls' => true])
+            ->assertHasNoFormErrors();
+        $raw = DB::table('sms_gateways')->first();
         $this->assertStringNotContainsString('AK-123', $raw->api_key);
-        $this->assertSame('AK-123', SmsSetting::forCompany($this->company)->api_key);
-        Livewire::test(SmsSettings::class)
-            ->assertSchemaStateSet(['api_key' => null, 'secret_key' => null, 'caller_id' => 'CenturyLink'])
-            ->assertDontSee('AK-123')->assertDontSee('SK-456')
+        $g = SmsGateway::sole();
+        $this->assertSame('AK-123', $g->api_key);
+        // the first gateway becomes the main one
+        $this->assertSame($g->id, SmsSetting::forCompany($this->company)->primary_gateway_id);
+        Livewire::test(ManageSmsGateways::class)->assertDontSee('AK-123')->assertDontSee('SK-456')
             // blank keys keep the saved ones
-            ->fillForm(['caller_id' => 'CLN'])->call('save')->assertHasNoFormErrors();
+            ->callAction(TestAction::make('edit')->table($g), ['caller_id' => 'CLN', 'api_key' => '', 'secret_key' => ''])
+            ->assertHasNoFormErrors();
+        $g->refresh();
+        $this->assertSame(['AK-123', 'SK-456', 'CLN'], [$g->api_key, $g->secret_key, $g->caller_id]);
+        $this->assertTrue(SmsSetting::forCompany($this->company)->configured());
+    }
+
+    public function test_bulksmsdhaka_needs_no_secret_key(): void
+    {
+        $this->as($this->owner);
+        Livewire::test(ManageSmsGateways::class)
+            ->callAction(TestAction::make('create')->table(), ['provider' => 'bulksmsdhaka', 'endpoint_url' => 'https://bulksmsdhaka.net/api',
+                'api_key' => 'BK-1', 'caller_id' => '1234', 'rate' => 0.34])
+            ->assertHasNoFormErrors();
+        $g = SmsGateway::sole();
+        $this->assertSame(['bulksmsdhaka', null], [$g->provider, $g->secret_key]);
+        $this->assertTrue($g->configured());
+        $this->assertEqualsWithDelta(0.34, SmsSetting::forCompany($this->company)->rate(), 0.0001);
+    }
+
+    public function test_fallback_takes_over_while_the_main_gateway_is_stopped(): void
+    {
+        $main = $this->smsGateway($this->company->id, ['rate' => 0.30]);
+        $backup = SmsGateway::create(['company_id' => $this->company->id, 'provider' => 'bulksmsdhaka',
+            'endpoint_url' => 'https://bulksmsdhaka.net/api', 'api_key' => 'x', 'caller_id' => '1234', 'rate' => 0.34]);
         $s = SmsSetting::forCompany($this->company);
-        $this->assertSame(['AK-123', 'SK-456', 'CLN'], [$s->api_key, $s->secret_key, $s->caller_id]);
-        $this->assertTrue($s->configured());
+        $s->fill(['fallback_gateway_id' => $backup->id])->save();
+        $this->assertSame($main->id, $s->fresh()->activeGateway()->id);
+        $main->update(['failed_at' => now(), 'last_error' => '2001 Balance Insufficient']);
+        $this->assertSame($backup->id, $s->fresh()->activeGateway()->id);
+        $this->assertEqualsWithDelta(0.34, $s->fresh()->rate(), 0.0001);
+        // another company's gateway can never be the fallback
+        $other = Company::create(['name' => 'Other ISP']);
+        $theirs = SmsGateway::create(['company_id' => $other->id, 'provider' => 'bulksmsdhaka', 'endpoint_url' => 'https://x.test',
+            'api_key' => 'y', 'caller_id' => '1']);
+        $this->as($this->owner);
+        Livewire::test(SmsSettings::class)->fillForm(['primary_gateway_id' => $main->id, 'fallback_gateway_id' => $theirs->id])
+            ->call('save');
+        $this->assertNotSame($theirs->id, $s->fresh()->fallback_gateway_id);
+        // switching sending back on gives stopped gateways another chance
+        Livewire::test(SmsSettings::class)->fillForm(['primary_gateway_id' => $main->id, 'enabled' => true])->call('save');
+        $this->assertNull($main->fresh()->failed_at);
     }
 
     public function test_test_sms_goes_now_through_the_engine(): void
     {
-        SmsSetting::forCompany($this->company)->fill(['endpoint_url' => 'https://portal.example.test/sendtext', 'api_key' => 'a',
-            'secret_key' => 'b', 'caller_id' => 'CLN', 'enabled' => false])->save();
+        $g = $this->smsGateway($this->company->id);
         $this->as($this->owner);
-        Livewire::test(SmsSettings::class)
-            ->callAction('testSms', ['mobile' => '01711000001', 'text' => 'test'])
+        Livewire::test(ManageSmsGateways::class)
+            ->callAction(TestAction::make('testSms')->table($g), ['mobile' => '01711000001', 'text' => 'test'])
             ->assertHasNoActionErrors()->assertNotified('গেটওয়ে SMS নিয়েছে');
         $m = SmsMessage::sole();
         $this->assertSame(['8801711000001', 'test'], [$m->mobile, $m->text]);
-        Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/sms/messages/{$m->id}/send");
+        Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/sms/messages/{$m->id}/send?gateway={$g->id}");
     }
 
     public function test_validate_shows_client_and_balance_without_sending(): void
     {
-        SmsSetting::forCompany($this->company)->fill(['api_key' => 'a', 'secret_key' => 'b', 'caller_id' => 'CLN'])->save();
+        $g = $this->smsGateway($this->company->id);
         $this->as($this->owner);
-        Livewire::test(SmsSettings::class)->callAction('validate')->assertNotified('কানেকশন ঠিক আছে');
-        Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/sms/validate");
+        Livewire::test(ManageSmsGateways::class)->callAction(TestAction::make('validate')->table($g))->assertNotified('কানেকশন ঠিক আছে');
+        Http::assertSent(fn ($r) => $r->url() === "http://engine.test/internal/{$this->company->id}/sms/validate?gateway={$g->id}");
         $this->assertSame(0, SmsMessage::count());
-        $this->assertSame(SmsSetting::KHUDEBARTA_SEND_URL, SmsSetting::forCompany($this->company)->endpoint_url);
+    }
+
+    public function test_gateway_list_shows_only_the_companys_own(): void
+    {
+        $this->smsGateway($this->company->id, ['label' => 'আমাদের গেটওয়ে']);
+        $other = Company::create(['name' => 'Other ISP']);
+        SmsGateway::create(['company_id' => $other->id, 'provider' => 'bulksmsdhaka', 'label' => 'ওদের গেটওয়ে',
+            'endpoint_url' => 'https://x.test', 'api_key' => 'y', 'caller_id' => '1']);
+        $this->as($this->owner);
+        Livewire::test(ManageSmsGateways::class)->assertSee('আমাদের গেটওয়ে')->assertDontSee('ওদের গেটওয়ে');
+        $this->actingAs($this->agent)->get("/app/{$this->company->slug}/sms-gateways")->assertForbidden();
     }
 
     public function test_sms_pages_need_the_sms_permission(): void
