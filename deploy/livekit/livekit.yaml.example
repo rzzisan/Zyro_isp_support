@@ -3,8 +3,8 @@
 #   key:    openssl rand -hex 8   ->  APIxxxxxxxx
 #   secret: openssl rand -hex 32
 # The same pair goes into panel/.env (LIVEKIT_API_KEY/SECRET) and engine/.env.
-port: 7880                 # signalling, 127.0.0.1 only; nginx serves it as wss://rtc.zyrotechbd.com
-bind_addresses: ["127.0.0.1"]
+port: 7880                 # signalling; nginx serves it as wss://rtc.zyrotechbd.com (no bind_addresses: they would
+                           # also pin the audio ports below to that address, and phones reach them from outside)
 rtc:
   tcp_port: 7881           # audio over TCP when UDP is blocked on the phone's network
   udp_port: 7882           # all audio over this one UDP port
