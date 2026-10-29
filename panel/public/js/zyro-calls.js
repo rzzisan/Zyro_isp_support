@@ -42,7 +42,7 @@
     }
 
     function label(c) {
-        if (c.ringing) return '📞 ' + (c.channel === 'whatsapp' ? T.wa_ringing : T.ringing);
+        if (c.ringing) return '📞 ' + (c.channel === 'whatsapp' ? T.wa_ringing : c.channel === 'reminder' ? T.reminder_ringing : T.ringing);
         return c.answered_by ? T.answered + ' ' + c.answered_by : T.ended;
     }
 

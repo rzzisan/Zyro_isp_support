@@ -28,6 +28,7 @@ import os
 import re
 import socket
 import subprocess
+import sys
 import time
 import uuid
 import wave
@@ -38,7 +39,7 @@ from urllib.parse import parse_qs, urlparse
 
 import websockets
 
-from engine import db
+from engine import db, voice_ivr
 from engine.sip_calls import normalize
 
 log = logging.getLogger("voice_bot")
@@ -859,7 +860,12 @@ async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         # everything but /mode comes from the Asterisk dialplan for staff calls (and the panel for /sync)
         routes = {"/take": (take, q.get("uid", ""), q.get("agent", "")), "/bot": (bot_turn, q.get("uid", "")),
                   "/out": (call_out, q.get("agent", ""), q.get("to", "")),
-                  "/ended": (ended, q.get("uid", ""), q.get("secs", "")), "/sync": (lambda: sync_asterisk() or "ok",)}
+                  "/ended": (ended, q.get("uid", ""), q.get("secs", "")), "/sync": (lambda: sync_asterisk() or "ok",),
+                  # voice reminder calls (engine/voice_ivr.py): the panel's kick, and the zyro-remind dialplan
+                  "/remind": (lambda i: voice_ivr.start(int(i)) if i.isdigit() else "no", q.get("id", "")),
+                  "/remind-dial": (voice_ivr.dial_plan, q.get("uid", "")),
+                  "/remind-dialed": (voice_ivr.dialed, q.get("uid", ""), q.get("status", "")),
+                  "/remind-ended": (voice_ivr.ended, q.get("uid", ""))}
         if url.path in routes:
             fn, *args = routes[url.path]
             try:
@@ -1495,10 +1501,13 @@ async def housekeeping() -> None:
 async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     os.makedirs(STATE_DIR, exist_ok=True)
+    voice_ivr.bind(sys.modules[__name__])
     a = await asyncio.start_server(mode_server, "127.0.0.1", MODE_PORT)
     b = await asyncio.start_server(audio_server, "127.0.0.1", AUDIO_PORT)
-    log.info("voice bot: /mode on %s, AudioSocket on %s", MODE_PORT, AUDIO_PORT)
-    async with a, b:
+    c = await asyncio.start_server(voice_ivr.agi_server, "127.0.0.1", voice_ivr.AGI_PORT)
+    log.info("voice bot: /mode on %s, AudioSocket on %s, reminder calls (FastAGI) on %s", MODE_PORT, AUDIO_PORT, voice_ivr.AGI_PORT)
+    asyncio.create_task(voice_ivr.queue_loop())
+    async with a, b, c:
         await housekeeping()
 
 

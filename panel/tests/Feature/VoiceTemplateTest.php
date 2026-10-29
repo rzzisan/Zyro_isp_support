@@ -76,7 +76,7 @@ class VoiceTemplateTest extends TestCase
         $this->assertSame('৫০০ টাকা, ২ অক্টোবর', $v['last_payment']);
         $text = VoiceTemplates::render('{name}, বিল {due} টাকা, শেষ তারিখ {expire_date}। {called_for}{nope}', $v);
         $this->assertSame('Alif Hasan, বিল ৫২০ টাকা, শেষ তারিখ ৩১ অক্টোবর। {nope}', $text);
-        $this->assertSame(['nope'], VoiceTemplates::unknown('{name} {nope} {reconnect_until}'));
+        $this->assertSame(['nope'], VoiceTemplates::unknown('{name} {nope} {reconnect_message}'));
         $this->assertSame('ফেরত: Alif-এর', VoiceTemplates::render('ফেরত: {called_for}', $v, ['called_for' => 'Alif-এর']));
     }
 

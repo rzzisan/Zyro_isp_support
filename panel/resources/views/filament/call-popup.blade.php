@@ -6,7 +6,7 @@
             poll: @js(route('calls.poll', $company)),
             phone: @js(asset('softphone/phone.html')),
             company: @js($company->slug),
-            t: @js(['ringing' => __('হটলাইনে কল আসছে'), 'wa_ringing' => __('WhatsApp কল আসছে'), 'ended' => __('কল শেষ'),
+            t: @js(['ringing' => __('হটলাইনে কল আসছে'), 'wa_ringing' => __('WhatsApp কল আসছে'), 'reminder_ringing' => __('রিমাইন্ডার কল থেকে কাস্টমার কথা বলতে চান'), 'ended' => __('কল শেষ'),
                 'answered' => __('ধরেছেন:'), 'take' => __('ধরুন'), 'unknown' => __('এই নম্বরে কোনো কাস্টমার নেই'),
                 'due' => __('বকেয়া'), 'left' => __('Left'), 'close' => __('বন্ধ করুন')]),
         };

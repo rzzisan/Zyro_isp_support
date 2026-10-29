@@ -1,0 +1,35 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/** One voice reminder call: queued by the panel (test) or the scheduler, placed and run by engine/voice_ivr.py. */
+class VoiceReminderCall extends Model
+{
+    public const STATUSES = ['queued' => 'অপেক্ষায়', 'dialing' => 'রিং হচ্ছে', 'answered' => 'কথা চলছে', 'done' => 'শেষ',
+        'no_answer' => 'ধরেনি', 'busy' => 'ব্যস্ত', 'failed' => 'যায়নি'];
+
+    public const RESULTS = ['listened' => 'শুনেছেন', 'sms' => 'SMS নিয়েছেন', 'reconnected' => 'লাইন চালু', 'reconnect_failed' => 'লাইন চালু হয়নি',
+        'staff' => 'স্টাফের সাথে কথা', 'voicemail' => 'ভয়েস মেসেজ', 'callback' => 'কল-ব্যাক চান', 'optout' => 'আর কল নয়',
+        'ticket' => 'টিকেট', 'hung_up' => 'কেটে দিয়েছেন'];
+
+    protected $guarded = [];
+
+    protected function casts(): array
+    {
+        return ['package' => 'array', 'scheduled_at' => 'datetime', 'started_at' => 'datetime', 'answered_at' => 'datetime',
+            'ended_at' => 'datetime'];
+    }
+
+    public function flow(): BelongsTo
+    {
+        return $this->belongsTo(VoiceFlow::class, 'voice_flow_id');
+    }
+
+    public function callLog(): BelongsTo
+    {
+        return $this->belongsTo(CallLog::class);
+    }
+}

@@ -2,9 +2,10 @@
 
 namespace App\Filament\App\Pages;
 
+use App\Filament\App\Concerns\QuickAccessible;
 use App\Filament\App\Resources\Customers\CustomerResource;
-use App\Models\BillingCustomer;
 use App\Models\CallLog;
+use App\Support\Menu;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -16,6 +17,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -24,9 +26,8 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class CallLogs extends Page implements HasTable
 {
-    use \App\Filament\App\Concerns\QuickAccessible;
-
     use InteractsWithTable;
+    use QuickAccessible;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPhone;
 
@@ -35,7 +36,7 @@ class CallLogs extends Page implements HasTable
         return __('কল লগ');
     }
 
-    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    public function getTitle(): string|Htmlable
     {
         return __('কল লগ');
     }
@@ -65,13 +66,22 @@ class CallLogs extends Page implements HasTable
         'callback' => ['কল ব্যাক দরকার', 'warning'],
         'unclear' => ['বোঝা যায়নি', 'danger'],
         'hung_up' => ['কলার কেটেছেন', 'gray'],
+        // voice reminder calls (engine/voice_ivr.py)
+        'listened' => ['রিমাইন্ডার শুনেছেন', 'success'],
+        'sms' => ['পেমেন্ট SMS নিয়েছেন', 'success'],
+        'reconnected' => ['লাইন চালু করেছেন', 'success'],
+        'reconnect_failed' => ['লাইন চালু হয়নি', 'warning'],
+        'staff' => ['স্টাফের সাথে কথা', 'info'],
+        'voicemail' => ['ভয়েস মেসেজ রেখেছেন', 'warning'],
+        'optout' => ['আর কল চান না', 'danger'],
+        'no_answer' => ['ধরেননি', 'gray'],
     ];
 
     public static function canAccess(): bool
     {
         $company = Filament::getTenant();
 
-        return \App\Support\Menu::can('calls') && $company && CallLog::enabledFor($company->getKey());
+        return Menu::can('calls') && $company && CallLog::enabledFor($company->getKey());
     }
 
     public function table(Table $table): Table
@@ -86,8 +96,12 @@ class CallLogs extends Page implements HasTable
                 TextColumn::make('started_at')->label(__('সময়'))
                     ->formatStateUsing(fn ($state) => $state->timezone('Asia/Dhaka')->format('d M, g:i A')),
                 TextColumn::make('channel')->label(__('লাইন'))->badge()
-                    ->formatStateUsing(fn ($state) => $state === 'whatsapp' ? 'WhatsApp' : __('হটলাইন'))
-                    ->color(fn ($state) => $state === 'whatsapp' ? 'success' : 'gray'),
+                    ->formatStateUsing(fn ($state) => match ($state) {
+                        'whatsapp' => 'WhatsApp', 'reminder' => __('রিমাইন্ডার'), default => __('হটলাইন')
+                    })
+                    ->color(fn ($state) => match ($state) {
+                        'whatsapp' => 'success', 'reminder' => 'warning', default => 'gray'
+                    }),
                 TextColumn::make('caller')->label(__('নম্বর'))->searchable()
                     ->formatStateUsing(fn ($state, CallLog $record) => $record->caller_normalized ? '0'.substr($record->caller_normalized, 3) : $state),
                 TextColumn::make('customer')->label(__('কাস্টমার'))->state(function (CallLog $record) {
@@ -122,7 +136,7 @@ class CallLogs extends Page implements HasTable
             ])
             ->filters([
                 SelectFilter::make('channel')->label(__('লাইন'))
-                    ->options(['hotline' => __('হটলাইন'), 'whatsapp' => 'WhatsApp']),
+                    ->options(['hotline' => __('হটলাইন'), 'whatsapp' => 'WhatsApp', 'reminder' => __('রিমাইন্ডার')]),
                 TernaryFilter::make('bot_answered')->label(__('বট ধরেছে')),
                 SelectFilter::make('outcome')->label(__('ফলাফল'))
                     ->options(collect(self::OUTCOMES)->map(fn ($o) => __($o[0]))->all()),
