@@ -8,5 +8,6 @@ Type=oneshot
 User=www-data
 Environment=HOME=/tmp
 WorkingDirectory=/var/www/zyro_isp_support/panel
-ExecStart=/usr/bin/php artisan voice:reminders
-TimeoutStartSec=600
+# plans once, then keeps queueing every 5 s for the rest of the minute: the next call goes as soon as a line is free
+ExecStart=/usr/bin/php artisan voice:reminders --for=55
+TimeoutStartSec=300
