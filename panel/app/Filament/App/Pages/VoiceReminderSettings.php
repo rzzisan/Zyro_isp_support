@@ -75,7 +75,7 @@ class VoiceReminderSettings extends CompanySettingsPage
         /** @var VoiceReminderSetting $record */
         $data = $record->only(['enabled', 'test_mode', 'test_number', 'test_daily_max', 'reminder_on', 'reminder_flow_id', 'reminder_days',
             'due_only', 'line_off_on', 'line_off_flow_id', 'line_off_delay', 'line_off_days', 'window_from', 'window_to', 'skip_jumma',
-            'max_calls', 'retry_minutes', 'max_tries', 'minute_rate']);
+            'max_calls', 'retry_minutes', 'max_tries', 'minute_rate', 'alt_on', 'alt_max', 'sms_saving']);
         $data['test_number'] = $data['test_number'] ? '0'.substr((string) $data['test_number'], 3) : null;
 
         return $data;
@@ -124,6 +124,13 @@ class VoiceReminderSettings extends CompanySettingsPage
                 TextInput::make('max_tries')->label(__('দিনে সর্বোচ্চ কতবার কল'))->numeric()->minValue(1)->maxValue(5)->required(),
                 TextInput::make('minute_rate')->label(__('মিনিট রেট (টাকা)'))->numeric()->minValue(0)->step(0.01)->required(),
             ]),
+            Section::make(__('বিকল্প নম্বর ও SMS সাশ্রয়'))->columns(3)->schema([
+                Toggle::make('alt_on')->label(__('মূল নম্বরে না পেলে বিকল্প নম্বরে'))->inline(false)
+                    ->helperText(__('কাস্টমারের প্রোফাইলের ফোন, টিকেট, WhatsApp, SMS-এর নম্বর থেকে, একটার পর একটা। যে নম্বর দুই বা বেশি অন্য কাস্টমারের সাথেও আছে (স্টাফ, টেকনিশিয়ান, অফিস), সেটা বাদ। কেউ ধরলে বাকিগুলো বাদ।')),
+                TextInput::make('alt_max')->label(__('দিনে সর্বোচ্চ কয়টা বিকল্প নম্বর'))->numeric()->minValue(1)->maxValue(3)->required(),
+                Toggle::make('sms_saving')->label(__('নিয়মিত কল ধরেন যারা, তাদের বিল রিমাইন্ডার SMS শুধু ব্যাকআপ'))->inline(false)
+                    ->helperText(__('শেষ ৩টা কলের ২টা ধরেছেন এমন কাস্টমারকে SMS যায় না, কলে জানানো হয়। কলে কাউকে না পেলে তখনই SMS যায়। টেস্ট মোডে SMS আগের মতোই যায়।')),
+            ]),
             Section::make(__('আগামীকাল'))->schema([
                 Placeholder::make('preview')->hiddenLabel()->content(function () {
                     $company = (int) Filament::getTenant()->getKey();
@@ -131,8 +138,8 @@ class VoiceReminderSettings extends CompanySettingsPage
                     $p = VoiceReminders::preview($company, $s, now(BillReminders::TZ)->addDay());
                     $days = collect($p['days'])->map(fn ($n, $d) => ($d === 0 ? __('মেয়াদের দিনে') : __(':n দিন আগে', ['n' => $d])).': '.__(':n জন', ['n' => number_format($n)]))->implode(' · ');
 
-                    return __('বিল রিমাইন্ডার: :days (মোট :total জন, আনুমানিক :m মিনিট, প্রায় :c টাকা) · এখন বিলের জন্য বন্ধ লাইন: :off · "আর কল নয়": :o', [
-                        'days' => $days ?: '—', 'total' => $p['total'], 'm' => $p['minutes'], 'c' => $p['cost'], 'off' => $p['off_now'], 'o' => $p['optouts'],
+                    return __('বিল রিমাইন্ডার: :days (মোট :total জন, আনুমানিক :m মিনিট, প্রায় :c টাকা) · এখন বিলের জন্য বন্ধ লাইন: :off · "আর কল নয়": :o · নিয়মিত কল ধরেন (SMS শুধু ব্যাকআপ): :r', [
+                        'days' => $days ?: '—', 'total' => $p['total'], 'm' => $p['minutes'], 'c' => $p['cost'], 'off' => $p['off_now'], 'o' => $p['optouts'], 'r' => $p['regulars'],
                     ]).($s->enabled ? ($s->test_mode ? __(' · এখন টেস্ট মোডে') : '') : __(' · এখন বন্ধ'));
                 }),
             ]),

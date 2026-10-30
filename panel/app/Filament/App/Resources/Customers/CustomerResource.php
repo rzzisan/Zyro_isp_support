@@ -244,6 +244,7 @@ class CustomerResource extends Resource
                 $tab(__('অভিযোগ'), 'heroicon-o-lifebuoy')->schema([$list(History\ComplainsTable::class)]),
                 $tab(__('মন্তব্য'), 'heroicon-o-chat-bubble-bottom-center-text')->schema([$list(History\RemarksTable::class)]),
                 $tab('SMS', 'heroicon-o-envelope')->schema([$list(History\SmsTable::class)]),
+                $tab(__('রিমাইন্ডার কল'), 'heroicon-o-phone-arrow-up-right')->schema([$list(History\VoiceCallsTable::class)])->visible(fn () => Menu::can('voice_reminder')),
                 $tab(__('পরিবর্তনের ইতিহাস'), 'heroicon-o-arrows-right-left')->schema([$list(History\ChangesTable::class)]),
                 $tab(__('লাইন চালু/বন্ধ'), 'heroicon-o-power')->schema([$list(History\LineLogsTable::class)]),
                 $tab(__('ইনভয়েস'), 'heroicon-o-receipt-percent')->schema([$list(History\InvoicesTable::class)]),

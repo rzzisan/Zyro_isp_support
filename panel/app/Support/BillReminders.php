@@ -74,6 +74,27 @@ class BillReminders
         return $out;
     }
 
+    /**
+     * Queue the reminder SMS for $customers (expire date $expire, $n days before) and remember them in sms_reminders.
+     * Returns how many went ($count) or the one message's id (a single backup SMS from VoiceReminders).
+     */
+    public static function send(int $companyId, SmsSetting $s, Collection $customers, Carbon $expire, int $n, ?string $body = null, bool $count = false): ?int
+    {
+        $body ??= (string) SmsTemplate::whereKey($s->reminder_template_id)->value('body');
+        [$byMobile] = Sms::byMobile($customers);
+        if (! $byMobile || $body === '') {
+            return null;
+        }
+        $campaign = Sms::queue($companyId, null, 'reminder', $body, $byMobile, [], ['days_before' => $n],
+            ['expire_date' => $expire->format('d/m/Y'), 'days_left' => (string) $n]);
+        $ids = $campaign->messages()->pluck('id', 'customer_header_id');
+        DB::table('sms_reminders')->insertOrIgnore($customers->map(fn ($c) => ['company_id' => $companyId,
+            'customer_header_id' => $c->header_id, 'expire_date' => $expire->toDateString(), 'days_before' => $n,
+            'message_id' => $ids[$c->header_id] ?? null, 'created_at' => now()])->values()->all());
+
+        return $count ? $campaign->total : ($ids->first() ?: null);
+    }
+
     /** Queue today's reminders for one company; returns [days before => SMS queued]. Safe to run again. */
     public static function run(int $companyId, ?Carbon $now = null): array
     {
@@ -95,17 +116,12 @@ class BillReminders
                 $done = DB::table('sms_reminders')->where('company_id', $companyId)->where('days_before', $n)
                     ->where('expire_date', $expire->toDateString())->pluck('customer_header_id')->flip();
                 $todo = static::targets($companyId, $s, $today, $n)->reject(fn ($c) => isset($done[$c->header_id]));
-                [$byMobile] = Sms::byMobile($todo);
-                if (! $byMobile) {
-                    continue;
+                // regular answerers of the voice reminder call: the call tells them (the SMS only if it gets nobody)
+                $byCall = VoiceReminders::coversSms($companyId, $todo, $expire, $n);
+                $todo = $todo->reject(fn ($c) => isset($byCall[$c->header_id]));
+                if ($sent = static::send($companyId, $s, $todo, $expire, $n, $body, true)) {
+                    $out[$n] = $sent;
                 }
-                $campaign = Sms::queue($companyId, null, 'reminder', $body, $byMobile, [], ['days_before' => $n],
-                    ['expire_date' => $expire->format('d/m/Y'), 'days_left' => (string) $n]);
-                $ids = $campaign->messages()->pluck('id', 'customer_header_id');
-                DB::table('sms_reminders')->insertOrIgnore($todo->map(fn ($c) => ['company_id' => $companyId,
-                    'customer_header_id' => $c->header_id, 'expire_date' => $expire->toDateString(), 'days_before' => $n,
-                    'message_id' => $ids[$c->header_id] ?? null, 'created_at' => now()])->values()->all());
-                $out[$n] = $campaign->total;
             }
         } finally {
             DB::selectOne('SELECT pg_advisory_unlock(?, ?)', [7301, $companyId]);

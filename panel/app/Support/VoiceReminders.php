@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\BillingCustomer;
+use App\Models\SmsSetting;
 use App\Models\VoiceFlow;
 use App\Models\VoiceReminderCall;
 use App\Models\VoiceReminderSetting;
@@ -21,6 +22,10 @@ use Illuminate\Support\Facades\DB;
  *  retry:    no answer / busy → planned again retry_minutes later, up to max_tries dials.
  *  dispatch: inside the calling hours (not Friday prayer time), as many as "একসাথে কয়টা কল" allows: checked again
  *            (paid, line back on, Left, opted out), the audio made (VoiceCalls::package), queued for the voice bot.
+ *  settle:   a call whose tries are over and nobody answered: the customer's other numbers (AltNumbers), one at a
+ *            time, up to alt_max a day; then the call is settled (reached or not).
+ *  backup:   customers who regularly answer (2 of their last 3 calls) get no bill reminder SMS while a call is coming
+ *            (BillReminders asks coversSms); when that call is settled unreached, the SMS goes now as a backup.
  *  Test mode: the calls go to the test number (with the customer's data), test_daily_max a day.
  */
 class VoiceReminders
@@ -63,7 +68,7 @@ class VoiceReminders
     {
         $now = ($now ?? now())->copy();
         $s = VoiceReminderSetting::forCompany($companyId);
-        if (! $s->exists || ! $s->enabled) {
+        if (! $s->exists) {
             return [];
         }
         $lock = Cache::lock("voice-reminders:{$companyId}", 600);   // one runner per company (timer + a manual run)
@@ -71,8 +76,13 @@ class VoiceReminders
             return [];
         }
         try {
+            if (! $s->enabled) {   // turned off: what was waiting is over, the backup SMS still go
+                return array_filter(['settled' => static::settle($companyId, $s, $now, false), 'backup_sms' => static::backup($companyId)]);
+            }
             $out = ['planned' => static::plan($companyId, $s, $now), 'expired' => static::expire($companyId, $now),
                 'retried' => static::retry($companyId, $s, $now)];
+            $out['settled'] = static::settle($companyId, $s, $now, true);
+            $out['backup_sms'] = static::backup($companyId);
             $out['queued'] = static::dispatch($companyId, $s, $now);
 
             return $out;
@@ -85,20 +95,27 @@ class VoiceReminders
     {
         $today = $now->copy()->timezone(self::TZ)->startOfDay();
         $rows = [];
-        $add = function (BillingCustomer $c, string $kind, string $key, Carbon $at, Carbon $ref) use (&$rows, $companyId, $s) {
+        $add = function (BillingCustomer $c, string $kind, string $key, Carbon $at, Carbon $ref, bool $smsBackup = false) use (&$rows, $companyId, $s) {
             $test = $s->test_mode;
             $rows[] = ['company_id' => $companyId, 'kind' => $kind,
                 'voice_flow_id' => $kind === 'reminder' ? $s->reminder_flow_id : $s->line_off_flow_id,
                 'customer_header_id' => $c->header_id, 'customer_id' => $c->customer_id, 'name' => $c->name,
                 'number' => $test ? (Sms::mobile((string) $s->test_number) ?? '') : $c->mobile_normalized,
                 'status' => 'planned', 'dedupe' => $key.($test ? ':test' : ''), 'ref_date' => $ref->toDateString(),
+                'sms_backup' => $smsBackup && ! $test,
                 'scheduled_at' => $at, 'created_at' => now(), 'updated_at' => now()];
         };
         if ($s->reminder_on && $s->reminder_flow_id && static::inWindow($s, $now)) {
+            $byDay = [];
             foreach (BillReminders::days($s->reminder_days) as $n) {
+                $byDay[$n] = static::billTargets($companyId, $s, $today, $n);
+            }
+            $regular = $s->sms_saving && ! $s->test_mode
+                ? static::regulars($companyId, collect($byDay)->flatten()->pluck('header_id')->all()) : [];
+            foreach ($byDay as $n => $targets) {
                 $expire = $today->copy()->addDays($n)->toDateString();
-                foreach (static::billTargets($companyId, $s, $today, $n) as $c) {
-                    $add($c, 'reminder', "bill:{$c->header_id}:{$expire}:{$n}", $now, $today);
+                foreach ($targets as $c) {
+                    $add($c, 'reminder', "bill:{$c->header_id}:{$expire}:{$n}", $now, $today, isset($regular[$c->header_id]));
                 }
             }
         }
@@ -172,7 +189,7 @@ class VoiceReminders
         $n = 0;
         $today = $now->copy()->timezone(self::TZ)->toDateString();
         foreach (VoiceReminderCall::where('company_id', $companyId)->whereIn('kind', ['reminder', 'line_off'])
-            ->whereIn('status', ['no_answer', 'busy'])->where('tries', '<', $s->max_tries)->whereDate('ref_date', $today)
+            ->whereNull('alt_of')->whereIn('status', ['no_answer', 'busy'])->where('tries', '<', $s->max_tries)->whereDate('ref_date', $today)
             ->where('ended_at', '<=', $now->copy()->subMinutes($s->retry_minutes))->get() as $c) {
             $c->update(['status' => 'planned', 'scheduled_at' => $now]);
             $n++;
@@ -203,8 +220,10 @@ class VoiceReminders
                 continue;
             }
             $customer = BillingCustomer::where('company_id', $companyId)->where('header_id', $call->customer_header_id)->first();
+            // on another number: the template's {called_for} says whose connection it is about
+            $extra = $call->alt_of ? ['called_for' => __(':name-এর ইন্টারনেট সংযোগের ব্যাপারে কল করেছি, অনুগ্রহ করে তাঁকে জানিয়ে দেবেন। ', ['name' => $customer->name])] : [];
             try {
-                $call->update(['package' => VoiceCalls::package($flows->get($call->voice_flow_id), $customer), 'status' => 'queued']);
+                $call->update(['package' => VoiceCalls::package($flows->get($call->voice_flow_id), $customer, $extra), 'status' => 'queued']);
             } catch (\Throwable $e) {
                 report($e);
                 $call->update(['status' => 'failed', 'error' => mb_substr($e->getMessage(), 0, 300)]);
@@ -248,19 +267,196 @@ class VoiceReminders
         return null;
     }
 
+    /**
+     * Calls whose dialling is over: answered (by this or another number) → reached; not answered and no retry left →
+     * the next of the customer's other numbers (when on, inside the hours, up to alt_max a day), else settled unreached.
+     * $active false (reminders turned off): no more retries or other numbers, just settle.
+     */
+    public static function settle(int $companyId, VoiceReminderSetting $s, Carbon $now, bool $active): int
+    {
+        $today = $now->copy()->timezone(self::TZ)->toDateString();
+        $open = ['planned', 'queued', 'dialing', 'answered'];
+        $hoursLeft = $now->copy()->timezone(self::TZ)->format('H:i') < substr((string) $s->window_to, 0, 5);
+        $n = 0;
+        foreach (VoiceReminderCall::where('company_id', $companyId)->whereIn('kind', ['reminder', 'line_off'])->whereNull('alt_of')
+            ->whereNull('settled_at')->whereNotIn('status', $open)->orderBy('id')->get() as $m) {
+            $alts = VoiceReminderCall::where('alt_of', $m->id)->orderBy('id')->get();
+            $answered = $alts->first(fn ($a) => $a->answered_at);
+            if ($m->answered_at || $answered) {
+                if ($answered && ! str_ends_with((string) $m->dedupe, ':test')) {
+                    DB::table('customer_alt_numbers')->where('company_id', $companyId)->where('customer_header_id', $m->customer_header_id)
+                        ->where('number', $answered->alt_number)->update(['reached_at' => $answered->answered_at, 'updated_at' => now()]);
+                }
+                $m->update(['settled_at' => $now, 'reached' => true]);
+                $n++;
+
+                continue;
+            }
+            if ($alts->contains(fn ($a) => in_array($a->status, $open, true))) {
+                continue;
+            }
+            $sameDay = $m->ref_date?->toDateString() === $today;
+            if ($active && $sameDay && $hoursLeft && in_array($m->status, ['no_answer', 'busy'], true) && $m->tries < $s->max_tries) {
+                continue;   // retry() puts it back later today
+            }
+            if ($active && $sameDay && $hoursLeft && $s->alt_on && in_array($m->status, ['no_answer', 'busy', 'failed'], true)
+                && static::nextAlt($m, $alts, $s, $now)) {
+                continue;
+            }
+            $m->update(['settled_at' => $now, 'reached' => false]);
+            $n++;
+        }
+
+        return $n;
+    }
+
+    /** Plan the call to the customer's next other number; false when there is none (left) for today. */
+    private static function nextAlt(VoiceReminderCall $m, Collection $alts, VoiceReminderSetting $s, Carbon $now): bool
+    {
+        $c = BillingCustomer::where('company_id', $m->company_id)->where('header_id', $m->customer_header_id)->first();
+        if (! $c) {
+            return false;
+        }
+        $start = $now->copy()->timezone(self::TZ)->startOfDay()->utc();
+        $todayAlts = VoiceReminderCall::where('company_id', $m->company_id)->where('customer_header_id', $c->header_id)
+            ->whereNotNull('alt_of')->where('created_at', '>=', $start)->count();
+        if ($todayAlts >= max(1, (int) $s->alt_max)) {
+            return false;
+        }
+        $tried = $alts->pluck('alt_number')->all();
+        $next = AltNumbers::for($c)->first(fn ($r) => ! in_array($r['number'], $tried, true));
+        if (! $next) {
+            return false;
+        }
+        $test = str_ends_with((string) $m->dedupe, ':test');
+        if ($test) {   // a test: to the test number, inside the test day's limit
+            $done = VoiceReminderCall::where('company_id', $m->company_id)->where('dedupe', 'like', '%:test')->where('created_at', '>=', $start)->count();
+            $number = Sms::mobile((string) $s->test_number);
+            if (! $s->test_mode || ! $number || $done >= $s->test_daily_max) {
+                return false;
+            }
+        }
+        $base = $test ? substr((string) $m->dedupe, 0, -5) : (string) $m->dedupe;
+        VoiceReminderCall::create(['company_id' => $m->company_id, 'kind' => $m->kind, 'voice_flow_id' => $m->voice_flow_id,
+            'customer_header_id' => $c->header_id, 'customer_id' => $c->customer_id, 'name' => $c->name,
+            'number' => $test ? $number : $next['number'], 'alt_of' => $m->id, 'alt_number' => $next['number'],
+            'number_source' => implode(',', $next['sources']), 'status' => 'planned',
+            'dedupe' => $base.':alt:'.$next['number'].($test ? ':test' : ''), 'ref_date' => $m->ref_date, 'scheduled_at' => $now]);
+        if (! $test) {
+            DB::table('customer_alt_numbers')->where('company_id', $m->company_id)->where('customer_header_id', $c->header_id)
+                ->where('number', $next['number'])->update(['tried_at' => now()]);
+        }
+
+        return true;
+    }
+
+    /** The bill reminder SMS for regular answerers whose call got nobody (once per expire date and day). */
+    public static function backup(int $companyId): int
+    {
+        $rows = VoiceReminderCall::where('company_id', $companyId)->where('kind', 'reminder')->whereNull('alt_of')->where('sms_backup', true)
+            ->where('reached', false)->whereNotNull('settled_at')->whereNull('backup_sms_at')->where('created_at', '>=', now()->subDays(3))->get();
+        if ($rows->isEmpty()) {
+            return 0;
+        }
+        $sms = SmsSetting::forCompany($companyId);
+        $n = 0;
+        foreach ($rows as $r) {
+            $r->update(['backup_sms_at' => now()]);
+            if (! preg_match('/^bill:(\d+):(\d{4}-\d{2}-\d{2}):(\d+)$/', (string) $r->dedupe, $m) || ! $sms->eventOn('bill_reminder')) {
+                continue;
+            }
+            $c = BillingCustomer::where('company_id', $companyId)->where('header_id', (int) $m[1])->first();
+            if (! $c || $c->gone_at || $c->is_left || $c->disabled || ($sms->reminder_due_only && (float) $c->due <= 0)
+                || DB::table('sms_reminders')->where('company_id', $companyId)->where('customer_header_id', $c->header_id)
+                    ->where('expire_date', $m[2])->where('days_before', (int) $m[3])->exists()) {
+                continue;
+            }
+            $id = BillReminders::send($companyId, $sms, collect([$c]), Carbon::parse($m[2], self::TZ), (int) $m[3]);
+            if ($id) {
+                $r->update(['backup_sms_id' => $id]);
+                $n++;
+            }
+        }
+
+        return $n;
+    }
+
+    /**
+     * Customers who regularly answer: 2 or more of their last 3 settled calls reached (calls skipped before dialling,
+     * e.g. bill already paid, don't count). header_id => true.
+     */
+    public static function regulars(int $companyId, array $headers): array
+    {
+        if (! $headers) {
+            return [];
+        }
+        $out = [];
+        foreach (array_chunk(array_values(array_unique($headers)), 500) as $chunk) {
+            VoiceReminderCall::where('company_id', $companyId)->whereIn('customer_header_id', $chunk)->whereIn('kind', ['reminder', 'line_off'])
+                ->whereNull('alt_of')->whereNotNull('settled_at')->where('dedupe', 'not like', '%:test')
+                ->where(fn ($q) => $q->where('reached', true)->orWhereNotIn('status', ['skipped', 'expired']))
+                ->where('created_at', '>=', now()->subDays(120))
+                ->orderByDesc('settled_at')->orderByDesc('id')->get(['customer_header_id', 'reached'])
+                ->groupBy('customer_header_id')
+                ->each(function ($calls, $h) use (&$out) {
+                    if ($calls->take(3)->where('reached', true)->count() >= 2) {
+                        $out[(int) $h] = true;
+                    }
+                });
+        }
+
+        return $out;
+    }
+
+    /**
+     * For BillReminders: the customers (of $customers, whose expire date is $expire, SMS $n days before) who get no
+     * reminder SMS now because a call does it: regular answerers the call reaches (a call is still to come on or
+     * before that SMS day, or one for this expire date was made; if it got nobody, backup() sends the SMS).
+     * header_id => true.
+     */
+    public static function coversSms(int $companyId, Collection $customers, Carbon $expire, int $n): array
+    {
+        $s = VoiceReminderSetting::where('company_id', $companyId)->first();
+        if (! $s || ! $s->enabled || $s->test_mode || ! $s->reminder_on || ! $s->reminder_flow_id || ! $s->sms_saving || $customers->isEmpty()) {
+            return [];
+        }
+        $coming = collect(BillReminders::days($s->reminder_days))->contains(fn ($d) => $d <= $n);
+        $regular = static::regulars($companyId, $customers->pluck('header_id')->all());
+        if (! $regular) {
+            return [];
+        }
+        $optout = DB::table('voice_optouts')->where('company_id', $companyId)->pluck('number')->flip();
+        $called = $coming ? collect() : VoiceReminderCall::where('company_id', $companyId)->where('kind', 'reminder')->whereNull('alt_of')
+            ->where('dedupe', 'like', 'bill:%:'.$expire->toDateString().':%')->where('dedupe', 'not like', '%:test')
+            ->whereIn('customer_header_id', array_keys($regular))->pluck('customer_header_id')->flip();
+        $out = [];
+        foreach ($customers as $c) {
+            if (isset($regular[$c->header_id]) && (! $s->due_only || (float) $c->due > 0) && ! isset($optout[$c->mobile_normalized])
+                && ($coming || isset($called[$c->header_id]))) {
+                $out[(int) $c->header_id] = true;
+            }
+        }
+
+        return $out;
+    }
+
     /** For the settings page: who would be called on $day and the rough minutes and cost. */
     public static function preview(int $companyId, VoiceReminderSetting $s, Carbon $day): array
     {
         $day = $day->copy()->timezone(self::TZ)->startOfDay();
         $byDays = [];
+        $headers = [];
         foreach (BillReminders::days($s->reminder_days) as $n) {
-            $byDays[$n] = static::billTargets($companyId, $s, $day, $n)->count();
+            $t = static::billTargets($companyId, $s, $day, $n);
+            $byDays[$n] = $t->count();
+            array_push($headers, ...$t->pluck('header_id')->all());
         }
         $optout = DB::table('voice_optouts')->where('company_id', $companyId)->count();
         $total = array_sum($byDays);
         $minutes = (int) ceil($total * 1.2 * 1.3);   // ~70 s a call, some tried twice
 
         return ['days' => $byDays, 'total' => $total, 'minutes' => $minutes, 'cost' => round($minutes * (float) $s->minute_rate),
-            'off_now' => static::offLines($companyId)->count(), 'optouts' => $optout];
+            'off_now' => static::offLines($companyId)->count(), 'optouts' => $optout,
+            'regulars' => $s->sms_saving ? count(static::regulars($companyId, $headers)) : 0];
     }
 }
