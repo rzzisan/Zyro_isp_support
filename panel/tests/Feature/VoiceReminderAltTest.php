@@ -252,6 +252,16 @@ class VoiceReminderAltTest extends TestCase
         $this->artisan('customers:alt-numbers')->assertSuccessful();
     }
 
+    public function test_the_new_pages_open_for_the_owner(): void
+    {
+        $this->customer(1, ['phone' => '01811000001']);
+        AltNumbers::rebuild($this->company->id);
+        // over HTTP, so the panel's tenant scoping runs too (a model without company() breaks only there)
+        foreach (['customer-alt-numbers', 'voice-reminder-report', 'voice-reminder-settings', 'voice-reminder-calls', 'voice-optouts'] as $page) {
+            $this->actingAs($this->owner)->get('/app/'.$this->company->slug.'/'.$page)->assertOk();
+        }
+    }
+
     public function test_report_and_customer_tab_render(): void
     {
         $this->settings();

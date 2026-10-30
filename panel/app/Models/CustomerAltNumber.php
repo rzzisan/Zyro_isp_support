@@ -16,6 +16,12 @@ class CustomerAltNumber extends Model
         return ['seen_at' => 'datetime', 'tried_at' => 'datetime', 'reached_at' => 'datetime', 'removed_at' => 'datetime'];
     }
 
+    /** The tenant (Filament scopes the বিকল্প নম্বর page by it). */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(BillingCustomer::class, 'customer_header_id', 'header_id')
