@@ -235,6 +235,20 @@ class BillCollectionTest extends TestCase
         $this->assertContains('bills', \App\Support\Menu::defaults('admin'));
     }
 
+    public function test_next_billing_date_switch_follows_the_amount(): void
+    {
+        $this->fakeEngine();
+        $this->as($this->owner);
+        $form = Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])->mountAction('receiveBill')
+            ->assertSchemaStateSet(['next_billing_date' => true], 'mountedActionSchema0');
+        // due 525: on only above 80% (420), off for an advance; a discount counts as paid
+        $form->fillForm(['paid' => 600])->assertSchemaStateSet(['next_billing_date' => false], 'mountedActionSchema0')
+            ->fillForm(['paid' => 420])->assertSchemaStateSet(['next_billing_date' => false], 'mountedActionSchema0')
+            ->fillForm(['paid' => 421])->assertSchemaStateSet(['next_billing_date' => true], 'mountedActionSchema0')
+            ->fillForm(['paid' => 400, 'discount' => 30])->assertSchemaStateSet(['next_billing_date' => true], 'mountedActionSchema0');
+        $this->assertFalse(BillActions::nextBillingDate(0, 100, 0));
+    }
+
     public function test_log_lists_only_own_company(): void
     {
         $other = Company::create(['name' => 'Other ISP']);

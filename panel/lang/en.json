@@ -865,7 +865,7 @@
     "বিলিং-এ নেই": "not in billing",
     "বিলিং-এ লাইন Disable হবে, কাস্টমারের ইন্টারনেট বন্ধ হয়ে যাবে।": "The line will be disabled in billing and the customer's internet will stop.",
     "বিলিং-এ লাইন Enable হবে।": "The line will be enabled in billing.",
-    "বিলিং-এর \"Is it next billing date?\"": "Billing's \"Is it next billing date?\"",
+    "বিলিং-এর \"Is it next billing date?\" শুধু বকেয়ার ৮০%-এর বেশি নিলে নিজে চালু হয়, অগ্রিমে বন্ধ": "Billing's \"Is it next billing date?\" Turns on by itself only when more than 80% of the due is paid; off for an advance",
     "বিলিং-এর Received By (যিনি টাকা নিয়েছেন)। খালি রাখলে শুধু নিজের এন্ট্রি দেওয়া বিল দেখবেন (ওপরের বিলিং ইউজারনেম মিলিয়ে)। Owner/Admin সবার বিল দেখেন।": "Billing's Received By (who took the money). Empty = only bills they entered themselves (matched by the billing username above). Owner/Admin see everyone's bills.",
     "বিলিং-এর কাস্টমার তালিকায় এখনো নেই": "not in billing's customer list yet",
     "বিলিংয়ে": "In billing",

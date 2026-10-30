@@ -64,7 +64,19 @@ class BillActions
         return ['paid' => (float) ($f['payable'] ?? 0) ?: null, 'discount' => 0,
             'method_id' => $f['method_default'] ?? null, 'received_by_id' => $f['received_by_default'] ?? null,
             'bill_month' => $f['bill_month'] ?? null, 'expected_payable' => $f['payable'] ?? null,
-            'desk_sms' => static::deskSmsDefault(), 'next_billing_date' => true, 'print' => true];
+            'desk_sms' => static::deskSmsDefault(), 'next_billing_date' => static::nextBillingDate((float) ($f['payable'] ?? 0), (float) ($f['payable'] ?? 0), 0),
+            'print' => true];
+    }
+
+    /**
+     * "পরের বিলিং তারিখ সেট" follows the amount (Zisan): on only when more than 80% of the due is paid, and off for an
+     * advance (more than the due); a discount counts as paid. Staff can still flip it by hand after typing the amount.
+     */
+    public static function nextBillingDate(float $payable, float $paid, float $discount): bool
+    {
+        $total = $paid + $discount;
+
+        return $payable > 0 && $total <= $payable + 0.001 && $total > 0.8 * $payable + 0.001;
     }
 
     /** "কাস্টমারকে SMS": the gateway settings' "বিল নিলে কাস্টমারকে SMS", when a bill-payment template is set. */
@@ -138,6 +150,8 @@ class BillActions
     public static function receive(?BillingCustomer $customer = null, bool $forRecord = false): Action
     {
         $headerOf = fn ($get) => $customer ? (int) $customer->header_id : (int) $get('header_id');
+        $nextDate = fn ($get, $set) => $get('expected_payable') === null ? null
+            : $set('next_billing_date', static::nextBillingDate((float) $get('expected_payable'), (float) $get('paid'), (float) $get('discount')));
 
         return Action::make($forRecord ? 'payBill' : 'receiveBill')->label(__('বিল নিন'))->icon(Heroicon::OutlinedBanknotes)
             ->visible(fn () => Menu::can('bills'))
@@ -194,11 +208,13 @@ class BillActions
                     Hidden::make('expected_payable'),
                     Grid::make(3)->schema([
                         TextInput::make('paid')->label(__('টাকা নিলেন'))->numeric()->minValue(0)->suffix(__('টাকা'))->required()->live(debounce: 400)
-                            ->partiallyRenderComponentsAfterStateUpdated(['summary'])
+                            ->afterStateUpdated($nextDate)
+                            ->partiallyRenderComponentsAfterStateUpdated(['summary', 'nextDate'])
                             ->autofocus((bool) $customer || $forRecord)
                             ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
                         TextInput::make('discount')->label(__('ডিসকাউন্ট'))->numeric()->minValue(0)->suffix(__('টাকা'))->default(0)->live(debounce: 400)
-                            ->partiallyRenderComponentsAfterStateUpdated(['summary'])
+                            ->afterStateUpdated($nextDate)
+                            ->partiallyRenderComponentsAfterStateUpdated(['summary', 'nextDate'])
                             ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
                         Select::make('method_id')->label(__('মাধ্যম'))->required()
                             ->options(fn ($get) => static::tryForm($headerOf($get))[0]['methods'] ?? []),
@@ -227,8 +243,8 @@ class BillActions
                             ->hintIcon('heroicon-o-information-circle', fn () => SmsSetting::forCompany(static::company())->billSmsReady()
                                 ? __('জমা হলে Desk-এর SMS গেটওয়ে দিয়ে "বিল পরিশোধ" টেমপ্লেটের SMS যায় (জমা দেরি হয় না)')
                                 : __('চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "বিল পরিশোধের টেমপ্লেট" সেট করুন')),
-                        Toggle::make('next_billing_date')->label(__('পরের বিলিং তারিখ সেট'))
-                            ->hintIcon('heroicon-o-information-circle', __('বিলিং-এর "Is it next billing date?"')),
+                        Toggle::make('next_billing_date')->label(__('পরের বিলিং তারিখ সেট'))->key('nextDate')
+                            ->hintIcon('heroicon-o-information-circle', __('বিলিং-এর "Is it next billing date?" শুধু বকেয়ার ৮০%-এর বেশি নিলে নিজে চালু হয়, অগ্রিমে বন্ধ')),
                     ]),
                 ])->key('billBody'),
             ])
