@@ -75,7 +75,7 @@ class VoiceReminderSettings extends CompanySettingsPage
         /** @var VoiceReminderSetting $record */
         $data = $record->only(['enabled', 'test_mode', 'test_number', 'test_daily_max', 'reminder_on', 'reminder_flow_id', 'reminder_days',
             'due_only', 'line_off_on', 'line_off_flow_id', 'line_off_delay', 'line_off_days', 'window_from', 'window_to', 'skip_jumma',
-            'max_calls', 'retry_minutes', 'max_tries', 'minute_rate', 'alt_on', 'alt_max', 'sms_saving']);
+            'max_calls', 'retry_minutes', 'max_tries', 'minute_rate', 'alt_on', 'alt_max', 'sms_saving', 'inbound_on', 'inbound_flow_id', 'inbound_delay']);
         $data['test_number'] = $data['test_number'] ? '0'.substr((string) $data['test_number'], 3) : null;
 
         return $data;
@@ -113,6 +113,14 @@ class VoiceReminderSettings extends CompanySettingsPage
                     TextInput::make('line_off_delay')->label(__('বন্ধ হওয়ার কত মিনিট পরে'))->numeric()->minValue(5)->maxValue(1440)->required(),
                     TextInput::make('line_off_days')->label(__('বন্ধ থাকলে কত দিন চেষ্টা'))->numeric()->minValue(1)->maxValue(7)->required()
                         ->helperText(__('প্রথম দিন + পরের দিনগুলোতে দিনে একবার, যতক্ষণ কাউকে পাওয়া না যায়')),
+                ]),
+            Section::make(__('লাইন বন্ধ কাস্টমার নিজে কল দিলে'))->columns(3)
+                ->description(__('বিলের জন্য লাইন বন্ধ (বকেয়া আছে) এমন কাস্টমার হটলাইনে বা WhatsApp-এ কল দিলে (নিজের বা বিকল্প নম্বর থেকে) কয়েক সেকেন্ডে কল ধরে এই ফ্লো চলে; স্টাফ বা বটের কাছে রিং যায় না, ফ্লোর স্টাফ বাটনে যায়। এক নম্বরে কয়েকটা লাইন থাকলে আগের মতো সাধারণ কল। উপরের "রিমাইন্ডার কল চালু" বন্ধ থাকলেও এটা আলাদা চলে; টেস্ট মোডে শুধু টেস্ট নম্বর থেকে কল দিলে (উদাহরণের তথ্য দিয়ে)। চালুর পর মেসেজ তৈরি হতে কয়েক মিনিট লাগে।'))
+                ->schema([
+                    Toggle::make('inbound_on')->label(__('চালু'))->inline(false),
+                    Select::make('inbound_flow_id')->label(__('কোন কল ফ্লো'))->options($flows('line_off'))
+                        ->placeholder(__('লাইন বন্ধের কলের ফ্লো-ই')),
+                    TextInput::make('inbound_delay')->label(__('কত সেকেন্ড রিং হওয়ার পরে ধরবে'))->numeric()->minValue(0)->maxValue(10)->required(),
                 ]),
             Section::make(__('কখন ও কতগুলো'))->columns(3)->schema([
                 TimePicker::make('window_from')->label(__('কল শুরু'))->seconds(false)->required(),
@@ -158,8 +166,11 @@ class VoiceReminderSettings extends CompanySettingsPage
             $data['test_number'] = isset($data['test_number']) ? Sms::mobile((string) $data['test_number']) : $record->test_number;
         }
         $own = VoiceFlow::where('company_id', Filament::getTenant()->getKey())->pluck('id')->all();
-        foreach (['reminder_flow_id', 'line_off_flow_id'] as $k) {
+        foreach (['reminder_flow_id', 'line_off_flow_id', 'inbound_flow_id'] as $k) {
             $data[$k] = in_array((int) ($data[$k] ?? 0), $own, true) ? (int) $data[$k] : null;
+        }
+        if (($data['inbound_on'] ?? false) && ! ($data['inbound_flow_id'] ?? null) && ! ($data['line_off_flow_id'] ?? null)) {
+            throw ValidationException::withMessages(['data.inbound_flow_id' => __('কোন কল ফ্লো চলবে, বেছে নিন')]);
         }
         $data['reminder_days'] = implode(',', BillReminders::days($data['reminder_days'] ?? '2,0')) ?: '0';
         foreach (['window_from', 'window_to'] as $k) {

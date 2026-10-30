@@ -282,6 +282,40 @@ class VoiceReminderAltTest extends TestCase
         $this->get('/calls/'.$this->company->slug.'/recording/'.$log->id)->assertNotFound();
     }
 
+    public function test_line_off_packages_are_made_ahead_for_callers(): void
+    {
+        $off = $this->customer(1, ['disabled' => true]);
+        $this->customer(2, ['disabled' => true, 'due' => 0]);   // off, nothing due: not ours
+        $this->customer(3);                                       // on
+        $s = $this->settings(['enabled' => false, 'inbound_on' => true]);
+        $ready = fn () => DB::table('voice_inbound_ready')->where('company_id', $this->company->id)->orderBy('customer_header_id')->pluck('customer_header_id')->all();
+
+        $this->assertSame(1, VoiceReminders::run($this->company->id)['inbound_ready'] ?? null);   // runs while the calls are off
+        $this->assertSame([1], $ready());
+        $p = json_decode(DB::table('voice_inbound_ready')->where('customer_header_id', 1)->value('package'), true);
+        $this->assertSame($s->line_off_flow_id, $p['flow']['id']);
+        $this->assertSame('1001', $p['customer']['customer_id']);
+        $this->assertNotEmpty($p['audio']);
+
+        $this->assertSame(0, VoiceReminders::prepareInbound($this->company->id, $s));   // nothing changed: not made again
+        $off->update(['due' => 700]);
+        $this->assertSame(1, VoiceReminders::prepareInbound($this->company->id, $s));
+        $off->update(['disabled' => false]);                                              // back on: removed
+        VoiceReminders::prepareInbound($this->company->id, $s);
+        $this->assertSame([], $ready());
+
+        // test mode: only the example, for the test number
+        $off->update(['disabled' => true]);
+        $s->update(['test_mode' => true, 'test_number' => '8801811000009']);
+        VoiceReminders::prepareInbound($this->company->id, $s->fresh());
+        $this->assertSame([0], $ready());
+
+        $s->update(['inbound_on' => false]);
+        VoiceReminders::prepareInbound($this->company->id, $s->fresh());
+        $this->assertSame([], $ready());
+        $this->actingAs($this->owner)->get('/app/'.$this->company->slug.'/voice-reminder-settings')->assertOk()->assertSee('লাইন বন্ধ কাস্টমার নিজে কল দিলে');
+    }
+
     public function test_report_and_customer_tab_render(): void
     {
         $this->settings();
