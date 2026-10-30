@@ -69,6 +69,7 @@ class VoiceReminderCallResource extends Resource
 
         return $table
             ->defaultSort('id', 'desc')
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('callLog'))
             ->poll('15s')
             ->emptyStateHeading(__('এখনো কোনো রিমাইন্ডার কল নেই'))
             ->columns([
@@ -104,6 +105,14 @@ class VoiceReminderCallResource extends Resource
                     ->url(fn () => VoiceOptoutResource::getUrl()),
             ])
             ->recordActions([
+                Action::make('listen')->label(__('শুনুন'))->icon(Heroicon::OutlinedPlay)->color('gray')
+                    ->visible(fn (VoiceReminderCall $r) => filled($r->callLog?->recording_path) || ! empty($r->callLog?->actions))
+                    ->modalHeading(fn (VoiceReminderCall $r) => __('রিমাইন্ডার কল: :n', ['n' => $r->name ?: '0'.substr((string) $r->number, 3)]))
+                    ->modalSubmitAction(false)->modalCancelActionLabel(__('বন্ধ করুন'))
+                    ->modalContent(fn (VoiceReminderCall $r) => view('filament.app.call-log-detail', [
+                        'call' => $r->callLog,
+                        'audio' => $r->callLog?->recording_path ? route('calls.recording', [Filament::getTenant(), $r->callLog]) : null,
+                    ])),
                 Action::make('cancel')->label(__('বাতিল'))->icon(Heroicon::OutlinedXMark)->color('danger')->requiresConfirmation()
                     ->visible(fn (VoiceReminderCall $r) => $r->status === 'planned')
                     ->action(function (VoiceReminderCall $r) {

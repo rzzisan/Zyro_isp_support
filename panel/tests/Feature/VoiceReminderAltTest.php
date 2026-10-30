@@ -262,6 +262,26 @@ class VoiceReminderAltTest extends TestCase
         }
     }
 
+    public function test_a_reminder_call_recording_can_be_heard_from_the_reminder_calls_page(): void
+    {
+        $this->settings();
+        $c = $this->customer(1, ['phone' => '01811000001']);
+        $log = \App\Models\CallLog::create(['company_id' => $this->company->id, 'call_ref' => 'r1', 'caller' => '01811000001', 'status' => 'ended',
+            'started_at' => now(), 'recording_path' => $this->company->id.'/rec-test-missing.mp3',
+            'actions' => [['at' => '16:50:03', 'kind' => 'sms', 'text' => 'SMS', 'ok' => true]]]);
+        $call = $this->unanswered($c, ['status' => 'done', 'answered_at' => now(), 'call_log_id' => $log->id]);
+        $this->actingAs($this->owner)->get('/app/'.$this->company->slug.'/voice-reminder-calls')->assertOk();
+        $this->actingAs($this->owner);
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($this->company);
+        Livewire::test(\App\Filament\App\Resources\VoiceReminderCalls\Pages\ListVoiceReminderCalls::class)
+            ->assertTableActionVisible('listen', $call)->mountTableAction('listen', $call)->assertHasNoErrors();
+        $html = view('filament.app.call-log-detail', ['call' => $log, 'audio' => route('calls.recording', [$this->company, $log])])->render();
+        $this->assertStringContainsString('16:50:03', $html);
+        // allowed (the file itself is not there in the test)
+        $this->get('/calls/'.$this->company->slug.'/recording/'.$log->id)->assertNotFound();
+    }
+
     public function test_report_and_customer_tab_render(): void
     {
         $this->settings();

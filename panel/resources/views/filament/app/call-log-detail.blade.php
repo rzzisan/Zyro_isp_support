@@ -15,7 +15,7 @@
                 @foreach ($call->actions as $a)
                     @php($cust = ! empty($a['customer_id']) ? \App\Models\BillingCustomer::where('company_id', $call->company_id)->where('customer_id', $a['customer_id'])->orderBy('is_left')->first() : null)
                     <div style="color:{{ ($a['ok'] ?? true) ? 'inherit' : '#dc2626' }}">
-                        <span style="opacity:.6">{{ gmdate('i:s', (int) ($a['at'] ?? 0)) }}</span>
+                        <span style="opacity:.6">{{ str_contains((string) ($a['at'] ?? ''), ':') ? $a['at'] : gmdate('i:s', (int) ($a['at'] ?? 0)) }}</span>
                         {{ $a['text'] ?? '' }}
                         @if ($cust)
                             · <a href="{{ \App\Filament\App\Resources\Customers\CustomerResource::getUrl('view', ['record' => $cust]) }}"

@@ -257,10 +257,13 @@ Route::get('/walkie/{company:slug}/clip/{clip}', function (\App\Models\Company $
     return response()->file($path, ['Content-Type' => 'audio/mpeg', 'Cache-Control' => 'private, max-age=86400']);
 })->middleware('web')->name('walkie.clip');
 
-// a bot-answered hotline call's recording (engine/voice_bot.py writes storage/app/call-recordings); "কল লগ" menu users only
+// a hotline call's recording (engine/voice_bot.py writes storage/app/call-recordings); "কল লগ" menu users, and
+// "ভয়েস রিমাইন্ডার" menu users for reminder calls
 Route::get('/calls/{company:slug}/recording/{call}', function (\App\Models\Company $company, \App\Models\CallLog $call) {
     $user = Auth::user();
-    abort_unless($user && \App\Support\Menu::allows($user, $company, 'calls') && $call->company_id === $company->id && $call->recording_path, 403);
+    $may = $user && (\App\Support\Menu::allows($user, $company, 'calls')
+        || (\App\Support\Menu::allows($user, $company, 'voice_reminder') && \App\Models\VoiceReminderCall::where('call_log_id', $call->id)->exists()));
+    abort_unless($may && $call->company_id === $company->id && $call->recording_path, 403);
     $path = storage_path('app/call-recordings/'.$call->recording_path);
     abort_unless(is_file($path) && ! str_contains($call->recording_path, '..'), 404);
 
