@@ -428,6 +428,18 @@ class ISPDigital:
             raise BillingRefused(res["errorMSG"])
         return res.get("successMSG") or "ok"
 
+    def approve_bills(self, daily_bill_ids: list[int]) -> str:
+        """Approve pending Daily Bill Collection rows like the page's "Approve" button ($.post billIDs[]=id, no
+        anti-forgery token). Only for logins billing lets approve (HasApprovalAccess on the row). Returns billing's message."""
+        r = self._post("/DailyAccountClosing/ApproveSelectedTransaction/", [("billIDs[]", str(int(i))) for i in daily_bill_ids])
+        if r.text.lstrip().startswith("<"):
+            self._logged_in = False
+            raise LoginError("billing session expired, the bill was not approved")
+        res = r.json()
+        if res.get("errorMessage"):
+            raise BillingRefused(res["errorMessage"])
+        return res.get("successMessage") or "ok"
+
     def open_tickets_for(self, username: str) -> list[dict]:
         rows = self.open_tickets(username)
         # the daily complain list holds unresolved tickets: Status 0 = pending, 1 = processing

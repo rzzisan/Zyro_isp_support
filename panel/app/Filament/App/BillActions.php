@@ -121,6 +121,12 @@ class BillActions
         return __('কাস্টমারকে SMS যাচ্ছে');
     }
 
+    /** Title after a saved bill: approved now (bill_approve) or still waiting for approval in billing. */
+    public static function savedTitle(array $res): string
+    {
+        return ! empty($res['approved']) ? __('বিল জমা ও approve হয়েছে') : __('বিল জমা হয়েছে, বিলিং-এ approve বাকি');
+    }
+
     /**
      * @param  BillingCustomer|null  $customer  fixed customer (customer page); null = pick one in the form
      * @param  bool  $forRecord  table row action: the row's customer (customer list "Pay")
@@ -233,6 +239,7 @@ class BillActions
                         'bill_month' => $data['bill_month'] ?? null, 'sms' => false,  // never billing's SMS
                         'next_billing_date' => (bool) ($data['next_billing_date'] ?? true),
                         'expected_payable' => isset($data['expected_payable']) ? (float) $data['expected_payable'] : null,
+                        'approve' => Menu::can('bill_approve'),
                     ]);
                 } catch (RuntimeException $e) {
                     Notification::make()->danger()->title(__('বিল নেওয়া হয়নি'))->body($e->getMessage())->persistent()->send();
@@ -250,8 +257,8 @@ class BillActions
                         .json_encode($receipt).'; document.body.appendChild(f); setTimeout(() => f.remove(), 120000); })()');
                 }
                 $smsNote = ($data['desk_sms'] ?? false) ? static::queueBillSms(static::company(), $headerId, $data, $res, $methodName) : null;
-                Notification::make()->success()->title(__('বিল জমা হয়েছে, বিলিং-এ approve বাকি').($smsNote ? ' · '.$smsNote : ''))
-                    ->body(trim(($res['message'] ?? '').' · '.((float) ($res['balance'] ?? 0) < 0
+                Notification::make()->success()->title(static::savedTitle($res).($smsNote ? ' · '.$smsNote : ''))
+                    ->body(trim(($res['message'] ?? '').' · '.(! empty($res['approve_error']) ? $res['approve_error'].' · ' : '').((float) ($res['balance'] ?? 0) < 0
                         ? __('অগ্রিম :amount টাকা', ['amount' => -(float) $res['balance']])
                         : __('বাকি বকেয়া :amount টাকা', ['amount' => $res['balance'] ?? 0])), ' ·'))
                     ->actions(! empty($res['collection_id']) ? [Action::make('printReceipt')->label(__('রিসিট প্রিন্ট'))->button()

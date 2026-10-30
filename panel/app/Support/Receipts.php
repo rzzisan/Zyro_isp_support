@@ -29,8 +29,8 @@ class Receipts
     {
         $c = BillCollection::where('company_id', $company->id)->where('result', 'saved')->findOrFail($collection);
         // billing only has a receipt number after approval; asking before that just makes printing slower
-        $approved = $c->daily_bill_id && BillingDailyBill::where('company_id', $company->id)
-            ->where('daily_bill_id', $c->daily_bill_id)->where('is_approved', true)->exists();
+        $approved = $c->approved_at || ($c->daily_bill_id && BillingDailyBill::where('company_id', $company->id)
+            ->where('daily_bill_id', $c->daily_bill_id)->where('is_approved', true)->exists());
         if (! $c->money_receipt_no && $approved) {
             try {
                 $c->money_receipt_no = Engine::receiptNo($company->id, $c->id);
