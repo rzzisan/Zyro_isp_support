@@ -91,10 +91,9 @@ class BillController extends Controller
         $smsNote = ($data['desk_sms'] ?? false) ? BillActions::queueBillSms($company->id, $headerId, $data, $res, $methodName) : null;
 
         // the app shows the message as is: say whether it was approved too
-        $message = trim(BillActions::savedTitle($res).' · '.($res['approve_error'] ?? '').' · '.($res['message'] ?? ''), ' ·');
-        $message = preg_replace('/( · )+/', ' · ', $message);
+        $message = trim(BillActions::savedTitle($res).' · '.($res['message'] ?? ''), ' ·');
 
-        return response()->json(['message' => $message, 'approved' => (bool) ($res['approved'] ?? false), 'balance' => $res['balance'] ?? null,
+        return response()->json(['message' => $message, 'approving' => (bool) ($res['approving'] ?? false), 'balance' => $res['balance'] ?? null,
             'collection_id' => $res['collection_id'] ?? null, 'daily_bill_id' => $res['daily_bill_id'] ?? null, 'sms' => $smsNote]);
     }
 

@@ -216,7 +216,7 @@ class BillCollectionTest extends TestCase
 
     public function test_approve_with_collection_only_with_its_permission(): void
     {
-        $this->fakeEngine(bill: ['message' => 'Succeeded...!!!', 'daily_bill_id' => 170239, 'balance' => 0, 'approved' => true]);
+        $this->fakeEngine(bill: ['message' => 'Succeeded...!!!', 'daily_bill_id' => 170239, 'balance' => 0, 'approving' => true]);
         $agentMember = \App\Models\Membership::where('company_id', $this->company->id)->where('user_id', $this->agent->id)->first();
         $agentMember->update(['billing_username' => 'arif', 'billing_password' => 'pw', 'permissions' => ['customers', 'bills']]);
         $this->as($this->agent);
@@ -227,7 +227,7 @@ class BillCollectionTest extends TestCase
         Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])->callAction('receiveBill')->assertHasNoActionErrors();
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/customers/3/bill') && $r['approve'] === true);
 
-        $this->assertSame('বিল জমা ও approve হয়েছে', BillActions::savedTitle(['approved' => true]));
+        $this->assertSame('বিল জমা হয়েছে, approve হচ্ছে', BillActions::savedTitle(['approving' => true]));
         $this->assertSame('বিল জমা হয়েছে, বিলিং-এ approve বাকি', BillActions::savedTitle(['approved' => false, 'approve_error' => 'x']));
 
         // an admin's role defaults never include it: the owner ticks it

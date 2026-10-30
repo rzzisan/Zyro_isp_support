@@ -78,6 +78,11 @@ class BillCollectionResource extends Resource
                 TextColumn::make('result')->label(__('ফল'))->badge()
                     ->formatStateUsing(fn (string $state) => __(BillCollection::RESULTS[$state] ?? $state))
                     ->color(fn (string $state) => ['saved' => 'success', 'blocked' => 'warning', 'failed' => 'danger'][$state] ?? 'gray'),
+                // bill_approve: approved in the background right after saving, or why it stayed pending
+                TextColumn::make('approved_at')->label('Approve')->badge()
+                    ->getStateUsing(fn ($record) => $record->approved_at ? __('হয়েছে') : ($record->approve_error ? __('হয়নি') : null))
+                    ->color(fn ($state) => $state === __('হয়েছে') ? 'success' : 'danger')
+                    ->tooltip(fn ($record) => $record->approve_error)->placeholder('—'),
                 TextColumn::make('message')->label(__('বার্তা'))->limit(70)->wrap()->toggleable(),
                 TextColumn::make('trx_no')->label(__('Trx নম্বর'))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('remarks')->label(__('নোট'))->placeholder('—')->limit(50)->toggleable(isToggledHiddenByDefault: true),

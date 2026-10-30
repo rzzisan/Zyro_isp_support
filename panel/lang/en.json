@@ -1774,5 +1774,6 @@
     "রেকর্ড হচ্ছে…": "Recording…",
     "শুধু ছবি (JPG/PNG/WEBP) পাঠানো যায়": "Only photos (JPG/PNG/WEBP) can be sent",
     "বিল নেওয়ার সাথে সাথে বিলিং-এ approve": "Approve in billing right when the bill is taken",
-    "বিল জমা ও approve হয়েছে": "Bill saved and approved"
+    "বিল জমা ও approve হয়েছে": "Bill saved and approved",
+    "বিল জমা হয়েছে, approve হচ্ছে": "Bill saved, approving in billing"
 }

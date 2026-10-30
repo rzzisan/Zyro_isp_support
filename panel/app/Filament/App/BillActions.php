@@ -121,10 +121,14 @@ class BillActions
         return __('কাস্টমারকে SMS যাচ্ছে');
     }
 
-    /** Title after a saved bill: approved now (bill_approve) or still waiting for approval in billing. */
+    /** Title after a saved bill: being approved in the background (bill_approve) or waiting for approval in billing. */
     public static function savedTitle(array $res): string
     {
-        return ! empty($res['approved']) ? __('বিল জমা ও approve হয়েছে') : __('বিল জমা হয়েছে, বিলিং-এ approve বাকি');
+        return match (true) {
+            ! empty($res['approved']) => __('বিল জমা ও approve হয়েছে'),
+            ! empty($res['approving']) => __('বিল জমা হয়েছে, approve হচ্ছে'),
+            default => __('বিল জমা হয়েছে, বিলিং-এ approve বাকি'),
+        };
     }
 
     /**
@@ -258,7 +262,7 @@ class BillActions
                 }
                 $smsNote = ($data['desk_sms'] ?? false) ? static::queueBillSms(static::company(), $headerId, $data, $res, $methodName) : null;
                 Notification::make()->success()->title(static::savedTitle($res).($smsNote ? ' · '.$smsNote : ''))
-                    ->body(trim(($res['message'] ?? '').' · '.(! empty($res['approve_error']) ? $res['approve_error'].' · ' : '').((float) ($res['balance'] ?? 0) < 0
+                    ->body(trim(($res['message'] ?? '').' · '.((float) ($res['balance'] ?? 0) < 0
                         ? __('অগ্রিম :amount টাকা', ['amount' => -(float) $res['balance']])
                         : __('বাকি বকেয়া :amount টাকা', ['amount' => $res['balance'] ?? 0])), ' ·'))
                     ->actions(! empty($res['collection_id']) ? [Action::make('printReceipt')->label(__('রিসিট প্রিন্ট'))->button()
