@@ -199,17 +199,21 @@ def dialed(uid: str, status: str) -> str:
 
 
 def ended(uid: str) -> str:
-    """GET /remind-ended: hangup handler of the answered leg. A call staff took is closed by the voice bot's own
-    ended() too (talk seconds, recording)."""
+    """GET /remind-ended: hangup handler of the answered leg. The whole answered call is recorded (MixMonitor from
+    the answer) and saved as MP3 on its call log; a call staff took is closed by the voice bot's own ended() too
+    (talk seconds, recording)."""
     c = active.get(uid)
     if c and c.get("answered") and not c.get("done"):
         finish(uid, "done")
     info = vb().calls.get(uid) or {}
     if info.get("state") == "taken":
-        vb().ended(uid, "")
-    elif info.get("state") in ("waiting", "missed"):   # hung up while Desk was ringing
+        vb().ended(uid, "")          # saves the recording too
+        return "ok"
+    if info.get("state") in ("waiting", "missed"):   # hung up while Desk was ringing
         vb().calls.pop(uid, None)
         vb().notify_staff(info["company_id"], {"type": "call_taken", "uid": uid, "by": ""})
+    if c and c.get("recorded") and c.get("log_id"):
+        vb().pool.submit(vb().save_recording, uid, {"company_id": c["company_id"], "row_id": c["log_id"]})
     return "ok"
 
 
@@ -325,6 +329,9 @@ async def agi_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter)
         await loop.run_in_executor(vb().pool, lambda: (
             db.execute("update voice_reminder_calls set status = 'answered', answered_at = now(), updated_at = now() where id = %s", (c["row_id"],)),
             db.execute("update call_logs set status = 'answered', updated_at = now() where id = %s", (c["log_id"],))))
+        # the whole call from here on, both sides (a staff member's part too): saved as MP3 on the call log at hangup
+        await agi.exec("MixMonitor", f"{vb().REC_SPOOL}/{uid}.wav")
+        c["recorded"] = True
         await run_flow(agi, uid, c)
     except (Hangup, ConnectionError, asyncio.TimeoutError):
         if uid in active and not active[uid].get("result"):
@@ -598,7 +605,6 @@ async def staff(agi: Agi, uid: str, c: dict, hold: dict) -> None:
     await off()
     if agent:
         act(c, "staff", "স্টাফ ধরেছেন")
-        await agi.exec("MixMonitor", f"{v.REC_SPOOL}/{uid}.wav")
         await agi.exec("Bridge", f"{agent},x")
         return
     # nobody took it: stop the ringing in Desk
@@ -612,7 +618,6 @@ async def staff(agi: Agi, uid: str, c: dict, hold: dict) -> None:
         res, data = await agi.cmd(f"DATABASE GET zyrotake {uid}")
         if res == 1:
             await agi.cmd(f"DATABASE DEL zyrotake {uid}")
-            await agi.exec("MixMonitor", f"{v.REC_SPOOL}/{uid}.wav")
             await agi.exec("Bridge", f"{data.strip().strip('()')},x")
             return
     v.calls.pop(uid, None)
