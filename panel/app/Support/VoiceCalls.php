@@ -8,6 +8,7 @@ use App\Models\SmsTemplate;
 use App\Models\VoiceFlow;
 use App\Models\VoiceReminderCall;
 use App\Models\VoiceTemplate;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -22,27 +23,49 @@ class VoiceCalls
     /** Placeholders the engine fills during the call. */
     public const CALL_TIME = ['reconnect_message'];
 
-    public static function package(VoiceFlow $flow, ?BillingCustomer $c, array $extra = []): array
+    /**
+     * The flow's messages for this customer: [template id => ['upload' => path] | ['text', 'voice', 'speed', 'later']]
+     * ('later': read out during the call, it has a call-time placeholder). No audio is made here.
+     */
+    public static function messages(VoiceFlow $flow, ?BillingCustomer $c, array $extra = [], ?Collection $templates = null): array
     {
         $company = $flow->company_id;
         $values = VoiceTemplates::values($company, $c);
         $keep = array_combine(array_map(fn ($k) => $k, self::CALL_TIME), array_map(fn ($k) => '{'.$k.'}', self::CALL_TIME));
-        $audio = [];
-        foreach (VoiceTemplate::where('company_id', $company)->whereIn('id', $flow->templateIds())->get() as $t) {
+        $out = [];
+        foreach ($templates ?? VoiceTemplate::where('company_id', $company)->whereIn('id', $flow->templateIds())->get() as $t) {
             if ($t->source === 'upload') {
                 if ($t->file()) {
-                    $audio[$t->id] = ['upload' => $t->audio_path];
+                    $out[$t->id] = ['upload' => $t->audio_path];
                 }
 
                 continue;
             }
             $text = VoiceTemplates::render((string) $t->body, $values, $extra + $keep);
-            if ($text === '') {
-                continue;
+            if ($text !== '') {
+                $out[$t->id] = ['text' => $text, 'voice' => $t->voice, 'speed' => (float) $t->speed,
+                    'later' => (bool) preg_match('/\{('.implode('|', self::CALL_TIME).')\}/', $text)];
             }
-            $audio[$t->id] = preg_match('/\{('.implode('|', self::CALL_TIME).')\}/', $text)
-                ? ['text' => $text, 'voice' => $t->voice, 'speed' => (float) $t->speed]
-                : ['file' => VoiceTemplates::audio($company, $text, $t->voice, (float) $t->speed)];
+        }
+
+        return $out;
+    }
+
+    /** Key of one made audio in the $made map package() takes (VoiceTemplates::audioMany's keys). */
+    public static function audioKey(array $m): string
+    {
+        return $m['voice'].'|'.$m['speed'].'|'.$m['text'];
+    }
+
+    /** $made: audio already made for some texts (audioKey => file), so they are not asked for again. */
+    public static function package(VoiceFlow $flow, ?BillingCustomer $c, array $extra = [], array $made = [], ?array $messages = null): array
+    {
+        $company = $flow->company_id;
+        $audio = [];
+        foreach ($messages ?? static::messages($flow, $c, $extra) as $id => $m) {
+            $audio[$id] = isset($m['upload']) ? ['upload' => $m['upload']]
+                : ($m['later'] ? ['text' => $m['text'], 'voice' => $m['voice'], 'speed' => $m['speed']]
+                    : ['file' => $made[static::audioKey($m)] ?? VoiceTemplates::audio($company, $m['text'], $m['voice'], $m['speed'])]);
         }
         $sms = [];
         foreach (SmsTemplate::where('company_id', $company)->whereIn('id', $flow->smsTemplateIds())->get() as $s) {
@@ -51,6 +74,7 @@ class VoiceCalls
             $sms[$s->id] = ['text' => $text, 'parts' => $p['parts'], 'unicode' => $p['unicode']];
         }
 
+        $values = VoiceTemplates::values($company, $c);
         // the agent's ring note: what the flow's settings pick; what the customer did on the call the engine adds
         $show = $flow->hold['whisper'] ?? array_keys(VoiceFlow::WHISPER);
         $whisper = array_values(array_filter([

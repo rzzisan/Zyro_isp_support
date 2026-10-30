@@ -298,6 +298,8 @@ class VoiceReminderAltTest extends TestCase
         $this->assertNotEmpty($p['audio']);
 
         $this->assertSame(0, VoiceReminders::prepareInbound($this->company->id, $s));   // nothing changed: not made again
+        Carbon::setTestNow(now()->addDay());                                              // a new day alone changes nothing
+        $this->assertSame(0, VoiceReminders::prepareInbound($this->company->id, $s));
         $off->update(['due' => 700]);
         $this->assertSame(1, VoiceReminders::prepareInbound($this->company->id, $s));
         $off->update(['disabled' => false]);                                              // back on: removed

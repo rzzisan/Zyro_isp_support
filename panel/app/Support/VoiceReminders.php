@@ -85,19 +85,19 @@ class VoiceReminders
             return [];
         }
         try {
-            $inbound = $full ? static::prepareInbound($companyId, $s) : 0;
             if (! $s->enabled) {   // turned off: what was waiting is over, the backup SMS still go
-                return array_filter(['inbound_ready' => $inbound, 'settled' => static::settle($companyId, $s, $now, false),
-                    'backup_sms' => static::backup($companyId)]);
+                $out = ['settled' => static::settle($companyId, $s, $now, false), 'backup_sms' => static::backup($companyId)];
+            } else {
+                $out = $full ? ['planned' => static::plan($companyId, $s, $now), 'expired' => static::expire($companyId, $now)] : [];
+                $out['retried'] = static::retry($companyId, $s, $now);
+                $out['settled'] = static::settle($companyId, $s, $now, true);
+                $out['backup_sms'] = static::backup($companyId);
+                $out['queued'] = static::dispatch($companyId, $s, $now);
             }
-            $out = $full ? ['planned' => static::plan($companyId, $s, $now), 'expired' => static::expire($companyId, $now),
-                'inbound_ready' => $inbound] : [];
-            $out['retried'] = static::retry($companyId, $s, $now);
-            $out['settled'] = static::settle($companyId, $s, $now, true);
-            $out['backup_sms'] = static::backup($companyId);
-            $out['queued'] = static::dispatch($companyId, $s, $now);
+            // after the calls are queued, so they never wait for this audio
+            $out['inbound_ready'] = $full ? static::prepareInbound($companyId, $s) : 0;
 
-            return $out;
+            return $s->enabled ? $out : array_filter($out);
         } finally {
             $lock->release();
         }
@@ -105,10 +105,11 @@ class VoiceReminders
 
     /**
      * The line-off flow's package for every line off for the bill (the test mode's example only, in test mode), made
-     * again when the flow, its messages or the customer's data change; the rest removed. At most $seconds of work a
-     * pass (each new message is a TTS call), the rest next minute. Returns how many were made.
+     * again only when what the caller would hear or get changes (the flow, a message's text for this customer, the
+     * SMS texts); the rest removed. New audio is made $concurrency at a time, for at most $seconds a pass; the rest
+     * next minute. Returns how many were made.
      */
-    public static function prepareInbound(int $companyId, VoiceReminderSetting $s, int $seconds = 20): int
+    public static function prepareInbound(int $companyId, VoiceReminderSetting $s, int $seconds = 40, int $concurrency = 4): int
     {
         $ready = DB::table('voice_inbound_ready')->where('company_id', $companyId);
         $flowId = $s->inbound_flow_id ?: $s->line_off_flow_id;
@@ -118,37 +119,55 @@ class VoiceReminders
 
             return 0;
         }
-        $base = implode('|', [$flow->id, $flow->updated_at, now(self::TZ)->toDateString(),
-            VoiceTemplate::where('company_id', $companyId)->whereIn('id', $flow->templateIds())->max('updated_at'),
-            SmsTemplate::where('company_id', $companyId)->whereIn('id', $flow->smsTemplateIds())->max('updated_at')]);
+        $templates = VoiceTemplate::where('company_id', $companyId)->whereIn('id', $flow->templateIds())->get();
+        $smsTemplates = SmsTemplate::where('company_id', $companyId)->whereIn('id', $flow->smsTemplateIds())->get();
+        $base = json_encode([$flow->id, $flow->steps, $flow->hold, $flow->goodbye_template_id, $flow->name]);
         $targets = $s->test_mode ? collect([0 => null]) : static::offLines($companyId)->keyBy('header_id');
         $have = (clone $ready)->pluck('signature', 'customer_header_id');
         $gone = array_diff($have->keys()->all(), $targets->keys()->all());
         foreach (array_chunk($gone, 500) as $chunk) {
             (clone $ready)->whereIn('customer_header_id', $chunk)->delete();
         }
+        // what changed, never made first
+        $todo = [];
+        foreach ($targets as $header => $c) {
+            $messages = VoiceCalls::messages($flow, $c, [], $templates);
+            $sms = $smsTemplates->map(fn ($t) => Sms::render($t->body, $c, ['company' => Sms::companyName($companyId)]))->all();
+            $sig = sha1($base.json_encode([$messages, $sms, $c?->name, $c?->customer_id]));
+            if (($have[$header] ?? null) !== $sig) {
+                $todo[] = [$header, $c, $messages, $sig, isset($have[$header])];
+            }
+        }
+        usort($todo, fn ($a, $b) => $a[4] <=> $b[4]);
         $start = microtime(true);
         $made = 0;
-        foreach ($targets as $header => $c) {
-            $sig = sha1($base.'|'.($c ? implode('|', [$c->name, $c->customer_id, $c->due, $c->monthly_bill, $c->bill_day, $c->package, $c->zone]) : 'example'));
-            if (($have[$header] ?? null) === $sig) {
-                continue;
-            }
+        foreach (array_chunk($todo, max(1, $concurrency)) as $batch) {
             if (microtime(true) - $start > $seconds) {
                 break;
             }
-            try {
-                $package = VoiceCalls::package($flow, $c);
-            } catch (\Throwable $e) {
-                Log::warning("voice inbound package {$companyId}/{$header}: ".$e->getMessage());
-
-                continue;
+            $texts = [];
+            foreach ($batch as [, , $messages]) {
+                foreach ($messages as $m) {
+                    if (! isset($m['upload']) && ! $m['later']) {
+                        $texts[VoiceCalls::audioKey($m)] = $m;
+                    }
+                }
             }
-            DB::table('voice_inbound_ready')->upsert([[
-                'company_id' => $companyId, 'customer_header_id' => $header, 'voice_flow_id' => $flow->id, 'signature' => $sig,
-                'package' => json_encode($package, JSON_UNESCAPED_UNICODE), 'built_at' => now(),
-            ]], ['company_id', 'customer_header_id'], ['voice_flow_id', 'signature', 'package', 'built_at']);
-            $made++;
+            $audio = VoiceTemplates::audioMany($companyId, $texts, $concurrency);
+            foreach ($batch as [$header, $c, $messages, $sig]) {
+                try {
+                    $package = VoiceCalls::package($flow, $c, [], $audio, $messages);
+                } catch (\Throwable $e) {
+                    Log::warning("voice inbound package {$companyId}/{$header}: ".$e->getMessage());
+
+                    continue;
+                }
+                DB::table('voice_inbound_ready')->upsert([[
+                    'company_id' => $companyId, 'customer_header_id' => $header, 'voice_flow_id' => $flow->id, 'signature' => $sig,
+                    'package' => json_encode($package, JSON_UNESCAPED_UNICODE), 'built_at' => now(),
+                ]], ['company_id', 'customer_header_id'], ['voice_flow_id', 'signature', 'package', 'built_at']);
+                $made++;
+            }
         }
 
         return $made;
