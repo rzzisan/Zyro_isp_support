@@ -870,6 +870,9 @@ def decide(ep: str, caller: str) -> str:
     if not s:
         return "ring"
     number = normalize(caller) or caller
+    ivr = voice_ivr.inbound(s["company_id"], caller, "hotline")   # line off for the bill: the line-off flow picks it up
+    if ivr:
+        return ivr
     if s["bot_mode"] not in ("test", "live") or number in numbers(s.get("bot_blocked_numbers")) \
             or (s["bot_mode"] == "test" and number not in numbers(s.get("bot_test_numbers"))):
         return ring_only(s["company_id"], caller)   # the bot is off for this caller: staff and office phones only
@@ -893,6 +896,9 @@ def decide_wa(to: str, caller: str) -> str:
     s = db.one("select * from sip_settings where company_id = %s", (acc["company_id"],)) or {}
     if number in numbers(s.get("bot_blocked_numbers")):
         return "busy"
+    ivr = voice_ivr.inbound(acc["company_id"], caller, "whatsapp")
+    if ivr:
+        return ivr
     return start(acc["company_id"], caller, s, min(int(acc["calling_bot_delay"] or 0), 45), "whatsapp")
 
 

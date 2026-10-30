@@ -4,13 +4,16 @@ namespace App\Support;
 
 use App\Models\BillingCustomer;
 use App\Models\SmsSetting;
+use App\Models\SmsTemplate;
 use App\Models\VoiceFlow;
 use App\Models\VoiceReminderCall;
 use App\Models\VoiceReminderSetting;
+use App\Models\VoiceTemplate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Voice reminder calls by themselves (ভয়েস রিমাইন্ডার → সেটিংস), every 5 minutes (`php artisan voice:reminders`):
@@ -27,6 +30,9 @@ use Illuminate\Support\Facades\DB;
  *  backup:   customers who regularly answer (2 of their last 3 calls) get no bill reminder SMS while a call is coming
  *            (BillReminders asks coversSms); when that call is settled unreached, the SMS goes now as a backup.
  *  Test mode: the calls go to the test number (with the customer's data), test_daily_max a day.
+ *  inbound:  every full pass (even while the calls are off) the line-off flow's package is made ahead for each line
+ *            off for the bill (prepareInbound), so when such a customer calls the hotline or WhatsApp the flow picks
+ *            the call up within seconds (engine/voice_ivr.py inbound). In test mode only the test number gets it.
  */
 class VoiceReminders
 {
@@ -79,10 +85,13 @@ class VoiceReminders
             return [];
         }
         try {
+            $inbound = $full ? static::prepareInbound($companyId, $s) : 0;
             if (! $s->enabled) {   // turned off: what was waiting is over, the backup SMS still go
-                return array_filter(['settled' => static::settle($companyId, $s, $now, false), 'backup_sms' => static::backup($companyId)]);
+                return array_filter(['inbound_ready' => $inbound, 'settled' => static::settle($companyId, $s, $now, false),
+                    'backup_sms' => static::backup($companyId)]);
             }
-            $out = $full ? ['planned' => static::plan($companyId, $s, $now), 'expired' => static::expire($companyId, $now)] : [];
+            $out = $full ? ['planned' => static::plan($companyId, $s, $now), 'expired' => static::expire($companyId, $now),
+                'inbound_ready' => $inbound] : [];
             $out['retried'] = static::retry($companyId, $s, $now);
             $out['settled'] = static::settle($companyId, $s, $now, true);
             $out['backup_sms'] = static::backup($companyId);
@@ -92,6 +101,57 @@ class VoiceReminders
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * The line-off flow's package for every line off for the bill (the test mode's example only, in test mode), made
+     * again when the flow, its messages or the customer's data change; the rest removed. At most $seconds of work a
+     * pass (each new message is a TTS call), the rest next minute. Returns how many were made.
+     */
+    public static function prepareInbound(int $companyId, VoiceReminderSetting $s, int $seconds = 20): int
+    {
+        $ready = DB::table('voice_inbound_ready')->where('company_id', $companyId);
+        $flowId = $s->inbound_flow_id ?: $s->line_off_flow_id;
+        $flow = $s->inbound_on && $flowId ? VoiceFlow::where('company_id', $companyId)->find($flowId) : null;
+        if (! $flow) {
+            $ready->delete();
+
+            return 0;
+        }
+        $base = implode('|', [$flow->id, $flow->updated_at, now(self::TZ)->toDateString(),
+            VoiceTemplate::where('company_id', $companyId)->whereIn('id', $flow->templateIds())->max('updated_at'),
+            SmsTemplate::where('company_id', $companyId)->whereIn('id', $flow->smsTemplateIds())->max('updated_at')]);
+        $targets = $s->test_mode ? collect([0 => null]) : static::offLines($companyId)->keyBy('header_id');
+        $have = (clone $ready)->pluck('signature', 'customer_header_id');
+        $gone = array_diff($have->keys()->all(), $targets->keys()->all());
+        foreach (array_chunk($gone, 500) as $chunk) {
+            (clone $ready)->whereIn('customer_header_id', $chunk)->delete();
+        }
+        $start = microtime(true);
+        $made = 0;
+        foreach ($targets as $header => $c) {
+            $sig = sha1($base.'|'.($c ? implode('|', [$c->name, $c->customer_id, $c->due, $c->monthly_bill, $c->bill_day, $c->package, $c->zone]) : 'example'));
+            if (($have[$header] ?? null) === $sig) {
+                continue;
+            }
+            if (microtime(true) - $start > $seconds) {
+                break;
+            }
+            try {
+                $package = VoiceCalls::package($flow, $c);
+            } catch (\Throwable $e) {
+                Log::warning("voice inbound package {$companyId}/{$header}: ".$e->getMessage());
+
+                continue;
+            }
+            DB::table('voice_inbound_ready')->upsert([[
+                'company_id' => $companyId, 'customer_header_id' => $header, 'voice_flow_id' => $flow->id, 'signature' => $sig,
+                'package' => json_encode($package, JSON_UNESCAPED_UNICODE), 'built_at' => now(),
+            ]], ['company_id', 'customer_header_id'], ['voice_flow_id', 'signature', 'package', 'built_at']);
+            $made++;
+        }
+
+        return $made;
     }
 
     public static function plan(int $companyId, VoiceReminderSetting $s, Carbon $now): int

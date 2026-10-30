@@ -13,7 +13,7 @@ class VoiceReminderSetting extends Model
     protected function casts(): array
     {
         return ['enabled' => 'boolean', 'test_mode' => 'boolean', 'reminder_on' => 'boolean', 'due_only' => 'boolean',
-            'line_off_on' => 'boolean', 'skip_jumma' => 'boolean', 'minute_rate' => 'float', 'alt_on' => 'boolean', 'sms_saving' => 'boolean'];
+            'line_off_on' => 'boolean', 'skip_jumma' => 'boolean', 'minute_rate' => 'float', 'alt_on' => 'boolean', 'sms_saving' => 'boolean', 'inbound_on' => 'boolean'];
     }
 
     public static function forCompany(Company|int $company): self
@@ -24,7 +24,7 @@ class VoiceReminderSetting extends Model
             $s->forceFill(['enabled' => false, 'test_mode' => true, 'test_daily_max' => 3, 'reminder_on' => true, 'reminder_days' => '2,0',
                 'due_only' => true, 'line_off_on' => true, 'line_off_delay' => 60, 'line_off_days' => 2, 'window_from' => '10:00',
                 'window_to' => '20:00', 'skip_jumma' => true, 'max_calls' => 1, 'retry_minutes' => 120, 'max_tries' => 2, 'minute_rate' => 0.5,
-                'alt_on' => true, 'alt_max' => 3, 'sms_saving' => true]);
+                'alt_on' => true, 'alt_max' => 3, 'sms_saving' => true, 'inbound_on' => false, 'inbound_delay' => 2]);
             $flows = VoiceFlow::where('company_id', $id)->orderBy('sort')->get(['id', 'kind']);
             $s->reminder_flow_id = $flows->firstWhere('kind', 'reminder')?->id;
             $s->line_off_flow_id = $flows->firstWhere('kind', 'line_off')?->id;

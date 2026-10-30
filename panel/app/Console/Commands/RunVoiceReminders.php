@@ -26,7 +26,8 @@ class RunVoiceReminders extends Command
         $full = true;
         do {
             // turned off (or settings changed) a moment ago: the quick passes follow that too
-            $companies = VoiceReminderSetting::where('enabled', true)
+            // (also the ones with only "লাইন বন্ধ কাস্টমার নিজে কল দিলে" on: its messages are made ahead here)
+            $companies = VoiceReminderSetting::where(fn ($q) => $q->where('enabled', true)->orWhere('inbound_on', true))
                 ->when($this->option('company'), fn ($q, $id) => $q->where('company_id', (int) $id))->pluck('company_id');
             foreach ($companies as $companyId) {
                 $out = array_filter(VoiceReminders::run((int) $companyId, null, $full));

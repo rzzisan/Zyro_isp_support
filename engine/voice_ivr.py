@@ -8,6 +8,9 @@ and the customer. No AI runs on the call; only {reconnect_message} is read out w
          (channel reminder, direction out) and runs `channel originate Local/<uid>@zyro-remind-dial extension
          <uid>@zyro-remind`. zyro-remind-dial asks GET /remind-dial for the hotline endpoint and number and Dials it
          (DIALSTATUS back to GET /remind-dialed); when the customer answers, zyro-remind hands the call to FastAGI.
+  in:    inbound(): a customer whose line is off for the bill calls the hotline or WhatsApp; the voice bot's /mode
+         answers "ivr:<uid>:<seconds>" and the dialplan picks the call up after those seconds into zyro-remind, so
+         the line-off flow runs on the caller's own call (kind inbound, package made ahead by the panel).
   run:   agi_server() plays the steps and reads the keys (deploy/asterisk/extensions.conf, port 4574).
   staff: "স্টাফের সাথে কথা" rings Desk like a hotline call (voice_bot.calls + notify_staff; the softphone dials
          take-<uid> and the voice bot's /take puts the agent channel in AstDB zyrotake/<uid>) while the customer hears
@@ -180,6 +183,86 @@ def start(row_id: int) -> str:
     return "ok"
 
 
+def _caller_line(company_id: int, number: str) -> int | None:
+    """The one customer line a calling number belongs to: by the line's own mobile, else by the customer's other
+    numbers (customer_alt_numbers); a number on several lines is nobody's."""
+    rows = db.all_rows("select distinct header_id from billing_customers where company_id = %s and mobile_normalized = %s"
+                       " and gone_at is null and not is_left limit 3", (company_id, number))
+    if not rows:
+        rows = db.all_rows("select distinct a.customer_header_id as header_id from customer_alt_numbers a"
+                           " join billing_customers bc on bc.company_id = a.company_id and bc.header_id = a.customer_header_id"
+                           " where a.company_id = %s and a.number = %s and a.removed_at is null"
+                           " and bc.gone_at is null and not bc.is_left limit 3", (company_id, number))
+    return rows[0]["header_id"] if len(rows) == 1 else None
+
+
+def inbound(company_id: int, caller: str, channel: str = "hotline") -> str | None:
+    """_inbound(), never in the way of the usual call: any error → None."""
+    try:
+        return _inbound(company_id, caller, channel)
+    except Exception:
+        log.exception("inbound line-off check for company %s", company_id)
+        return None
+
+
+def _inbound(company_id: int, caller: str, channel: str = "hotline") -> str | None:
+    """A customer whose line is off for the bill calls the hotline or WhatsApp: "ivr:<uid>:<seconds>" (the dialplan
+    answers after that many seconds and runs the line-off flow like a reminder call), else None (the usual way).
+    Its package was made ahead by the panel (voice_inbound_ready, App\\Support\\VoiceReminders::prepareInbound), so
+    nothing slow happens while the caller waits. In test mode only the test number gets it (with the example data)."""
+    s = db.one("select inbound_on, inbound_delay, test_mode, test_number from voice_reminder_settings where company_id = %s",
+               (company_id,))
+    if not s or not s["inbound_on"]:
+        return None
+    number = vb().normalize(caller)
+    if not number:
+        return None
+    if s["test_mode"]:
+        if number != vb().normalize(s["test_number"] or ""):
+            return None
+        header = 0
+    else:
+        header = _caller_line(company_id, number)
+        if header is None:
+            return None
+    r = db.one("select r.voice_flow_id, r.package, bc.customer_id, bc.name from voice_inbound_ready r"
+               " left join billing_customers bc on bc.company_id = r.company_id and bc.header_id = r.customer_header_id"
+               " where r.company_id = %s and r.customer_header_id = %s"
+               " and (r.customer_header_id = 0 or (bc.disabled and bc.due > 0 and bc.gone_at is null and not bc.is_left))",
+               (company_id, header))
+    if not r:
+        return None
+    uid = uuid.uuid4().hex
+    with _lock:
+        row = db.execute("insert into voice_reminder_calls (company_id, voice_flow_id, kind, customer_header_id, customer_id, name,"
+                         " number, package, status, scheduled_at, started_at, tries, created_at, updated_at)"
+                         " values (%s, %s, 'inbound', %s, %s, %s, %s, %s, 'dialing', now(), now(), 0, now(), now()) returning id",
+                         (company_id, r["voice_flow_id"], header or None, r["customer_id"], r["name"], number, r["package"]))
+        active[uid] = {"row_id": row["id"], "company_id": company_id, "number": number, "kind": "inbound",
+                       "package": json.loads(r["package"] or "{}"), "at": time.time(), "keys": [], "result": None,
+                       "actions": [], "channel": channel}
+    c = active[uid]
+    try:
+        c["sounds"] = {str(k): sound(company_id, a) for k, a in (c["package"].get("audio") or {}).items()}
+        if channel == "hotline":   # the row the caller ID popup made for this very call, else a new one
+            log_id = vb().hotline_row(uid, {"company_id": company_id, "caller": caller, "at": time.time()})
+            db.execute("update call_logs set status = 'ivr', updated_at = now() where id = %s", (log_id,))
+        else:
+            log_id = db.execute("insert into call_logs (company_id, call_ref, caller, caller_normalized, status, started_at,"
+                                " channel, direction, actions, created_at, updated_at)"
+                                " values (%s, %s, %s, %s, 'ivr', now(), %s, 'in', '[]', now(), now()) returning id",
+                                (company_id, "inb-" + uid, caller[:80], number, channel))["id"]
+        c["log_id"] = log_id
+        db.execute("update voice_reminder_calls set call_log_id = %s where id = %s", (log_id, c["row_id"]))
+    except Exception as e:
+        log.exception("inbound line-off call from %s", number)
+        finish(uid, "failed", error=str(e)[:300])
+        return None
+    act(c, "inbound", "লাইন বন্ধ কাস্টমার নিজে কল করেছেন" + (" (WhatsApp)" if channel == "whatsapp" else ""))
+    log.info("inbound line-off call %s (%s, %s)", c["row_id"], channel, uid)
+    return f"ivr:{uid}:{max(0, min(int(s['inbound_delay'] or 0), 10))}"
+
+
 def dial_plan(uid: str) -> str:
     """GET /remind-dial: "ok:c<company>:0<number>:<ring seconds>" for zyro-remind-dial."""
     c = active.get(uid)
@@ -253,7 +336,7 @@ def run_queue() -> None:
     # a call Asterisk never came back about (originate refused silently): give up after 2 minutes unanswered
     for uid, c in list(active.items()):
         if not c.get("answered") and not c.get("done") and time.time() - c["at"] > 120:
-            finish(uid, "failed", error="Asterisk থেকে কোনো সাড়া আসেনি")
+            finish(uid, "failed", error="ধরার আগেই কেটে দিয়েছেন" if c["kind"] == "inbound" else "Asterisk থেকে কোনো সাড়া আসেনি")
         elif time.time() - c["at"] > 4 * 3600:
             active.pop(uid, None)
 
