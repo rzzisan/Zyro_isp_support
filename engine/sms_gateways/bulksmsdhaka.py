@@ -43,6 +43,9 @@ NUMBER_ERRORS = {
 }
 QUERY_FINAL = {"1016": "Message id not valid or already queried", "1017": "Message id missing"}
 ACCOUNT_WORDS = re.compile(r"whitelist|unauthenticated|invalid api ?key|insufficient|account (is )?(disabled|not verified)", re.I)
+# a refused text comes back as HTTP 200 without a code, e.g. "Spam Word Detected: বিকাশ, লিংক" (2026-10-29/30):
+# nothing went out, so engine/sms.py may try the fallback gateway with it
+CONTENT_WORDS = re.compile(r"spam|content validation|masking sms", re.I)
 ERROR_WORDS = re.compile(r"error|fail|invalid|denied|unauthori[sz]ed|unauthenticated|reject", re.I)
 
 CODE_KEYS = ("response_code", "code", "status_code", "statusCode", "error_code", "status")
@@ -123,6 +126,9 @@ def parse_send(status_code: int, body: str) -> dict:
     status = code or str(status_code)
     if code in ACCOUNT_ERRORS or status_code in (401, 403) or (code is None and ACCOUNT_WORDS.search(text)):
         return {"ok": False, "account": True, "status": status, "text": text or None, "description": desc, "message_ids": []}
+    if code in ("1005", "1006", "1012") or (code is None and CONTENT_WORDS.search(text)):
+        return {"ok": False, "account": False, "content": True, "status": status, "text": text or None,
+                "description": desc or "SMS-এর লেখা গেটওয়ে আটকে দিয়েছে", "message_ids": []}
     if code in OK_CODES:
         ok = 200 <= status_code < 300
     elif code is not None:

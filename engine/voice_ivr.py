@@ -452,7 +452,7 @@ def send_sms(c: dict, sms_id) -> bool:
                (c["company_id"], cust.get("header_id"), cust.get("customer_id"), cust.get("name"), c["number"], s["text"],
                 int(s.get("parts") or 1), bool(s.get("unicode"))))
     sms.kick(c["company_id"])
-    act(c, "sms", "পেমেন্টের SMS পাঠানো হলো")
+    act(c, "sms", "পেমেন্টের SMS পাঠানোর লাইনে দেওয়া হলো (পৌঁছাল কিনা SMS লগে দেখা যাবে)")
     return True
 
 

@@ -4,7 +4,8 @@ Dhaka; adapters in engine/sms_gateways), reads balances and delivery reports. Th
 
 Main and fallback: SMS go through the company's main gateway (sms_settings.primary_gateway_id). When it refuses for an
 account reason (keys, balance, IP whitelist, sender ID; nothing went out) it gets failed_at and the rest of the queue
-goes through the fallback gateway (fallback_gateway_id), if there is one. Any other failure, a timeout included, stays
+goes through the fallback gateway (fallback_gateway_id), if there is one. When it refuses only the text (spam words),
+that one SMS goes once through the other gateway. Any other failure, a timeout included, stays
 with that SMS and is never sent again through the other gateway, so nobody gets the same SMS twice. A failed gateway is
 used again only after someone clears it in the panel (saving the gateway, "আবার চালু", or switching sending back on).
 
@@ -208,6 +209,36 @@ def _gateway_failed(g: dict, reason: str) -> None:
     log.error("company %s: sms gateway %s (%s) stopped", g["company_id"], g["id"], g["provider"])
 
 
+def _other(company_id: int, s: dict, g: dict) -> dict | None:
+    """The company's other usable gateway (main or fallback), if any."""
+    return next((x for x in (gateway(company_id, s.get(k)) for k in ("primary_gateway_id", "fallback_gateway_id"))
+                 if usable(x) and x["id"] != g["id"]), None)
+
+
+def _other_try(company_id: int, s: dict, g: dict, job: list[dict], res: dict, stats: dict) -> bool:
+    """The gateway refused the text itself (spam words ...): nothing went out, so it goes once through the other
+    gateway. False when there is none; then the SMS fails with the first gateway's answer."""
+    o = _other(company_id, s, g)
+    if not o:
+        return False
+    with gw.client(o) as c:
+        r2 = gw.adapter(o).send(o, [m["mobile"] for m in job], job[0]["text"], c)
+    stats["requests"] += 1
+    if r2["ok"]:
+        ids = r2["message_ids"] if len(r2["message_ids"]) == len(job) else [None] * len(job)
+        for m, mid in zip(job, ids):
+            _save(m, r2, o, mid)
+        stats["sent"] += len(job)
+    else:
+        r2 = dict(r2, error=f"{g.get('label') or g['provider']}: {res.get('error')} | {o.get('label') or o['provider']}: {r2.get('error')}"[:500])
+        for m in job:
+            _save(m, r2, o)
+        stats["failed"] += len(job)
+    log.warning("sms %s: text refused by gateway %s, sent through %s: %s", [m["id"] for m in job], g["id"], o["id"],
+                "ok" if r2["ok"] else "failed")
+    return True
+
+
 def send_queue(company_id: int) -> dict:
     """Sends everything queued for one company (one runner per company at a time)."""
     lock = _lock(company_id)
@@ -269,6 +300,8 @@ def send_queue(company_id: int) -> dict:
                 elif res.get("unreachable"):                  # never reached the gateway; keep them queued
                     back += [m["id"] for m in job]
                     down += 1
+                elif res.get("content") and _other_try(company_id, s, g, job, res, stats):
+                    streak, kind = 0, None
                 else:
                     for m in job:
                         _save(m, res, g)
@@ -289,9 +322,7 @@ def send_queue(company_id: int) -> dict:
             if down and down == len(results):
                 unreachable[g["id"]] = unreachable.get(g["id"], 0) + 1
                 if unreachable[g["id"]] >= MAX_UNREACHABLE:
-                    other = next((x for x in (gateway(company_id, s.get(k)) for k in ("primary_gateway_id", "fallback_gateway_id"))
-                                  if usable(x) and x["id"] != g["id"]), None)
-                    if other:
+                    if _other(company_id, s, g):
                         refused = results[-1][1]
                     else:                                # no other gateway: wait for the next run, nothing is lost
                         stats["stopped"] = "unreachable"
