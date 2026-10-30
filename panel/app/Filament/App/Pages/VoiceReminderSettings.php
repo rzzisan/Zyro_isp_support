@@ -119,7 +119,7 @@ class VoiceReminderSettings extends CompanySettingsPage
                 TimePicker::make('window_to')->label(__('কল শেষ'))->seconds(false)->required(),
                 Toggle::make('skip_jumma')->label(__('শুক্রবার জুমার সময় (১২:৩০-২:৩০) বাদ'))->inline(false),
                 TextInput::make('max_calls')->label(__('একসাথে কয়টা কল'))->numeric()->minValue(1)->maxValue(10)->required()
-                    ->helperText(__('pbx.bd-তে একসাথে কয়টা লাইন চলে জেনে বাড়ান। হটলাইনে কাস্টমারের কল চললে নতুন রিমাইন্ডার কল অপেক্ষা করে।')),
+                    ->helperText(__('একটা কল শেষ হলেই পরেরটা যায়। হটলাইনে একসাথে মোট ৪টা লাইন (৩০ অক্টোবরের টেস্ট), আসা কল আর স্টাফের কলও এর মধ্যে; তাই ১-২ রাখা ভালো। হটলাইনে কাস্টমারের কল চললে নতুন রিমাইন্ডার কল অপেক্ষা করে।')),
                 TextInput::make('retry_minutes')->label(__('না ধরলে কত মিনিট পরে আবার'))->numeric()->minValue(15)->maxValue(600)->required(),
                 TextInput::make('max_tries')->label(__('দিনে সর্বোচ্চ কতবার কল'))->numeric()->minValue(1)->maxValue(5)->required(),
                 TextInput::make('minute_rate')->label(__('মিনিট রেট (টাকা)'))->numeric()->minValue(0)->step(0.01)->required(),

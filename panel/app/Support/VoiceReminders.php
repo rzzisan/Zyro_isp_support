@@ -63,8 +63,11 @@ class VoiceReminders
             ->where('disabled', true)->where('due', '>', 0)->get();
     }
 
-    /** One pass for one company; returns what it did (for the command's log). */
-    public static function run(int $companyId, ?Carbon $now = null): array
+    /**
+     * One pass for one company; returns what it did (for the command's log). $full false: only what moves the queue
+     * (retry, settle, backup SMS, dispatch), for the quick passes between calls (`voice:reminders --for=55`).
+     */
+    public static function run(int $companyId, ?Carbon $now = null, bool $full = true): array
     {
         $now = ($now ?? now())->copy();
         $s = VoiceReminderSetting::forCompany($companyId);
@@ -79,8 +82,8 @@ class VoiceReminders
             if (! $s->enabled) {   // turned off: what was waiting is over, the backup SMS still go
                 return array_filter(['settled' => static::settle($companyId, $s, $now, false), 'backup_sms' => static::backup($companyId)]);
             }
-            $out = ['planned' => static::plan($companyId, $s, $now), 'expired' => static::expire($companyId, $now),
-                'retried' => static::retry($companyId, $s, $now)];
+            $out = $full ? ['planned' => static::plan($companyId, $s, $now), 'expired' => static::expire($companyId, $now)] : [];
+            $out['retried'] = static::retry($companyId, $s, $now);
             $out['settled'] = static::settle($companyId, $s, $now, true);
             $out['backup_sms'] = static::backup($companyId);
             $out['queued'] = static::dispatch($companyId, $s, $now);
