@@ -22,7 +22,7 @@ class VoiceReminderCall extends Model
     protected function casts(): array
     {
         return ['package' => 'array', 'scheduled_at' => 'datetime', 'started_at' => 'datetime', 'answered_at' => 'datetime',
-            'ended_at' => 'datetime', 'ref_date' => 'date'];
+            'ended_at' => 'datetime', 'ref_date' => 'date', 'sms_backup' => 'boolean', 'reached' => 'boolean', 'settled_at' => 'datetime', 'backup_sms_at' => 'datetime'];
     }
 
     public function company(): BelongsTo

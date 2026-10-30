@@ -6,6 +6,7 @@ use App\Filament\App\Concerns\QuickAccessible;
 use App\Filament\App\Resources\VoiceOptouts\VoiceOptoutResource;
 use App\Filament\App\Resources\VoiceReminderCalls\Pages\ListVoiceReminderCalls;
 use App\Models\VoiceReminderCall;
+use App\Support\AltNumbers;
 use App\Support\Menu;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -75,7 +76,9 @@ class VoiceReminderCallResource extends Resource
                     ->formatStateUsing(fn ($state) => $state?->timezone('Asia/Dhaka')->format('d M, g:i A')),
                 TextColumn::make('kind')->label(__('ধরন'))->badge()->formatStateUsing(fn ($state) => __(VoiceReminderCall::KINDS[$state] ?? $state)),
                 TextColumn::make('name')->label(__('কাস্টমার'))->searchable(['name', 'customer_id', 'number'])
-                    ->description(fn (VoiceReminderCall $r) => trim(($r->customer_id ? 'ID '.$r->customer_id.' · ' : '').'0'.substr((string) $r->number, 3))),
+                    ->description(fn (VoiceReminderCall $r) => trim(($r->customer_id ? 'ID '.$r->customer_id.' · ' : '').'0'.substr((string) $r->number, 3)
+                        .($r->alt_of ? ' · '.__('বিকল্প নম্বর').($r->alt_number && $r->alt_number !== $r->number ? ' 0'.substr($r->alt_number, 3) : '')
+                            .' ('.collect(explode(',', (string) $r->number_source))->map(fn ($x) => __(AltNumbers::SOURCES[$x] ?? $x))->join(', ').')' : ''))),
                 TextColumn::make('status')->label(__('অবস্থা'))->badge()->color($color)
                     ->formatStateUsing(fn ($state) => __(VoiceReminderCall::STATUSES[$state] ?? $state))
                     ->description(fn (VoiceReminderCall $r) => $r->tries > 1 ? __(':n বার কল', ['n' => $r->tries]) : null),
@@ -85,11 +88,14 @@ class VoiceReminderCallResource extends Resource
                 TextColumn::make('seconds')->label(__('সময়'))
                     ->formatStateUsing(fn ($state) => $state ? gmdate('i:s', (int) $state) : ''),
                 TextColumn::make('reason')->label(__('কেন বাদ / সমস্যা'))->wrap()->color('gray')
-                    ->state(fn (VoiceReminderCall $r) => $r->reason ?: $r->error),
+                    ->state(fn (VoiceReminderCall $r) => collect([$r->reason ?: $r->error,
+                        $r->backup_sms_id ? __('কলে পাওয়া যায়নি, বিল রিমাইন্ডার SMS গেছে') : null,
+                        $r->sms_backup && $r->reached ? __('কলে জানানো হয়েছে, SMS লাগেনি') : null])->filter()->join(' · ')),
             ])
             ->filters([
                 SelectFilter::make('kind')->label(__('ধরন'))->options(array_map('__', VoiceReminderCall::KINDS)),
                 SelectFilter::make('status')->label(__('অবস্থা'))->options(array_map('__', VoiceReminderCall::STATUSES)),
+                Filter::make('alt')->label(__('শুধু বিকল্প নম্বরের কল'))->query(fn (Builder $q) => $q->whereNotNull('alt_of')),
                 Filter::make('today')->label(__('শুধু আজ'))->default()
                     ->query(fn (Builder $q) => $q->where('created_at', '>=', now('Asia/Dhaka')->startOfDay()->utc())),
             ])
