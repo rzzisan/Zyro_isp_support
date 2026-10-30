@@ -107,6 +107,10 @@ def sync_company(t, frm: date, to: date, with_deleted: bool = True) -> dict:
                    receive_amount = EXCLUDED.receive_amount, discount_amount = EXCLUDED.discount_amount,
                    vat_amount = EXCLUDED.vat_amount, balance_due = EXCLUDED.balance_due,
                    payment_method = EXCLUDED.payment_method, is_deleted = EXCLUDED.is_deleted, synced_at = now()""", rows)
+        # a Desk bill whose quick approve looked failed but billing lists approved: it was approved after all
+        cur.execute("""UPDATE bill_collections c SET approve_error = NULL FROM billing_daily_bills d
+                       WHERE c.company_id = %s AND d.company_id = c.company_id AND d.daily_bill_id = c.daily_bill_id
+                         AND d.is_approved AND NOT d.is_deleted AND c.approve_error IS NOT NULL""", (t.company_id,))
     # rows of the range that billing no longer lists at all (hard-removed) are marked deleted;
     # an empty answer is not trusted for that (a billing hiccup must not wipe a month)
     # the quick live pass (today, every 5 s) skips the slower receipt refresh and the gone check

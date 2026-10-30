@@ -182,15 +182,27 @@ def _approve(company_id: int, user_id: int, api: ISPDigital, username: str, head
         elif not new.get("can_approve"):
             out["approve_error"] = "আপনার বিলিং লগইনের approve করার অনুমতি নেই"
         else:
-            api.approve_bills([int(new["id"])])
-            # trust billing's list, not its reply: approved = no longer pending
-            still = any(int(p["id"] or 0) == int(new["id"]) for p in _pending(api, header_id, username))
-            if still:
-                out["approve_error"] = "বিলিং approve নেয়নি, বিলটা pending আছে"
+            still = lambda: any(int(p["id"] or 0) == int(new["id"]) for p in _pending(api, header_id, username))
+            error = None
+            try:
+                try:
+                    api.approve_bills([int(new["id"])])
+                except LoginError as e:
+                    # the session was dropped (e.g. the same billing login opened in a browser): log in again
+                    # (the pending check does) and try once more, unless it got approved meanwhile
+                    _log.warning("approve after collection %s: %s", collection_id, e)
+                    if still():
+                        api.approve_bills([int(new["id"])])
+            except BillingRefused as e:
+                error = f"বিলিং approve নেয়নি: {e}"
+            except Exception:
+                _log.exception("approve after collection %s failed", collection_id)
+                error = "approve করা যায়নি, বিলটা pending আছে"
+            # trust billing's list, not its reply: approved = no longer pending (whoever approved it)
+            if still():
+                out["approve_error"] = error or "বিলিং approve নেয়নি, বিলটা pending আছে"
             else:
                 out["approved"] = True
-    except BillingRefused as e:
-        out["approve_error"] = f"বিলিং approve নেয়নি: {e}"
     except Exception:
         _log.exception("approve after collection %s failed", collection_id)
         out["approve_error"] = "approve করা যায়নি, বিলটা pending আছে"
