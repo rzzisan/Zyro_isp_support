@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Filament\App\Pages\VoiceReminderReport;
+use App\Filament\App\Resources\CustomerAltNumbers\Pages\ManageCustomerAltNumbers;
 use App\Filament\App\Resources\Customers\History\VoiceCallsTable;
 use App\Models\BillingCustomer;
 use App\Models\Company;
+use App\Models\CustomerAltNumber;
 use App\Models\SipSetting;
 use App\Models\SmsMessage;
 use App\Models\SmsSetting;
@@ -16,6 +18,7 @@ use App\Models\VoiceReminderCall;
 use App\Models\VoiceReminderSetting;
 use App\Support\AltNumbers;
 use App\Support\VoiceReminders;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -111,7 +114,7 @@ class VoiceReminderAltTest extends TestCase
         $alts = AltNumbers::for($c);
         $this->assertSame(['8801811000001', '8801611000001'], $alts->pluck('number')->all());   // profile first, then WhatsApp
         $this->assertSame(['profile'], $alts[0]['sources']);
-        $this->assertSame(2, DB::table('customer_alt_numbers')->where('customer_header_id', 1)->count());
+        $this->assertSame(3, DB::table('customer_alt_numbers')->where('customer_header_id', 1)->count());   // the opted-out one is kept, only calls skip it
     }
 
     public function test_unanswered_call_tries_the_other_numbers_one_by_one_then_settles(): void
@@ -219,6 +222,36 @@ class VoiceReminderAltTest extends TestCase
         $this->artisan('voice:reminders', ['--for' => 0])->assertSuccessful();
     }
 
+    public function test_nightly_list_keeps_staff_numbers_and_never_brings_back_a_removed_one(): void
+    {
+        $this->customer(1, ['phone' => '01811000001']);
+        $this->customer(2);
+        $this->ticket(2, '01911000002');
+        $this->assertSame(2, AltNumbers::rebuild($this->company->id));
+        $this->assertSame(0, AltNumbers::rebuild($this->company->id));   // again: nothing doubles
+
+        $this->actingAs($this->owner);
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($this->company);
+        Livewire::test(ManageCustomerAltNumbers::class)
+            ->callAction(TestAction::make('create')->table(), ['customer_header_id' => '1', 'number' => '01611 000001'])
+            ->assertHasNoErrors()
+            ->assertCanSeeTableRecords(CustomerAltNumber::all());
+        $staff = CustomerAltNumber::where('number', '8801611000001')->sole();
+        $this->assertSame(['staff'], $staff->sourceList());
+        $wrong = CustomerAltNumber::where('number', '8801911000002')->sole();
+        Livewire::test(ManageCustomerAltNumbers::class)->callAction(TestAction::make('remove')->table($wrong));
+        $this->assertNotNull($wrong->fresh()->removed_at);
+
+        AltNumbers::rebuild($this->company->id);
+        $this->assertNotNull($wrong->fresh()->removed_at);                // stays off
+        $this->assertTrue(CustomerAltNumber::whereKey($staff->id)->exists());   // staff's stays though no history has it
+        $this->assertSame([], AltNumbers::list(BillingCustomer::where('header_id', 2)->first())->all());
+        $this->assertSame(['8801811000001', '8801611000001'],
+            AltNumbers::list(BillingCustomer::where('header_id', 1)->first())->pluck('number')->sort()->reverse()->values()->all());
+        $this->artisan('customers:alt-numbers')->assertSuccessful();
+    }
+
     public function test_report_and_customer_tab_render(): void
     {
         $this->settings();
@@ -237,6 +270,7 @@ class VoiceReminderAltTest extends TestCase
         $this->assertSame(['0' => 1, '1' => 1], $r['keys']);
         $page->assertSee('৩ দিনের মধ্যে পেমেন্ট');
 
+        AltNumbers::rebuild($this->company->id);
         Livewire::test(VoiceCallsTable::class, ['record' => $c])->assertOk()
             ->assertSee('বিল রিমাইন্ডার SMS-এ জানানো হয়')->assertSee('01811000001');
     }

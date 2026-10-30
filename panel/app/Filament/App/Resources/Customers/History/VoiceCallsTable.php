@@ -45,7 +45,7 @@ class VoiceCallsTable extends HistoryTable
         $s = VoiceReminderSetting::where('company_id', $c->company_id)->first();
         $regular = (bool) (VoiceReminders::regulars((int) $c->company_id, [(int) $c->header_id])[$c->header_id] ?? false);
         $parts = [$regular && $s?->sms_saving ? __('বিল রিমাইন্ডার কলে জানানো হয় (নিয়মিত কল ধরেন; SMS শুধু কলে না পেলে)') : __('বিল রিমাইন্ডার SMS-এ জানানো হয়')];
-        $alts = AltNumbers::for($c);
+        $alts = AltNumbers::list($c);
         $reached = $alts->filter(fn ($r) => $r['reached_at']);
         if ($reached->isNotEmpty()) {
             $parts[] = __('এই নম্বরে পাওয়া গেছে: :n', ['n' => $reached->map(fn ($r) => '0'.substr($r['number'], 3))->join(', ')]);

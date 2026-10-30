@@ -26,9 +26,26 @@ def _one(rows: list[dict]) -> dict | None:
     return rows[0] if len(rows) == 1 else None
 
 
+def by_alt_number(t: Tenant, mobile: str) -> dict | None:
+    """The one customer whose other number this is (customer_alt_numbers: profile phone, ticket, WhatsApp, SMS or
+    added by staff in Desk → বিকল্প নম্বর; numbers shared by several customers are never there)."""
+    rows = db.all_rows("""SELECT bc.extra FROM customer_alt_numbers a
+                          JOIN billing_customers bc ON bc.company_id = a.company_id AND bc.header_id = a.customer_header_id
+                          WHERE a.company_id = %s AND a.number = %s AND a.removed_at IS NULL
+                            AND bc.gone_at IS NULL AND NOT bc.is_left LIMIT 3""", (t.company_id, mobile))
+    return _one([r["extra"] for r in rows if r["extra"]])
+
+
+def local_by_mobile(t: Tenant, mobile: str) -> dict | None:
+    """A line by its registered mobile (8801…); a number on no line at all: by the customer's other numbers.
+    A number on several lines finds nothing (the bot asks for the ID)."""
+    rows = _rows(t, "mobile_normalized = %s", (mobile,))
+    return _one(rows) if rows else by_alt_number(t, mobile)
+
+
 def local_by_whatsapp(t: Tenant, wa_number: str) -> dict | None:
     mobile = normalize_bd_mobile(wa_number)
-    return _one(_rows(t, "mobile_normalized = %s", ("88" + mobile,))) if len(mobile) == 11 else None
+    return local_by_mobile(t, "88" + mobile) if len(mobile) == 11 else None
 
 
 def local_by_text(t: Tenant, text: str, allow_bare_id: bool = True) -> dict | None:
@@ -36,7 +53,7 @@ def local_by_text(t: Tenant, text: str, allow_bare_id: bool = True) -> dict | No
     text = without_urls(text)
     nums = number_text(text)
     for m in re.findall(r"(?:\+?88)?01[3-9]\d{8}", re.sub(r"[\s-]", "", nums)):
-        hit = _one(_rows(t, "mobile_normalized = %s", ("88" + normalize_bd_mobile(m),)))
+        hit = local_by_mobile(t, "88" + normalize_bd_mobile(m))
         if hit:
             return hit
     bare_ok = allow_bare_id or bool(ID_HINT.search(text)) or text.strip().isdigit()

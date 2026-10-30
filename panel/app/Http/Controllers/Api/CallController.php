@@ -16,6 +16,7 @@ use App\Support\Menu;
 use App\Support\Softphone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /** Android app: the hotline call log, like the panel's "কল লগ" page; bot-answered calls have a recording and a transcript. */
@@ -144,7 +145,10 @@ class CallController extends Controller
         $ids = WaContact::where('company_id', $company->id)->where('wa_number', $n)->whereNotNull('customer_id')
             ->pluck('customer_id');
         $customers = BillingCustomer::where('company_id', $company->id)
-            ->where(fn ($q) => $q->where('mobile_normalized', $n)->orWhereIn('customer_id', $ids))
+            ->where(fn ($q) => $q->where('mobile_normalized', $n)->orWhereIn('customer_id', $ids)
+                // one of a customer's other numbers (কাস্টমার ও বিল → বিকল্প নম্বর)
+                ->orWhereIn('header_id', DB::table('customer_alt_numbers')->where('company_id', $company->id)->where('number', $n)
+                    ->whereNull('removed_at')->select('customer_header_id')))
             ->orderBy('is_left')->orderByDesc('header_id')->limit(5)->get();
         $tickets = BillingTicket::where('company_id', $company->id)->whereIn('customer_header_id', $customers->pluck('header_id'))
             ->whereIn('state', ['pending', 'processing'])->orderByDesc('opened_at')->get()->groupBy('customer_header_id');

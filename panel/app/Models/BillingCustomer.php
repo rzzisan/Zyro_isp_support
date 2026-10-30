@@ -71,7 +71,12 @@ class BillingCustomer extends Model
             $core = preg_replace('/^(?:88)?0?/', '', $digits);
             if (strlen($core) >= 4 && strlen($digits) * 2 >= strlen(str_replace(' ', '', $q))) {
                 $w->orWhere('mobile_normalized', 'like', "%{$core}%")
-                    ->orWhereRaw("regexp_replace(coalesce(mobile, ''), ?, '', 'g') like ?", ['\D', "%{$core}%"]);
+                    ->orWhereRaw("regexp_replace(coalesce(mobile, ''), ?, '', 'g') like ?", ['\D', "%{$core}%"])
+                    // or one of their other numbers (কাস্টমার ও বিল → বিকল্প নম্বর)
+                    ->orWhereExists(fn ($a) => $a->from('customer_alt_numbers')
+                        ->whereColumn('customer_alt_numbers.company_id', 'billing_customers.company_id')
+                        ->whereColumn('customer_alt_numbers.customer_header_id', 'billing_customers.header_id')
+                        ->whereNull('customer_alt_numbers.removed_at')->where('customer_alt_numbers.number', 'like', "%{$core}%"));
             }
         });
     }
