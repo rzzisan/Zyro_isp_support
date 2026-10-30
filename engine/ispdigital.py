@@ -119,6 +119,8 @@ class ISPDigital:
         if not self._username or not self._password:
             raise LoginError("billing username / password not set")
         USERNAME, PASSWORD = self._username, self._password
+        # start clean: with a still-valid session cookie billing redirects /Account/Login away (no form, no token)
+        self._client.cookies.clear()
         page = self._client.get("/Account/Login")
         m = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"', page.text)
         if not m:
@@ -431,10 +433,23 @@ class ISPDigital:
     def approve_bills(self, daily_bill_ids: list[int]) -> str:
         """Approve pending Daily Bill Collection rows like the page's "Approve" button ($.post billIDs[]=id, no
         anti-forgery token). Only for logins billing lets approve (HasApprovalAccess on the row). Returns billing's message."""
-        r = self._post("/DailyAccountClosing/ApproveSelectedTransaction/", [("billIDs[]", str(int(i))) for i in daily_bill_ids])
+        body = urlencode([("billIDs[]", str(int(i))) for i in daily_bill_ids])
+        with self._lock:
+            if not self._logged_in:
+                self.login()
+            r = self._client.post("/DailyAccountClosing/ApproveSelectedTransaction/", content=body, headers={
+                "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
+        # billing answers an approve with a redirect (not to the login page) and the session stays valid: the
+        # caller checks the pending list. Only a redirect to the login page means the session is gone.
+        if r.status_code in (301, 302, 303):
+            location = r.headers.get("location", "")
+            if "Account/Login" in location:
+                self._logged_in = False
+                raise LoginError("billing session expired, the bill was not approved")
+            return "ok"
+        r.raise_for_status()
         if r.text.lstrip().startswith("<"):
-            self._logged_in = False
-            raise LoginError("billing session expired, the bill was not approved")
+            return "ok"
         res = r.json()
         if res.get("errorMessage"):
             raise BillingRefused(res["errorMessage"])
