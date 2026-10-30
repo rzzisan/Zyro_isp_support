@@ -79,7 +79,9 @@ class BillController extends Controller
                 'method_id' => (string) $data['method_id'], 'received_by_id' => (string) $data['received_by_id'],
                 'trx_no' => $data['trx_no'] ?? '', 'remarks' => $data['remarks'] ?? '',
                 'bill_month' => $data['bill_month'] ?? null, 'sms' => false,  // never billing's SMS
-                'next_billing_date' => (bool) ($data['next_billing_date'] ?? true),
+                // the app's switch can't override the amount rule (on only above 80% of the due, never for an advance)
+                'next_billing_date' => (bool) ($data['next_billing_date'] ?? true) && (! isset($data['expected_payable'])
+                    || BillActions::nextBillingDate((float) $data['expected_payable'], (float) $data['paid'], (float) ($data['discount'] ?? 0))),
                 'expected_payable' => isset($data['expected_payable']) ? (float) $data['expected_payable'] : null,
                 'approve' => Menu::allows($request->user(), $company, 'bill_approve'),
             ]);
