@@ -203,6 +203,22 @@ class VoiceReminderAltTest extends TestCase
         $this->assertSame([], VoiceReminders::coversSms($this->company->id, collect([$c]), Carbon::parse('2026-10-31', 'Asia/Dhaka'), 2));
     }
 
+    public function test_next_call_goes_as_soon_as_a_line_is_free(): void
+    {
+        $this->settings(['max_calls' => 1, 'reminder_days' => '2']);
+        $this->customer(1);
+        $this->customer(2);
+        $out = VoiceReminders::run($this->company->id);
+        $this->assertSame([2, 1], [$out['planned'], $out['queued']]);
+        // a quick pass while the first call rings: nothing more; once it ended, the next one at once
+        $this->assertSame(0, VoiceReminders::run($this->company->id, null, false)['queued']);
+        VoiceReminderCall::where('status', 'queued')->update(['status' => 'done', 'answered_at' => now(), 'ended_at' => now(), 'tries' => 1]);
+        $quick = VoiceReminders::run($this->company->id, null, false);
+        $this->assertArrayNotHasKey('planned', $quick);
+        $this->assertSame(1, $quick['queued']);
+        $this->artisan('voice:reminders', ['--for' => 0])->assertSuccessful();
+    }
+
     public function test_report_and_customer_tab_render(): void
     {
         $this->settings();
