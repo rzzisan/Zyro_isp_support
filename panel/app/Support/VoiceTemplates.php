@@ -132,6 +132,32 @@ class VoiceTemplates
         return (string) $r->json('file');
     }
 
+    /**
+     * Several audios at once, $concurrency requests at a time: [key => ['text', 'voice', 'speed']] → [key => file]
+     * (the ones that failed are left out; package() then asks for them one by one).
+     */
+    public static function audioMany(int $companyId, array $items, int $concurrency = 4): array
+    {
+        $out = [];
+        foreach (array_chunk($items, max(1, $concurrency), true) as $chunk) {
+            try {
+                $res = Http::pool(fn ($pool) => array_map(fn ($k) => $pool->as((string) $k)->baseUrl(config('services.engine.url'))
+                    ->timeout(120)->acceptJson()->withHeaders(['x-internal-key' => (string) config('services.engine.key')])
+                    ->post("/internal/{$companyId}/voice/tts", ['text' => $chunk[$k]['text'], 'voice' => $chunk[$k]['voice'], 'speed' => $chunk[$k]['speed']]),
+                    array_keys($chunk)));
+            } catch (\Throwable $e) {
+                continue;
+            }
+            foreach ($res as $k => $r) {
+                if ($r instanceof \Illuminate\Http\Client\Response && $r->successful() && $r->json('file')) {
+                    $out[$k] = (string) $r->json('file');
+                }
+            }
+        }
+
+        return $out;
+    }
+
     /** Browser URL of a made audio (mp3) or of a template's uploaded recording. */
     public static function url(string $companySlug, string $file): string
     {
