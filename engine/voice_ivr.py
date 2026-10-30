@@ -124,13 +124,28 @@ def busy(company_id: int) -> int:
     return sum(1 for c in active.values() if c["company_id"] == company_id)
 
 
+def limit(company_id: int) -> int:
+    """Reminder calls at once (ভয়েস রিমাইন্ডার → সেটিংস, "একসাথে কয়টা কল"), else VOICE_REMIND_MAX_CALLS."""
+    r = db.one("select max_calls from voice_reminder_settings where company_id = %s", (company_id,))
+    return max(1, int(r["max_calls"])) if r and r["max_calls"] else MAX_PER_COMPANY
+
+
+def line_in_use(company_id: int) -> bool:
+    """A customer's own call is on the hotline (ringing Desk, with the bot or with staff): reminders wait for it."""
+    now = time.time()
+    return any(i.get("company_id") == company_id and not i.get("reminder") and now - i.get("at", 0) < 1800
+               and i.get("state") in ("waiting", "bot", "taken") for i in list(vb().calls.values()))
+
+
 def start(row_id: int) -> str:
     """Place one queued call now unless the company already has its calls running. "ok" | "busy" | "gone" | error."""
     with _lock:
-        row = db.one("select company_id from voice_reminder_calls where id = %s and status = 'queued'", (row_id,))
+        row = db.one("select company_id, kind from voice_reminder_calls where id = %s and status = 'queued'", (row_id,))
         if not row:
             return "gone"
-        if busy(row["company_id"]) >= MAX_PER_COMPANY:
+        if busy(row["company_id"]) >= limit(row["company_id"]):
+            return "busy"
+        if row["kind"] != "test" and line_in_use(row["company_id"]):
             return "busy"
         row = db.one("update voice_reminder_calls set status = 'dialing', started_at = now(), updated_at = now()"
                      " where id = %s and status = 'queued' returning *", (row_id,))
@@ -210,7 +225,7 @@ def finish(uid: str, status: str, error: str | None = None, dial_status: str | N
     result = c.get("result") or ("listened" if status == "done" else None)
     secs = int(time.time() - c["answered_at"]) if c.get("answered_at") else None
     db.execute("update voice_reminder_calls set status = %s, dial_status = coalesce(%s, dial_status), result = %s, keys = %s,"
-               " seconds = %s, error = %s, ended_at = now(), updated_at = now() where id = %s",
+               " seconds = %s, error = %s, tries = tries + 1, ended_at = now(), updated_at = now() where id = %s",
                (status, dial_status, result, " ".join(c["keys"]) or None, secs, error, c["row_id"]))
     if c.get("log_id"):
         outcome = result if status == "done" else ("no_answer" if status in ("no_answer", "busy") else None)
@@ -227,7 +242,7 @@ def finish(uid: str, status: str, error: str | None = None, dial_status: str | N
 
 
 def run_queue() -> None:
-    """Every few seconds: the calls whose time has come (test calls now; the scheduler's later)."""
+    """Every few seconds: the calls whose time has come (test calls, and what the panel's `voice:reminders` queued)."""
     for r in db.all_rows("select id from voice_reminder_calls where status = 'queued' and coalesce(scheduled_at, now()) <= now()"
                          " order by scheduled_at nulls first, id limit 20"):
         start(r["id"])
@@ -530,7 +545,7 @@ async def staff(agi: Agi, uid: str, c: dict, hold: dict) -> None:
     push = {"type": "call", "uid": uid, "caller": v.display_number(c["number"]), "channel": "hotline", "kind": "reminder",
             "name": label or "রিমাইন্ডার কল", "note": note}
     v.calls[uid] = {"company_id": c["company_id"], "caller": c["number"], "at": time.time(), "channel": "hotline",
-                    "state": "waiting", "row_id": c["log_id"]}
+                    "state": "waiting", "row_id": c["log_id"], "reminder": True}
     await loop.run_in_executor(v.pool, lambda: db.execute(
         "update call_logs set status = 'ringing', ring_note = %s, updated_at = now() where id = %s", (note or None, c["log_id"])))
     every, max_wait = max(10, int(hold.get("every") or 25)), max(20, int(hold.get("max_wait") or 90))

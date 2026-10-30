@@ -1,0 +1,12 @@
+[Unit]
+Description=Zyro Desk: plan and queue automatic voice reminder calls (bill reminder, line off)
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+# www-data like the panel itself: the cached config is readable for it and new log files stay writable for PHP-FPM
+User=www-data
+Environment=HOME=/tmp
+WorkingDirectory=/var/www/zyro_isp_support/panel
+ExecStart=/usr/bin/php artisan voice:reminders
+TimeoutStartSec=600

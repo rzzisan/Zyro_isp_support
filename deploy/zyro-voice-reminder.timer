@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Desk voice reminder calls every 5 minutes (each company only when turned on, inside its calling hours)
+
+[Timer]
+OnCalendar=*-*-* *:00/5:30
+Persistent=true
+Unit=zyro-voice-reminder.service
+
+[Install]
+WantedBy=timers.target
