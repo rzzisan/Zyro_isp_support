@@ -1,0 +1,10 @@
+[Unit]
+Description=Copy hotline call records from the PBX portal every night, 01:00 Bangladesh time
+
+[Timer]
+OnCalendar=*-*-* 19:00:00 UTC
+Persistent=true
+Unit=zyro-pbx-cdr.service
+
+[Install]
+WantedBy=timers.target

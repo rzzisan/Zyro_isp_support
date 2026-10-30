@@ -1,0 +1,12 @@
+[Unit]
+Description=Zyro Desk: copy hotline call records (CDR) from the PBX portal, yesterday and today
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+# www-data like the panel itself: the cached config is readable for it and new log files stay writable for PHP-FPM
+User=www-data
+Environment=HOME=/tmp
+WorkingDirectory=/var/www/zyro_isp_support/panel
+ExecStart=/usr/bin/php artisan pbx:cdr-pull --days=2
+TimeoutStartSec=900

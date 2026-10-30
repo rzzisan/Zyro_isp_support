@@ -4,7 +4,10 @@ namespace App\Filament\App\Pages;
 
 use App\Models\Company;
 use App\Models\SipSetting;
+use App\Services\PbxPortalClient;
 use BackedEnum;
+use Carbon\CarbonImmutable;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -15,7 +18,9 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
+use Throwable;
 
 /**
  * The hotline's SIP extension (cloud PBX). Put it in the hotline's ring group: while a call rings, the panel shows
@@ -58,7 +63,8 @@ class SipSettings extends CompanySettingsPage
             'bot_mode' => $record->bot_mode ?? 'off', 'bot_delay' => $record->bot_delay ?? 20, 'bot_model' => $record->bot_model,
             'bot_test_numbers' => $record->bot_test_numbers, 'bot_blocked_numbers' => $record->bot_blocked_numbers,
             'bot_max_seconds' => $record->bot_max_seconds ?? 180,
-            'bot_engine' => $record->bot_engine ?? 'live', 'cascade_scope' => $record->cascade_scope ?? 'test'];
+            'bot_engine' => $record->bot_engine ?? 'live', 'cascade_scope' => $record->cascade_scope ?? 'test',
+            'portal_url' => $record->portal_url, 'portal_username' => $record->portal_username, 'portal_password' => null];
     }
 
     public function form(Schema $schema): Schema
@@ -113,6 +119,22 @@ class SipSettings extends CompanySettingsPage
                     Textarea::make('bot_blocked_numbers')->label(__('ব্লক করা নম্বর'))->rows(2)->columnSpanFull()
                         ->placeholder('01712345678')->helperText(__('এই নম্বরের কল বট কখনো ধরবে না, শুধু এজেন্টদের ফোনে বাজবে')),
                 ]),
+            Section::make(__('PBX পোর্টাল (কল রেকর্ড রিপোর্টের জন্য)'))->columns(3)
+                ->description(__('হটলাইনের ওয়েব পোর্টালের লগইন দিলে Desk পোর্টাল থেকে সব কলের রেকর্ড (CDR) এনে রাখে, তা দিয়ে হটলাইনের রিপোর্ট বানানো যায়। শুধু পড়ে, পোর্টালে কিছু বদলায় না। পাসওয়ার্ড এনক্রিপ্ট করে রাখা হয়, কাউকে দেখানো হয় না।'))
+                ->schema([
+                    TextInput::make('portal_url')->label(__('পোর্টালের ঠিকানা'))->maxLength(200)->placeholder('https://century.alphapbx.net')
+                        ->rule('regex:/^(https?:\/\/)?[A-Za-z0-9.\-]+(:\d+)?\/?$/')->validationMessages(['regex' => __('শুধু পোর্টালের ঠিকানা দিন, যেমন https://century.alphapbx.net')]),
+                    TextInput::make('portal_username')->label(__('পোর্টালের ইউজারনেম'))->maxLength(120)
+                        ->required(fn ($get) => filled($get('portal_url')))->extraInputAttributes(['autocomplete' => 'off']),
+                    TextInput::make('portal_password')->label(__('পোর্টালের পাসওয়ার্ড'))->password()->revealable()->maxLength(200)
+                        ->extraInputAttributes(self::NO_AUTOFILL)
+                        ->required(fn ($get) => filled($get('portal_url')) && ! filled($s->portal_password))
+                        ->helperText(filled($s->portal_password) ? __('এনক্রিপ্ট করে রাখা আছে; বদলাতে না চাইলে খালি রাখুন') : __('এনক্রিপ্ট করে রাখা হবে, পরে আর দেখা যাবে না')),
+                    Placeholder::make('portal_status')->label(__('শেষ পরীক্ষা'))->columnSpanFull()
+                        ->content(fn () => $s->portal_checked_at
+                            ? ($s->portal_check_ok ? '✅ ' : '❌ ').$s->portal_check_message.' · '.$s->portal_checked_at->diffForHumans()
+                            : __('এখনো পরীক্ষা করা হয়নি')),
+                ]),
             Placeholder::make('status')->label(__('অবস্থা'))
                 ->content(fn () => $s->status_at
                     ? ($s->status === 'registered' ? __('✅ রেজিস্টার্ড') : '❌ '.$s->status).' · '.$s->status_at->diffForHumans()
@@ -124,6 +146,18 @@ class SipSettings extends CompanySettingsPage
     {
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
+        }
+        if (blank($data['portal_password'] ?? null)) {
+            unset($data['portal_password']);
+        }
+        $data['portal_url'] = filled($data['portal_url'] ?? null) ? rtrim(trim($data['portal_url']), '/') : null;
+        if ($data['portal_url'] && ! preg_match('#^https?://#i', $data['portal_url'])) {
+            $data['portal_url'] = 'https://'.$data['portal_url'];
+        }
+        $data['portal_username'] = filled($data['portal_username'] ?? null) ? trim($data['portal_username']) : null;
+        if (! $data['portal_url']) {   // cleared: forget the login too
+            $data['portal_username'] = null;
+            $data['portal_password'] = null;
         }
         $data['server'] = trim($data['server']);
         $data['username'] = trim($data['username']);
@@ -140,6 +174,35 @@ class SipSettings extends CompanySettingsPage
         $data['status_at'] = null;
 
         return $data;
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('portalTest')->label(__('পোর্টাল পরীক্ষা'))->icon(Heroicon::OutlinedSignal)->color('gray')
+                ->visible(fn () => $this->record(Filament::getTenant())->portalConfigured())
+                ->action(fn () => $this->testPortal()),
+        ];
+    }
+
+    /** Logs into the PBX portal and counts today's call records; nothing is saved but the result. */
+    public function testPortal(): void
+    {
+        abort_unless(static::canAccess(), 403);
+        $s = $this->record(Filament::getTenant());
+        try {
+            $client = new PbxPortalClient($s->portal_url, $s->portal_username, $s->portal_password);
+            $today = CarbonImmutable::now(PbxPortalClient::TZ)->startOfDay();
+            $n = count($client->cdrs($today, $today->addDay()));
+            $s->forceFill(['portal_checked_at' => now(), 'portal_check_ok' => true,
+                'portal_check_message' => __('লগইন ঠিক আছে — আজ :n টা কল রেকর্ড', ['n' => $n])])->save();
+            Notification::make()->success()->title(__('লগইন ঠিক আছে — আজ :n টা কল রেকর্ড', ['n' => $n]))->send();
+        } catch (Throwable $e) {
+            $s->forceFill(['portal_checked_at' => now(), 'portal_check_ok' => false,
+                'portal_check_message' => mb_substr($e->getMessage(), 0, 300)])->save();
+            Notification::make()->danger()->title(__('পোর্টালে ঢোকা যায়নি'))->body($e->getMessage())->send();
+        }
+        $this->redirect(static::getUrl());
     }
 
     /** Gemini Live models that opened with the bot's setup on the paid key (2026-10-25). Not listed: the 2.5 native-audio
