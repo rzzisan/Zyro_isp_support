@@ -675,3 +675,9 @@
 - প্যানেল: সেটিংস → হটলাইন (SIP) → "PBX পোর্টাল (কল রেকর্ড রিপোর্টের জন্য)": পোর্টালের ঠিকানা, ইউজারনেম, পাসওয়ার্ড (`sip_settings.portal_*`, পাসওয়ার্ড এনক্রিপ্টেড, কখনো দেখানো হয় না)। উপরে "পোর্টাল পরীক্ষা": লগইন করে আজকের কল রেকর্ড গোনে।
 - App\Services\PbxPortalClient: FusionPBX (pbx.bd / century.alphapbx.net) ব্রাউজারের মতো লগইন (`/login.php`), CDR পেজের CSV export (`/app/xml_cdr/xml_cdr_export.php`, আগে টোকেনসহ POST, না হলে GET)। CSV না এলে পেজগুলো `storage/app/pbx-debug/`-এ রাখে।
 - `php artisan pbx:cdr-pull [--company=] [--days=30 | --from=Y-m-d --to=Y-m-d]`: দিন ধরে টেনে `pbx_cdrs`-এ (company_id+uuid unique, পুরো সারি `raw` json-এ)। deploy/zyro-pbx-cdr.timer প্রতি রাতে ০১:০০ (BD) শেষ ২ দিন। রিপোর্ট এই টেবিল + call_logs থেকে।
+
+## 2026-10-30: কাস্টমারের বিকল্প নম্বর: তালিকা, সার্চ, বট
+- `customer_alt_numbers` এখন সব কাস্টমারের জন্য: App\Support\AltNumbers::rebuild (প্রতি রাতে `php artisan customers:alt-numbers`, deploy/zyro-alt-numbers.timer 03:40 ঢাকা), refresh (এক কাস্টমার, রিমাইন্ডার কলের আগে), list (যা রাখা আছে), for (কলের জন্য, "আর কল নয়" বাদ)। সূত্র: প্রোফাইলের phone, টিকেট, WhatsApp, Desk SMS, স্টাফ। নিজের মোবাইল আর দুই বা বেশি অন্য কাস্টমারের নম্বর বাদ (স্টাফ যোগ করলে থাকে)। আর না পাওয়া নম্বর মুছে যায়, স্টাফের/সরানোগুলো থাকে।
+- `added_by`, `removed_at`, `removed_by`: প্যানেল কাস্টমার ও বিল → "বিকল্প নম্বর" (CustomerAltNumberResource): নম্বর/নাম/ID/PPPoE দিয়ে সার্চ, সূত্র ফিল্টার, হাতে যোগ, "সরিয়ে দিন" (আর কোথাও ধরা হয় না, রাতের আপডেটেও ফেরে না), "ফিরিয়ে আনুন"।
+- BillingCustomer::scopeMatching নম্বর দিয়ে সার্চে বিকল্প নম্বরও মেলায় (কাস্টমার লিস্ট, হেডার সার্চ, অ্যাপ, পিকার)। অ্যাপের কল স্ক্রিন (callInfo) বিকল্প নম্বরের কাস্টমারও দেখায়।
+- engine/customers.py: local_by_mobile: নম্বরে কোনো লাইন না থাকলে by_alt_number (ঠিক একজন হলে)। WhatsApp বট (by_whatsapp), লেখা নম্বর (local_by_text), ফোন বট সব এটা ব্যবহার করে; voice_bot.caller_name-ও।

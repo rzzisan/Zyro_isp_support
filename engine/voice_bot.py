@@ -643,6 +643,11 @@ def caller_name(company_id: int, caller: str) -> str:
     n = normalize(caller)
     row = db.one("select name, customer_id from billing_customers where company_id = %s and mobile_normalized = %s"
                  " order by is_left, header_id desc limit 1", (company_id, n)) if n else None
+    if n and not row:  # one of a customer's other numbers (Desk → বিকল্প নম্বর)
+        row = db.one("select bc.name, bc.customer_id from customer_alt_numbers a join billing_customers bc"
+                     " on bc.company_id = a.company_id and bc.header_id = a.customer_header_id"
+                     " where a.company_id = %s and a.number = %s and a.removed_at is null and bc.gone_at is null"
+                     " order by bc.is_left, a.reached_at desc nulls last limit 1", (company_id, n))
     return f"{row['name']} (ID {row['customer_id']})" if row else ""
 
 
