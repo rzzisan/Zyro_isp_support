@@ -307,7 +307,7 @@ class ISPDigital:
                 "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
         if r.status_code in (301, 302):
             self._logged_in = False
-            raise LoginError(f"session not accepted for {path}")
+            raise LoginError(f"session not accepted for {path} (-> {r.headers.get('location', '')[:100]})")
         r.raise_for_status()
         return r
 
