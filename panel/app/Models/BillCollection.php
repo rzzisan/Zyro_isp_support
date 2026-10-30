@@ -17,7 +17,7 @@ class BillCollection extends Model
     protected function casts(): array
     {
         return ['created_at' => 'datetime', 'payable' => 'decimal:2', 'paid' => 'decimal:2', 'discount' => 'decimal:2',
-            'send_sms' => 'boolean', 'next_billing_date' => 'boolean'];
+            'send_sms' => 'boolean', 'next_billing_date' => 'boolean', 'approved_at' => 'datetime'];
     }
 
     public function company(): BelongsTo

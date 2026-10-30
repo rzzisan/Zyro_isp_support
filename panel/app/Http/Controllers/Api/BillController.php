@@ -20,7 +20,8 @@ use RuntimeException;
 
 /**
  * Android app: bill collection, the same flow as the panel's "বিল নিন" (BillActions): billing's Receive Bill through
- * the engine with the member's own billing login, pending until approved in billing. Members with the bills menu only.
+ * the engine with the member's own billing login, pending until approved in billing (or approved at once with
+ * bill_approve). Members with the bills menu only.
  */
 class BillController extends Controller
 {
@@ -80,6 +81,7 @@ class BillController extends Controller
                 'bill_month' => $data['bill_month'] ?? null, 'sms' => false,  // never billing's SMS
                 'next_billing_date' => (bool) ($data['next_billing_date'] ?? true),
                 'expected_payable' => isset($data['expected_payable']) ? (float) $data['expected_payable'] : null,
+                'approve' => Menu::allows($request->user(), $company, 'bill_approve'),
             ]);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -88,7 +90,10 @@ class BillController extends Controller
         }
         $smsNote = ($data['desk_sms'] ?? false) ? BillActions::queueBillSms($company->id, $headerId, $data, $res, $methodName) : null;
 
-        return response()->json(['message' => $res['message'] ?? null, 'balance' => $res['balance'] ?? null,
+        // the app shows the message as is: say whether it was approved too
+        $message = trim(BillActions::savedTitle($res).' · '.($res['message'] ?? ''), ' ·');
+
+        return response()->json(['message' => $message, 'approving' => (bool) ($res['approving'] ?? false), 'balance' => $res['balance'] ?? null,
             'collection_id' => $res['collection_id'] ?? null, 'daily_bill_id' => $res['daily_bill_id'] ?? null, 'sms' => $smsNote]);
     }
 

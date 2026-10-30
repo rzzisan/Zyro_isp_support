@@ -214,6 +214,27 @@ class BillCollectionTest extends TestCase
         Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])->assertActionVisible('receiveBill');
     }
 
+    public function test_approve_with_collection_only_with_its_permission(): void
+    {
+        $this->fakeEngine(bill: ['message' => 'Succeeded...!!!', 'daily_bill_id' => 170239, 'balance' => 0, 'approving' => true]);
+        $agentMember = \App\Models\Membership::where('company_id', $this->company->id)->where('user_id', $this->agent->id)->first();
+        $agentMember->update(['billing_username' => 'arif', 'billing_password' => 'pw', 'permissions' => ['customers', 'bills']]);
+        $this->as($this->agent);
+        Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])->callAction('receiveBill')->assertHasNoActionErrors();
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/customers/3/bill') && $r['approve'] === false);
+
+        $agentMember->update(['permissions' => ['customers', 'bills', 'bill_approve']]);
+        Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])->callAction('receiveBill')->assertHasNoActionErrors();
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/customers/3/bill') && $r['approve'] === true);
+
+        $this->assertSame('বিল জমা হয়েছে, approve হচ্ছে', BillActions::savedTitle(['approving' => true]));
+        $this->assertSame('বিল জমা হয়েছে, বিলিং-এ approve বাকি', BillActions::savedTitle(['approved' => false, 'approve_error' => 'x']));
+
+        // an admin's role defaults never include it: the owner ticks it
+        $this->assertNotContains('bill_approve', \App\Support\Menu::defaults('admin'));
+        $this->assertContains('bills', \App\Support\Menu::defaults('admin'));
+    }
+
     public function test_log_lists_only_own_company(): void
     {
         $other = Company::create(['name' => 'Other ISP']);

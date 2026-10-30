@@ -3,7 +3,10 @@
 A collection stays pending until staff approve it in the billing software, and the customer's due only
 drops after that approval. So before posting we refuse while the customer still has a pending
 collection; otherwise the same bill could be taken twice. Every attempt is logged in bill_collections.
+Members the panel lets approve (menu permission bill_approve) get the new bill approved right after it is saved, in the
+background, with their own billing login, the way the Daily Bill Collection page's Approve button does it.
 """
+import logging
 import re
 import threading
 import time
@@ -11,6 +14,7 @@ import time
 from engine import db
 from engine.ispdigital import BillingRefused, ISPDigital, LoginError, money
 
+_log = logging.getLogger("zyro-bills")
 _locks: dict[tuple[int, int], threading.Lock] = {}
 _locks_guard = threading.Lock()
 
@@ -29,7 +33,7 @@ def _pending(api: ISPDigital, header_id: int, username: str) -> list[dict]:
         raise BillError("কাস্টমারের username পাওয়া যায়নি")
     return [{"id": r.get("DailyBillId"), "date": r.get("CreationTime"), "amount": r.get("ReceiveAmount"),
              "discount": r.get("DiscountAmount"), "method": r.get("PaymentMethod"), "received_by": r.get("ReceivedBy"),
-             "created_by": r.get("CreatedBy")}
+             "created_by": r.get("CreatedBy"), "can_approve": bool(r.get("HasApprovalAccess"))}
             for r in api.pending_bills(username) if int(r.get("CustomerHeaderId") or 0) == int(header_id)]
 
 
@@ -137,18 +141,79 @@ def collect(company_id: int, user_id: int, api: ISPDigital, header_id: int, b: d
             message = f"বিলিং দেরিতে উত্তর দিয়েছে, তবে বিল জমা হয়েছে (Daily Bill Collection #{found['id']})"
             collection_id = _save(log, "saved", message, found["id"])
             return {"message": message, "daily_bill_id": found["id"], "payable": f["payable"],
-                    "balance": round(f["payable"] - paid - discount, 2), "collection_id": collection_id}
+                    "balance": round(f["payable"] - paid - discount, 2), "collection_id": collection_id,
+                    **_approve_if_asked(b, company_id, user_id, api, f["username"], header_id, collection_id, found, paid, discount)}
         # find the new pending row so the panel can show its billing id
         try:
             after = _pending(api, header_id, f["username"])
-            daily_bill_id = after[0]["id"] if after else None
         except Exception:
-            daily_bill_id = None
+            after = []
+        new = after[0] if after else None
+        daily_bill_id = new["id"] if new else None
         collection_id = _save(log, "saved", message, daily_bill_id)
         return {"message": message, "daily_bill_id": daily_bill_id, "payable": f["payable"],
-                "balance": round(f["payable"] - paid - discount, 2), "collection_id": collection_id}
+                "balance": round(f["payable"] - paid - discount, 2), "collection_id": collection_id,
+                **_approve_if_asked(b, company_id, user_id, api, f["username"], header_id, collection_id, new, paid, discount)}
     finally:
         lock.release()
+
+
+def _approve_if_asked(b: dict, company_id: int, user_id: int, api: ISPDigital, username: str, header_id: int,
+                      collection_id: int | None, new: dict | None, paid: float, discount: float) -> dict:
+    """The panel asked to approve (the member has bill_approve): approve the bill just saved in the background, so
+    taking the bill is no slower (Zisan). {"approving": True} goes back at once; the outcome lands in bill_collections."""
+    if not b.get("approve"):
+        return {"approved": False}
+    threading.Thread(target=_approve, args=(company_id, user_id, api, username, header_id, collection_id, new, paid, discount),
+                     daemon=True).start()
+    return {"approved": False, "approving": True}
+
+
+def _approve(company_id: int, user_id: int, api: ISPDigital, username: str, header_id: int, collection_id: int | None,
+             new: dict | None, paid: float, discount: float) -> dict:
+    """Approve the new pending bill with the member's billing login. Never re-posts the bill: if this fails the bill
+    simply stays pending, as before, and the member gets a push. {"approved": bool, "approve_error": why not}."""
+    out = {"approved": False, "approve_error": None}
+    try:
+        if not new or not new.get("id"):  # billing can list it a moment late
+            new = _new_pending(api, header_id, username, paid, discount)
+        if not new or not new.get("id"):
+            out["approve_error"] = "বিলিং-এ নতুন বিলটা খুঁজে পাওয়া যায়নি, approve করা হয়নি"
+        elif not new.get("can_approve"):
+            out["approve_error"] = "আপনার বিলিং লগইনের approve করার অনুমতি নেই"
+        else:
+            api.approve_bills([int(new["id"])])
+            # trust billing's list, not its reply: approved = no longer pending
+            still = any(int(p["id"] or 0) == int(new["id"]) for p in _pending(api, header_id, username))
+            if still:
+                out["approve_error"] = "বিলিং approve নেয়নি, বিলটা pending আছে"
+            else:
+                out["approved"] = True
+    except BillingRefused as e:
+        out["approve_error"] = f"বিলিং approve নেয়নি: {e}"
+    except Exception:
+        _log.exception("approve after collection %s failed", collection_id)
+        out["approve_error"] = "approve করা যায়নি, বিলটা pending আছে"
+    try:
+        if collection_id:
+            db.execute("UPDATE bill_collections SET approved_at = CASE WHEN %s THEN now() END, approve_error = %s WHERE id = %s",
+                       (out["approved"], out["approve_error"], collection_id))
+        if out["approved"]:
+            db.execute("""UPDATE billing_daily_bills SET is_approved = true, synced_at = now()
+                          WHERE company_id = %s AND daily_bill_id = %s""", (company_id, int(new["id"])))
+            if collection_id:
+                out["receipt_no"] = receipt_no(company_id, api, collection_id)
+        elif user_id:
+            from engine import webpush
+            cust = db.one("SELECT customer_id, name FROM billing_customers WHERE company_id = %s AND header_id = %s",
+                          (company_id, header_id)) or {}
+            webpush.send_users(company_id, [user_id], {
+                "title": "বিল জমা হয়েছে, কিন্তু approve হয়নি",
+                "body": f"{cust.get('name') or username} ({cust.get('customer_id') or header_id}): {out['approve_error']}",
+                "tag": f"bill-approve-{collection_id}", "url": ""})
+    except Exception:
+        _log.exception("after approving collection %s", collection_id)
+    return out
 
 
 def _save(log: dict, result: str, message: str, daily_bill_id=None) -> int | None:

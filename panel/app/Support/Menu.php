@@ -27,6 +27,8 @@ class Menu
         'field_jobs' => ['আমার কাজ (ফিল্ড টেকনিশিয়ান)', false, false],
         'force_solve' => ['লাইন অফলাইন থাকলেও কারণ লিখে কাজ শেষ', false, false],
         'bills' => ['বিল কালেকশন', false, false],
+        // only when ticked (also for admins): the bill is approved in billing right after it is taken, with the member's billing login
+        'bill_approve' => ['বিল নেওয়ার সাথে সাথে বিলিং-এ approve', false, false],
         'sms' => ['SMS (পাঠানো, লগ, টেমপ্লেট)', false, false],
         'wa_campaign' => ['WhatsApp টেমপ্লেট পাঠানো ও লগ', false, false],
         'voice_reminder' => ['ভয়েস রিমাইন্ডার (টেমপ্লেট, কল ফ্লো, সেটিংস)', false, true],
@@ -60,10 +62,13 @@ class Menu
     /** Not a menu to tick: "আমার কাজ" comes with the member's "ফিল্ড টেকনিশিয়ান" tick on the team page, whatever the role. */
     public const EXPLICIT = ['field_jobs'];
 
+    /** Never part of a role's defaults: the owner ticks them per member or group. */
+    public const NOT_DEFAULT = ['bill_approve'];
+
     public static function defaults(string $role): array
     {
         return array_values(array_diff(array_keys(array_filter(self::ITEMS, fn ($i) => in_array($role, ['owner', 'admin'], true) || $i[1])),
-            self::EXPLICIT));
+            self::EXPLICIT, self::NOT_DEFAULT));
     }
 
     public static function allows(?User $user, ?Company $company, string $key): bool
