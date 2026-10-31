@@ -10,12 +10,14 @@ The same text is never made twice, so a fixed message (menu, goodbye) costs once
 """
 import argparse
 import base64
+import math
 import hashlib
 import logging
 import os
 import re
 import subprocess
 import threading
+from array import array
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
@@ -33,6 +35,9 @@ MAX_CHARS = 1500
 
 _locks: dict[str, threading.Lock] = {}
 _locks_lock = threading.Lock()
+# Gemini TTS allows only a few requests a minute per key: asking for many pieces at once got ~13 refusals (429) per
+# clip made, so at most this many are asked at a time, whatever the panel sends in parallel
+_gemini_slots = threading.BoundedSemaphore(int(os.environ.get("VOICE_TTS_PARALLEL", "2")))
 
 
 _ONES = ("শূন্য এক দুই তিন চার পাঁচ ছয় সাত আট নয় দশ এগারো বারো তেরো চৌদ্দ পনেরো ষোলো সতেরো আঠারো উনিশ "
@@ -130,6 +135,33 @@ def _gemini(company_id: int, text: str, voice: str, model: str | None = None) ->
     raise RuntimeError(last)
 
 
+def clean_tail(pcm: bytes, rate: int = 24000) -> bytes:
+    """Cut the burst the voice model sometimes adds after it has finished speaking: a short loud noise (a harsh
+    "ঝিড় ঝিড়", louder than the speech) after a near-silent gap at the very end. Raw 16-bit mono PCM in and out."""
+    a = array("h")
+    a.frombytes(pcm[: len(pcm) // 2 * 2])
+    step = rate // 100   # 10 ms frames
+    rms = [math.sqrt(sum(x * x for x in a[i:i + step]) / max(1, len(a[i:i + step]))) for i in range(0, len(a), step)]
+    loud = [r > 600 for r in rms]
+    if sum(loud) < 20:   # hardly any speech: leave it
+        return pcm
+    # from the end: the last sound, then the quiet gap before it
+    end = len(loud)
+    while end and not loud[end - 1]:
+        end -= 1
+    start = end
+    while start and loud[start - 1]:
+        start -= 1
+    gap = start
+    while gap and not loud[gap - 1]:
+        gap -= 1
+    speech = sorted(r for r, l in zip(rms[:gap], loud[:gap]) if l)
+    # ≤300 ms of sound after ≥60 ms of quiet, louder than the speech (a short last word is as loud as the rest)
+    if end - start <= 30 and start - gap >= 6 and len(speech) >= 20 and max(rms[start:end]) > 1.3 * speech[len(speech) // 2]:
+        return a[: min(len(a), (gap + 5) * step)].tobytes()   # keep 50 ms of the quiet
+    return pcm
+
+
 def _ffmpeg(pcm: bytes, speed: float, out: str, args: list[str]) -> None:
     tempo = [] if abs(speed - 1) < 0.01 else ["-af", f"atempo={speed:.2f}"]
     r = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "pipe:0",
@@ -158,7 +190,8 @@ def make(company_id: int, text: str, voice: str = "Kore", speed: float = 1.0) ->
         if os.path.exists(base + ".wav") and os.path.exists(base + ".mp3"):
             return {"file": f"{int(company_id)}/{h}", "cached": True}
         os.makedirs(folder, exist_ok=True)
-        pcm = _gemini(company_id, text, voice, model)
+        with _gemini_slots:
+            pcm = clean_tail(_gemini(company_id, text, voice, model))
         _ffmpeg(pcm, speed, base + ".mp3.tmp", ["-c:a", "libmp3lame", "-b:a", "48k", "-f", "mp3"])
         _ffmpeg(pcm, speed, base + ".wav.tmp", ["-ar", "8000", "-ac", "1", "-c:a", "pcm_s16le", "-f", "wav"])
         os.replace(base + ".mp3.tmp", base + ".mp3")
@@ -169,7 +202,11 @@ def make(company_id: int, text: str, voice: str = "Kore", speed: float = 1.0) ->
 
 GAP = 0.12        # seconds between two joined pieces inside a sentence
 GAP_STOP = 0.35   # after a piece that ends a phrase (। , ? !)
-_TRIM = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03"
+# Each piece: the quiet start trimmed, then (reversed) the end, where the voice leaves a soft hiss: trimmed a little
+# harder, and both edges faded so no cut lands mid-wave (a hard cut there crackles: "ঝিড় ঝিড়" at every join)
+_PIECE = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.02,afade=t=in:d=0.015,"
+          "areverse,silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.04,afade=t=in:d=0.06,areverse")
+JOIN_VERSION = "3"   # in the joined file's hash: raised when the joining changes, so joins are made again (pieces stay)
 
 
 def make_parts(company_id: int, parts: list[str], voice: str = "Kore", speed: float = 1.0) -> dict:
@@ -181,24 +218,39 @@ def make_parts(company_id: int, parts: list[str], voice: str = "Kore", speed: fl
         return make(company_id, " ".join(parts), voice, speed)
     with ThreadPoolExecutor(max_workers=4) as pool:   # the new pieces at once
         made = list(pool.map(lambda p: make(company_id, p, voice, speed), parts))
-    h = key(voice, speed, "parts:" + "|".join(m["file"] for m in made))
+    h = key(voice, speed, f"parts{JOIN_VERSION}:" + "|".join(m["file"] for m in made))
     folder = os.path.join(AUDIO_DIR, str(int(company_id)))
     base = os.path.join(folder, h)
     if os.path.exists(base + ".wav") and os.path.exists(base + ".mp3"):
         return {"file": f"{int(company_id)}/{h}", "cached": all(m["cached"] for m in made)}
-    inputs, chains = [], []
+    inputs, chains, temps = [], [], []
     for i, (p, m) in enumerate(zip(parts, made)):
-        inputs += ["-i", os.path.join(AUDIO_DIR, m["file"] + ".mp3")]
-        gap = 0 if i == len(parts) - 1 else (GAP_STOP if re.search(r"[।,?!.;:]$", p) else GAP)
-        chains.append(f"[{i}:a]aresample=24000,aformat=channel_layouts=mono,{_TRIM},areverse,{_TRIM},areverse,"
-                      f"apad=pad_dur={gap:.2f}[a{i}]")
-    graph = ";".join(chains) + ";" + "".join(f"[a{i}]" for i in range(len(parts))) + f"concat=n={len(parts)}:v=0:a=1[out]"
-    for ext, args in ((".mp3", ["-c:a", "libmp3lame", "-b:a", "48k", "-f", "mp3"]),
-                      (".wav", ["-ar", "8000", "-ac", "1", "-c:a", "pcm_s16le", "-f", "wav"])):
-        r = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[out]", *args,
-                            base + ext + ".tmp"], capture_output=True, timeout=60)
+        # pieces made before clean_tail existed still carry the burst: cleaned here too
+        r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", os.path.join(AUDIO_DIR, m["file"] + ".mp3"), "-f", "s16le",
+                            "-ar", "24000", "-ac", "1", "pipe:1"], capture_output=True, timeout=60)
         if r.returncode != 0:
             raise RuntimeError(f"ffmpeg: {r.stderr[:200]!r}")
+        temps.append(f"{base}.{i}.pcm.tmp")
+        with open(temps[-1], "wb") as f:
+            f.write(clean_tail(r.stdout))
+        inputs += ["-f", "s16le", "-ar", "24000", "-ac", "1", "-i", temps[-1]]
+        gap = 0 if i == len(parts) - 1 else (GAP_STOP if re.search(r"[।,?!.;:]$", p) else GAP)
+        chains.append(f"[{i}:a]aresample=24000,aformat=sample_fmts=fltp:channel_layouts=mono,{_PIECE},"
+                      f"apad=pad_dur={gap:.2f}[a{i}]")
+    graph = ";".join(chains) + ";" + "".join(f"[a{i}]" for i in range(len(parts))) + f"concat=n={len(parts)}:v=0:a=1[out]"
+    try:
+        for ext, args in ((".mp3", ["-c:a", "libmp3lame", "-b:a", "48k", "-f", "mp3"]),
+                          (".wav", ["-ar", "8000", "-ac", "1", "-c:a", "pcm_s16le", "-f", "wav"])):
+            r = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[out]", *args,
+                                base + ext + ".tmp"], capture_output=True, timeout=60)
+            if r.returncode != 0:
+                raise RuntimeError(f"ffmpeg: {r.stderr[:200]!r}")
+    finally:
+        for t in temps:
+            try:
+                os.remove(t)
+            except OSError:
+                pass
     os.replace(base + ".mp3.tmp", base + ".mp3")
     os.replace(base + ".wav.tmp", base + ".wav")
     log.info("voice audio joined: company %s %s (%d pieces)", company_id, h, len(parts))
