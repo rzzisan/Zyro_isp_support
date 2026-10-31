@@ -173,7 +173,11 @@ def make(company_id: int, text: str, voice: str = "Kore", speed: float = 1.0) ->
 
 GAP = 0.12        # seconds between two joined pieces inside a sentence
 GAP_STOP = 0.35   # after a piece that ends a phrase (। , ? !)
-_TRIM = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03"
+# Each piece: the quiet start trimmed, then (reversed) the end, where the voice leaves a soft hiss: trimmed a little
+# harder, and both edges faded so no cut lands mid-wave (a hard cut there crackles: "ঝিড় ঝিড়" at every join)
+_PIECE = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.02,afade=t=in:d=0.015,"
+          "areverse,silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.04,afade=t=in:d=0.06,areverse")
+JOIN_VERSION = "2"   # in the joined file's hash: raised when the joining changes, so joins are made again (pieces stay)
 
 
 def make_parts(company_id: int, parts: list[str], voice: str = "Kore", speed: float = 1.0) -> dict:
@@ -185,7 +189,7 @@ def make_parts(company_id: int, parts: list[str], voice: str = "Kore", speed: fl
         return make(company_id, " ".join(parts), voice, speed)
     with ThreadPoolExecutor(max_workers=4) as pool:   # the new pieces at once
         made = list(pool.map(lambda p: make(company_id, p, voice, speed), parts))
-    h = key(voice, speed, "parts:" + "|".join(m["file"] for m in made))
+    h = key(voice, speed, f"parts{JOIN_VERSION}:" + "|".join(m["file"] for m in made))
     folder = os.path.join(AUDIO_DIR, str(int(company_id)))
     base = os.path.join(folder, h)
     if os.path.exists(base + ".wav") and os.path.exists(base + ".mp3"):
@@ -194,7 +198,7 @@ def make_parts(company_id: int, parts: list[str], voice: str = "Kore", speed: fl
     for i, (p, m) in enumerate(zip(parts, made)):
         inputs += ["-i", os.path.join(AUDIO_DIR, m["file"] + ".mp3")]
         gap = 0 if i == len(parts) - 1 else (GAP_STOP if re.search(r"[।,?!.;:]$", p) else GAP)
-        chains.append(f"[{i}:a]aresample=24000,aformat=channel_layouts=mono,{_TRIM},areverse,{_TRIM},areverse,"
+        chains.append(f"[{i}:a]aresample=24000,aformat=sample_fmts=fltp:channel_layouts=mono,{_PIECE},"
                       f"apad=pad_dur={gap:.2f}[a{i}]")
     graph = ";".join(chains) + ";" + "".join(f"[a{i}]" for i in range(len(parts))) + f"concat=n={len(parts)}:v=0:a=1[out]"
     for ext, args in ((".mp3", ["-c:a", "libmp3lame", "-b:a", "48k", "-f", "mp3"]),
