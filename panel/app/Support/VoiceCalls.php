@@ -24,8 +24,9 @@ class VoiceCalls
     public const CALL_TIME = ['reconnect_message'];
 
     /**
-     * The flow's messages for this customer: [template id => ['upload' => path] | ['text', 'voice', 'speed', 'later']]
-     * ('later': read out during the call, it has a call-time placeholder). No audio is made here.
+     * The flow's messages for this customer: [template id => ['upload' => path] | ['text', 'voice', 'speed', 'later', 'parts'?]]
+     * ('later': read out during the call, it has a call-time placeholder; 'parts': the pieces a spliced audio is
+     * joined from). No audio is made here.
      */
     public static function messages(VoiceFlow $flow, ?BillingCustomer $c, array $extra = [], ?Collection $templates = null): array
     {
@@ -33,6 +34,7 @@ class VoiceCalls
         $values = VoiceTemplates::values($company, $c);
         $keep = array_combine(array_map(fn ($k) => $k, self::CALL_TIME), array_map(fn ($k) => '{'.$k.'}', self::CALL_TIME));
         $out = [];
+        $spliced = null;
         foreach ($templates ?? VoiceTemplate::where('company_id', $company)->whereIn('id', $flow->templateIds())->get() as $t) {
             if ($t->source === 'upload') {
                 if ($t->file()) {
@@ -43,8 +45,9 @@ class VoiceCalls
             }
             $text = VoiceTemplates::render((string) $t->body, $values, $extra + $keep);
             if ($text !== '') {
-                $out[$t->id] = ['text' => $text, 'voice' => $t->voice, 'speed' => (float) $t->speed,
-                    'later' => (bool) preg_match('/\{('.implode('|', self::CALL_TIME).')\}/', $text)];
+                $later = (bool) preg_match('/\{('.implode('|', self::CALL_TIME).')\}/', $text);
+                $parts = ! $later && ($spliced ??= VoiceTemplates::spliced($company)) ? VoiceTemplates::parts((string) $t->body, $values, $extra) : null;
+                $out[$t->id] = ['text' => $text, 'voice' => $t->voice, 'speed' => (float) $t->speed, 'later' => $later] + ($parts ? ['parts' => $parts] : []);
             }
         }
 
@@ -54,7 +57,7 @@ class VoiceCalls
     /** Key of one made audio in the $made map package() takes (VoiceTemplates::audioMany's keys). */
     public static function audioKey(array $m): string
     {
-        return $m['voice'].'|'.$m['speed'].'|'.$m['text'];
+        return $m['voice'].'|'.$m['speed'].'|'.(isset($m['parts']) ? implode('¦', $m['parts']) : $m['text']);
     }
 
     /** $made: audio already made for some texts (audioKey => file), so they are not asked for again. */
@@ -65,7 +68,7 @@ class VoiceCalls
         foreach ($messages ?? static::messages($flow, $c, $extra) as $id => $m) {
             $audio[$id] = isset($m['upload']) ? ['upload' => $m['upload']]
                 : ($m['later'] ? ['text' => $m['text'], 'voice' => $m['voice'], 'speed' => $m['speed']]
-                    : ['file' => $made[static::audioKey($m)] ?? VoiceTemplates::audio($company, $m['text'], $m['voice'], $m['speed'])]);
+                    : ['file' => $made[static::audioKey($m)] ?? VoiceTemplates::audio($company, $m['text'], $m['voice'], $m['speed'], $m['parts'] ?? null)]);
         }
         $sms = [];
         foreach (SmsTemplate::where('company_id', $company)->whereIn('id', $flow->smsTemplateIds())->get() as $s) {

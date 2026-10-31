@@ -75,7 +75,8 @@ class VoiceReminderSettings extends CompanySettingsPage
         /** @var VoiceReminderSetting $record */
         $data = $record->only(['enabled', 'test_mode', 'test_number', 'test_daily_max', 'reminder_on', 'reminder_flow_id', 'reminder_days',
             'due_only', 'line_off_on', 'line_off_flow_id', 'line_off_delay', 'line_off_days', 'window_from', 'window_to', 'skip_jumma',
-            'max_calls', 'retry_minutes', 'max_tries', 'minute_rate', 'alt_on', 'alt_max', 'sms_saving', 'inbound_on', 'inbound_flow_id', 'inbound_delay']);
+            'max_calls', 'retry_minutes', 'max_tries', 'minute_rate', 'alt_on', 'alt_max', 'sms_saving', 'inbound_on', 'inbound_flow_id', 'inbound_delay',
+            'audio_mode', 'tts_model']);
         $data['test_number'] = $data['test_number'] ? '0'.substr((string) $data['test_number'], 3) : null;
 
         return $data;
@@ -121,6 +122,15 @@ class VoiceReminderSettings extends CompanySettingsPage
                     Select::make('inbound_flow_id')->label(__('কোন কল ফ্লো'))->options($flows('line_off'))
                         ->placeholder(__('লাইন বন্ধের কলের ফ্লো-ই')),
                     TextInput::make('inbound_delay')->label(__('কত সেকেন্ড রিং হওয়ার পরে ধরবে'))->numeric()->minValue(0)->maxValue(10)->required(),
+                ]),
+            Section::make(__('অডিও বানানো'))->columns(2)
+                ->description(__('কাস্টমারের তথ্য ({name}, {due}, {expire_date} ...) আছে এমন মেসেজের অডিও কীভাবে বানানো হবে। জোড়া লাগানো: টেমপ্লেটের লেখা একবার বানানো হয়, আর প্রতিটা টাকার অঙ্ক, তারিখ বা নাম আলাদা ছোট অডিও, যা সেই তথ্যের সব কাস্টমারের জন্য একবারই। বদলালে শুধু নতুন লেখার অডিও নতুন নিয়মে বানানো হয়।'))
+                ->schema([
+                    Select::make('audio_mode')->label(__('অডিও কীভাবে'))->options(array_map('__', VoiceReminderSetting::AUDIO_MODES))
+                        ->required()->selectablePlaceholder(false),
+                    Select::make('tts_model')->label(__('সব মেসেজের ভয়েস মডেল'))->options(array_map('__', VoiceReminderSetting::TTS_MODELS))
+                        ->selectablePlaceholder(false)
+                        ->helperText(__('মডেল বদলালে এরপর যে অডিও লাগবে তা নতুন মডেলে বানানো হবে। কণ্ঠ (Kore, Charon ...) সব টেমপ্লেটে একসাথে বদলাতে: ভয়েস টেমপ্লেট পেজে "সবগুলোর কণ্ঠ বদলান"।')),
                 ]),
             Section::make(__('কখন ও কতগুলো'))->columns(3)->schema([
                 TimePicker::make('window_from')->label(__('কল শুরু'))->seconds(false)->required(),

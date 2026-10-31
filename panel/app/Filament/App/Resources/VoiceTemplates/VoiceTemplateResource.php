@@ -142,9 +142,9 @@ class VoiceTemplateResource extends Resource
                             ->action(function (Get $get, Set $set) {
                                 $c = $get('preview_customer')
                                     ? BillingCustomer::where('company_id', static::company())->where('header_id', $get('preview_customer'))->first() : null;
-                                $text = VoiceTemplates::render((string) $get('body'), VoiceTemplates::values(static::company(), $c));
+                                ['text' => $text, 'parts' => $parts] = VoiceTemplates::speech(static::company(), (string) $get('body'), VoiceTemplates::values(static::company(), $c));
                                 try {
-                                    $file = VoiceTemplates::audio(static::company(), $text, (string) ($get('voice') ?: 'Kore'), (float) ($get('speed') ?: 1));
+                                    $file = VoiceTemplates::audio(static::company(), $text, (string) ($get('voice') ?: 'Kore'), (float) ($get('speed') ?: 1), $parts);
                                 } catch (RuntimeException $e) {
                                     Notification::make()->danger()->title($e->getMessage())->send();
 
@@ -181,8 +181,22 @@ class VoiceTemplateResource extends Resource
                     ->state(fn (VoiceTemplate $r) => $r->source === 'upload' ? '—'
                         : __(VoiceTemplate::VOICES[$r->voice] ?? $r->voice).' · '.__(VoiceTemplate::SPEEDS[number_format((float) $r->speed, 2, '.', '')] ?? $r->speed)),
             ])
-            ->headerActions([CreateAction::make()->label(__('টেমপ্লেট যোগ করুন'))
-                ->mutateDataUsing(fn (array $data) => static::clean([...$data, 'company_id' => static::company()]))])
+            ->headerActions([
+                Action::make('voice_all')->label(__('সবগুলোর কণ্ঠ বদলান'))->icon(Heroicon::OutlinedSpeakerWave)->color('gray')
+                    ->modalHeading(__('সব লেখা-টেমপ্লেটের কণ্ঠ ও গতি একসাথে'))
+                    ->modalDescription(__('নিজের রেকর্ড করা টেমপ্লেট বাদে সবগুলোতে বসবে। এরপর যে অডিও লাগবে, নতুন কণ্ঠে বানানো হবে।'))
+                    ->schema([
+                        Select::make('voice')->label(__('কণ্ঠ'))->options(array_map('__', VoiceTemplate::VOICES))->required(),
+                        Select::make('speed')->label(__('গতি'))->options(array_map('__', VoiceTemplate::SPEEDS))->placeholder(__('যেমন আছে')),
+                    ])
+                    ->action(function (array $data) {
+                        $n = VoiceTemplate::where('company_id', static::company())->where('source', '!=', 'upload')
+                            ->update(array_filter(['voice' => $data['voice'], 'speed' => $data['speed'] ?? null]) + ['updated_at' => now()]);
+                        Notification::make()->success()->title(__(':n টা টেমপ্লেটে বদলানো হলো', ['n' => $n]))->send();
+                    }),
+                CreateAction::make()->label(__('টেমপ্লেট যোগ করুন'))
+                    ->mutateDataUsing(fn (array $data) => static::clean([...$data, 'company_id' => static::company()])),
+            ])
             ->recordActions([
                 Action::make('listen')->label(__('শুনুন'))->icon(Heroicon::OutlinedPlay)->color('gray')
                     ->modalHeading(fn (VoiceTemplate $r) => $r->name)
@@ -192,9 +206,9 @@ class VoiceTemplateResource extends Resource
                             return view('filament.app.voice.player', ['url' => $r->file() ? VoiceTemplates::uploadUrl(static::slug(), $r) : null,
                                 'text' => $r->file() ? null : __('রেকর্ড ফাইল পাওয়া যায়নি')]);
                         }
-                        $text = VoiceTemplates::render((string) $r->body, VoiceTemplates::values(static::company(), null));
+                        ['text' => $text, 'parts' => $parts] = VoiceTemplates::speech(static::company(), (string) $r->body, VoiceTemplates::values(static::company(), null));
                         try {
-                            $url = VoiceTemplates::url(static::slug(), VoiceTemplates::audio(static::company(), $text, $r->voice, (float) $r->speed));
+                            $url = VoiceTemplates::url(static::slug(), VoiceTemplates::audio(static::company(), $text, $r->voice, (float) $r->speed, $parts));
                         } catch (RuntimeException $e) {
                             return view('filament.app.voice.player', ['url' => null, 'text' => $e->getMessage()]);
                         }

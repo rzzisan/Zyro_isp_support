@@ -215,10 +215,14 @@ class VoiceRemindersTest extends TestCase
         Filament::setCurrentPanel('app');
         Filament::setTenant($this->company);
         Livewire::test(VoiceReminderSettings::class)->assertOk()->assertSee('আগামীকাল')
-            ->fillForm(['enabled' => true, 'test_mode' => true, 'test_number' => '01811-000009', 'window_from' => '09:00', 'window_to' => '21:00'])
+            ->assertSee('অডিও বানানো')->assertFormSet(['audio_mode' => 'splice', 'tts_model' => 'auto'])
+            ->fillForm(['enabled' => true, 'test_mode' => true, 'test_number' => '01811-000009', 'window_from' => '09:00', 'window_to' => '21:00',
+                'audio_mode' => 'full', 'tts_model' => 'gemini-2.5-flash-preview-tts'])
             ->call('save')->assertHasNoFormErrors();
         $s = VoiceReminderSetting::where('company_id', $this->company->id)->first();
         $this->assertTrue($s->enabled);
+        $this->assertSame('full', $s->audio_mode);
+        $this->assertSame('gemini-2.5-flash-preview-tts', $s->tts_model);
         $this->assertSame('8801811000009', $s->test_number);
         $this->assertSame('09:00', $s->window_from);
         $this->assertSame(VoiceFlow::where('kind', 'reminder')->value('id'), $s->reminder_flow_id);

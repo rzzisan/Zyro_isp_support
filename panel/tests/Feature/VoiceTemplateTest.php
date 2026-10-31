@@ -8,6 +8,7 @@ use App\Models\BillingCustomer;
 use App\Models\BillingCustomerPayment;
 use App\Models\Company;
 use App\Models\User;
+use App\Models\VoiceReminderSetting;
 use App\Models\VoiceTemplate;
 use App\Support\VoiceTemplates;
 use Filament\Actions\Testing\TestAction;
@@ -69,7 +70,7 @@ class VoiceTemplateTest extends TestCase
     {
         $v = VoiceTemplates::values($this->company->id, $this->customer);
         $this->assertSame('৫২০', $v['due']);
-        $this->assertSame('৪২', $v['id']);
+        $this->assertSame('৪ ২', $v['id']);
         $this->assertSame('৩১ অক্টোবর', $v['expire_date']);
         $this->assertSame('২', $v['days_left']);
         $this->assertSame('চালু', $v['line_status']);
@@ -101,6 +102,45 @@ class VoiceTemplateTest extends TestCase
             ->callAction(TestAction::make('preview')->schemaComponent('preview_actions', schema: 'mountedActionSchema0'))
             ->assertSchemaStateSet(['preview_text' => 'Alif Hasan, বকেয়া ৫২০ টাকা'], 'mountedActionSchema0');
         Http::assertSent(fn (Request $r) => $r['text'] === 'Alif Hasan, বকেয়া ৫২০ টাকা' && $r['voice'] === 'Charon' && (float) $r['speed'] === 1.15);
+    }
+
+    public function test_spliced_audio_keeps_each_value_apart(): void
+    {
+        $v = VoiceTemplates::values($this->company->id, $this->customer);
+        $this->assertSame(['Alif Hasan,', 'আপনার বকেয়া', '৫২০', 'টাকা, শেষ তারিখ', '৩১ অক্টোবর।', 'ধন্যবাদ'],
+            VoiceTemplates::parts('{name}, আপনার বকেয়া {due} টাকা, শেষ তারিখ {expire_date}। ধন্যবাদ', $v));
+        // a word stuck to the value goes with it; values side by side stay one piece
+        $this->assertSame(['Alif Hasan-এর', 'লাইন', '৫২০ ৪ ২'], VoiceTemplates::parts('{name}-এর লাইন {due} {id}', $v));
+        $this->assertNull(VoiceTemplates::parts('শুধু লেখা, কোনো তথ্য নেই', $v));
+        $this->assertNull(VoiceTemplates::parts('{name}', $v));
+
+        // the form's preview sends the pieces; in "full" mode the whole text only
+        $this->as($this->owner);
+        $form = fn () => Livewire::test(ManageVoiceTemplates::class)->mountAction(TestAction::make('create')->table())
+            ->fillForm(['name' => 'Test', 'type' => 'reminder', 'source' => 'tts', 'body' => '{name}, বকেয়া {due} টাকা', 'voice' => 'Kore',
+                'speed' => '1.00', 'preview_customer' => '77'])
+            ->callAction(TestAction::make('preview')->schemaComponent('preview_actions', schema: 'mountedActionSchema0'));
+        $form();
+        Http::assertSent(fn (Request $r) => $r['parts'] === ['Alif Hasan,', 'বকেয়া', '৫২০', 'টাকা']);
+        VoiceReminderSetting::forCompany($this->company)->fill(['audio_mode' => 'full'])->save();
+        Http::fake(['engine.test/internal/*/voice/tts' => Http::response(['file' => $this->company->id.'/abc'])]);
+        $form();
+        Http::assertSent(fn (Request $r) => $r['text'] === 'Alif Hasan, বকেয়া ৫২০ টাকা' && ! isset($r['parts']));
+    }
+
+    public function test_every_template_voice_can_be_changed_at_once(): void
+    {
+        $this->as($this->owner);
+        VoiceTemplate::seed($this->company->id);
+        $rec = VoiceTemplate::where('company_id', $this->company->id)->first();
+        $rec->update(['source' => 'upload', 'body' => null, 'voice' => 'Kore']);
+        Livewire::test(ManageVoiceTemplates::class)
+            ->callAction(TestAction::make('voice_all')->table(), ['voice' => 'Charon', 'speed' => '1.15'])->assertHasNoErrors();
+        $tts = VoiceTemplate::where('company_id', $this->company->id)->where('source', 'tts')->get();
+        $this->assertGreaterThan(0, $tts->count());
+        $this->assertSame(['Charon'], $tts->pluck('voice')->unique()->values()->all());
+        $this->assertSame([1.15], $tts->map(fn ($t) => (float) $t->speed)->unique()->values()->all());
+        $this->assertSame('Kore', $rec->fresh()->voice);   // own recordings untouched
     }
 
     public function test_create_keeps_one_source(): void
