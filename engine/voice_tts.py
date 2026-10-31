@@ -17,6 +17,8 @@ import os
 import re
 import subprocess
 import threading
+import time
+from datetime import datetime, timedelta, timezone
 from array import array
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
@@ -97,6 +99,23 @@ def chosen_model(company_id: int) -> str | None:
     return None if model == "auto" else model
 
 
+# (key id, model) → time its daily TTS limit comes back: Gemini allows only 10-100 voice requests a day per key and
+# model, so a key that said so is not asked again (thousands of refused requests a day before this)
+_spent: dict[tuple[int, str], float] = {}
+
+
+def _spent_until(body: str) -> float | None:
+    """When a 429 is the daily limit: the time it comes back (Google's retryDelay, else next 07:00 UTC); else None."""
+    if "PerDay" not in body:
+        return None
+    m = re.search(r'"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"', body)
+    if m:
+        return time.time() + float(m.group(1))
+    now = datetime.now(timezone.utc)
+    reset = now.replace(hour=7, minute=0, second=0, microsecond=0)
+    return (reset if reset > now else reset + timedelta(days=1)).timestamp()
+
+
 def _gemini(company_id: int, text: str, voice: str, model: str | None = None) -> bytes:
     """Raw 16-bit PCM at 24 kHz from the company's Gemini keys (the one picked for voice_reminder first); the picked
     model first, the others as the fallback."""
@@ -105,6 +124,9 @@ def _gemini(company_id: int, text: str, voice: str, model: str | None = None) ->
     models = [model] + [m for m in MODELS if m != model] if model else MODELS
     for row in agent._keys(t, "gemini", usable_only=True, job="voice_reminder"):
         for model in models:
+            if _spent.get((row["id"], model), 0) > time.time():
+                last = "Gemini-র আজকের ভয়েস সীমা শেষ (সব key-তে)"
+                continue
             words = text if model.startswith("gemini-3") else agent.TTS_STYLE + text
             try:
                 r = httpx.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
@@ -122,6 +144,9 @@ def _gemini(company_id: int, text: str, voice: str, model: str | None = None) ->
                 agent.record_usage(t, row["id"], "gemini", model, "voice_reminder_tts", None,
                                    error=f"HTTP {r.status_code}: {r.text[:200]}")
                 last = f"Gemini HTTP {r.status_code}"
+                if r.status_code == 429 and (until := _spent_until(r.text)):
+                    _spent[(row["id"], model)] = until
+                    log.info("gemini key %s %s: daily voice limit used up, resting %d min", row["id"], model, (until - time.time()) // 60)
                 continue
             data = r.json()
             u = data.get("usageMetadata") or {}

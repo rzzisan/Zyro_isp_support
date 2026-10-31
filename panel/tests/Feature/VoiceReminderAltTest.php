@@ -291,6 +291,12 @@ class VoiceReminderAltTest extends TestCase
         $s = $this->settings(['enabled' => false, 'inbound_on' => true]);
         $ready = fn () => DB::table('voice_inbound_ready')->where('company_id', $this->company->id)->orderBy('customer_header_id')->pluck('customer_header_id')->all();
 
+        // a reminder call still to go today: the calls get Gemini's few daily voice requests first
+        $wait = VoiceReminderCall::create(['company_id' => $this->company->id, 'customer_header_id' => 3, 'kind' => 'reminder', 'number' => '8801711000003',
+            'status' => 'planned', 'dedupe' => 'bill:3:x', 'ref_date' => now('Asia/Dhaka')->toDateString(), 'scheduled_at' => now()->addHour()]);
+        $this->assertSame(0, VoiceReminders::prepareInbound($this->company->id, $s));
+        $wait->update(['status' => 'done']);
+
         $this->assertSame(1, VoiceReminders::run($this->company->id)['inbound_ready'] ?? null);   // runs while the calls are off
         $this->assertSame([1], $ready());
         $p = json_decode(DB::table('voice_inbound_ready')->where('customer_header_id', 1)->value('package'), true);
