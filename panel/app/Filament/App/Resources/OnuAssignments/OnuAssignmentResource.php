@@ -184,7 +184,7 @@ class OnuAssignmentResource extends Resource
                     ->state(fn (OnuAssignment $r) => $r->isOther() ? __('অন্যান্য') : 'ID '.$r->customer_code)
                     ->description(fn (OnuAssignment $r) => $r->isOther() ? ($r->note ?: $r->legacy_customer_code)
                         : collect([$r->customer?->name ?? $r->connection?->name, $r->customer?->mobile ?? $r->connection?->mobile])->filter()->join(' · '))
-                    ->searchable(query: fn (Builder $q, string $search) => $q->where(fn ($w) => $w
+                    ->searchable(query: fn (Builder $query, string $search) => $query->where(fn ($w) => $w
                         ->whereRaw("ltrim(onu_assignments.customer_code, '0') = ltrim(?, '0')", [trim($search)])
                         ->orWhere('onu_assignments.mac_norm', 'like', '%'.Onu::normalizeMac($search).'%')
                         ->orWhereHas('customer', fn ($c) => $c->where('name', 'ilike', "%{$search}%")->orWhere('mobile', 'like', "%{$search}%")))),
