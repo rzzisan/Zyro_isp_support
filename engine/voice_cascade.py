@@ -222,8 +222,7 @@ def think(t, system: list[dict], messages: list[dict], tools: list[dict], heard=
                 r = stream.get_final_message()
             if r.stop_reason not in ("end_turn", "tool_use"):
                 log.warning("claude stopped: %s, blocks %s", r.stop_reason, [b.type for b in r.content])
-        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.RateLimitError,
-                anthropic.InternalServerError, anthropic.APIConnectionError) as e:
+        except (anthropic.APIStatusError, anthropic.APIConnectionError) as e:
             last = e
             agent.record_usage(t, row["id"], "claude", LLM_MODEL, "call_llm", None, error=str(e)[:300])
             if sent:
@@ -260,12 +259,10 @@ def relevant(t, query: str) -> str:
 
 
 async def open_transcriber(company_id: int):
-    """A streaming transcription session on the company's Gemini key for call_stt (then the others)."""
+    """A streaming transcription session on the company's Gemini keys for call_stt, in the picked order."""
     keys = db.all_rows("select id, api_key from ai_keys where company_id = %s and provider = 'gemini'"
                        " and (rate_limited_until is null or rate_limited_until <= now()) order by id", (company_id,))
-    picked = agent.job_key(company_id, "call_stt")
-    if picked:
-        keys.sort(key=lambda k: k["id"] != picked["id"])
+    keys = agent.in_job_order(company_id, "call_stt", keys)
     last = "no Gemini key"
     for k in keys:
         try:

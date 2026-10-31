@@ -17,7 +17,7 @@ class AiKey extends Model
         'openrouter' => ['OpenRouter', 'https://openrouter.ai/api/v1', ''],
     ];
 
-    /** job => [label, providers whose keys fit]; engine/agent.py JOBS uses the same names (table ai_key_jobs) */
+    /** job => [label, providers whose keys fit]; engine/agent.py PURPOSE_JOB uses the same names (table ai_key_jobs) */
     public const JOBS = [
         'chat' => ['WhatsApp লেখা চ্যাট (কাস্টমার/টেকনিশিয়ান)', ['claude', 'groq', 'gemini', 'grok', 'openai', 'openrouter']],
         'voice_read' => ['WhatsApp ভয়েস মেসেজ পড়া', ['gemini', 'groq']],

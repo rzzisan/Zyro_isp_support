@@ -682,3 +682,9 @@
 - `added_by`, `removed_at`, `removed_by`: প্যানেল কাস্টমার ও বিল → "বিকল্প নম্বর" (CustomerAltNumberResource): নম্বর/নাম/ID/PPPoE দিয়ে সার্চ, সূত্র ফিল্টার, হাতে যোগ, "সরিয়ে দিন" (আর কোথাও ধরা হয় না, রাতের আপডেটেও ফেরে না), "ফিরিয়ে আনুন"।
 - BillingCustomer::scopeMatching নম্বর দিয়ে সার্চে বিকল্প নম্বরও মেলায় (কাস্টমার লিস্ট, হেডার সার্চ, অ্যাপ, পিকার)। অ্যাপের কল স্ক্রিন (callInfo) বিকল্প নম্বরের কাস্টমারও দেখায়।
 - engine/customers.py: local_by_mobile: নম্বরে কোনো লাইন না থাকলে by_alt_number (ঠিক একজন হলে)। WhatsApp বট (by_whatsapp), লেখা নম্বর (local_by_text), ফোন বট সব এটা ব্যবহার করে; voice_bot.caller_name-ও।
+
+## 2026-10-31: প্রতিটি কাজে একাধিক AI key, ক্রম ধরে fallback
+- AI key → "কোন কাজে কোন key": প্রতিটি কাজে এক বা একাধিক key (টেনে ক্রম বদলানো যায়, Filament `Select::multiple()->reorderable()`)। টেবিল `ai_key_jobs`-এ `position`, unique এখন (company, job, key)।
+- নিয়ম: বাছা থাকলে শুধু বাছা key, বাছা ক্রমে (`agent.job_keys`, `agent.in_job_order`); কিছু না বাছলে আগের মতো ওই ধরনের সব key id ক্রমে। চ্যাটে key-র ক্রম হুবহু মানে, ধরন মেশানো যায় (`_generate_picked`); সব key 429 দিলে ৮ সেকেন্ড পর আরেক রাউন্ড। ভয়েস মেসেজ পড়ায় (`transcribe`) একই ধরনের key একসাথে চলে, ধরনের ক্রম বাছা ক্রমে।
+- migration 2026_10_31_000001: আগের একটি বাছা key-এর পরে কোম্পানির বাকি মানানসই key যোগ করে, তাই deploy-এর পর আচরণ বদলায় না, তালিকাটা শুধু প্যানেলে দেখা যায়। পরে যোগ করা নতুন key তালিকায় নিজে ঢোকে না।
+- ফেইলের সংজ্ঞা বড় হলো: চ্যাট ও `voice_cascade.think`-এ যেকোনো 4xx/5xx (Claude-এর 400 "credit balance is too low" সহ) এখন পরের key-তে যায়; আগে শুধু 401/403/429/5xx যেত। Gemini ভয়েস লুপগুলো আগে থেকেই পরের key-তে যেত।

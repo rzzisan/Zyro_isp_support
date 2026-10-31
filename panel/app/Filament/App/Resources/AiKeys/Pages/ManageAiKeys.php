@@ -21,11 +21,12 @@ class ManageAiKeys extends ManageRecords
         // create lives in the table header (with seat/role checks)
         return [
             Action::make('jobs')->label(__('কোন কাজে কোন key'))->icon(Heroicon::OutlinedCog)->color('gray')
-                ->modalDescription(__('খালি রাখলে ওই কাজে আগের নিয়মে চলবে (ওই ধরনের প্রথম key)। বেছে নেওয়া key না চললে একই ধরনের পরের key দিয়ে চলবে।'))
+                ->modalDescription(__('প্রতিটি কাজে এক বা একাধিক key বাছুন, টেনে ক্রম ঠিক করুন। প্রথমটি না চললে (quota, বিল, অন্য সমস্যা) পরেরটি দিয়ে চলবে; বাছা key-এর বাইরে কোনো key ব্যবহার হবে না। খালি রাখলে ওই ধরনের সব key ক্রমে চলবে।'))
                 ->fillForm(fn () => DB::table('ai_key_jobs')->where('company_id', Filament::getTenant()->getKey())
-                    ->pluck('ai_key_id', 'job')->all())
+                    ->orderBy('position')->orderBy('id')->get()->groupBy('job')
+                    ->map(fn ($rows) => $rows->pluck('ai_key_id')->map(fn ($id) => (string) $id)->all())->all())
                 ->schema(fn () => collect(AiKey::JOBS)->map(fn ($job, $name) => Select::make($name)->label(__($job[0]))
-                    ->placeholder(__('আগের নিয়মে'))
+                    ->multiple()->reorderable()->placeholder(__('ওই ধরনের সব key'))
                     ->options(AiKey::where('company_id', Filament::getTenant()->getKey())->whereIn('provider', $job[1])
                         ->orderBy('id')->get()
                         ->mapWithKeys(fn (AiKey $k) => [$k->id => ($k->label ?: AiKey::PROVIDERS[$k->provider][0] ?? $k->provider)
@@ -34,15 +35,15 @@ class ManageAiKeys extends ManageRecords
                 ->action(function (array $data) {
                     $company = Filament::getTenant()->getKey();
                     $valid = AiKey::where('company_id', $company)->pluck('provider', 'id');
-                    foreach (AiKey::JOBS as $job => [, $providers]) {
-                        $key = $data[$job] ?? null;
-                        if ($key && in_array($valid[$key] ?? null, $providers, true)) {
-                            DB::table('ai_key_jobs')->updateOrInsert(['company_id' => $company, 'job' => $job],
-                                ['ai_key_id' => $key, 'updated_at' => now(), 'created_at' => now()]);
-                        } else {
+                    DB::transaction(function () use ($company, $data, $valid) {
+                        foreach (AiKey::JOBS as $job => [, $providers]) {
                             DB::table('ai_key_jobs')->where('company_id', $company)->where('job', $job)->delete();
+                            $keys = collect($data[$job] ?? [])->unique()
+                                ->filter(fn ($key) => in_array($valid[$key] ?? null, $providers, true))->values();
+                            DB::table('ai_key_jobs')->insert($keys->map(fn ($key, $position) => ['company_id' => $company,
+                                'job' => $job, 'ai_key_id' => $key, 'position' => $position, 'updated_at' => now(), 'created_at' => now()])->all());
                         }
-                    }
+                    });
                     Notification::make()->success()->title(__('সংরক্ষণ হয়েছে; পরের কাজ থেকে চলবে'))->send();
                 }),
         ];

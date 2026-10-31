@@ -161,26 +161,31 @@ PURPOSE_JOB = {"customer": "chat", "technician": "chat", "image": "image", "voic
                "call_tts": "call_tts", "voice_reminder_tts": "voice_reminder"}
 
 
-def job_key(company_id: int, job: str | None) -> dict | None:
-    """The key the company picked for this job (id, provider), or None (the provider's keys in order, as before)."""
+def job_keys(company_id: int, job: str | None) -> list[dict]:
+    """The keys the company picked for this job (id, provider) in the picked order; [] = the provider's keys, by id."""
     if not job:
-        return None
+        return []
     try:
-        return db.one("SELECT k.id, k.provider FROM ai_key_jobs j JOIN ai_keys k ON k.id = j.ai_key_id"
-                      " WHERE j.company_id = %s AND j.job = %s", (company_id, job))
+        return db.all_rows("SELECT k.id, k.provider FROM ai_key_jobs j JOIN ai_keys k ON k.id = j.ai_key_id"
+                           " WHERE j.company_id = %s AND j.job = %s ORDER BY j.position, j.id", (company_id, job))
     except Exception:   # before the migration
-        return None
+        return []
+
+
+def in_job_order(company_id: int, job: str | None, rows: list[dict]) -> list[dict]:
+    """Only the keys picked for the job, in the picked order; every row when none is picked."""
+    picked = [k["id"] for k in job_keys(company_id, job)]
+    if not picked:
+        return rows
+    return sorted((r for r in rows if r["id"] in picked), key=lambda r: picked.index(r["id"]))
 
 
 def _keys(t: Tenant, provider: str, usable_only: bool = False, job: str | None = None) -> list[dict]:
-    """The company's keys of a provider; the one picked for `job` first, the others after it as the fallback."""
+    """The company's keys of a provider; with keys picked for `job`, those only, in the picked order."""
     extra = " AND (rate_limited_until IS NULL OR rate_limited_until <= now())" if usable_only else ""
     rows = db.all_rows(f"SELECT * FROM ai_keys WHERE company_id = %s AND provider = %s{extra} ORDER BY id",
                        (t.company_id, provider))
-    picked = job_key(t.company_id, job)
-    if picked:
-        rows.sort(key=lambda r: r["id"] != picked["id"])
-    return rows
+    return in_job_order(t.company_id, job, rows)
 
 
 _DAILY = re.compile(r"on (tokens|requests) per (day|minute) \((\w+)\): Limit (\d+), Used (\d+)")
@@ -211,9 +216,11 @@ def record_usage(t: Tenant, key_id: int | None, provider: str, model: str, purpo
 
 
 def generate(t: Tenant, system: str, messages: list[dict], provider: str, model: str | None,
-             purpose: str = "customer", contact_id: int | None = None) -> tuple[str | None, str, str]:
-    """One provider, rotating the company's keys; a failing key cools down for a minute."""
-    rows = _keys(t, provider, usable_only=True, job=PURPOSE_JOB.get(purpose))
+             purpose: str = "customer", contact_id: int | None = None,
+             key_id: int | None = None) -> tuple[str | None, str, str]:
+    """One provider, rotating the company's keys (or just key_id); a failing key cools down for a minute."""
+    rows = [r for r in _keys(t, provider, usable_only=True, job=PURPOSE_JOB.get(purpose))
+            if key_id is None or r["id"] == key_id]
     if not rows:
         raise RuntimeError(f"no usable {provider} key")
     last = None
@@ -232,13 +239,34 @@ def generate(t: Tenant, system: str, messages: list[dict], provider: str, model:
     raise RuntimeError(f"all {provider} keys failed: {last}")
 
 
+def _generate_picked(t: Tenant, system: str, messages: list[dict], picked: list[dict], purpose: str,
+                     contact_id: int | None) -> tuple[str | None, str, str]:
+    """The keys picked for the job, one by one in the picked order. The key decides the AI, and uses its own model
+    unless it is the bot's AI. When rate limits stopped the round, one more after 8 s."""
+    active, bot_model = t.bot.get("ai_provider") or "groq", t.bot.get("ai_model")
+    last = None
+    for again in (True, False):
+        limited = False
+        for k in picked:
+            model = bot_model if k["provider"] == active else None
+            try:
+                return generate(t, system, messages, k["provider"], model, purpose, contact_id, k["id"])
+            except RuntimeError as e:
+                last, limited = e, limited or "429" in str(e)
+        if not (again and limited):
+            break
+        time.sleep(8)
+        db.execute("UPDATE ai_keys SET rate_limited_until = NULL WHERE id = ANY(%s)", ([k["id"] for k in picked],))
+    raise last
+
+
 def generate_with_fallback(t: Tenant, system: str, messages: list[dict], purpose: str = "customer",
                            contact_id: int | None = None) -> tuple[str | None, str, str]:
+    picked = job_keys(t.company_id, PURPOSE_JOB.get(purpose))
+    if picked:
+        return _generate_picked(t, system, messages, picked, purpose, contact_id)
     active = t.bot.get("ai_provider") or "groq"
     model = t.bot.get("ai_model")
-    picked = job_key(t.company_id, PURPOSE_JOB.get(purpose))
-    if picked and picked["provider"] != active:   # the key picked for chat decides the AI; its own model
-        active, model = picked["provider"], None
     try:
         return generate(t, system, messages, active, model, purpose, contact_id)
     except RuntimeError as first:
@@ -400,10 +428,11 @@ VOICE_PROVIDERS = {"gemini": _transcribe_gemini, "groq": _transcribe_groq}
 
 
 def transcribe(t: Tenant, audio: bytes, mime: str, contact_id: int | None = None) -> str | None:
-    """The company's voice AI first, every one of its keys in turn, then the other voice AIs the company has keys for."""
-    picked = job_key(t.company_id, "voice_read")
-    first = (picked or {}).get("provider") or t.bot.get("voice_provider") or "gemini"
-    for provider in [first] + [p for p in VOICE_PROVIDERS if p != first]:
+    """The AIs of the keys picked for voice_read, in the picked order; with none picked the company's voice AI first,
+    then the other voice AIs it has keys for. Every key of an AI in turn."""
+    first = t.bot.get("voice_provider") or "gemini"
+    picked = list(dict.fromkeys(k["provider"] for k in job_keys(t.company_id, "voice_read")))
+    for provider in picked or [first] + [p for p in VOICE_PROVIDERS if p != first]:
         fn = VOICE_PROVIDERS.get(provider)
         if not fn:
             continue

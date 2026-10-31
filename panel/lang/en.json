@@ -1775,5 +1775,7 @@
     "শুধু ছবি (JPG/PNG/WEBP) পাঠানো যায়": "Only photos (JPG/PNG/WEBP) can be sent",
     "বিল নেওয়ার সাথে সাথে বিলিং-এ approve": "Approve in billing right when the bill is taken",
     "বিল জমা ও approve হয়েছে": "Bill saved and approved",
-    "বিল জমা হয়েছে, approve হচ্ছে": "Bill saved, approving in billing"
+    "বিল জমা হয়েছে, approve হচ্ছে": "Bill saved, approving in billing",
+    "প্রতিটি কাজে এক বা একাধিক key বাছুন, টেনে ক্রম ঠিক করুন। প্রথমটি না চললে (quota, বিল, অন্য সমস্যা) পরেরটি দিয়ে চলবে; বাছা key-এর বাইরে কোনো key ব্যবহার হবে না। খালি রাখলে ওই ধরনের সব key ক্রমে চলবে।": "Pick one or more keys for each job and drag to set the order. If the first fails (quota, billing, any other problem) the next one takes over; keys not picked are not used. Left empty, all keys of that type run in turn.",
+    "ওই ধরনের সব key": "All keys of that type"
 }

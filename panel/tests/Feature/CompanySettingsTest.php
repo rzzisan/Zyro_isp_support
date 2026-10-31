@@ -198,6 +198,34 @@ class CompanySettingsTest extends TestCase
         $this->assertTrue($today['priced']);
     }
 
+    public function test_a_job_keeps_several_keys_in_the_picked_order(): void
+    {
+        $this->as($this->owner);
+        $gemini = fn (string $label) => AiKey::create(['company_id' => $this->company->id, 'provider' => 'gemini', 'api_key' => 'k', 'label' => $label])->id;
+        [$a, $b, $c] = [$gemini('a'), $gemini('b'), $gemini('c')];
+        $groq = AiKey::create(['company_id' => $this->company->id, 'provider' => 'groq', 'api_key' => 'k'])->id;
+        $other = AiKey::create(['company_id' => Company::create(['name' => 'Other'])->id, 'provider' => 'gemini', 'api_key' => 'k'])->id;
+
+        $post = fn (array $keys) => Livewire::test(ManageAiKeys::class)->callAction('jobs',
+            data: ['voice_reminder' => array_map('strval', $keys), 'chat' => [(string) $groq]]);
+        $save = fn (array $keys) => $post($keys)->assertHasNoActionErrors();
+        $save([$c, $a, $b]);
+        // a key of the wrong type or of another company is refused
+        $post([$groq])->assertHasActionErrors();
+        $post([$other])->assertHasActionErrors();
+
+        $order = fn () => DB::table('ai_key_jobs')->where('company_id', $this->company->id)->where('job', 'voice_reminder')
+            ->orderBy('position')->pluck('ai_key_id')->all();
+        $this->assertSame([$c, $a, $b], $order());
+
+        $save([$b]);
+        $this->assertSame([$b], $order());
+
+        $save([]);
+        $this->assertSame([], $order());
+        $this->assertSame(1, DB::table('ai_key_jobs')->where('job', 'chat')->count());
+    }
+
     public function test_ai_key_is_encrypted_and_scoped_to_company(): void
     {
         $other = Company::create(['name' => 'Other ISP']);

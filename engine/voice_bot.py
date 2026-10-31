@@ -1335,13 +1335,11 @@ async def open_model(info: dict, prep: dict):
 
 
 async def open_live(company_id: int, model: str, prep: dict):
-    """A Gemini Live session on the first of the company's Gemini keys that accepts it."""
+    """A Gemini Live session on the first of the company's Gemini keys that accepts it, in the order picked for calls."""
     keys = db.all_rows("select id, api_key from ai_keys where company_id = %s and provider = 'gemini'"
                        " and (rate_limited_until is null or rate_limited_until <= now()) order by id", (company_id,))
-    from engine.agent import job_key
-    picked = job_key(company_id, "call_live")   # the key picked for calls first (panel: কোন কাজে কোন key)
-    if picked:
-        keys.sort(key=lambda k: k["id"] != picked["id"])
+    from engine.agent import in_job_order
+    keys = in_job_order(company_id, "call_live", keys)
     last = None
     for k in keys:
         try:

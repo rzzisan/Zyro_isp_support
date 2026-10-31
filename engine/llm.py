@@ -120,8 +120,7 @@ def _call(provider: str, model: str, api_key: str, system: str, messages: list[d
                 betas=["server-side-fallback-2026-07-01"],
                 fallbacks="default",
             )
-        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.RateLimitError,
-                anthropic.InternalServerError, anthropic.APIConnectionError) as e:
+        except (anthropic.APIStatusError, anthropic.APIConnectionError) as e:  # 400 too: "credit balance is too low"
             resp = getattr(e, "response", None)
             raise KeyFailed(str(e), _limits(resp.headers) if resp is not None else None) from e
         response = raw.parse()
@@ -142,9 +141,8 @@ def _call(provider: str, model: str, api_key: str, system: str, messages: list[d
         )
     except httpx.TransportError as e:  # timeout / connection: move on to the next key or provider
         raise KeyFailed(f"{type(e).__name__}: {e}") from e
-    if r.status_code in (401, 403, 429) or r.status_code >= 500:  # 5xx e.g. Gemini "model overloaded"
+    if r.status_code >= 400:  # quota, billing, a dead key, Gemini "model overloaded": the next key may work
         raise KeyFailed(f"HTTP {r.status_code}: {r.text[:300]}", _limits(r.headers))
-    r.raise_for_status()
     body = r.json()
     u = body.get("usage") or {}
     usage = {"input": u.get("prompt_tokens") or 0, "output": u.get("completion_tokens") or 0,
