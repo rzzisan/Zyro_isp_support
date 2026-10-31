@@ -155,7 +155,7 @@ class VoiceReminders
         }
         usort($todo, fn ($a, $b) => $a[4] <=> $b[4]);
         $pause = "voice-inbound-pause:{$companyId}";
-        if (! $todo || Cache::has($pause)) {
+        if (! $todo || Cache::has($pause) || static::callsWaiting($companyId)) {
             return 0;
         }
         $start = microtime(true);
@@ -204,6 +204,16 @@ class VoiceReminders
         }
 
         return $made;
+    }
+
+    /**
+     * Today's reminder or line-off calls still to go: the line-off audio made ahead waits for them, so the few voice
+     * requests Gemini allows a day go to the calls first.
+     */
+    public static function callsWaiting(int $companyId): bool
+    {
+        return VoiceReminderCall::where('company_id', $companyId)->whereIn('kind', ['reminder', 'line_off'])
+            ->whereIn('status', ['planned', 'queued'])->whereDate('ref_date', now(self::TZ)->toDateString())->exists();
     }
 
     public static function plan(int $companyId, VoiceReminderSetting $s, Carbon $now): int
