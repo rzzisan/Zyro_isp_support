@@ -38,8 +38,14 @@ class VoiceReminders
 {
     public const TZ = 'Asia/Dhaka';
 
+    /** Billing's customer status: only Active customers get reminder calls, line-off calls or their audio. */
+    public const ACTIVE = 'Active';
+
     /** Minutes a call waits when its audio could not be made, before it is tried again. */
     public const AUDIO_RETRY = 20;
+
+    /** Raised when the engine starts reading the same text differently (2: numbers in words), so the packages made ahead are made again. */
+    public const SPEECH = 2;
 
     /** Minutes prepareInbound rests after a batch made no audio at all. */
     public const INBOUND_PAUSE = 20;
@@ -61,18 +67,18 @@ class VoiceReminders
         $expire = $day->copy()->startOfDay()->addDays($n);
 
         return BillingCustomer::where('company_id', $companyId)->whereNull('gone_at')->where('is_left', false)
-            ->where('disabled', false)->whereNotNull('bill_day')->where('bill_day', '>', 0)->whereNotNull('mobile_normalized')
+            ->where('status', self::ACTIVE)->where('disabled', false)->whereNotNull('bill_day')->where('bill_day', '>', 0)->whereNotNull('mobile_normalized')
             ->when($s->due_only, fn ($q) => $q->where('due', '>', 0))
             ->orderBy('customer_id')->get()
             ->filter(fn ($c) => BillReminders::expireDate((int) $c->bill_day, $day)->isSameDay($expire))
             ->values();
     }
 
-    /** Lines off for the bill now. */
+    /** Lines off for the bill now (Active customers only). */
     public static function offLines(int $companyId): Collection
     {
         return BillingCustomer::where('company_id', $companyId)->whereNull('gone_at')->where('is_left', false)
-            ->where('disabled', true)->where('due', '>', 0)->get();
+            ->where('status', self::ACTIVE)->where('disabled', true)->where('due', '>', 0)->get();
     }
 
     /**
@@ -127,7 +133,7 @@ class VoiceReminders
         }
         $templates = VoiceTemplate::where('company_id', $companyId)->whereIn('id', $flow->templateIds())->get();
         $smsTemplates = SmsTemplate::where('company_id', $companyId)->whereIn('id', $flow->smsTemplateIds())->get();
-        $base = json_encode([$flow->id, $flow->steps, $flow->hold, $flow->goodbye_template_id, $flow->name]);
+        $base = json_encode([self::SPEECH, $flow->id, $flow->steps, $flow->hold, $flow->goodbye_template_id, $flow->name]);
         $targets = $s->test_mode ? collect([0 => null]) : static::offLines($companyId)->keyBy('header_id');
         $have = (clone $ready)->pluck('signature', 'customer_header_id');
         $gone = array_diff($have->keys()->all(), $targets->keys()->all());
@@ -361,6 +367,9 @@ class VoiceReminders
         if (! $c || $c->gone_at || $c->is_left) {
             return __('কাস্টমার নেই বা Left');
         }
+        if ($c->status !== self::ACTIVE) {
+            return __('কাস্টমার Active নয়');
+        }
         if ($call->kind === 'reminder' && $c->disabled) {
             return __('লাইন বন্ধ');
         }
@@ -477,7 +486,7 @@ class VoiceReminders
                 continue;
             }
             $c = BillingCustomer::where('company_id', $companyId)->where('header_id', (int) $m[1])->first();
-            if (! $c || $c->gone_at || $c->is_left || $c->disabled || ($sms->reminder_due_only && (float) $c->due <= 0)
+            if (! $c || $c->gone_at || $c->is_left || $c->disabled || $c->status !== self::ACTIVE || ($sms->reminder_due_only && (float) $c->due <= 0)
                 || DB::table('sms_reminders')->where('company_id', $companyId)->where('customer_header_id', $c->header_id)
                     ->where('expire_date', $m[2])->where('days_before', (int) $m[3])->exists()) {
                 continue;

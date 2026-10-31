@@ -84,6 +84,8 @@ class VoiceRemindersTest extends TestCase
         $this->customer(2);
         $this->customer(3, ['due' => 0]);          // paid: not called
         $this->customer(4, ['bill_day' => 15]);    // another day
+        $this->customer(5, ['status' => 'Inactive']);   // not Active in billing: not called
+        $this->customer(6, ['disabled' => true]);  // line not enabled: no bill reminder
         $out = VoiceReminders::run($this->company->id);
         $this->assertSame(2, $out['planned']);
         $this->assertSame(1, $out['queued']);      // one line at a time
@@ -124,15 +126,17 @@ class VoiceRemindersTest extends TestCase
         $this->customer(1);
         $this->customer(2);
         $this->customer(3);
+        $this->customer(4);
         $s = VoiceReminderSetting::forCompany($this->company);
         VoiceReminders::plan($this->company->id, $s, now());
+        BillingCustomer::where('header_id', 4)->update(['status' => 'Inactive']);
         BillingCustomer::where('header_id', 1)->update(['due' => 0]);
         VoiceOptout::create(['company_id' => $this->company->id, 'number' => '8801711000002', 'source' => 'call']);
         BillingCustomer::where('header_id', 3)->update(['is_left' => true]);
         VoiceReminders::dispatch($this->company->id, $s, now());
-        $this->assertSame(['বিল দেওয়া হয়ে গেছে', 'আর কল চান না', 'কাস্টমার নেই বা Left'],
+        $this->assertSame(['বিল দেওয়া হয়ে গেছে', 'আর কল চান না', 'কাস্টমার নেই বা Left', 'কাস্টমার Active নয়'],
             VoiceReminderCall::orderBy('customer_header_id')->pluck('reason')->all());
-        $this->assertSame(3, VoiceReminderCall::where('status', 'skipped')->count());
+        $this->assertSame(4, VoiceReminderCall::where('status', 'skipped')->count());
     }
 
     public function test_nothing_goes_outside_calling_hours_or_when_off(): void
