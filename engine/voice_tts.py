@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import httpx
@@ -81,12 +82,24 @@ def key(voice: str, speed: float, text: str) -> str:
     return hashlib.sha1(f"{voice}|{speed:.2f}|{text}".encode()).hexdigest()[:20]
 
 
-def _gemini(company_id: int, text: str, voice: str) -> bytes:
-    """Raw 16-bit PCM at 24 kHz from the company's Gemini keys (the one picked for voice_reminder first)."""
+def chosen_model(company_id: int) -> str | None:
+    """The voice model picked in রিমাইন্ডার সেটিংস → অডিও বানানো (None: 'auto', the newest first)."""
+    try:
+        row = db.one("SELECT tts_model FROM voice_reminder_settings WHERE company_id = %s", (company_id,))
+    except Exception:   # before the migration
+        return None
+    model = (row or {}).get("tts_model") or "auto"
+    return None if model == "auto" else model
+
+
+def _gemini(company_id: int, text: str, voice: str, model: str | None = None) -> bytes:
+    """Raw 16-bit PCM at 24 kHz from the company's Gemini keys (the one picked for voice_reminder first); the picked
+    model first, the others as the fallback."""
     t = SimpleNamespace(company_id=company_id)
     last = "কোম্পানির কোনো Gemini key নেই"
+    models = [model] + [m for m in MODELS if m != model] if model else MODELS
     for row in agent._keys(t, "gemini", usable_only=True, job="voice_reminder"):
-        for model in MODELS:
+        for model in models:
             words = text if model.startswith("gemini-3") else agent.TTS_STYLE + text
             try:
                 r = httpx.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
@@ -135,7 +148,8 @@ def make(company_id: int, text: str, voice: str = "Kore", speed: float = 1.0) ->
     voice = voice if voice in VOICES else "Kore"
     speed = min(1.5, max(0.7, float(speed or 1)))
     text = spoken(text)   # before the hash: audio made from digits before this is never used again
-    h = key(voice, speed, text)
+    model = chosen_model(company_id)
+    h = key(voice, speed, text + (f"|{model}" if model else ""))   # a picked model makes its own audio
     folder = os.path.join(AUDIO_DIR, str(int(company_id)))
     base = os.path.join(folder, h)
     with _locks_lock:
@@ -144,12 +158,50 @@ def make(company_id: int, text: str, voice: str = "Kore", speed: float = 1.0) ->
         if os.path.exists(base + ".wav") and os.path.exists(base + ".mp3"):
             return {"file": f"{int(company_id)}/{h}", "cached": True}
         os.makedirs(folder, exist_ok=True)
-        pcm = _gemini(company_id, text, voice)
+        pcm = _gemini(company_id, text, voice, model)
         _ffmpeg(pcm, speed, base + ".mp3.tmp", ["-c:a", "libmp3lame", "-b:a", "48k", "-f", "mp3"])
         _ffmpeg(pcm, speed, base + ".wav.tmp", ["-ar", "8000", "-ac", "1", "-c:a", "pcm_s16le", "-f", "wav"])
         os.replace(base + ".mp3.tmp", base + ".mp3")
         os.replace(base + ".wav.tmp", base + ".wav")
     log.info("voice audio made: company %s %s (%d chars)", company_id, h, len(text))
+    return {"file": f"{int(company_id)}/{h}", "cached": False}
+
+
+GAP = 0.12        # seconds between two joined pieces inside a sentence
+GAP_STOP = 0.35   # after a piece that ends a phrase (। , ? !)
+_TRIM = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03"
+
+
+def make_parts(company_id: int, parts: list[str], voice: str = "Kore", speed: float = 1.0) -> dict:
+    """A message joined from pieces (the template's words, each customer value apart; the panel's
+    VoiceTemplates::parts): every piece is made once (make(), shared by every message that has it) and the pieces are joined with
+    their own silence trimmed and a short pause between, so it runs on like one sentence. Same answer as make()."""
+    parts = [p for p in (re.sub(r"\s+", " ", x or "").strip() for x in parts) if p]
+    if len(parts) < 2:
+        return make(company_id, " ".join(parts), voice, speed)
+    with ThreadPoolExecutor(max_workers=4) as pool:   # the new pieces at once
+        made = list(pool.map(lambda p: make(company_id, p, voice, speed), parts))
+    h = key(voice, speed, "parts:" + "|".join(m["file"] for m in made))
+    folder = os.path.join(AUDIO_DIR, str(int(company_id)))
+    base = os.path.join(folder, h)
+    if os.path.exists(base + ".wav") and os.path.exists(base + ".mp3"):
+        return {"file": f"{int(company_id)}/{h}", "cached": all(m["cached"] for m in made)}
+    inputs, chains = [], []
+    for i, (p, m) in enumerate(zip(parts, made)):
+        inputs += ["-i", os.path.join(AUDIO_DIR, m["file"] + ".mp3")]
+        gap = 0 if i == len(parts) - 1 else (GAP_STOP if re.search(r"[।,?!.;:]$", p) else GAP)
+        chains.append(f"[{i}:a]aresample=24000,aformat=channel_layouts=mono,{_TRIM},areverse,{_TRIM},areverse,"
+                      f"apad=pad_dur={gap:.2f}[a{i}]")
+    graph = ";".join(chains) + ";" + "".join(f"[a{i}]" for i in range(len(parts))) + f"concat=n={len(parts)}:v=0:a=1[out]"
+    for ext, args in ((".mp3", ["-c:a", "libmp3lame", "-b:a", "48k", "-f", "mp3"]),
+                      (".wav", ["-ar", "8000", "-ac", "1", "-c:a", "pcm_s16le", "-f", "wav"])):
+        r = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[out]", *args,
+                            base + ext + ".tmp"], capture_output=True, timeout=60)
+        if r.returncode != 0:
+            raise RuntimeError(f"ffmpeg: {r.stderr[:200]!r}")
+    os.replace(base + ".mp3.tmp", base + ".mp3")
+    os.replace(base + ".wav.tmp", base + ".wav")
+    log.info("voice audio joined: company %s %s (%d pieces)", company_id, h, len(parts))
     return {"file": f"{int(company_id)}/{h}", "cached": False}
 
 
