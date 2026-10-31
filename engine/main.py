@@ -1420,6 +1420,9 @@ async def voice_tts(request: Request, company_id: int):
     from engine import voice_tts as vt
     body = await request.json()
     try:
+        if isinstance(body.get("parts"), list) and body["parts"]:   # joined from pieces (রিমাইন্ডার সেটিংস → অডিও বানানো)
+            return await run_in_threadpool(vt.make_parts, company_id, [str(p) for p in body["parts"]][:20],
+                                           str(body.get("voice") or "Kore"), float(body.get("speed") or 1))
         return await run_in_threadpool(vt.make, company_id, str(body.get("text") or ""), str(body.get("voice") or "Kore"),
                                        float(body.get("speed") or 1))
     except (ValueError, RuntimeError) as e:

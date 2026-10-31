@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\BillingCustomer;
 use App\Models\BillingCustomerPayment;
+use App\Models\VoiceReminderSetting;
 use App\Models\VoiceTemplate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -108,6 +109,71 @@ class VoiceTemplates
         return trim(preg_replace('/\s+/u', ' ', preg_replace_callback('/\{(\w+)\}/', fn ($m) => array_key_exists($m[1], $all) ? (string) $all[$m[1]] : $m[0], $body)));
     }
 
+    /**
+     * The pieces a spliced audio is joined from (engine/voice_tts.py make_parts): the template's own words, and each
+     * filled-in value apart, so "বিশ টাকা" or a name is made once and shared by every customer who has it. A word
+     * stuck to a value ("{name}-এর", "{due},") goes with the value. Null when nothing is filled in (one whole audio).
+     */
+    public static function parts(string $body, array $values, array $extra = []): ?array
+    {
+        $all = $extra + $values + self::EXAMPLES;
+        $out = [];   // [is value, text]
+        foreach (preg_split('/(\{\w+\})/u', $body, -1, PREG_SPLIT_DELIM_CAPTURE) as $piece) {
+            if (preg_match('/^\{(\w+)\}$/', $piece, $m) && array_key_exists($m[1], $all)) {
+                $out[] = [true, (string) $all[$m[1]]];
+            } elseif ($piece !== '') {
+                $out[] = [false, $piece];
+            }
+        }
+        if (! array_filter($out, fn ($p) => $p[0])) {
+            return null;
+        }
+        $n = count($out);
+        for ($i = 0; $i < $n; $i++) {
+            if (! $out[$i][0]) {
+                continue;
+            }
+            // what touches the value without a space: its suffix after it, its prefix before it
+            if ($i + 1 < $n && ! $out[$i + 1][0] && preg_match('/^(\S+)(.*)$/su', $out[$i + 1][1], $m)) {
+                $out[$i][1] .= $m[1];
+                $out[$i + 1][1] = $m[2];
+            }
+            if ($i > 0 && ! $out[$i - 1][0] && preg_match('/^(.*?)(\S+)$/su', $out[$i - 1][1], $m)) {
+                $out[$i][1] = $m[2].$out[$i][1];
+                $out[$i - 1][1] = $m[1];
+            }
+        }
+        $parts = [];
+        $last = null;
+        foreach ($out as [$isValue, $text]) {
+            $text = trim(preg_replace('/\s+/u', ' ', $text));
+            if ($text === '') {
+                continue;
+            }
+            // values side by side ("{name} {id}") or words side by side stay one piece
+            if ($last === $isValue && $parts) {
+                $parts[count($parts) - 1] .= ' '.$text;
+            } else {
+                $parts[] = $text;
+            }
+            $last = $isValue;
+        }
+
+        return count($parts) > 1 ? $parts : null;
+    }
+
+    /** Whether this company's messages with customer values are made by joining pieces (রিমাইন্ডার সেটিংস → অডিও বানানো). */
+    public static function spliced(int $companyId): bool
+    {
+        return (VoiceReminderSetting::where('company_id', $companyId)->value('audio_mode') ?? 'splice') === 'splice';
+    }
+
+    /** The spoken text of a template and, when spliced, its pieces (null: one whole audio). */
+    public static function speech(int $companyId, string $body, array $values, array $extra = []): array
+    {
+        return ['text' => static::render($body, $values, $extra), 'parts' => static::spliced($companyId) ? static::parts($body, $values, $extra) : null];
+    }
+
     /** Placeholders in the text that are not known (typos): shown under the text box. */
     public static function unknown(string $body): array
     {
@@ -117,12 +183,12 @@ class VoiceTemplates
     }
 
     /** Audio of a spoken text: "{company}/{hash}" (storage/app/voice-audio/…{.mp3,.wav}). Throws with a Bangla reason. */
-    public static function audio(int $companyId, string $text, string $voice, float $speed): string
+    public static function audio(int $companyId, string $text, string $voice, float $speed, ?array $parts = null): string
     {
         try {
             $r = Http::baseUrl(config('services.engine.url'))->timeout(120)->acceptJson()
                 ->withHeaders(['x-internal-key' => (string) config('services.engine.key')])
-                ->post("/internal/{$companyId}/voice/tts", ['text' => $text, 'voice' => $voice, 'speed' => $speed]);
+                ->post("/internal/{$companyId}/voice/tts", array_filter(['text' => $text, 'voice' => $voice, 'speed' => $speed, 'parts' => $parts]));
         } catch (\Throwable $e) {
             throw new RuntimeException(__('অডিও বানানো গেল না: ইঞ্জিনে পৌঁছানো যায়নি'));
         }
@@ -134,7 +200,7 @@ class VoiceTemplates
     }
 
     /**
-     * Several audios at once, $concurrency requests at a time: [key => ['text', 'voice', 'speed']] → [key => file]
+     * Several audios at once, $concurrency requests at a time: [key => ['text', 'voice', 'speed', 'parts'?]] → [key => file]
      * (the ones that failed are left out; package() then asks for them one by one).
      */
     public static function audioMany(int $companyId, array $items, int $concurrency = 4): array
@@ -144,7 +210,8 @@ class VoiceTemplates
             try {
                 $res = Http::pool(fn ($pool) => array_map(fn ($k) => $pool->as((string) $k)->baseUrl(config('services.engine.url'))
                     ->timeout(120)->acceptJson()->withHeaders(['x-internal-key' => (string) config('services.engine.key')])
-                    ->post("/internal/{$companyId}/voice/tts", ['text' => $chunk[$k]['text'], 'voice' => $chunk[$k]['voice'], 'speed' => $chunk[$k]['speed']]),
+                    ->post("/internal/{$companyId}/voice/tts", array_filter(['text' => $chunk[$k]['text'], 'voice' => $chunk[$k]['voice'],
+                        'speed' => $chunk[$k]['speed'], 'parts' => $chunk[$k]['parts'] ?? null])),
                     array_keys($chunk)));
             } catch (\Throwable $e) {
                 continue;
