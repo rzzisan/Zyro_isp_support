@@ -41,6 +41,7 @@ class AppPanelProvider extends PanelProvider
             ->brandName('Zyro Support')
             ->brandLogo(fn () => view('filament.brand'))
             ->brandLogoHeight('2.5rem')
+            ->favicon('/favicon.ico?v=2')
             ->font('Geist')
             ->maxContentWidth(Width::Full)
             ->sidebarWidth('16rem')

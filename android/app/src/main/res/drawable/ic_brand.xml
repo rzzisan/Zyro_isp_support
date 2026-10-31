@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- teal gradient with two soft circles, same as the BSOL icon -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108">
+                <item android:offset="0" android:color="#FF14938C" />
+                <item android:offset="1" android:color="#FF0D5E5C" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#16A097" android:fillAlpha="0.45" android:pathData="M48.5,21a38,38 0 1,0 76,0a38,38 0 1,0 -76,0z" />
+    <path android:fillColor="#0A4F4E" android:fillAlpha="0.4" android:pathData="M-14.799999999999997,90.7a33.8,33.8 0 1,0 67.6,0a33.8,33.8 0 1,0 -67.6,0z" />
+
+    <group android:scaleX="0.1055" android:scaleY="0.1055" android:translateX="0" android:translateY="0">
+        <!-- Z, in the logo's 1024 box -->
+        <path android:pathData="M345,250H680V330L482,576H684V597.2A104,104 0 0,0 604,660H335V580L533,334H345Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="0" android:startY="250" android:endX="0" android:endY="660">
+                    <item android:offset="0" android:color="#FFFFFFFF" />
+                    <item android:offset="1" android:color="#FFEAFBF9" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- chat bubble with three dots -->
+        <path android:fillColor="#F1F6F7" android:pathData="M614,700a86,86 0 1,0 172,0a86,86 0 1,0 -172,0z" />
+        <path android:fillColor="#14938C" android:pathData="M667,696a9,9 0 1,0 18,0a9,9 0 1,0 -18,0zM691,696a9,9 0 1,0 18,0a9,9 0 1,0 -18,0zM715,696a9,9 0 1,0 18,0a9,9 0 1,0 -18,0z" />
+    </group>
+
+</vector>

@@ -1,5 +1,8 @@
 package com.zyrotechbd.desk.ui.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.zyrotechbd.desk.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -90,9 +93,7 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(96.dp))
-            Box(Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)).background(Primary), contentAlignment = Alignment.Center) {
-                Text("ZD", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            }
+            Image(painterResource(R.drawable.ic_brand), contentDescription = null, modifier = Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)))
             Spacer(Modifier.height(14.dp))
             Text("Zyro Desk", color = Ink, fontWeight = FontWeight.Bold, fontSize = 22.sp)
             Spacer(Modifier.height(24.dp))

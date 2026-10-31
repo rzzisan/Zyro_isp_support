@@ -1,7 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <gradient
-        android:startColor="#0B5F5E"
-        android:endColor="#19A59C"
-        android:angle="135" />
-</shape>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- teal gradient with two soft circles, same as the BSOL icon -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108">
+                <item android:offset="0" android:color="#FF14938C" />
+                <item android:offset="1" android:color="#FF0D5E5C" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#16A097" android:fillAlpha="0.45" android:pathData="M48.5,21a38,38 0 1,0 76,0a38,38 0 1,0 -76,0z" />
+    <path android:fillColor="#0A4F4E" android:fillAlpha="0.4" android:pathData="M-14.799999999999997,90.7a33.8,33.8 0 1,0 67.6,0a33.8,33.8 0 1,0 -67.6,0z" />
+
+</vector>

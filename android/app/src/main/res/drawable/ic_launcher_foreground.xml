@@ -1,19 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Z letter: top bar + diagonal + bottom bar (single filled path) -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M 18,18 L 52,18 L 52,29 L 25,79 L 52,79 L 52,90 L 18,90 L 18,79 L 45,29 L 18,29 Z" />
+    <group android:scaleX="0.092" android:scaleY="0.092" android:translateX="2.43" android:translateY="6.34">
+        <!-- Z, in the logo's 1024 box -->
+        <path android:pathData="M345,250H680V330L482,576H684V597.2A104,104 0 0,0 604,660H335V580L533,334H345Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="0" android:startY="250" android:endX="0" android:endY="660">
+                    <item android:offset="0" android:color="#FFFFFFFF" />
+                    <item android:offset="1" android:color="#FFEAFBF9" />
+                </gradient>
+            </aapt:attr>
+        </path>
 
-    <!-- D letter: rounded right side with the inside cut out -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M 56,18 L 74,18 Q 90,18 90,34 L 90,74 Q 90,90 74,90 L 56,90 Z M 66,28 L 72,28 Q 80,28 80,36 L 80,72 Q 80,80 72,80 L 66,80 Z" />
+        <!-- chat bubble with three dots -->
+        <path android:fillColor="#F1F6F7" android:pathData="M614,700a86,86 0 1,0 172,0a86,86 0 1,0 -172,0z" />
+        <path android:fillColor="#14938C" android:pathData="M667,696a9,9 0 1,0 18,0a9,9 0 1,0 -18,0zM691,696a9,9 0 1,0 18,0a9,9 0 1,0 -18,0zM715,696a9,9 0 1,0 18,0a9,9 0 1,0 -18,0z" />
+    </group>
 
 </vector>

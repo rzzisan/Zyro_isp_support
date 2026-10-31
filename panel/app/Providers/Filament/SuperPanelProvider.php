@@ -36,6 +36,7 @@ class SuperPanelProvider extends PanelProvider
             ->brandName('Zyro Support · Super Admin')
             ->brandLogo(fn () => view('filament.brand', ['sub' => __('প্ল্যাটফর্ম অ্যাডমিন')]))
             ->brandLogoHeight('2.5rem')
+            ->favicon('/favicon.ico?v=2')
             ->font('Geist')
             ->maxContentWidth(Width::Full)
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString('<link rel="stylesheet" href="'.asset('css/zyro-theme.css').'?v='.filemtime(public_path('css/zyro-theme.css')).'">'.Locale::jsScript()))
