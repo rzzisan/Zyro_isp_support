@@ -77,7 +77,7 @@ class VoiceTemplates
     {
         $v = ['company' => Sms::companyName($companyId)];
         if (! $c) {
-            return $v + ['name' => 'রহিম উদ্দিন', 'id' => '১২৩৪', 'due' => '৫২০', 'monthly' => '৫২০', 'expire_date' => '৩১ অক্টোবর',
+            return $v + ['name' => 'রহিম উদ্দিন', 'id' => '১ ২ ৩ ৪', 'due' => '৫২০', 'monthly' => '৫২০', 'expire_date' => '৩১ অক্টোবর',
                 'days_left' => '২', 'package' => '১০ এমবিপিএস', 'zone' => 'উত্তর পাড়া', 'line_status' => 'চালু', 'last_payment' => '৫২০ টাকা, ১ অক্টোবর'];
         }
         $today = now()->timezone(BillReminders::TZ)->startOfDay();
@@ -87,7 +87,8 @@ class VoiceTemplates
 
         return $v + [
             'name' => (string) $c->name,
-            'id' => static::digits(ltrim((string) $c->customer_id, '0') ?: '0'),
+            // one digit at a time ("৩ ৫ ৬ ১"): the voice reads each as a word, not "তিন হাজার পাঁচশো একষট্টি"
+            'id' => implode(' ', mb_str_split(static::digits(ltrim((string) $c->customer_id, '0') ?: '0'))),
             'due' => static::digits(Sms::money(max(0, (float) $c->due))),
             'monthly' => static::digits(Sms::money((float) $c->monthly_bill)),
             'expire_date' => $expire ? static::date($expire) : '',

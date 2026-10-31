@@ -69,7 +69,7 @@ class VoiceTemplateTest extends TestCase
     {
         $v = VoiceTemplates::values($this->company->id, $this->customer);
         $this->assertSame('৫২০', $v['due']);
-        $this->assertSame('৪২', $v['id']);
+        $this->assertSame('৪ ২', $v['id']);
         $this->assertSame('৩১ অক্টোবর', $v['expire_date']);
         $this->assertSame('২', $v['days_left']);
         $this->assertSame('চালু', $v['line_status']);
