@@ -38,6 +38,9 @@ class VoiceReminders
 {
     public const TZ = 'Asia/Dhaka';
 
+    /** Minutes a call waits when its audio could not be made, before it is tried again. */
+    public const AUDIO_RETRY = 20;
+
     /** Minutes prepareInbound rests after a batch made no audio at all. */
     public const INBOUND_PAUSE = 20;
 
@@ -328,10 +331,15 @@ class VoiceReminders
             try {
                 $call->update(['package' => VoiceCalls::package($flows->get($call->voice_flow_id), $customer, $extra), 'status' => 'queued']);
             } catch (\Throwable $e) {
+                // the audio could not be made (AI quota used up ...): nothing was dialled, so the call waits and is
+                // tried again later the same day (expire() ends it at the day's end); the rest wait with it
                 report($e);
-                $call->update(['status' => 'failed', 'error' => mb_substr($e->getMessage(), 0, 300)]);
+                $call->update(['status' => 'planned', 'scheduled_at' => $now->copy()->addMinutes(self::AUDIO_RETRY),
+                    'error' => mb_substr($e->getMessage(), 0, 300)]);
+                VoiceReminderCall::where('company_id', $companyId)->where('status', 'planned')->where('scheduled_at', '<=', $now)
+                    ->update(['scheduled_at' => $now->copy()->addMinutes(self::AUDIO_RETRY)]);
 
-                continue;
+                break;
             }
             VoiceCalls::kick($call->id);
             $queued++;
