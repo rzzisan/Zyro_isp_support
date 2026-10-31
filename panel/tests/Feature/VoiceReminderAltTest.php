@@ -324,10 +324,15 @@ class VoiceReminderAltTest extends TestCase
         $s = $this->settings(['enabled' => false, 'inbound_on' => true]);
         $tts = 0;
         Http::swap(new \Illuminate\Http\Client\Factory);
-        Http::fake(['engine.test/internal/*/voice/tts' => function () use (&$tts) {
-            $tts++;
+        // messages the same for everyone come from the engine's cache; a customer's own text fails (quota used up)
+        Http::fake(['engine.test/internal/*/voice/tts' => function (Request $r) use (&$tts) {
+            if (str_contains($r['text'], 'Customer 1') || str_contains($r['text'], '৫০০')) {
+                $tts++;
 
-            return Http::response(['detail' => 'Gemini 429'], 502);
+                return Http::response(['detail' => 'Gemini 429'], 502);
+            }
+
+            return Http::response(['file' => '1/'.substr(sha1($r['text']), 0, 20)]);
         }]);
         $this->assertSame(0, VoiceReminders::prepareInbound($this->company->id, $s));
         $asked = $tts;
