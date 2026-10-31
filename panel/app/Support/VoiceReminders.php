@@ -161,13 +161,15 @@ class VoiceReminders
                 }
             }
             $audio = VoiceTemplates::audioMany($companyId, $texts, $concurrency);
-            if ($texts && ! $audio) {
-                // not one made (the AI keys' quota is used up, 429): rest a while instead of asking every minute
-                Cache::put($pause, true, now()->addMinutes(self::INBOUND_PAUSE));
-                Log::warning("voice inbound: no audio could be made, paused {$companyId} for ".self::INBOUND_PAUSE.' min');
-                break;
-            }
+            $before = $made;
             foreach ($batch as [$header, $c, $messages, $sig]) {
+                // a message whose audio could not be made: this customer waits for a later pass (asking again one by
+                // one here only repeats the failure)
+                foreach ($messages as $m) {
+                    if (! isset($m['upload']) && ! $m['later'] && ! isset($audio[VoiceCalls::audioKey($m)])) {
+                        continue 2;
+                    }
+                }
                 try {
                     $package = VoiceCalls::package($flow, $c, [], $audio, $messages);
                 } catch (\Throwable $e) {
@@ -180,6 +182,12 @@ class VoiceReminders
                     'package' => json_encode($package, JSON_UNESCAPED_UNICODE), 'built_at' => now(),
                 ]], ['company_id', 'customer_header_id'], ['voice_flow_id', 'signature', 'package', 'built_at']);
                 $made++;
+            }
+            if ($made === $before) {
+                // not one customer's audio made (the AI keys' quota is used up, 429): rest instead of asking every minute
+                Cache::put($pause, true, now()->addMinutes(self::INBOUND_PAUSE));
+                Log::warning("voice inbound: no audio could be made, paused {$companyId} for ".self::INBOUND_PAUSE.' min');
+                break;
             }
         }
 
