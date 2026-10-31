@@ -10,6 +10,7 @@ use App\Support\Menu;
 use App\Support\Sms;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -65,7 +66,7 @@ class BillActions
             'method_id' => $f['method_default'] ?? null, 'received_by_id' => $f['received_by_default'] ?? null,
             'bill_month' => $f['bill_month'] ?? null, 'expected_payable' => $f['payable'] ?? null,
             'desk_sms' => static::deskSmsDefault(), 'next_billing_date' => static::nextBillingDate((float) ($f['payable'] ?? 0), (float) ($f['payable'] ?? 0), 0),
-            'print' => true];
+            'next_billing_on' => now('Asia/Dhaka')->toDateString(), 'print' => true];
     }
 
     /**
@@ -164,7 +165,8 @@ class BillActions
             ->modalSubmitActionLabel(__('বিল জমা দিন'))
             ->fillForm(function (?BillingCustomer $record = null) use ($customer, $forRecord) {
                 $c = $customer ?? ($forRecord ? $record : null);
-                $plain = ['desk_sms' => static::deskSmsDefault(), 'next_billing_date' => true, 'print' => true];
+                $plain = ['desk_sms' => static::deskSmsDefault(), 'next_billing_date' => true,
+                    'next_billing_on' => now('Asia/Dhaka')->toDateString(), 'print' => true];
                 if (! $c) {
                     return $plain;
                 }
@@ -209,12 +211,12 @@ class BillActions
                     Grid::make(3)->schema([
                         TextInput::make('paid')->label(__('টাকা নিলেন'))->numeric()->minValue(0)->suffix(__('টাকা'))->required()->live(debounce: 400)
                             ->afterStateUpdated($nextDate)
-                            ->partiallyRenderComponentsAfterStateUpdated(['summary', 'nextDate'])
+                            ->partiallyRenderComponentsAfterStateUpdated(['summary', 'nextDate', 'nextDay'])
                             ->autofocus((bool) $customer || $forRecord)
                             ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
                         TextInput::make('discount')->label(__('ডিসকাউন্ট'))->numeric()->minValue(0)->suffix(__('টাকা'))->default(0)->live(debounce: 400)
                             ->afterStateUpdated($nextDate)
-                            ->partiallyRenderComponentsAfterStateUpdated(['summary', 'nextDate'])
+                            ->partiallyRenderComponentsAfterStateUpdated(['summary', 'nextDate', 'nextDay'])
                             ->extraInputAttributes(['x-on:keydown.enter.prevent' => static::ENTER_SUBMITS]),
                         Select::make('method_id')->label(__('মাধ্যম'))->required()
                             ->options(fn ($get) => static::tryForm($headerOf($get))[0]['methods'] ?? []),
@@ -244,8 +246,15 @@ class BillActions
                                 ? __('জমা হলে Desk-এর SMS গেটওয়ে দিয়ে "বিল পরিশোধ" টেমপ্লেটের SMS যায় (জমা দেরি হয় না)')
                                 : __('চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "বিল পরিশোধের টেমপ্লেট" সেট করুন')),
                         Toggle::make('next_billing_date')->label(__('পরের বিলিং তারিখ সেট'))->key('nextDate')
+                            ->live()->partiallyRenderComponentsAfterStateUpdated(['nextDay'])
                             ->hintIcon('heroicon-o-information-circle', __('বিলিং-এর "Is it next billing date?" শুধু বকেয়ার ৮০%-এর বেশি নিলে নিজে চালু হয়, অগ্রিমে বন্ধ')),
                     ]),
+                    // billing's switch only sets today; another day is written to the customer's Expire Date after the bill
+                    DatePicker::make('next_billing_on')->label(__('পরের বিলিং তারিখ'))->key('nextDay')
+                        ->visible(fn ($get) => (bool) $get('next_billing_date'))
+                        ->default(fn () => now('Asia/Dhaka')->toDateString())
+                        ->minDate(fn () => now('Asia/Dhaka')->subDays(31)->toDateString())->maxDate(fn () => now('Asia/Dhaka')->addDays(62)->toDateString())
+                        ->helperText(__('আজকের তারিখ থাকলে বিলিং নিজেই সেট করে। অন্য তারিখ বাছলে বিল জমার পর কাস্টমারের Expire Date সেই দিনে (মাসের দিন) বদলানো হয়।')),
                 ])->key('billBody'),
             ])
             ->action(function (array $data, Action $action, $livewire) use ($customer) {
@@ -258,6 +267,7 @@ class BillActions
                         'trx_no' => $data['trx_no'] ?? '', 'remarks' => $data['remarks'] ?? '',
                         'bill_month' => $data['bill_month'] ?? null, 'sms' => false,  // never billing's SMS
                         'next_billing_date' => (bool) ($data['next_billing_date'] ?? true),
+                        'next_billing_day' => ! empty($data['next_billing_on']) ? (int) \Illuminate\Support\Carbon::parse($data['next_billing_on'])->day : null,
                         'expected_payable' => isset($data['expected_payable']) ? (float) $data['expected_payable'] : null,
                         'approve' => Menu::can('bill_approve'),
                     ]);
@@ -278,7 +288,8 @@ class BillActions
                 }
                 $smsNote = ($data['desk_sms'] ?? false) ? static::queueBillSms(static::company(), $headerId, $data, $res, $methodName) : null;
                 Notification::make()->success()->title(static::savedTitle($res).($smsNote ? ' · '.$smsNote : ''))
-                    ->body(trim(($res['message'] ?? '').' · '.((float) ($res['balance'] ?? 0) < 0
+                    ->body(trim(($res['message'] ?? '').' · '.(! empty($res['next_billing_day'])
+                        ? __('পরের বিলিং তারিখ :day সেট হচ্ছে', ['day' => $res['next_billing_day']]).' · ' : '').((float) ($res['balance'] ?? 0) < 0
                         ? __('অগ্রিম :amount টাকা', ['amount' => -(float) $res['balance']])
                         : __('বাকি বকেয়া :amount টাকা', ['amount' => $res['balance'] ?? 0])), ' ·'))
                     ->actions(! empty($res['collection_id']) ? [Action::make('printReceipt')->label(__('রিসিট প্রিন্ট'))->button()
