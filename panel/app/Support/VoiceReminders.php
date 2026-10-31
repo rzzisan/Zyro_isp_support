@@ -44,6 +44,9 @@ class VoiceReminders
     /** Minutes a call waits when its audio could not be made, before it is tried again. */
     public const AUDIO_RETRY = 20;
 
+    /** Raised when the engine starts reading the same text differently (2: numbers in words), so the packages made ahead are made again. */
+    public const SPEECH = 2;
+
     /** Minutes prepareInbound rests after a batch made no audio at all. */
     public const INBOUND_PAUSE = 20;
 
@@ -130,7 +133,7 @@ class VoiceReminders
         }
         $templates = VoiceTemplate::where('company_id', $companyId)->whereIn('id', $flow->templateIds())->get();
         $smsTemplates = SmsTemplate::where('company_id', $companyId)->whereIn('id', $flow->smsTemplateIds())->get();
-        $base = json_encode([$flow->id, $flow->steps, $flow->hold, $flow->goodbye_template_id, $flow->name]);
+        $base = json_encode([self::SPEECH, $flow->id, $flow->steps, $flow->hold, $flow->goodbye_template_id, $flow->name]);
         $targets = $s->test_mode ? collect([0 => null]) : static::offLines($companyId)->keyBy('header_id');
         $have = (clone $ready)->pluck('signature', 'customer_header_id');
         $gone = array_diff($have->keys()->all(), $targets->keys()->all());
