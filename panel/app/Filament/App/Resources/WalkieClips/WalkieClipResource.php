@@ -61,11 +61,11 @@ class WalkieClipResource extends Resource
             ->filters([
                 SelectFilter::make('walkie_group_id')->label(__('গ্রুপ'))
                     ->options(fn () => WalkieGroup::where('company_id', $company())->orderBy('name')->pluck('name', 'id')),
-                Filter::make('calls')->label(__('শুধু প্রাইভেট কল'))->query(fn (Builder $q) => $q->whereNotNull('walkie_call_id')),
+                Filter::make('calls')->label(__('শুধু প্রাইভেট কল'))->query(fn (Builder $query) => $query->whereNotNull('walkie_call_id')),
                 SelectFilter::make('user_id')->label(__('কে বললেন'))->searchable()
                     ->options(fn () => User::whereIn('id', WalkieClip::where('company_id', $company())->distinct()->pluck('user_id'))->pluck('name', 'id')),
                 Filter::make('date')->schema([DatePicker::make('day')->label(__('তারিখ'))])
-                    ->query(fn (Builder $q, array $data) => $q->when($data['day'] ?? null, fn ($w, $d) => $w->whereBetween('started_at',
+                    ->query(fn (Builder $query, array $data) => $query->when($data['day'] ?? null, fn ($w, $d) => $w->whereBetween('started_at',
                         [\Illuminate\Support\Carbon::parse($d, 'Asia/Dhaka')->startOfDay()->utc(), \Illuminate\Support\Carbon::parse($d, 'Asia/Dhaka')->endOfDay()->utc()]))),
             ]);
     }

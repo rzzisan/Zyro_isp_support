@@ -96,9 +96,9 @@ class VoiceReminderCallResource extends Resource
             ->filters([
                 SelectFilter::make('kind')->label(__('ধরন'))->options(array_map('__', VoiceReminderCall::KINDS)),
                 SelectFilter::make('status')->label(__('অবস্থা'))->options(array_map('__', VoiceReminderCall::STATUSES)),
-                Filter::make('alt')->label(__('শুধু বিকল্প নম্বরের কল'))->query(fn (Builder $q) => $q->whereNotNull('alt_of')),
+                Filter::make('alt')->label(__('শুধু বিকল্প নম্বরের কল'))->query(fn (Builder $query) => $query->whereNotNull('alt_of')),
                 Filter::make('today')->label(__('শুধু আজ'))->default()
-                    ->query(fn (Builder $q) => $q->where('created_at', '>=', now('Asia/Dhaka')->startOfDay()->utc())),
+                    ->query(fn (Builder $query) => $query->where('created_at', '>=', now('Asia/Dhaka')->startOfDay()->utc())),
             ])
             ->headerActions([
                 Action::make('optouts')->label(__('"আর কল নয়" তালিকা'))->icon(Heroicon::OutlinedNoSymbol)->color('gray')

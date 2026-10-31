@@ -98,11 +98,11 @@ class CustomerAltNumberResource extends Resource
             ->searchPlaceholder(__('নম্বর, নাম, ID বা PPPoE'))
             ->columns([
                 TextColumn::make('number')->label(__('নম্বর'))->formatStateUsing(fn ($state) => '0'.substr((string) $state, 3))
-                    ->searchable(query: function (Builder $q, string $search) {
+                    ->searchable(query: function (Builder $query, string $search) {
                         $core = preg_replace('/^(?:88)?0?/', '', preg_replace('/\D/', '', $search));
                         $headers = BillingCustomer::where('company_id', static::company())->matching($search)->limit(200)->pluck('header_id');
 
-                        return $q->where(fn ($w) => $w->when(strlen($core) >= 4, fn ($w) => $w->orWhere('number', 'like', "%{$core}%"))
+                        return $query->where(fn ($w) => $w->when(strlen($core) >= 4, fn ($w) => $w->orWhere('number', 'like', "%{$core}%"))
                             ->orWhereIn('customer_header_id', $headers));
                     })
                     ->description(fn (CustomerAltNumber $r) => $r->removed_at ? __('সরানো হয়েছে') : null),
@@ -119,7 +119,7 @@ class CustomerAltNumberResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('source')->label(__('কোথা থেকে'))->options(array_map('__', AltNumbers::SOURCES))
-                    ->query(fn (Builder $q, array $data) => $data['value'] ? $q->where('sources', 'like', '%'.$data['value'].'%') : $q),
+                    ->query(fn (Builder $query, array $data) => $data['value'] ? $query->where('sources', 'like', '%'.$data['value'].'%') : $query),
                 TernaryFilter::make('removed')->label(__('সরানো নম্বর'))->placeholder(__('শুধু চালু'))
                     ->trueLabel(__('শুধু সরানো'))->falseLabel(__('সব'))
                     ->queries(true: fn (Builder $q) => $q->whereNotNull('removed_at'), false: fn (Builder $q) => $q, blank: fn (Builder $q) => $q->whereNull('removed_at')),

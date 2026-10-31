@@ -144,7 +144,7 @@ class NewConnectionResource extends Resource
                 TextColumn::make('customer_code')->label('ID')->state(fn (NewConnection $r) => $r->customer_kind === Onu::OTHER
                     ? __('অন্যান্য') : $r->customer_code)
                     ->description(fn (NewConnection $r) => $r->customer_kind === Onu::OTHER ? $r->legacy_customer_code : null)
-                    ->searchable(query: fn (Builder $q, string $search) => $q->where(fn ($w) => $w
+                    ->searchable(query: fn (Builder $query, string $search) => $query->where(fn ($w) => $w
                         ->whereRaw("ltrim(new_connections.customer_code, '0') = ltrim(?, '0')", [trim($search)])
                         ->orWhere('new_connections.mobile', 'like', '%'.trim($search).'%')
                         ->orWhere('new_connections.name', 'ilike', '%'.trim($search).'%'))),
