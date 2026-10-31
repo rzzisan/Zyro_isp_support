@@ -98,6 +98,26 @@ class VoiceRemindersTest extends TestCase
         $this->assertSame(1, VoiceReminderCall::where('status', 'planned')->count());
     }
 
+    public function test_a_call_whose_audio_cannot_be_made_waits_and_is_tried_again(): void
+    {
+        $s = $this->settings(['max_calls' => 2]);
+        $this->customer(1);
+        $this->customer(2);
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::fake(['engine.test/*' => Http::response(['detail' => 'Gemini HTTP 429'], 502), '127.0.0.1:8997/*' => Http::response('ok')]);
+        VoiceReminders::run($this->company->id);
+        $this->assertSame(0, VoiceReminderCall::whereIn('status', ['failed', 'queued'])->count());   // nothing lost, nothing dialled
+        $this->assertSame(2, VoiceReminderCall::where('status', 'planned')->where('scheduled_at', '>', now())->count());
+        $this->assertStringContainsString('429', (string) VoiceReminderCall::whereNotNull('error')->value('error'));
+
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::fake(['engine.test/*' => fn (Request $r) => Http::response(['file' => '1/'.substr(sha1($r['text']), 0, 20)]),
+            '127.0.0.1:8997/*' => Http::response('ok')]);
+        Carbon::setTestNow(now()->addMinutes(VoiceReminders::AUDIO_RETRY + 1));
+        VoiceReminders::dispatch($this->company->id, $s, now());
+        $this->assertSame(2, VoiceReminderCall::where('status', 'queued')->count());
+    }
+
     public function test_checked_again_right_before_the_call(): void
     {
         $this->settings(['max_calls' => 5]);
