@@ -318,6 +318,27 @@ class VoiceReminderAltTest extends TestCase
         $this->actingAs($this->owner)->get('/app/'.$this->company->slug.'/voice-reminder-settings')->assertOk()->assertSee('লাইন বন্ধ কাস্টমার নিজে কল দিলে');
     }
 
+    public function test_line_off_packages_rest_when_no_audio_can_be_made(): void
+    {
+        $this->customer(1, ['disabled' => true]);
+        $s = $this->settings(['enabled' => false, 'inbound_on' => true]);
+        $tts = 0;
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::fake(['engine.test/internal/*/voice/tts' => function () use (&$tts) {
+            $tts++;
+
+            return Http::response(['detail' => 'Gemini 429'], 502);
+        }]);
+        $this->assertSame(0, VoiceReminders::prepareInbound($this->company->id, $s));
+        $asked = $tts;
+        $this->assertGreaterThan(0, $asked);
+        $this->assertSame(0, VoiceReminders::prepareInbound($this->company->id, $s));   // resting: nothing asked
+        $this->assertSame($asked, $tts);
+        Carbon::setTestNow(now()->addMinutes(VoiceReminders::INBOUND_PAUSE + 1));
+        VoiceReminders::prepareInbound($this->company->id, $s);
+        $this->assertGreaterThan($asked, $tts);
+    }
+
     public function test_report_and_customer_tab_render(): void
     {
         $this->settings();
