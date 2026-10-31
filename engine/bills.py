@@ -10,11 +10,15 @@ import logging
 import re
 import threading
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from engine import db
 from engine.ispdigital import BillingRefused, ISPDigital, LoginError, money
 
 _log = logging.getLogger("zyro-bills")
+DHAKA = ZoneInfo("Asia/Dhaka")
+_approving: dict[tuple[int, int], threading.Thread] = {}   # the latest background approve per customer
 _locks: dict[tuple[int, int], threading.Lock] = {}
 _locks_guard = threading.Lock()
 
@@ -93,6 +97,13 @@ def collect(company_id: int, user_id: int, api: ISPDigital, header_id: int, b: d
            "customer_id": cust.get("customer_id"), "customer_name": cust.get("name"), "paid": paid, "discount": discount,
            "trx_no": trx_no or None, "remarks": remarks or None, "send_sms": False,  # the customer's SMS goes from the Desk (App\Support\Sms::billPaid), never billing's
            "next_billing_date": bool(b.get("next_billing_date"))}
+    # a next billing day other than today: billing's switch can only set today, so the bill goes in without it and the
+    # Expire Date is set to that day afterwards (expire_dates.after_bill)
+    next_day = int(b.get("next_billing_day") or 0)
+    if log["next_billing_date"] and 1 <= next_day <= 31 and next_day != datetime.now(DHAKA).day:
+        log["next_billing_date"] = False
+    else:
+        next_day = 0
     lock = _lock(company_id, header_id)
     if not lock.acquire(blocking=False):
         raise BillError("এই কাস্টমারের বিল এই মুহূর্তে আরেকজন নিচ্ছেন")
@@ -142,7 +153,8 @@ def collect(company_id: int, user_id: int, api: ISPDigital, header_id: int, b: d
             collection_id = _save(log, "saved", message, found["id"])
             return {"message": message, "daily_bill_id": found["id"], "payable": f["payable"],
                     "balance": round(f["payable"] - paid - discount, 2), "collection_id": collection_id,
-                    **_approve_if_asked(b, company_id, user_id, api, f["username"], header_id, collection_id, found, paid, discount)}
+                    **_approve_if_asked(b, company_id, user_id, api, f["username"], header_id, collection_id, found, paid, discount),
+                    **_set_day_later(company_id, user_id, api, header_id, next_day, paid + discount, f["payable"])}
         # find the new pending row so the panel can show its billing id
         try:
             after = _pending(api, header_id, f["username"])
@@ -153,9 +165,38 @@ def collect(company_id: int, user_id: int, api: ISPDigital, header_id: int, b: d
         collection_id = _save(log, "saved", message, daily_bill_id)
         return {"message": message, "daily_bill_id": daily_bill_id, "payable": f["payable"],
                 "balance": round(f["payable"] - paid - discount, 2), "collection_id": collection_id,
-                **_approve_if_asked(b, company_id, user_id, api, f["username"], header_id, collection_id, new, paid, discount)}
+                **_approve_if_asked(b, company_id, user_id, api, f["username"], header_id, collection_id, new, paid, discount),
+                **_set_day_later(company_id, user_id, api, header_id, next_day, paid + discount, f["payable"])}
     finally:
         lock.release()
+
+
+def _set_day_later(company_id: int, user_id: int, api: ISPDigital, header_id: int, day: int, paid: float,
+                   payable: float) -> dict:
+    """The hand-picked next billing day, set in the background (the bill itself is already saved)."""
+    if not day:
+        return {}
+
+    def run():
+        # after the approval (and billing switching the line back on because of it), so the Expire Date check sees
+        # only its own change
+        th = _approving.get((company_id, header_id))
+        if th:
+            th.join(timeout=120)
+        time.sleep(5)
+        try:
+            from engine import expire_dates
+            res = expire_dates.after_bill(company_id, api, header_id, day, paid, payable, user_id)
+        except Exception as e:
+            _log.exception("next billing day %s for %s", day, header_id)
+            res = {"ok": False, "error": str(e)[:200]}
+        if not res.get("ok") and user_id:
+            from engine import webpush
+            webpush.send_users(company_id, [user_id], {"title": "বিল জমা হয়েছে, কিন্তু পরের বিলিং তারিখ বদলায়নি",
+                                                       "body": f"তারিখ {day}: {res.get('error') or 'অজানা কারণ'}",
+                                                       "tag": f"bill-day-{header_id}", "url": ""})
+    threading.Thread(target=run, daemon=True).start()
+    return {"next_billing_day": day}
 
 
 def _approve_if_asked(b: dict, company_id: int, user_id: int, api: ISPDigital, username: str, header_id: int,
@@ -164,8 +205,10 @@ def _approve_if_asked(b: dict, company_id: int, user_id: int, api: ISPDigital, u
     taking the bill is no slower (Zisan). {"approving": True} goes back at once; the outcome lands in bill_collections."""
     if not b.get("approve"):
         return {"approved": False}
-    threading.Thread(target=_approve, args=(company_id, user_id, api, username, header_id, collection_id, new, paid, discount),
-                     daemon=True).start()
+    th = threading.Thread(target=_approve, args=(company_id, user_id, api, username, header_id, collection_id, new, paid,
+                                                 discount), daemon=True)
+    _approving[(company_id, header_id)] = th
+    th.start()
     return {"approved": False, "approving": True}
 
 

@@ -142,6 +142,32 @@ def _insert(cur, company_id: int, kind: str, status: str, ch: dict) -> None:
                 (company_id, kind, status, *[ch[k] for k in COLS]))
 
 
+# --- Desk bill form: a next billing date picked by hand ------------------------------------------------------------
+def after_bill(company_id: int, api, header_id: int, day: int, paid: float, payable: float, user_id: int | None) -> dict:
+    """The bill form's "পরের বিলিং তারিখ" set to a day other than today (billing's own switch only knows today): the
+    bill went in without it, now the customer's Expire Date is set to that day like a bulk row (kind desk_bill, same
+    checks, rollback kept). Returns {"ok": bool, "error": ...}."""
+    c = db.one("SELECT customer_id, name, customer_type, bill_day FROM billing_customers WHERE company_id = %s AND header_id = %s",
+               (company_id, header_id)) or {}
+    ch = {"customer_header_id": header_id, "customer_id": c.get("customer_id"), "name": c.get("name"),
+          "customer_type": c.get("customer_type"), "rule": "manual", "old_day": c.get("bill_day"), "new_day": int(day),
+          "off_at": None, "on_at": None, "off_hours": None, "on_remark": None,
+          "paid_on": datetime.now(DHAKA).date(), "paid": paid, "payable": payable,
+          "paid_pct": round(100 * paid / payable) if payable > 0 else None, "method": None, "is_online": False}
+    with db.conn() as conn, conn.cursor() as cur:
+        _insert(cur, company_id, "desk_bill", "queued", ch)
+        cur.execute("SELECT currval(pg_get_serial_sequence('expire_date_changes', 'id')) AS id")
+        row_id = cur.fetchone()
+    row_id = row_id["id"] if isinstance(row_id, dict) else row_id[0]
+    try:
+        write_one(argparse.Namespace(company_id=company_id), api, {"id": row_id, "customer_header_id": header_id,
+                                                                    "new_day": int(day)}, user_id)
+    except StopRun as e:
+        return {"ok": False, "error": str(e)}
+    r = db.one("SELECT status, error FROM expire_date_changes WHERE id = %s", (row_id,)) or {}
+    return {"ok": r.get("status") == "done", "error": r.get("error") if r.get("status") != "done" else None}
+
+
 # --- bulk: the one-time list ---------------------------------------------------------------------------------------
 def preview(company_id: int) -> dict:
     """Build the bulk list again from the desk's copy of billing. Customers the owner ticked off stay ticked off;

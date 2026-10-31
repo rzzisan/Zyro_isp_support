@@ -249,6 +249,18 @@ class BillCollectionTest extends TestCase
         $this->assertFalse(BillActions::nextBillingDate(0, 100, 0));
     }
 
+    public function test_next_billing_date_can_be_picked(): void
+    {
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-31 12:00', 'Asia/Dhaka'));
+        $this->fakeEngine();
+        $this->as($this->owner);
+        Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])->mountAction('receiveBill')
+            ->assertSchemaStateSet(['next_billing_on' => '2026-10-31'], 'mountedActionSchema0')
+            ->fillForm(['next_billing_on' => '2026-11-05'])->callMountedAction()->assertHasNoActionErrors();
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/customers/3/bill') && $r['next_billing_date'] === true
+            && $r['next_billing_day'] === 5);
+    }
+
     public function test_log_lists_only_own_company(): void
     {
         $other = Company::create(['name' => 'Other ISP']);

@@ -1777,5 +1777,8 @@
     "বিল জমা ও approve হয়েছে": "Bill saved and approved",
     "বিল জমা হয়েছে, approve হচ্ছে": "Bill saved, approving in billing",
     "প্রতিটি কাজে এক বা একাধিক key বাছুন, টেনে ক্রম ঠিক করুন। প্রথমটি না চললে (quota, বিল, অন্য সমস্যা) পরেরটি দিয়ে চলবে; বাছা key-এর বাইরে কোনো key ব্যবহার হবে না। খালি রাখলে ওই ধরনের সব key ক্রমে চলবে।": "Pick one or more keys for each job and drag to set the order. If the first fails (quota, billing, any other problem) the next one takes over; keys not picked are not used. Left empty, all keys of that type run in turn.",
-    "ওই ধরনের সব key": "All keys of that type"
+    "ওই ধরনের সব key": "All keys of that type",
+    "পরের বিলিং তারিখ": "Next billing date",
+    "আজকের তারিখ থাকলে বিলিং নিজেই সেট করে। অন্য তারিখ বাছলে বিল জমার পর কাস্টমারের Expire Date সেই দিনে (মাসের দিন) বদলানো হয়।": "With today's date billing sets it itself. With another date, the customer's Expire Date is changed to that day (of the month) after the bill is saved.",
+    "পরের বিলিং তারিখ :day সেট হচ্ছে": "Setting next billing date to :day"
 }
