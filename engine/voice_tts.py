@@ -33,6 +33,9 @@ MAX_CHARS = 1500
 
 _locks: dict[str, threading.Lock] = {}
 _locks_lock = threading.Lock()
+# Gemini TTS allows only a few requests a minute per key: asking for many pieces at once got ~13 refusals (429) per
+# clip made, so at most this many are asked at a time, whatever the panel sends in parallel
+_gemini_slots = threading.BoundedSemaphore(int(os.environ.get("VOICE_TTS_PARALLEL", "2")))
 
 
 _ONES = ("শূন্য এক দুই তিন চার পাঁচ ছয় সাত আট নয় দশ এগারো বারো তেরো চৌদ্দ পনেরো ষোলো সতেরো আঠারো উনিশ "
@@ -158,7 +161,8 @@ def make(company_id: int, text: str, voice: str = "Kore", speed: float = 1.0) ->
         if os.path.exists(base + ".wav") and os.path.exists(base + ".mp3"):
             return {"file": f"{int(company_id)}/{h}", "cached": True}
         os.makedirs(folder, exist_ok=True)
-        pcm = _gemini(company_id, text, voice, model)
+        with _gemini_slots:
+            pcm = _gemini(company_id, text, voice, model)
         _ffmpeg(pcm, speed, base + ".mp3.tmp", ["-c:a", "libmp3lame", "-b:a", "48k", "-f", "mp3"])
         _ffmpeg(pcm, speed, base + ".wav.tmp", ["-ar", "8000", "-ac", "1", "-c:a", "pcm_s16le", "-f", "wav"])
         os.replace(base + ".mp3.tmp", base + ".mp3")
