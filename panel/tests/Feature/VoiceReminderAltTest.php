@@ -287,6 +287,7 @@ class VoiceReminderAltTest extends TestCase
         $off = $this->customer(1, ['disabled' => true]);
         $this->customer(2, ['disabled' => true, 'due' => 0]);   // off, nothing due: not ours
         $this->customer(3);                                       // on
+        $this->customer(4, ['disabled' => true, 'status' => 'Inactive']);   // not Active in billing: no audio
         $s = $this->settings(['enabled' => false, 'inbound_on' => true]);
         $ready = fn () => DB::table('voice_inbound_ready')->where('company_id', $this->company->id)->orderBy('customer_header_id')->pluck('customer_header_id')->all();
 
