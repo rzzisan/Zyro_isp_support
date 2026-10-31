@@ -38,6 +38,9 @@ class VoiceReminders
 {
     public const TZ = 'Asia/Dhaka';
 
+    /** Minutes prepareInbound rests after a batch made no audio at all. */
+    public const INBOUND_PAUSE = 20;
+
     public static function inWindow(VoiceReminderSetting $s, Carbon $now): bool
     {
         $at = $now->copy()->timezone(self::TZ);
@@ -139,6 +142,10 @@ class VoiceReminders
             }
         }
         usort($todo, fn ($a, $b) => $a[4] <=> $b[4]);
+        $pause = "voice-inbound-pause:{$companyId}";
+        if (! $todo || Cache::has($pause)) {
+            return 0;
+        }
         $start = microtime(true);
         $made = 0;
         foreach (array_chunk($todo, max(1, $concurrency)) as $batch) {
@@ -154,6 +161,12 @@ class VoiceReminders
                 }
             }
             $audio = VoiceTemplates::audioMany($companyId, $texts, $concurrency);
+            if ($texts && ! $audio) {
+                // not one made (the AI keys' quota is used up, 429): rest a while instead of asking every minute
+                Cache::put($pause, true, now()->addMinutes(self::INBOUND_PAUSE));
+                Log::warning("voice inbound: no audio could be made, paused {$companyId} for ".self::INBOUND_PAUSE.' min');
+                break;
+            }
             foreach ($batch as [$header, $c, $messages, $sig]) {
                 try {
                     $package = VoiceCalls::package($flow, $c, [], $audio, $messages);
