@@ -44,11 +44,8 @@ class VoiceReminders
     /** Minutes a call waits when its audio could not be made, before it is tried again. */
     public const AUDIO_RETRY = 20;
 
-    /**
-     * Raised when the spoken text or the engine's reading of it changes, so the packages made ahead are made again
-     * (2: numbers in words; 3: again, 2's rebuild ran before the engine restarted, and the ID one digit at a time).
-     */
-    public const SPEECH = 3;
+    /** Raised when the engine starts reading the same text differently (2: numbers in words), so the packages made ahead are made again. */
+    public const SPEECH = 2;
 
     /** Minutes prepareInbound rests after a batch made no audio at all. */
     public const INBOUND_PAUSE = 20;
