@@ -90,6 +90,23 @@ class ExpireDateTest extends TestCase
             ->assertCanSeeTableRecords([$this->r['student']])->assertCanNotSeeTableRecords([$this->r['home'], $this->r['done']]);
     }
 
+    public function test_rule_skips_show_with_reason_and_bill_date_filter(): void
+    {
+        $this->r['student']->update(['status' => 'skipped', 'skip_reason' => 'day_changed']);
+        $this->r['home']->update(['paid_on' => '2026-10-31']);
+        $this->as($this->owner);
+        Livewire::test(ExpireDates::class)->filterTable('skip_reason', 'rules')
+            ->assertCanSeeTableRecords([$this->r['student']])->assertCanNotSeeTableRecords([$this->r['home']]);
+        Livewire::test(ExpireDates::class)->filterTable('skip_reason', 'none')
+            ->assertCanSeeTableRecords([$this->r['home']])->assertCanNotSeeTableRecords([$this->r['student']]);
+        Livewire::test(ExpireDates::class)->filterTable('paid_on', ['from' => '2026-10-30', 'until' => '2026-10-31'])
+            ->assertCanSeeTableRecords([$this->r['home']])->assertCanNotSeeTableRecords([$this->r['student']]);
+        Livewire::test(ExpireDates::class)->callTableBulkAction('tick', [$this->r['student']]);
+        $this->assertSame(['preview', 'allowed'], [$this->r['student']->fresh()->status, $this->r['student']->fresh()->skip_reason]);
+        Livewire::test(ExpireDates::class)->callTableBulkAction('untick', [$this->r['student']]);
+        $this->assertSame(['skipped', null], [$this->r['student']->fresh()->status, $this->r['student']->fresh()->skip_reason]);
+    }
+
     public function test_only_the_owner_runs_and_the_engine_gets_the_request(): void
     {
         Http::fake(['*/expire-dates/start' => Http::response(['started' => true])]);

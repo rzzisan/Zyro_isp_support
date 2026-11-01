@@ -53,6 +53,14 @@ class BillingRefused(RuntimeError):
     """The billing software answered with its own error message."""
 
 
+class DayChanged(RuntimeError):
+    """set_expire_day(expect_day=...): billing's Expire Date is no longer the day the caller saw; nothing was written."""
+
+    def __init__(self, day: int | None):
+        super().__init__(f"Expire Date is now {day}")
+        self.day = day
+
+
 class ISPDigital:
     def __init__(self, base_url: str, username: str, password: str):
         self.base_url = base_url.rstrip("/")
@@ -470,12 +478,13 @@ class ISPDigital:
             raise RuntimeError("billing's customer edit form was not as expected")
         return form
 
-    def set_expire_day(self, header_id: int, day: int, expect: dict | None = None) -> dict:
+    def set_expire_day(self, header_id: int, day: int, expect: dict | None = None, expect_day: int | None = None) -> dict:
         """Change only the customer's Expire Date (BillingLastDate, 1-31). Returns {"before": the day it had,
         "speed": the profile posted, "saved": False when it already was that day}.
         Everything else goes back exactly as billing showed it; "Mikrotik Impact" is never sent (with it, saving an
         Active customer whose line is off turns the line on). Refuses when the form doesn't match `expect`
-        (the desk's copy: username, monthly_bill, subzone, box) or a JS-set value (Speed, SubZone, Box) is missing."""
+        (the desk's copy: username, monthly_bill, subzone, box) or a JS-set value (Speed, SubZone, Box) is missing.
+        With expect_day, raises DayChanged (writing nothing) when the form's current day is neither that nor `day`."""
         if not 1 <= int(day) <= 31:
             raise ValueError("day must be 1-31")
         form = self.edit_form(header_id)
@@ -487,6 +496,8 @@ class ISPDigital:
                "saved": False}
         if before == str(int(day)):
             return out
+        if expect_day is not None and out["before"] != int(expect_day):
+            raise DayChanged(out["before"])
         data: dict[str, list[str]] = {}
         for n, v in form["fields"]:
             data.setdefault(n, []).append(str(int(day)) if n == "BillingLastDate" else v)
