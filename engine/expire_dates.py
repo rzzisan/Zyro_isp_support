@@ -25,6 +25,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from engine import customer_history, db, tenant as tenants
+from engine.ispdigital import DayChanged
 from engine.ticket_sync import companies
 
 log = logging.getLogger("zyro-expire-dates")
@@ -133,13 +134,13 @@ def _load(company_id: int, header_ids: list[int] | None, since: datetime) -> tup
 
 
 COLS = ("customer_header_id", "customer_id", "name", "customer_type", "rule", "old_day", "new_day", "off_at", "on_at",
-        "off_hours", "on_remark", "paid_on", "paid", "payable", "paid_pct", "method", "is_online")
+        "off_hours", "on_remark", "paid_on", "paid", "payable", "paid_pct", "method", "is_online", "skip_reason")
 
 
 def _insert(cur, company_id: int, kind: str, status: str, ch: dict) -> None:
     cur.execute(f"""INSERT INTO expire_date_changes (company_id, kind, status, {", ".join(COLS)}, created_at, updated_at)
                     VALUES (%s, %s, %s, {", ".join(["%s"] * len(COLS))}, now(), now())""",
-                (company_id, kind, status, *[ch[k] for k in COLS]))
+                (company_id, kind, status, *[ch.get(k) for k in COLS]))
 
 
 # --- Desk bill form: a next billing date picked by hand ------------------------------------------------------------
@@ -168,6 +169,74 @@ def after_bill(company_id: int, api, header_id: int, day: int, paid: float, paya
     return {"ok": r.get("status") == "done", "error": r.get("error") if r.get("status") != "done" else None}
 
 
+# --- bulk: who stays off the list ---------------------------------------------------------------------------------
+# Zisan (2026-11-01): bills collected on Oct 30-31 had their Expire Date set to the 1st by hand; the bulk list must not
+# move those (or anyone who has paid again since, e.g. in advance) back to the old payment's day. Such rows go on the
+# list ticked off (skipped) with the reason; the owner can still tick one back in (skip_reason 'allowed', kept on rebuild).
+SKIP_LATER_PCT = 50       # a later receipt of at least half the monthly bill counts as "paid again"
+SKIP_NOTES = {"day_changed": "বিলের পরে মেয়াদ হাতে বদলানো হয়েছে", "paid_later": "পরে আবার বিল দিয়েছেন",
+              "advance": "অ্যাডভান্স আছে"}
+
+
+def exclusions(company_id: int, changes: list[dict]) -> dict[int, str]:
+    """{customer_header_id: reason} for list rows that must not be written:
+    day_changed  billing's Expire Date was changed (by hand, by billing's "next billing date" switch or the Desk bill
+                 form) on or after the deciding payment's day;
+    paid_later   a newer receipt (billing receipt, Daily Bill, Desk or online) after the deciding payment's day;
+    advance      billing shows an advance balance."""
+    if not changes:
+        return {}
+    ids = [c["customer_header_id"] for c in changes]
+    # deciding payment's Bangladesh day per customer, as a UTC start time and as a date
+    paid = {c["customer_header_id"]: c["paid_on"] for c in changes}
+    since = min(paid.values())
+    since_utc = datetime.combine(since, datetime.min.time(), DHAKA).astimezone(timezone.utc).replace(tzinfo=None)
+    out: dict[int, str] = {}
+
+    def later(h: int, at: date | datetime | None) -> bool:
+        if at is None or h not in paid:
+            return False
+        d = bd_date(at) if isinstance(at, datetime) else at
+        return d > paid[h]
+
+    for r in db.all_rows("""SELECT customer_header_id AS h, changed_at FROM billing_customer_change_logs
+                            WHERE company_id = %s AND customer_header_id = ANY(%s) AND changed_at >= %s
+                              AND (changed ? 'ExpireDate' OR changed ? 'BillingLastDate')""",
+                         (company_id, ids, since_utc)):
+        if r["changed_at"] and bd_date(r["changed_at"]) >= paid[r["h"]]:
+            out[r["h"]] = "day_changed"
+    for r in db.all_rows("""SELECT customer_header_id AS h, paid_on FROM expire_date_changes
+                            WHERE company_id = %s AND customer_header_id = ANY(%s) AND kind IN ('desk_bill', 'auto')
+                              AND status = 'done' AND paid_on >= %s""", (company_id, ids, since)):
+        if r["paid_on"] >= paid[r["h"]]:
+            out.setdefault(r["h"], "day_changed")
+    monthly = {r["h"]: float(r["monthly_bill"] or 0) for r in db.all_rows(
+        """SELECT header_id AS h, monthly_bill, advance FROM billing_customers
+           WHERE company_id = %s AND header_id = ANY(%s)""", (company_id, ids))}
+
+    def big(h: int, amount) -> bool:
+        return float(amount or 0) * 100 >= SKIP_LATER_PCT * monthly.get(h, 0)
+
+    for r in db.all_rows(
+            """SELECT customer_header_id AS h, received_on AS at, paid + coalesce(discount, 0) AS amount
+                 FROM billing_customer_payments WHERE company_id = %(c)s AND customer_header_id = ANY(%(ids)s)
+                  AND received_on > %(d)s AND NOT is_canceled AND removed_at IS NULL AND paid > 0
+               UNION ALL
+               SELECT customer_header_id, collected_at, receive_amount + discount_amount FROM billing_daily_bills
+                WHERE company_id = %(c)s AND customer_header_id = ANY(%(ids)s) AND NOT is_deleted
+                  AND collected_at >= %(u)s AND receive_amount > 0
+               UNION ALL
+               SELECT customer_header_id, paid_at, amount FROM billing_online_payments
+                WHERE company_id = %(c)s AND customer_header_id = ANY(%(ids)s) AND paid_at >= %(u)s AND amount > 0
+                  AND coalesce(status_id, 0) <> 1""", {"c": company_id, "ids": ids, "d": since, "u": since_utc}):
+        if later(r["h"], r["at"]) and big(r["h"], r["amount"]):
+            out.setdefault(r["h"], "paid_later")
+    for r in db.all_rows("""SELECT header_id AS h FROM billing_customers WHERE company_id = %s
+                            AND header_id = ANY(%s) AND coalesce(advance, 0) > 0""", (company_id, ids)):
+        out.setdefault(r["h"], "advance")
+    return out
+
+
 # --- bulk: the one-time list ---------------------------------------------------------------------------------------
 def preview(company_id: int) -> dict:
     """Build the bulk list again from the desk's copy of billing. Customers the owner ticked off stay ticked off;
@@ -181,6 +250,7 @@ def preview(company_id: int) -> dict:
         ch = evaluate(c, logs.get(c["header_id"], []), pays.get(c["header_id"], []), s, on_after, home_rule=True)
         if ch and ch["new_day"] != c["bill_day"]:
             changes.append(ch)
+    excluded = exclusions(company_id, changes)
     _recover(company_id)
     with db.conn() as conn, conn.transaction(), conn.cursor() as cur:
         if conn.execute("""SELECT 1 FROM expire_date_changes WHERE company_id = %s AND kind = 'bulk'
@@ -188,18 +258,27 @@ def preview(company_id: int) -> dict:
             raise RuntimeError("চালানো চলছে, শেষ হলে আবার তালিকা বানান")
         skipped = {r["customer_header_id"] for r in conn.execute(
             """SELECT customer_header_id FROM expire_date_changes WHERE company_id = %s AND kind = 'bulk'
-               AND status = 'skipped'""", (company_id,)).fetchall()}
+               AND status = 'skipped' AND skip_reason IS NULL""", (company_id,)).fetchall()}
+        allowed = {r["customer_header_id"] for r in conn.execute(
+            """SELECT customer_header_id FROM expire_date_changes WHERE company_id = %s AND kind = 'bulk'
+               AND status = 'preview' AND skip_reason = 'allowed'""", (company_id,)).fetchall()}
         handled = {r["customer_header_id"] for r in conn.execute(
             """SELECT customer_header_id FROM expire_date_changes WHERE company_id = %s AND kind = 'bulk'
                AND status IN ('done', 'failed', 'rolled_back')""", (company_id,)).fetchall()}
         cur.execute("DELETE FROM expire_date_changes WHERE company_id = %s AND kind = 'bulk' AND status IN ('preview', 'skipped')",
                     (company_id,))
         for ch in changes:
-            if ch["customer_header_id"] not in handled:
-                _insert(cur, company_id, "bulk", "skipped" if ch["customer_header_id"] in skipped else "preview", ch)
+            h = ch["customer_header_id"]
+            if h not in handled:
+                reason = "allowed" if h in allowed else excluded.get(h)
+                _insert(cur, company_id, "bulk", "skipped" if (reason and reason != "allowed") or h in skipped
+                        else "preview", {**ch, "skip_reason": reason})
     n = len([c for c in changes if c["customer_header_id"] not in handled])
-    log.info("company %s: bulk list %s customers (%s already written)", company_id, n, len(changes) - n)
-    return {"rows": n, "already_done": len(changes) - n}
+    out = len([c for c in changes if c["customer_header_id"] not in handled and c["customer_header_id"] in excluded
+               and c["customer_header_id"] not in allowed])
+    log.info("company %s: bulk list %s customers (%s left out by the rules, %s already written)", company_id, n, out,
+             len(changes) - n)
+    return {"rows": n, "excluded": out, "already_done": len(changes) - n}
 
 
 # --- writing -------------------------------------------------------------------------------------------------------
@@ -244,14 +323,32 @@ def _verify(api, company_id: int, h: int, since: datetime, day: int, posted_spee
     return notes
 
 
+def _skip(row_id: int, reason: str, note: str) -> None:
+    db.execute("""UPDATE expire_date_changes SET status = 'skipped', skip_reason = %s, error = %s, updated_at = now()
+                  WHERE id = %s""", (reason, note, row_id))
+
+
 def write_one(t, api, row: dict, user_id: int | None) -> None:
-    """Set one customer's day in billing and mark the row done (or failed). StopRun is passed on."""
+    """Set one customer's day in billing and mark the row done (or failed). StopRun is passed on.
+    A bulk row (row["bulk"]) is checked once more right before writing: a new payment, an advance, or billing's Expire
+    Date no longer being the day the list saw (someone set it by hand) puts it back to skipped instead."""
     h = row["customer_header_id"]
+    if row.get("bulk"):
+        full = db.one("SELECT customer_header_id, paid_on, skip_reason FROM expire_date_changes WHERE id = %s", (row["id"],))
+        # 'allowed': the owner ticked a rule-skipped row back in (or ran just that one), their call
+        reason = full and full["skip_reason"] != "allowed" and exclusions(t.company_id, [full]).get(h)
+        if reason:
+            _skip(row["id"], reason, "চালানোর আগে বাদ: " + SKIP_NOTES[reason])
+            return
     db.execute("UPDATE expire_date_changes SET status = 'running', error = NULL, updated_at = now() WHERE id = %s", (row["id"],))
     started = datetime.now(timezone.utc).replace(tzinfo=None)
     try:
-        res = api.set_expire_day(h, row["new_day"], expect=_expected(t.company_id, h))
+        res = api.set_expire_day(h, row["new_day"], expect=_expected(t.company_id, h),
+                                 expect_day=row.get("old_day") if row.get("bulk") else None)
         notes = _verify(api, t.company_id, h, started, row["new_day"], res["speed"])
+    except DayChanged as e:
+        _skip(row["id"], "day_changed", f"চালানোর আগে বাদ: বিলিং-এ মেয়াদ এখন {e.day}, তালিকায় ছিল {row.get('old_day')}")
+        return
     except StopRun as e:
         db.execute("""UPDATE expire_date_changes SET status = 'failed', error = %s, updated_at = now() WHERE id = %s""",
                    (str(e)[:500], row["id"]))
@@ -296,7 +393,7 @@ def _run(t, ids: list[int] | None, user_id: int | None, rollback: bool = False) 
         where, args = "id = ANY(%s) AND status IN ('preview', 'skipped', 'failed')", [ids]
     else:
         where, args = "kind = 'bulk' AND status = 'queued'", []
-    rows = db.all_rows(f"""SELECT id, customer_header_id, new_day, old_day FROM expire_date_changes
+    rows = db.all_rows(f"""SELECT id, customer_header_id, new_day, old_day, kind = 'bulk' AS bulk FROM expire_date_changes
                            WHERE company_id = %s AND {where} ORDER BY id""", (t.company_id, *args))
     for row in rows:
         try:

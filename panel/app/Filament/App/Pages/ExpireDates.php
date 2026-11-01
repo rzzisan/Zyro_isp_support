@@ -16,10 +16,13 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Forms\Components\DatePicker;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Throwable;
 
@@ -71,6 +74,7 @@ class ExpireDates extends Page implements HasTable
             ->selectRaw('status, count(*) AS n')->groupBy('status')->pluck('n', 'status');
 
         return __('লাইন ১ দিন বা বেশি বন্ধ থেকে বিল (দেয় টাকার ৮৫% বা বেশি) দিয়ে চালু হলে মেয়াদ হবে বিল দেওয়ার দিন, সর্বোচ্চ ২৮। প্রথমবারের তালিকায় Home কাস্টমার ২০ তারিখের মধ্যে দিলে ৫ দিন বেশি (সর্বোচ্চ ২০)। শুধু Expire Date বদলায়: MikroTik, Zone, SubZone, Box, প্যাকেজ কিছুই না।')
+            .' '.__('যাদের বিলের পরে মেয়াদ হাতে বদলানো হয়েছে, পরে আবার বিল দিয়েছেন বা অ্যাডভান্স আছে, তারা নিজে থেকেই বাদ থাকেন (চালানোর ঠিক আগেও আবার দেখা হয়)।')
             .' · '.__('তালিকা: বাছাই :p, বাদ :s, হয়েছে :d, ব্যর্থ :f', ['p' => $n['preview'] ?? 0, 's' => $n['skipped'] ?? 0,
                 'd' => $n['done'] ?? 0, 'f' => $n['failed'] ?? 0]);
     }
@@ -86,7 +90,8 @@ class ExpireDates extends Page implements HasTable
                 ->action(function () use ($company) {
                     try {
                         $r = Engine::expirePreview($company->getKey());
-                        Notification::make()->success()->title(__('তালিকায় :n জন', ['n' => $r['rows'] ?? 0]))->send();
+                        Notification::make()->success()->title(__('তালিকায় :n জন, নিয়মে বাদ :x জন',
+                            ['n' => $r['rows'] ?? 0, 'x' => $r['excluded'] ?? 0]))->send();
                     } catch (Throwable $e) {
                         Notification::make()->danger()->title($e->getMessage())->send();
                     }
@@ -111,6 +116,11 @@ class ExpireDates extends Page implements HasTable
     public function start(string $mode, array $ids = []): void
     {
         abort_unless(static::isOwner(), 403);
+        if ($mode === 'one') {
+            // the owner runs a rule-skipped row by hand: their call, the engine won't skip it again
+            ExpireDateChange::whereIn('id', $ids)->where('company_id', Filament::getTenant()->getKey())
+                ->whereNotNull('skip_reason')->update(['skip_reason' => 'allowed']);
+        }
         try {
             Engine::expireStart(Filament::getTenant()->getKey(), $mode, $ids);
             Notification::make()->success()->title(__('শুরু হয়েছে, নিচের তালিকায় অবস্থা দেখুন'))->send();
@@ -153,7 +163,8 @@ class ExpireDates extends Page implements HasTable
                 TextColumn::make('status')->label(__('অবস্থা'))->badge()
                     ->formatStateUsing(fn ($state) => __(ExpireDateChange::STATUSES[$state][0] ?? $state))
                     ->color(fn ($state) => ExpireDateChange::STATUSES[$state][1] ?? 'gray')
-                    ->description(fn (ExpireDateChange $record) => $record->error ? mb_substr($record->error, 0, 120) : null),
+                    ->description(fn (ExpireDateChange $record) => $record->error ? mb_substr($record->error, 0, 120)
+                        : ($record->skip_reason ? __(ExpireDateChange::SKIP_REASONS[$record->skip_reason] ?? $record->skip_reason) : null)),
                 TextColumn::make('kind')->label(__('কোথা থেকে'))->toggleable(isToggledHiddenByDefault: true)
                     ->formatStateUsing(fn ($state) => $state === 'bulk' ? __('প্রথমবারের তালিকা') : __('নিজে (timer)')),
             ])
@@ -162,6 +173,29 @@ class ExpireDates extends Page implements HasTable
                     ->options(['bulk' => __('প্রথমবারের তালিকা'), 'auto' => __('নিজে (timer)')]),
                 SelectFilter::make('status')->label(__('অবস্থা'))
                     ->options(collect(ExpireDateChange::STATUSES)->map(fn ($s) => __($s[0]))->all()),
+                SelectFilter::make('skip_reason')->label(__('বাদের কারণ'))
+                    ->options(['rules' => __('নিয়মে বাদ (সব)')]
+                        + collect(ExpireDateChange::SKIP_REASONS)->map(fn ($r) => __($r))->all()
+                        + ['hand' => __('হাতে বাদ'), 'none' => __('নিয়মে বাদ নয়')])
+                    ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
+                        null, '' => $query,
+                        'rules' => $query->whereNotNull('skip_reason')->where('skip_reason', '!=', 'allowed'),
+                        'hand' => $query->where('status', 'skipped')->whereNull('skip_reason'),
+                        'none' => $query->where(fn (Builder $q) => $q->whereNull('skip_reason')->orWhere('skip_reason', 'allowed')),
+                        default => $query->where('skip_reason', $data['value']),
+                    }),
+                Filter::make('paid_on')->label(__('বিলের তারিখ'))
+                    ->schema([
+                        DatePicker::make('from')->label(__('বিলের তারিখ থেকে')),
+                        DatePicker::make('until')->label(__('বিলের তারিখ পর্যন্ত')),
+                    ])
+                    ->query(fn (Builder $query, array $data) => $query
+                        ->when($data['from'] ?? null, fn (Builder $q, $d) => $q->whereDate('paid_on', '>=', $d))
+                        ->when($data['until'] ?? null, fn (Builder $q, $d) => $q->whereDate('paid_on', '<=', $d)))
+                    ->indicateUsing(fn (array $data) => array_filter([
+                        ($data['from'] ?? null) ? __('বিল :d থেকে', ['d' => Carbon::parse($data['from'])->format('d M')]) : null,
+                        ($data['until'] ?? null) ? __('বিল :d পর্যন্ত', ['d' => Carbon::parse($data['until'])->format('d M')]) : null,
+                    ])),
                 SelectFilter::make('type')->label(__('ধরন'))
                     ->options(['student' => 'Student', 'home' => 'Home', 'other' => __('অন্য')])
                     ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
@@ -212,8 +246,15 @@ class ExpireDates extends Page implements HasTable
     public function tick(Collection $records, bool $in): void
     {
         $ids = $records->filter(fn (ExpireDateChange $r) => $r->editable())->pluck('id');
-        ExpireDateChange::whereIn('id', $ids)->where('company_id', Filament::getTenant()->getKey())
-            ->whereIn('status', ['preview', 'skipped'])->update(['status' => $in ? 'preview' : 'skipped', 'updated_at' => now()]);
+        $rows = ExpireDateChange::whereIn('id', $ids)->where('company_id', Filament::getTenant()->getKey())
+            ->whereIn('status', ['preview', 'skipped']);
+        if ($in) {
+            // a rule-skipped row ticked back in stays in (also on the next rebuild and right before running)
+            (clone $rows)->whereNotNull('skip_reason')->update(['skip_reason' => 'allowed']);
+        } else {
+            (clone $rows)->where('skip_reason', 'allowed')->update(['skip_reason' => null]);
+        }
+        $rows->update(['status' => $in ? 'preview' : 'skipped', 'updated_at' => now()]);
         Notification::make()->success()->title(($in ? __('বাছাই হলো: ') : __('বাদ দেওয়া হলো: ')).$ids->count())->send();
     }
 

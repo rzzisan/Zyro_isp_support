@@ -29,6 +29,14 @@ class ExpireDateChange extends Model
         'cap_max' => 'সর্বোচ্চ ২৮',
     ];
 
+    /** Why the rules left a bulk row off the list (engine/expire_dates.py exclusions). */
+    public const SKIP_REASONS = [
+        'day_changed' => 'বিলের পরে মেয়াদ হাতে বদলানো',
+        'paid_later' => 'পরে আবার বিল দিয়েছেন',
+        'advance' => 'অ্যাডভান্স আছে',
+        'allowed' => 'নিয়মে বাদ ছিল, হাতে রাখা',
+    ];
+
     protected function casts(): array
     {
         return ['off_at' => 'datetime', 'on_at' => 'datetime', 'paid_on' => 'date', 'applied_at' => 'datetime',
@@ -45,6 +53,12 @@ class ExpireDateChange extends Model
     {
         if (in_array($this->status, ['preview', 'skipped'], true)) {
             $this->attributes['status'] = $value ? 'preview' : 'skipped';
+            // ticking a rule-skipped row back in keeps it in (the engine won't skip it again); ticking it out undoes that
+            if ($value && $this->skip_reason) {
+                $this->attributes['skip_reason'] = 'allowed';
+            } elseif (! $value && $this->skip_reason === 'allowed') {
+                $this->attributes['skip_reason'] = null;
+            }
         }
     }
 

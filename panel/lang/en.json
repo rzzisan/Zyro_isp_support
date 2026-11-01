@@ -1780,5 +1780,20 @@
     "ওই ধরনের সব key": "All keys of that type",
     "পরের বিলিং তারিখ": "Next billing date",
     "আজকের তারিখ থাকলে বিলিং নিজেই সেট করে। অন্য তারিখ বাছলে বিল জমার পর কাস্টমারের Expire Date সেই দিনে (মাসের দিন) বদলানো হয়।": "With today's date billing sets it itself. With another date, the customer's Expire Date is changed to that day (of the month) after the bill is saved.",
-    "পরের বিলিং তারিখ :day সেট হচ্ছে": "Setting next billing date to :day"
+    "পরের বিলিং তারিখ :day সেট হচ্ছে": "Setting next billing date to :day",
+    "বিলের পরে মেয়াদ হাতে বদলানো": "Expire date changed by hand after the bill",
+    "পরে আবার বিল দিয়েছেন": "Paid again later",
+    "অ্যাডভান্স আছে": "Has advance",
+    "যাদের বিলের পরে মেয়াদ হাতে বদলানো হয়েছে, পরে আবার বিল দিয়েছেন বা অ্যাডভান্স আছে, তারা নিজে থেকেই বাদ থাকেন (চালানোর ঠিক আগেও আবার দেখা হয়)।": "Customers whose expire date was changed by hand after the bill, who paid again later, or who have an advance are left out automatically (checked again right before running).",
+    "তালিকায় :n জন, নিয়মে বাদ :x জন": ":n on the list, :x left out by the rules",
+    "বাদের কারণ": "Why left out",
+    "নিয়মে বাদ (সব)": "Left out by rules (all)",
+    "হাতে বাদ": "Left out by hand",
+    "নিয়মে বাদ নয়": "Not left out by rules",
+    "বিলের তারিখ": "Bill date",
+    "বিলের তারিখ থেকে": "Bill date from",
+    "বিলের তারিখ পর্যন্ত": "Bill date until",
+    "বিল :d থেকে": "Bill from :d",
+    "বিল :d পর্যন্ত": "Bill until :d",
+    "নিয়মে বাদ ছিল, হাতে রাখা": "Left out by rules, kept by hand"
 }
