@@ -214,13 +214,15 @@ Route::get('/port-check/{company:slug}', function (\App\Models\Company $company,
     if (! $port || ! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
         return response()->json(['open' => null]);
     }
-    $open = \Illuminate\Support\Facades\Cache::remember("port-check:$ip:$port", 60, function () use ($ip, $port) {
+    $open = \Illuminate\Support\Facades\Cache::remember("port-check:{$company->id}:$ip:$port", 60, function () use ($company, $ip, $port) {
         // the Desk server has no route to customer pools: the customer's MikroTik checks it (engine /port-check)
         try {
             return \Illuminate\Support\Facades\Http::baseUrl(config('services.engine.url'))->timeout(20)->acceptJson()
                 ->withHeaders(['x-internal-key' => (string) config('services.engine.key')])
                 ->get("/internal/{$company->id}/port-check", ['ip' => $ip, 'port' => $port])->json('open');
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return null;
         }
     });
