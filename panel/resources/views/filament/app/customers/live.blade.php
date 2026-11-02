@@ -34,7 +34,7 @@
     <div style="display:grid; grid-template-columns: auto 1fr; gap:6px 16px; font-size:.9rem">
         @foreach ($rows as $k => $v)
             <div style="color:#6b7280">{{ $k }}</div>
-            <div style="font-weight:600; {{ $k === __('MikroTik (এখন)') ? ($online ? 'color:#059669' : ($blocked ? 'color:#d97706' : 'color:#dc2626')) : '' }}">{{ $v }}</div>
+            <div style="font-weight:600; {{ $k === __('MikroTik (এখন)') ? ($online ? 'color:#059669' : ($blocked ? 'color:#d97706' : 'color:#dc2626')) : '' }}">@if ($k === 'IP' && $v !== '—')<x-router-ip :ip="$v" />@elseif ($k === __('IP / MAC (রাউটার)') && $v !== '—')<x-router-ip :ip="$mk['address'] ?? null" /> · {{ $mk['caller_id'] ?? '—' }}@else{{ $v }}@endif</div>
         @endforeach
     </div>
     @if (! empty($live['payments']))
