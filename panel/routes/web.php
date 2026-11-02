@@ -205,6 +205,23 @@ Route::post('/notify/{company:slug}/push/delete', function (\App\Models\Company 
     return response()->json(['ok' => true]);
 })->middleware('web')->name('notify.push.delete');
 
+// Customer router remote port (Network settings) open on this IP? Short timeout, cached a minute; colours <x-router-ip>.
+Route::get('/port-check/{company:slug}', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
+    $user = Auth::user();
+    abort_unless($user && \App\Support\Menu::allows($user, $company, 'customers'), 403);
+    $ip = (string) $request->query('ip');
+    $port = (int) $company->router_port;
+    if (! $port || ! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        return response()->json(['open' => null]);
+    }
+    $open = \Illuminate\Support\Facades\Cache::remember("port-check:$ip:$port", 60, function () use ($ip, $port) {
+        $fp = @fsockopen($ip, $port, $errno, $errstr, 1.5);
+        if ($fp) { fclose($fp); return true; }
+        return false;
+    });
+    return response()->json(['open' => $open]);
+})->middleware('web');
+
 // hotline calls ringing now (public/js/zyro-calls.js): the caller and their customer profile; customers menu users only
 Route::get('/calls/{company:slug}/poll', function (\App\Models\Company $company) {
     $user = Auth::user();
