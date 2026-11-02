@@ -205,7 +205,7 @@ Route::post('/notify/{company:slug}/push/delete', function (\App\Models\Company 
     return response()->json(['ok' => true]);
 })->middleware('web')->name('notify.push.delete');
 
-// Customer router remote port (Network settings) open on this IP? Short timeout, cached a minute; colours <x-router-ip>.
+// Customer router remote port (Network settings) open on this IP? Checked from the MikroTik, cached a minute; colours <x-router-ip>.
 Route::get('/port-check/{company:slug}', function (\App\Models\Company $company, \Illuminate\Http\Request $request) {
     $user = Auth::user();
     abort_unless($user && \App\Support\Menu::allows($user, $company, 'customers'), 403);
@@ -215,9 +215,14 @@ Route::get('/port-check/{company:slug}', function (\App\Models\Company $company,
         return response()->json(['open' => null]);
     }
     $open = \Illuminate\Support\Facades\Cache::remember("port-check:$ip:$port", 60, function () use ($ip, $port) {
-        $fp = @fsockopen($ip, $port, $errno, $errstr, 1.5);
-        if ($fp) { fclose($fp); return true; }
-        return false;
+        // the Desk server has no route to customer pools: the customer's MikroTik checks it (engine /port-check)
+        try {
+            return \Illuminate\Support\Facades\Http::baseUrl(config('services.engine.url'))->timeout(20)->acceptJson()
+                ->withHeaders(['x-internal-key' => (string) config('services.engine.key')])
+                ->get("/internal/{$company->id}/port-check", ['ip' => $ip, 'port' => $port])->json('open');
+        } catch (\Throwable) {
+            return null;
+        }
     });
     return response()->json(['open' => $open]);
 })->middleware('web');
