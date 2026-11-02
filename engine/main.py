@@ -1155,6 +1155,27 @@ def customer_history_status(request: Request, company_id: int, header_id: int):
     return {"running": customer_history.is_running(company_id, header_id)}
 
 
+@app.get("/internal/{company_id}/port-check")
+def port_check(request: Request, company_id: int, ip: str, port: int):
+    """Is the customer router's remote port open? Checked from the MikroTik the customer is (or was last) online on."""
+    internal_tenant(request, company_id)
+    import ipaddress
+    from engine import mikrotik
+    try:
+        ipaddress.IPv4Address(ip)
+    except ValueError:
+        raise HTTPException(status_code=422)
+    r = db.one("""SELECT r.* FROM ppp_sessions s JOIN mikrotik_routers r ON r.id = s.router_id
+                  WHERE s.company_id = %s AND s.address = %s AND r.enabled ORDER BY s.seen_at DESC LIMIT 1""", (company_id, ip)) \
+        or db.one("SELECT * FROM mikrotik_routers WHERE company_id = %s AND enabled ORDER BY id LIMIT 1", (company_id,))
+    if not r:
+        return {"open": None}
+    try:
+        return {"open": mikrotik.port_open(r["host"], r["api_port"], r["username"], db.decrypt(r["password"]), ip, port)}
+    except Exception:
+        return {"open": None}
+
+
 @app.post("/internal/{company_id}/mikrotik/{router_id}/test")
 def mikrotik_test(request: Request, company_id: int, router_id: int):
     """Connect to the router, read its identity, and match it to the billing software's server name."""

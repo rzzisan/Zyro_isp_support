@@ -124,3 +124,24 @@ def active_session(host: str, port: int, username: str, password: str, pppoe_use
     with RouterOS(host, port, username, password) as r:
         rows = r.talk("/ppp/active/print", query={"name": pppoe_user})
     return rows[0] if rows else None
+
+
+_CLOSED = ("timeout", "timed out", "refused", "could not connect", "connection failed", "unreachable", "no route")
+
+
+def port_open(host: str, port: int, username: str, password: str, ip: str, target_port: int) -> bool | None:
+    """Ask the router to open http://ip:target_port/ (/tool/fetch). Any HTTP answer, even 401/404, means the port is open;
+    timeout/refused means closed. None when the router could not tell (unknown fetch options on an old RouterOS)."""
+    url = f"http://{ip}:{target_port}/"
+    tries = [{"url": url, "output": "none", "idle-timeout": "2s"}, {"url": url, "output": "none"}, {"url": url, "keep-result": "no"}]
+    with RouterOS(host, port, username, password, timeout=15) as r:
+        for attrs in tries:
+            try:
+                r.talk("/tool/fetch", attrs)
+                return True
+            except RouterOSError as e:
+                msg = str(e).lower()
+                if "unknown parameter" in msg or "expected end of command" in msg or "invalid" in msg:
+                    continue
+                return not any(w in msg for w in _CLOSED)
+    return None
