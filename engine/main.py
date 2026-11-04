@@ -1026,6 +1026,35 @@ def online_payments_sync_now(request: Request, company_id: int):
     return billing_call(lambda: online_payment_sync.sync_company(t, frm, to))
 
 
+@app.post("/pay/bkash/webhook/{slug}")
+async def bkash_webhook(slug: str, request: Request):
+    """bKash merchant webhook (Amazon SNS) for one company; engine/bkash_webhook.py checks the signature and topic."""
+    from engine import bkash_webhook as bw
+    raw = await request.body()
+    status, text = await run_in_threadpool(bw.handle, slug, request.headers.get("x-amz-sns-message-type"), raw)
+    return PlainTextResponse(text, status_code=status)
+
+
+@app.post("/internal/{company_id}/bkash-webhook/confirm")
+def bkash_webhook_confirm(request: Request, company_id: int):
+    """bKash Webhook settings page: confirm the subscription that is waiting (its topic becomes the accepted one)."""
+    internal_key(request)
+    from engine import bkash_webhook as bw
+    return billing_call(lambda: bw.confirm_pending(company_id))
+
+
+@app.post("/internal/{company_id}/bkash-webhook/payments/{payment_id}/settle")
+def bkash_webhook_settle(request: Request, company_id: int, payment_id: int, by: str = "Desk", user_id: int = 0):
+    """Online payments page: put a Desk webhook payment (matched, or a customer picked by staff) into billing now,
+    with that member's billing login."""
+    internal_key(request)
+    from engine import bkash_webhook as bw
+    res = bw.settle(company_id, payment_id, by=by[:100], user_id=user_id or None)
+    if res["state"] != "settled":
+        raise HTTPException(status_code=400, detail=res["error"] or "জমা হয়নি")
+    return res
+
+
 @app.post("/internal/{company_id}/daily-bills/sync")
 def daily_bills_sync_now(request: Request, company_id: int):
     """বিল কালেকশন page's "এখনই Sync": the last 3 days of billing's Daily Bill Collection."""

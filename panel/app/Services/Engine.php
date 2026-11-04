@@ -217,6 +217,18 @@ class Engine
         return static::call('post', "/internal/{$companyId}/online-payments/sync") ?? [];
     }
 
+    /** bKash Webhook settings: confirm the subscription bKash sent that is still waiting. */
+    public static function confirmBkashWebhook(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/bkash-webhook/confirm") ?? [];
+    }
+
+    /** Put one Desk bKash webhook payment into billing as an approved bKash bill now. */
+    public static function settleBkashPayment(int $companyId, int $paymentId, string $by, ?int $userId = null): array
+    {
+        return static::call('post', "/internal/{$companyId}/bkash-webhook/payments/{$paymentId}/settle?".http_build_query(['by' => $by, 'user_id' => $userId ?? 0])) ?? [];
+    }
+
     public static function syncDailyBills(int $companyId): array
     {
         return static::call('post', "/internal/{$companyId}/daily-bills/sync") ?? [];

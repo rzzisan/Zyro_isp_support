@@ -85,11 +85,12 @@ def gateway(type_for: str | None) -> str | None:
 
 
 def code_of(ref: str | None) -> str | None:
-    """A reference that is a customer ID ('0904', ' 904 ') -> '904' (no leading zeros), else None."""
+    """A reference that is a customer ID, as billing writes it: customer IDs have at least 4 digits with leading zeros
+    (Zisan: 0042), so '0904' stays '0904' and a short '42' becomes '0042'. Anything else -> None."""
     s = (ref or "").strip()
     if not re.fullmatch(r"\d{1,8}", s):
         return None
-    return s.lstrip("0") or "0"
+    return s.zfill(4)
 
 
 def fetch(api, source: str, frm: date, to: date) -> list[dict]:
@@ -141,13 +142,13 @@ UPSERT = """INSERT INTO billing_online_payments (company_id, source, billing_row
 
 
 def match_customers(company_id: int) -> int:
-    """Rows with a customer-ID reference get the customer (current lines first, then Left ones)."""
+    """Rows with a customer-ID reference get the customer with exactly that ID (current lines first, then Left ones)."""
     r = db.execute(
         """WITH m AS (
                SELECT DISTINCT ON (p.id) p.id, c.header_id, c.customer_id FROM billing_online_payments p
                JOIN billing_customers c ON c.company_id = p.company_id
-                    AND nullif(ltrim(c.customer_id, '0'), '') = p.match_code
-               WHERE p.company_id = %s AND p.match_code IS NOT NULL AND p.customer_header_id IS NULL
+                    AND c.customer_id = p.match_code
+               WHERE p.company_id = %s AND p.source <> 'desk_webhook' AND p.match_code IS NOT NULL AND p.customer_header_id IS NULL
                ORDER BY p.id, (c.status = 'Left'), c.header_id DESC)
            , u AS (UPDATE billing_online_payments p SET customer_header_id = m.header_id, customer_id = m.customer_id
                    FROM m WHERE p.id = m.id RETURNING 1)
