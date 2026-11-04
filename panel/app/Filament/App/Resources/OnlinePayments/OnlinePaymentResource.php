@@ -9,8 +9,12 @@ use App\Models\BillingCustomer;
 use App\Models\BillingOnlinePayment;
 use App\Support\Menu;
 use BackedEnum;
+use App\Services\Engine;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -20,10 +24,13 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use RuntimeException;
 
 /**
  * Online payments (bKash/Nagad webhook and bKash PayBill) of the billing software, synced every 3 minutes. Billing
  * settles them by itself when the reference is a customer code; "সেটেল হয়নি" ones wait for staff in billing.
+ * Payments of the Desk's own bKash webhook (source desk_webhook, engine/bkash_webhook.py) are put into billing by the
+ * Desk; an unmatched or failed one gets the "বিলিং-এ জমা দিন" action (pick the customer, then post and approve).
  */
 class OnlinePaymentResource extends Resource
 {
@@ -65,8 +72,11 @@ class OnlinePaymentResource extends Resource
     /** Unsettled ones of the last 7 days, as a badge. */
     public static function getNavigationBadge(): ?string
     {
-        $n = BillingOnlinePayment::where('company_id', Filament::getTenant()?->getKey() ?? 0)->where('status_id', 1)
-            ->where('paid_at', '>', now()->subDays(7))->count();
+        $n = BillingOnlinePayment::where('company_id', Filament::getTenant()?->getKey() ?? 0)
+            ->where('paid_at', '>', now()->subDays(7))
+            ->where(fn ($q) => $q->where('status_id', 1)->orWhere(fn ($q) => $q->where('source', 'desk_webhook')
+                ->where(fn ($q) => $q->whereNull('customer_header_id')->orWhere('settle_state', 'failed'))))
+            ->count();
 
         return $n ? (string) $n : null;
     }
@@ -100,9 +110,9 @@ class OnlinePaymentResource extends Resource
                 TextColumn::make('reference')->label(__('রেফারেন্স'))->placeholder('—')->searchable(),
                 TextColumn::make('payer')->label(__('যে নম্বর থেকে'))->placeholder('—')->searchable()->copyable(),
                 TextColumn::make('status_id')->label(__('অবস্থা'))->badge()
-                    ->formatStateUsing(fn (BillingOnlinePayment $record) => $record->statusLabel())
+                    ->state(fn (BillingOnlinePayment $record) => $record->statusLabel())  // Desk webhook rows have no billing StatusId
                     ->color(fn (BillingOnlinePayment $record) => $record->statusColor())
-                    ->tooltip(fn (BillingOnlinePayment $r) => $r->updated_by ? __('করেছেন: :u', ['u' => $r->updated_by]) : null),
+                    ->tooltip(fn (BillingOnlinePayment $r) => $r->settle_error ?: ($r->updated_by ? __('করেছেন: :u', ['u' => $r->updated_by]) : null)),
                 TextColumn::make('updated_by')->label(__('কে সেটেল করলেন'))->placeholder('—')->toggleable(),
                 TextColumn::make('note')->label(__('নোট'))->limit(40)->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('trx_status')->label(__('গেটওয়ের অবস্থা'))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
@@ -139,7 +149,44 @@ class OnlinePaymentResource extends Resource
                     ->options(fn () => BillingOnlinePayment::where('company_id', $company())->whereNotNull('updated_by')
                         ->distinct()->orderBy('updated_by')->pluck('updated_by', 'updated_by')->all()),
             ])
-            ->filtersFormColumns(3);
+            ->filtersFormColumns(3)
+            ->recordActions([
+                Action::make('settle')->label(__('বিলিং-এ জমা দিন'))->icon(Heroicon::OutlinedBanknotes)->color('success')
+                    ->visible(fn (BillingOnlinePayment $r) => $r->canSettle() && Menu::can('bill_approve'))
+                    ->modalHeading(fn (BillingOnlinePayment $r) => __('bKash :a ৳ (TrxID :t) বিলিং-এ জমা', ['a' => $tk($r->amount), 't' => $r->trx_id]))
+                    ->modalDescription(__('বিলিং-এ bKash বিল হিসেবে TrxID সহ জমা আর approve হবে, আপনার বিলিং লগইন দিয়ে।'))
+                    ->fillForm(fn (BillingOnlinePayment $r) => ['header_id' => $r->customer_header_id ? (string) $r->customer_header_id : null])
+                    ->schema([
+                        Select::make('header_id')->label(__('কাস্টমার'))->required()->searchable()->searchDebounce(300)
+                            ->placeholder(__('কাস্টমার ID, মোবাইল, PPPoE বা নাম লিখুন'))
+                            ->getSearchResultsUsing(fn (string $search) => BillingCustomer::where('company_id', $company())->whereNull('gone_at')
+                                ->matching(trim($search))->orderBy('customer_id')->limit(15)
+                                ->get(['header_id', 'customer_id', 'name', 'mobile', 'username', 'zone', 'subzone', 'box', 'is_left', 'left_on'])
+                                ->mapWithKeys(fn ($c) => [(string) $c->header_id => BillingCustomer::searchLabel($c)])->all())
+                            ->getOptionLabelUsing(function ($value) use ($company) {
+                                $c = BillingCustomer::where('company_id', $company())->where('header_id', (int) $value)->first();
+
+                                return $c ? BillingCustomer::searchLabel($c) : (string) $value;
+                            }),
+                    ])
+                    ->action(function (BillingOnlinePayment $r, array $data) {
+                        $c = BillingCustomer::where('company_id', $r->company_id)->where('header_id', (int) $data['header_id'])->first();
+                        if (! $c) {
+                            Notification::make()->danger()->title(__('কাস্টমার পাওয়া যায়নি'))->send();
+
+                            return;
+                        }
+                        if ((int) $r->customer_header_id !== (int) $c->header_id) {
+                            $r->update(['customer_header_id' => $c->header_id, 'customer_id' => $c->customer_id, 'matched_by' => 'staff']);
+                        }
+                        try {
+                            Engine::settleBkashPayment($r->company_id, $r->id, (string) auth()->user()?->name, auth()->id());
+                            Notification::make()->success()->title(__('বিলিং-এ জমা হয়েছে'))->send();
+                        } catch (RuntimeException $e) {
+                            Notification::make()->danger()->title(__('জমা হয়নি'))->body($e->getMessage())->send();
+                        }
+                    }),
+            ]);
     }
 
     public static function getEloquentQuery(): Builder
