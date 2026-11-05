@@ -139,6 +139,9 @@ class BillingRules extends CompanySettingsPage
             __('বকেয়া মিল: :m / :h জন (:pc%)। মোট বকেয়া Desk :d, বিলিং :bd টাকা', ['m' => $n($s['matched'] ?? 0), 'h' => $n($s['with_history'] ?? 0),
                 'pc' => $s['match_percent'] ?? '—', 'd' => $n($s['desk_due'] ?? 0), 'bd' => $n($s['billing_due'] ?? 0)]),
         ];
+        if (($s['matched_after_todays_receipts'] ?? 0) > 0) {
+            $lines[] = __('আরও :n জন মিলবে বিলিং-এর সাম্প্রতিক রিসিট রাতের কপিতে এলে (তখন :pc%)', ['n' => $n($s['matched_after_todays_receipts']), 'pc' => $s['match_percent_with_receipts'] ?? '—']);
+        }
         if (($s['customers'] ?? 0) > ($s['with_history'] ?? 0)) {
             $lines[] = __(':x জনের বিলের ইতিহাস এখনো বিলিং থেকে আসেনি (রাতের কপিতে আসবে)', ['x' => $n(($s['customers'] ?? 0) - ($s['with_history'] ?? 0))]);
         }

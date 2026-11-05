@@ -1897,5 +1897,6 @@
     "অ্যাপ": "App",
     "বিল সংশোধন": "Edit bills",
     "ক্যাশ পেমেন্ট মোছা": "Delete cash payments",
-    "অনলাইন পেমেন্ট ট্রান্সফার": "Move online payments"
+    "অনলাইন পেমেন্ট ট্রান্সফার": "Move online payments",
+    "আরও :n জন মিলবে বিলিং-এর সাম্প্রতিক রিসিট রাতের কপিতে এলে (তখন :pc%)": "Another :n will match once billing's recent receipts arrive in the nightly copy (then :pc%)"
 }
