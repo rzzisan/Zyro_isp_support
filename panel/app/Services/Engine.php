@@ -204,6 +204,12 @@ class Engine
         return static::call('get', "/internal/{$companyId}/customers/{$headerId}/bill-form", ['user_id' => auth()->id()]) ?? [];
     }
 
+    /** বিলিং নিয়ম "এখনই কপি": the Desk ledger from the billing copies, in the background (engine/desk_billing.py). */
+    public static function deskBillingImport(int $companyId): array
+    {
+        return static::call('post', "/internal/{$companyId}/desk-billing/import?".http_build_query(['user_id' => auth()->id()])) ?? [];
+    }
+
     /** বিল কালেকশন page open: the engine syncs today's bills (throttled) and returns a version that changes with them. */
     public static function liveDailyBills(int $companyId): array
     {

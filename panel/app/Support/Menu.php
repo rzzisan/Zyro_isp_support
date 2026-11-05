@@ -29,6 +29,10 @@ class Menu
         'bills' => ['বিল কালেকশন', false, false],
         // only when ticked (also for admins): the bill is approved in billing right after it is taken, with the member's billing login
         'bill_approve' => ['বিল নেওয়ার সাথে সাথে বিলিং-এ approve', false, false],
+        // in-house billing (plan 2.2 rule 3): the owner always; others only when ticked
+        'bill_edit' => ['বিল সংশোধন', false, false],
+        'payment_delete' => ['ক্যাশ পেমেন্ট মোছা', false, false],
+        'payment_transfer' => ['অনলাইন পেমেন্ট ট্রান্সফার', false, false],
         'sms' => ['SMS (পাঠানো, লগ, টেমপ্লেট)', false, false],
         'wa_campaign' => ['WhatsApp টেমপ্লেট পাঠানো ও লগ', false, false],
         'voice_reminder' => ['ভয়েস রিমাইন্ডার (টেমপ্লেট, কল ফ্লো, সেটিংস)', false, true],
@@ -63,7 +67,7 @@ class Menu
     public const EXPLICIT = ['field_jobs'];
 
     /** Never part of a role's defaults: the owner ticks them per member or group. */
-    public const NOT_DEFAULT = ['bill_approve'];
+    public const NOT_DEFAULT = ['bill_approve', 'bill_edit', 'payment_delete', 'payment_transfer'];
 
     public static function defaults(string $role): array
     {
