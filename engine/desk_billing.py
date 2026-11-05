@@ -164,7 +164,14 @@ STEPS = [
 
     ("balances", """INSERT INTO desk_customer_balances (customer_ref, company_id, balance, last_bill_period,
             last_payment_on, billing_due, has_history, updated_at)
-        SELECT c.id, c.company_id, coalesce(l.bal, 0), l.last_bill, l.last_pay, b.due,
+        SELECT c.id, c.company_id, coalesce(l.bal, 0), l.last_bill, l.last_pay,
+               -- billing's own figure: due minus the separate advance column; billing's list leaves due empty for
+               -- Inactive/Free/Personal customers, then the running due of their latest bill row
+               coalesce(b.due - coalesce(b.advance, 0),
+                        (SELECT x.due FROM billing_customer_bills x WHERE x.company_id = c.company_id
+                           AND x.customer_header_id = c.header_id AND x.removed_at IS NULL
+                         ORDER BY x.period_year DESC NULLS LAST, x.period_month DESC NULLS LAST, x.bill_master_id DESC
+                         LIMIT 1)),
                EXISTS (SELECT 1 FROM billing_customer_fetches f WHERE f.company_id = c.company_id
                        AND f.customer_header_id = c.header_id AND f.section = 'bills' AND f.fetched_at IS NOT NULL),
                now()
@@ -198,6 +205,14 @@ SELECT (SELECT ws FROM _w)::text AS window_start,
   (SELECT count(*) FROM desk_customer_balances WHERE company_id = %(c)s AND has_history) AS with_history,
   (SELECT count(*) FROM desk_customer_balances WHERE company_id = %(c)s AND has_history
      AND abs(balance - coalesce(billing_due, 0)) < 1) AS matched,
+  (SELECT count(*) FROM desk_customer_balances x JOIN desk_customers c ON c.id = x.customer_ref
+     JOIN (SELECT customer_header_id AS h, sum(receive_amount + discount_amount) AS amt FROM billing_daily_bills d
+           WHERE d.company_id = %(c)s AND d.is_approved AND NOT d.is_deleted AND d.collected_at > now() - interval '3 days'
+             AND NOT EXISTS (SELECT 1 FROM billing_customer_payments p WHERE p.company_id = d.company_id
+                             AND p.daily_bill_id = d.daily_bill_id)
+           GROUP BY 1) t ON t.h = c.header_id
+     WHERE x.company_id = %(c)s AND x.has_history AND abs(x.balance - coalesce(x.billing_due, 0)) >= 1
+       AND abs(x.balance - t.amt - coalesce(x.billing_due, 0)) < 1) AS matched_after_todays_receipts,
   (SELECT coalesce(sum(balance) FILTER (WHERE balance > 0), 0) FROM desk_customer_balances
      WHERE company_id = %(c)s AND has_history) AS desk_due,
   (SELECT coalesce(sum(billing_due) FILTER (WHERE billing_due > 0), 0) FROM desk_customer_balances
@@ -231,6 +246,9 @@ def import_company(company_id: int, user_id: int | None = None, source: str = "t
                     stats = {k: _num(v) for k, v in c.execute(STATS, p).fetchone().items()}
                     stats["rows"] = rows
                     stats["match_percent"] = round(100 * stats["matched"] / stats["with_history"], 2) if stats["with_history"] else None
+                    # receipts billing approved that the nightly history copy hasn't brought yet: they match tomorrow
+                    stats["match_percent_with_receipts"] = round(
+                        100 * (stats["matched"] + stats["matched_after_todays_receipts"]) / stats["with_history"], 2) if stats["with_history"] else None
                     activity.record(company_id, "billing.import", actor="system" if not user_id else "user",
                                     source=source, user_id=user_id, subject_type="desk_billing_run", subject_id=run,
                                     note=f"বিলিং থেকে কপি: {stats['customers']} কাস্টমার, {stats['bills']} বিল, "
