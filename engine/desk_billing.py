@@ -16,6 +16,8 @@ import refuses to run.
   ... --verify-log --company ID       check the activity log's hash chain
   ... --shadow                        phase 1: on the 1st make this month's shadow bills, then compare the last months
   ... --shadow-bills --period 2026-12 [--replace]   make one month's shadow bills by hand (and compare)
+  ... --disable-shadow                phase 2, hourly: at the disable hour today's "would turn off" list, then compare
+  ... --disable-list [--day 2026-11-06] [--replace]  make one day's list by hand (engine/desk_disable.py)
 
 Phase 1 (ছায়া হিসাব), still read-only: every copy also notes which customers' due doesn't match billing, why and since
 when (desk_customer_balances.diff / mismatch_reason / mismatch_since). On the 1st the Desk makes its own monthly bills
@@ -485,7 +487,10 @@ def main() -> None:
     ap.add_argument("--shadow", action="store_true", help="phase 1 nightly: shadow bills on the 1st + compare")
     ap.add_argument("--shadow-bills", action="store_true", help="make one month's shadow bills (with --period)")
     ap.add_argument("--period", help="YYYY-MM, default this month")
-    ap.add_argument("--replace", action="store_true", help="with --shadow-bills: make the month again")
+    ap.add_argument("--replace", action="store_true", help="with --shadow-bills / --disable-list: make it again")
+    ap.add_argument("--disable-shadow", action="store_true", help="phase 2 hourly: today's disable list + compare")
+    ap.add_argument("--disable-list", action="store_true", help="make one day's disable list (with --day)")
+    ap.add_argument("--day", help="YYYY-MM-DD (Bangladesh), default today")
     a = ap.parse_args()
     if a.partitions:
         log.info("partitions: %s", ensure_partitions(a.months))
@@ -507,6 +512,18 @@ def main() -> None:
                 log.info("shadow bills company %s: %s", cid, json.dumps(res, default=str))
             except Exception:
                 log.exception("shadow bills failed for company %s", cid)
+    if a.disable_shadow or a.disable_list or a.shadow:
+        # after the nightly copy the enable/disable logs are fresh: compare the last days' lists again
+        from engine import desk_disable
+        for cid in [a.company] if a.company else companies():
+            if settings(cid)["billing_mode"] == "desk":
+                continue
+            try:
+                res = (desk_disable.make_list(cid, dt.date.fromisoformat(a.day) if a.day else None, replace=a.replace,
+                                              source="console") if a.disable_list else desk_disable.hourly(cid))
+                log.info("disable shadow company %s: %s", cid, json.dumps(res, default=str))
+            except Exception:
+                log.exception("disable shadow failed for company %s", cid)
     if a.verify_log:
         print(json.dumps(activity.verify(a.company), default=str))
 

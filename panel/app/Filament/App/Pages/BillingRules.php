@@ -104,6 +104,8 @@ class BillingRules extends CompanySettingsPage
                     ->visible(fn ($get) => $get('disable_when') === 'after_days'),
                 Select::make('disable_hour')->label(__('কোন ঘণ্টায় (বাংলাদেশ সময়)'))->required()->selectablePlaceholder(false)
                     ->options(collect(range(0, 23))->mapWithKeys(fn ($h) => [$h => sprintf('%02d:00', $h)])->all()),
+                TextInput::make('disable_min_due')->label(__('এর চেয়ে কম বকেয়ায় বন্ধ নয়'))->numeric()->minValue(0)->maxValue(100000)
+                    ->suffix(__('টাকা'))->required()->helperText(__('০ = যেকোনো বকেয়ায় বন্ধ')),
             ]),
             Section::make(__('৮-১০. MikroTik আর আংশিক পেমেন্ট'))->columns(2)->schema([
                 TextInput::make('mikrotik_retries')->label(__('৮. MikroTik-এ কাজ যাচাই ব্যর্থ হলে কতবার আবার চেষ্টা'))->numeric()->integer()->minValue(0)->maxValue(10)->required(),
@@ -195,6 +197,8 @@ class BillingRules extends CompanySettingsPage
                 ->url(fn () => BillingDueMatch::getUrl()),
             Action::make('shadow_bills')->label(__('মাসিক বিল মিল'))->icon(Heroicon::OutlinedDocumentDuplicate)->color('gray')
                 ->url(fn () => BillingShadowBills::getUrl()),
+            Action::make('disable_shadow')->label(__('বন্ধের তালিকা মিল'))->icon(Heroicon::OutlinedNoSymbol)->color('gray')
+                ->url(fn () => BillingDisableShadow::getUrl()),
             Action::make('import')->label(__('এখনই কপি'))->icon(Heroicon::OutlinedArrowPath)
                 ->requiresConfirmation()
                 ->modalDescription(__('বিলিং-এর কাস্টমার, প্যাকেজ, বিল আর পেমেন্টের Desk-এ থাকা কপি থেকে খাতা নতুন করে ভরা হবে। বিলিং-এ কিছু লেখা হয় না।'))

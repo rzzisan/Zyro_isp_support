@@ -24,7 +24,7 @@
 - nginx: `support.zyrotechbd.com` শুধু `/webhook` → engine (বাকি → desk-এ redirect); desk-এ `/pay/` → engine (bKash), `/sip-ws` → Asterisk WS, `/apk/` ডাউনলোড। কনফিগ `deploy/nginx-*.conf`। সার্টিফিকেট `*.zyrotechbd.com` wildcard (dns-cloudflare)।
 - পুরনো বট `app/` + `zyro-support` (support.zyrotechbd.com:8993) বন্ধ 2026-10-06; ডেটা `data/messages.db`।
 - **systemd সার্ভিস:** zyro-engine, zyro-voice (`engine/voice_bot.py`, Asterisk-এর ভয়েস বট/IVR, HTTP 127.0.0.1:8997, AudioSocket 9093, FastAGI 4574), zyro-sip (baresip কলার পপআপ), zyro-walkie (MemoryMax=2G), zyro-livekit, asterisk।
-- **timer (deploy/-এ unit):** ticket-sync ৫ মি., ppp-sync ২ মি., olt-sync ১০ মি., customer-sync রাত ৩টা BD, customer-new ২০ মি., customer-history রাত ১২:৩০-৭টা BD, daily-bill-sync ১০ মি., online-payment-sync ৩ মি., sms-send/wa-campaign/voice-reminder/system-backup প্রতি মিনিট, sms-sync ৩০ মি., sms-reminder ঘণ্টায় :05, expire-date ঘণ্টায় :20, ticket-followup ১০ মি., mikrotik-backup 21:00 UTC, pbx-cdr ০১:০০ BD, alt-numbers ০৩:৪০ BD, desk-billing 01:15 UTC।
+- **timer (deploy/-এ unit):** ticket-sync ৫ মি., ppp-sync ২ মি., olt-sync ১০ মি., customer-sync রাত ৩টা BD, customer-new ২০ মি., customer-history রাত ১২:৩০-৭টা BD, daily-bill-sync ১০ মি., online-payment-sync ৩ মি., sms-send/wa-campaign/voice-reminder/system-backup প্রতি মিনিট, sms-sync ৩০ মি., sms-reminder ঘণ্টায় :05, expire-date ঘণ্টায় :20, ticket-followup ১০ মি., mikrotik-backup 21:00 UTC, pbx-cdr ০১:০০ BD, alt-numbers ০৩:৪০ BD, desk-billing 01:15 UTC, desk-disable-shadow ঘণ্টায় :05।
 
 ## ৩. Deploy ও গোটচা (লাইভে)
 - স্ট্যান্ডিং অনুমতি: Zisan যা চান তার PR merge, deploy, APK build জিজ্ঞেস ছাড়াই। লাইভ ডেটা বদল/bulk delete/না-চাওয়া কাজে আগে জিজ্ঞেস।
@@ -103,6 +103,7 @@
 - প্ল্যান `/mnt/project-files/billing-system/plan.md` (রিসেলার: `reseller-plan.md`)। লক্ষ্য cutover 1 Jan 2027 (মিল <৯৯% হলে Feb)। **billing_mode সব কোম্পানিতে `ispdigital`**: Desk এখনো শুধু ছায়া হিসাব রাখে, বিলিংয়ে কিছু লেখে না।
 - ধাপ ০ লাইভ (PR #110-#117): partition করা `activity_logs`, `desk_bills`, `desk_payments`, `desk_ledger_entries` + `desk_customers`, `desk_packages`, `desk_customer_balances`, `billing_settings`। `engine/desk_billing.py` রোজ কপি করে খাতা ও balance বানায় (বিলিংয়ে request নেই)। সেটিংস → "বিলিং নিয়ম" (`/billing-rules`, Owner; মেলানো থেকে বাদ: 0001 = Zisan-এর হাউস অ্যাকাউন্ট)।
 - ধাপ ১ (PR #118, main 5690ee6): `desk_customer_balances.diff/mismatch_reason/mismatch_since`, `desk_shadow_bills` (Desk-এর মাসিক বিল বনাম বিলিংয়ের), timer এখন `--partitions --import --shadow`; পেজ `/billing-due-match`, `/billing-shadow-bills`। মিল ~৯৯.২% (5935/5981)। বিলিং paid/inactive কাস্টমারের due খালি রাখে (= ০ বা শেষ বিল-সারির due)।
+- ধাপ ২ (বন্ধের তালিকা ছায়া): `engine/desk_disable.py`, টেবিল `desk_disable_shadow`, timer `zyro-desk-disable-shadow` (ঘণ্টায় :05; কোম্পানির `disable_hour`-এ দিনে একবার তালিকা, তারপর বিলিং-এর enable/disable লগের সাথে মেলানো, রাতের কপির পরেও)। নিয়ম: মাসের বিলের শেষ দিন = Expire + `disable_when` দিন; রাখা হয় VIP/EffectiveTo/৩ দিনে চালু/অল্প বাকি। পেজ `/billing-disable-shadow`; নতুন সেটিং `disable_min_due`। কারো লাইন বন্ধ করে না।
 - নতুন অনুমতি (এখনো কাজে নেই): `bill_edit`, `payment_delete`, `payment_transfer`।
 
 ## ৮. বাকি / Zisan-এর সিদ্ধান্তের অপেক্ষায়
@@ -113,7 +114,7 @@
 - CLN_4 MikroTik ব্যাকআপ (ssh/ftp-এ 10.85.1.13/32 যোগ বা RouterOS 7.13+)।
 - বটের FAQ উত্তর (অফিস সময়, Wi-Fi পাসওয়ার্ড, রাউটার লগইন নীতি, ৫৫০ টাকা 20Mbps + Bongo অফার, FTP লিংক)।
 - টিকিট 2556/3564/3697 ডুপ্লিকেট; ওয়াকি-টকি ও টিম চ্যাট টেস্ট; ভয়েস রিমাইন্ডার লাইভ চালু।
-- নিজের বিলিং: অমিলগুলো (~৪৬) পরের রাতের কপির পর আবার দেখা, তারপর ধাপ ২+।
+- নিজের বিলিং: অমিলগুলো (~৪৬) পরের রাতের কপির পর আবার দেখা; ধাপ ২-এর বন্ধের তালিকা কয়েক দিন মিলিয়ে নিয়ম ঠিক করা, তারপর ধাপ ৪/৩।
 - VPS-এ সরানো নিয়ে সিদ্ধান্ত (Hostinger KVM 4 প্রস্তাব; OLT/MikroTik প্রাইভেট IP-তে, তাই WireGuard লাগবে)।
 - আগে থেকে ফেল করা কয়েকটা পুরনো টেস্ট (CustomerTest left তারিখ, TicketActionsTest টাকা ফরম্যাট, AreaStaffTest, SoftphoneTest APP_URL) — নতুন কাজের দোষ নয়।
 

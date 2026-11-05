@@ -13,7 +13,7 @@ class BillingSetting extends Model
     public const DEFAULTS = [
         'bill_generation' => 'month_start', 'waive_off_month' => true, 'desk_auto_approve' => true,
         'expire_on_payment' => true, 'expire_full_percent' => 85, 'expire_max_days' => 28, 'expire_keep_if_early' => true,
-        'auto_line' => true, 'disable_when' => 'next_day', 'disable_after_days' => 1, 'disable_hour' => 11,
+        'auto_line' => true, 'disable_when' => 'next_day', 'disable_after_days' => 1, 'disable_hour' => 11, 'disable_min_due' => 0,
         'online_expire' => true, 'mikrotik_retries' => 3, 'enable_min_percent' => 90,
         'partial_redisable_percent' => 40, 'partial_redisable_days' => 3, 'history_months' => 12, 'activity_log_months' => null,
         'match_exclude_codes' => [],
