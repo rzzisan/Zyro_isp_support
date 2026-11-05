@@ -164,7 +164,7 @@ class BillingRules extends CompanySettingsPage
     /** Every changed rule into billing_settings_log (the activity log gets the same change from the model event). */
     protected function afterSaved(Model $record): void
     {
-        foreach ($record->getChanges() as $field => $new) {
+        foreach ($record->wasRecentlyCreated ? $record->getAttributes() : $record->getChanges() as $field => $new) {
             if (in_array($field, ['updated_at', 'created_at', 'id', 'company_id'], true)) {
                 continue;
             }
