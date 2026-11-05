@@ -40,8 +40,8 @@ class Activity
             $request = app()->runningInConsole() ? null : request();
             ActivityLog::create([
                 'company_id' => $companyId,
-                'user_id' => $userId ?? auth()->id(),
-                'actor' => $userId || auth()->check() ? 'user' : 'system',
+                'user_id' => $userId ?? self::userId(),
+                'actor' => $userId || self::userId() ? 'user' : 'system',
                 'source' => self::source(),
                 'action' => Str::limit($action, 100, ''),
                 'subject_type' => $subject ? class_basename($subject) : null,
@@ -86,7 +86,7 @@ class Activity
     /** Eloquent created/updated/deleted of any model, while a person is signed in (panel and app). */
     public static function modelEvent(string $event, Model $model): void
     {
-        if (! auth()->check() || in_array($model::class, self::SKIP_MODELS, true)) {
+        if (in_array($model::class, self::SKIP_MODELS, true) || ! self::userId()) {
             return;
         }
         $changes = match ($event) {
@@ -102,6 +102,17 @@ class Activity
         $secret = [...array_keys(array_filter($model->getCasts(), fn ($c) => is_string($c) && str_contains($c, 'encrypted'))), ...$model->getHidden()];
         $changes = self::redact($changes, $secret);
         self::log(Str::snake(class_basename($model)).'.'.$event, $changes, $model);
+    }
+
+    /**
+     * The signed-in person, only when the request's guard already knows them. Never asks a guard to resolve a user:
+     * that would cache whoever the guard finds now (e.g. a stale token) for the rest of the process.
+     */
+    public static function userId(): ?int
+    {
+        $guard = auth()->guard();
+
+        return $guard->hasUser() ? (int) $guard->user()->getAuthIdentifier() : null;
     }
 
     public static function source(): string
@@ -135,7 +146,7 @@ class Activity
         if ($tenant) {
             return (int) $tenant->getKey();
         }
-        $user = auth()->user();
+        $user = self::userId() ? auth()->guard()->user() : null;
         $company = $user && method_exists($user, 'companies') ? $user->companies()->first() : null;
 
         return $company?->getKey();
