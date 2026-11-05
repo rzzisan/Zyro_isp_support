@@ -29,9 +29,9 @@ class AppServiceProvider extends ServiceProvider
             });
         }
         \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Login::class,
-            fn ($e) => \App\Support\Activity::log('auth.login'));
+            fn ($e) => \App\Support\Activity::log('auth.login', userId: (int) $e->user->getAuthIdentifier()));
         \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Logout::class,
-            fn ($e) => $e->user ? \App\Support\Activity::log('auth.logout') : null);
+            fn ($e) => $e->user ? \App\Support\Activity::log('auth.logout', userId: (int) $e->user->getAuthIdentifier()) : null);
         \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Failed::class,
             fn ($e) => $e->user ? \App\Support\Activity::log('auth.failed', companyId: $e->user->companies()->first()?->getKey()) : null);
     }

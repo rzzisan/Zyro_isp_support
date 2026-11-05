@@ -99,7 +99,7 @@ class ActivityLogResource extends Resource
                         ->distinct()->orderBy('action')->pluck('action', 'action')->all()),
                 SelectFilter::make('source')->label(__('কোথা থেকে'))->options(array_map('__', self::SOURCES)),
                 Filter::make('customer')->schema([TextInput::make('code')->label(__('কাস্টমার ID'))])
-                    ->query(fn (Builder $q, array $data) => $q->when($data['code'] ?? null, fn ($q, $c) => $q->where('customer_code', trim($c)))),
+                    ->query(fn (Builder $query, array $data) => $query->when($data['code'] ?? null, fn ($q, $c) => $q->where('customer_code', trim($c)))),
                 Filter::make('date')->schema([DatePicker::make('from')->label(__('থেকে')), DatePicker::make('until')->label(__('পর্যন্ত'))])
                     ->query(fn (Builder $query, array $data) => $query
                         ->when($data['from'] ?? null, fn ($q, $d) => $q->where('created_at', '>=', Carbon::parse($d, 'Asia/Dhaka')->startOfDay()->utc()))
