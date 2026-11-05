@@ -60,9 +60,11 @@ def _local(s, *fmts) -> datetime | None:
     s = re.sub(r"\s+", " ", str(s or "")).strip()
     for f in fmts:
         try:
-            return datetime.strptime(s, f)
+            d = datetime.strptime(s, f)
         except ValueError:
             continue
+        # billing's empty date is .NET's 01-Jan-0001 ("never logged in"); it can't move to UTC, and means nothing
+        return d if d.year >= 1900 else None
     return None
 
 
