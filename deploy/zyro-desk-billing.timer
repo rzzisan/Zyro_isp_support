@@ -1,0 +1,10 @@
+[Unit]
+Description=Desk billing ledger copy every morning at 07:15 Bangladesh time (after the customer history copy ends at 07:00)
+
+[Timer]
+OnCalendar=*-*-* 01:15:00 UTC
+Persistent=true
+Unit=zyro-desk-billing.service
+
+[Install]
+WantedBy=timers.target

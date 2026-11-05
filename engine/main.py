@@ -1107,6 +1107,27 @@ def expire_dates_status(request: Request, company_id: int):
     return {"running": expire_dates.is_running(company_id)}
 
 
+@app.post("/internal/{company_id}/desk-billing/import")
+def desk_billing_import(request: Request, company_id: int, user_id: int | None = None):
+    """বিলিং নিয়ম page "এখনই কপি": the Desk ledger from the billing copies, in the background (engine/desk_billing.py)."""
+    internal_key(request)
+    from engine import desk_billing
+    if desk_billing.settings(company_id)["billing_mode"] == "desk":
+        raise HTTPException(status_code=409, detail="Desk-ই এখন মূল বিলিং, বিলিং থেকে কপি বন্ধ")
+    if db.one("""SELECT 1 FROM desk_billing_runs WHERE company_id = %s AND kind = 'import' AND status = 'running'
+                 AND started_at > now() - interval '20 minutes'""", (company_id,)):
+        raise HTTPException(status_code=409, detail="আগের কপি এখনো চলছে")
+
+    def run():
+        try:
+            desk_billing.import_company(company_id, user_id, source="panel")
+        except Exception:
+            log.exception("desk billing import failed for company %s", company_id)
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"started": True}
+
+
 @app.post("/internal/{company_id}/customers/find")
 def customers_find(request: Request, company_id: int, q: str = ""):
     """Desk header search fallback: the billing header search, copying customers the desk doesn't have yet."""

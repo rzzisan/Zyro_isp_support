@@ -35,6 +35,8 @@ class AuthController extends Controller
         }
         static::acceptPrivacy($user);
         $token = $user->createToken('android:'.($data['device'] ?? 'phone'))->plainTextToken;
+        \App\Support\Activity::log('auth.login', note: $data['device'] ?? null, userId: $user->id,
+            companyId: $user->companies()->first()?->getKey());
 
         return response()->json(['token' => $token] + static::profile($user));
     }
@@ -94,6 +96,7 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()?->delete();
+        \App\Support\Activity::log('auth.logout');
 
         return response()->json(['ok' => true]);
     }
