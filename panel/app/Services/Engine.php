@@ -210,6 +210,13 @@ class Engine
         return static::call('post', "/internal/{$companyId}/desk-billing/import?".http_build_query(['user_id' => auth()->id()])) ?? [];
     }
 
+    /** মাসিক বিল মিল "ছায়া বিল বানান": the Desk's own bills of one month, shadow only (engine/desk_billing.py). */
+    public static function deskShadowBills(int $companyId, string $period, bool $replace = false): array
+    {
+        return static::call('post', "/internal/{$companyId}/desk-billing/shadow-bills?".http_build_query(['user_id' => auth()->id(),
+            'period' => $period, 'replace' => $replace ? 1 : 0])) ?? [];
+    }
+
     /** বিল কালেকশন page open: the engine syncs today's bills (throttled) and returns a version that changes with them. */
     public static function liveDailyBills(int $companyId): array
     {

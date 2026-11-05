@@ -145,6 +145,11 @@ class BillingRules extends CompanySettingsPage
         if (($s['matched_after_todays_receipts'] ?? 0) > 0) {
             $lines[] = __('আরও :n জন মিলবে বিলিং-এর সাম্প্রতিক রিসিট রাতের কপিতে এলে (তখন :pc%)', ['n' => $n($s['matched_after_todays_receipts']), 'pc' => $s['match_percent_with_receipts'] ?? '—']);
         }
+        $why = collect($s['mismatch_reasons'] ?? [])->sortDesc()
+            ->map(fn ($n, $r) => __(\App\Models\DeskCustomerBalance::REASONS[$r][0] ?? $r).' '.$n)->implode(', ');
+        if ($why !== '') {
+            $lines[] = __('অমিলের কারণ: :w', ['w' => $why]);
+        }
         if (($s['customers'] ?? 0) > ($s['with_history'] ?? 0)) {
             $lines[] = __(':x জনের বিলের ইতিহাস এখনো বিলিং থেকে আসেনি (রাতের কপিতে আসবে)', ['x' => $n(($s['customers'] ?? 0) - ($s['with_history'] ?? 0))]);
         }
@@ -186,6 +191,10 @@ class BillingRules extends CompanySettingsPage
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('due_match')->label(__('বকেয়ার অমিল'))->icon(Heroicon::OutlinedScale)->color('gray')
+                ->url(fn () => BillingDueMatch::getUrl()),
+            Action::make('shadow_bills')->label(__('মাসিক বিল মিল'))->icon(Heroicon::OutlinedDocumentDuplicate)->color('gray')
+                ->url(fn () => BillingShadowBills::getUrl()),
             Action::make('import')->label(__('এখনই কপি'))->icon(Heroicon::OutlinedArrowPath)
                 ->requiresConfirmation()
                 ->modalDescription(__('বিলিং-এর কাস্টমার, প্যাকেজ, বিল আর পেমেন্টের Desk-এ থাকা কপি থেকে খাতা নতুন করে ভরা হবে। বিলিং-এ কিছু লেখা হয় না।'))

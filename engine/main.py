@@ -1128,6 +1128,32 @@ def desk_billing_import(request: Request, company_id: int, user_id: int | None =
     return {"started": True}
 
 
+@app.post("/internal/{company_id}/desk-billing/shadow-bills")
+def desk_billing_shadow_bills(request: Request, company_id: int, period: str = "", replace: int = 0,
+                              user_id: int | None = None):
+    """মাসিক বিল মিল "ছায়া বিল বানান": one month's Desk bills (shadow only) + the compare, in the background."""
+    internal_key(request)
+    from engine import desk_billing
+    if desk_billing.settings(company_id)["billing_mode"] == "desk":
+        raise HTTPException(status_code=409, detail="Desk-ই এখন মূল বিলিং")
+    try:
+        ps = desk_billing.month_start(period or None)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="মাস YYYY-MM")
+    if db.one("""SELECT 1 FROM desk_billing_runs WHERE company_id = %s AND kind IN ('import', 'shadow_bills')
+                 AND status = 'running' AND started_at > now() - interval '20 minutes'""", (company_id,)):
+        raise HTTPException(status_code=409, detail="আগের কাজ এখনো চলছে")
+
+    def run():
+        try:
+            desk_billing.make_bills(company_id, ps, replace=bool(replace), user_id=user_id, source="panel")
+        except Exception:
+            log.exception("desk shadow bills failed for company %s", company_id)
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"started": True, "period": str(ps)}
+
+
 @app.post("/internal/{company_id}/customers/find")
 def customers_find(request: Request, company_id: int, q: str = ""):
     """Desk header search fallback: the billing header search, copying customers the desk doesn't have yet."""
