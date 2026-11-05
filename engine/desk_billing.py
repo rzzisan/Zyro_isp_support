@@ -166,13 +166,14 @@ STEPS = [
     ("balances", """INSERT INTO desk_customer_balances (customer_ref, company_id, balance, last_bill_period,
             last_payment_on, billing_due, has_history, excluded, updated_at)
         SELECT c.id, c.company_id, coalesce(l.bal, 0), l.last_bill, l.last_pay,
-               -- billing's own figure: due minus the separate advance column; billing's list leaves due empty for
-               -- Inactive/Free/Personal customers, then the running due of their latest bill row
-               coalesce(b.due - coalesce(b.advance, 0),
-                        (SELECT x.due FROM billing_customer_bills x WHERE x.company_id = c.company_id
-                           AND x.customer_header_id = c.header_id AND x.removed_at IS NULL
-                         ORDER BY x.period_year DESC NULLS LAST, x.period_month DESC NULLS LAST, x.bill_master_id DESC
-                         LIMIT 1)),
+               -- billing's own figure: due minus the separate advance column (an empty due is 0: paid up). Only for
+               -- Inactive/Free/Personal does billing's list leave due/payable empty for real: their latest bill row
+               CASE WHEN b.status IN ('Inactive', 'Free', 'Personal') AND b.payable IS NULL THEN
+                    coalesce((SELECT x.due FROM billing_customer_bills x WHERE x.company_id = c.company_id
+                                AND x.customer_header_id = c.header_id AND x.removed_at IS NULL
+                              ORDER BY x.period_year DESC NULLS LAST, x.period_month DESC NULLS LAST,
+                                       x.bill_master_id DESC LIMIT 1), 0)
+                    ELSE coalesce(b.due, 0) - coalesce(b.advance, 0) END,
                EXISTS (SELECT 1 FROM billing_customer_fetches f WHERE f.company_id = c.company_id
                        AND f.customer_header_id = c.header_id AND f.section = 'bills' AND f.fetched_at IS NOT NULL),
                coalesce(c.customer_code = ANY(%(exclude)s::text[]), false), now()
