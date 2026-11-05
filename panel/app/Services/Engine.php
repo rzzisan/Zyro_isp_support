@@ -217,6 +217,13 @@ class Engine
             'period' => $period, 'replace' => $replace ? 1 : 0])) ?? [];
     }
 
+    /** বন্ধের তালিকা (ছায়া) "এখনই বানান": one day's would-turn-off list, shadow only (engine/desk_disable.py). */
+    public static function deskDisableList(int $companyId, string $day, bool $replace = false): array
+    {
+        return static::call('post', "/internal/{$companyId}/desk-billing/disable-list?".http_build_query(['user_id' => auth()->id(),
+            'day' => $day, 'replace' => $replace ? 1 : 0])) ?? [];
+    }
+
     /** বিল কালেকশন page open: the engine syncs today's bills (throttled) and returns a version that changes with them. */
     public static function liveDailyBills(int $companyId): array
     {

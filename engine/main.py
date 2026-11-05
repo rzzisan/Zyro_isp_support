@@ -1154,6 +1154,32 @@ def desk_billing_shadow_bills(request: Request, company_id: int, period: str = "
     return {"started": True, "period": str(ps)}
 
 
+@app.post("/internal/{company_id}/desk-billing/disable-list")
+def desk_billing_disable_list(request: Request, company_id: int, day: str = "", replace: int = 0,
+                              user_id: int | None = None):
+    """বন্ধের তালিকা (ছায়া) "এখনই বানান": one day's would-turn-off list + the compare, in the background. Read-only."""
+    internal_key(request)
+    from engine import desk_billing, desk_disable
+    if desk_billing.settings(company_id)["billing_mode"] == "desk":
+        raise HTTPException(status_code=409, detail="Desk-ই এখন মূল বিলিং")
+    try:
+        d = datetime.strptime(day, "%Y-%m-%d").date() if day else desk_disable.bd_now().date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="তারিখ YYYY-MM-DD")
+    if db.one("""SELECT 1 FROM desk_billing_runs WHERE company_id = %s AND kind IN ('import', 'disable_shadow')
+                 AND status = 'running' AND started_at > now() - interval '20 minutes'""", (company_id,)):
+        raise HTTPException(status_code=409, detail="আগের কাজ এখনো চলছে")
+
+    def run():
+        try:
+            desk_disable.make_list(company_id, d, replace=bool(replace), user_id=user_id, source="panel")
+        except Exception:
+            log.exception("desk disable list failed for company %s", company_id)
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"started": True, "day": str(d)}
+
+
 @app.post("/internal/{company_id}/customers/find")
 def customers_find(request: Request, company_id: int, q: str = ""):
     """Desk header search fallback: the billing header search, copying customers the desk doesn't have yet."""

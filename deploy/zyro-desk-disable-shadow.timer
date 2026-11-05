@@ -1,0 +1,10 @@
+[Unit]
+Description=Desk disable list (shadow) every hour at :05; the list itself is made once a day at the disable hour
+
+[Timer]
+OnCalendar=*-*-* *:05:00
+Persistent=true
+Unit=zyro-desk-disable-shadow.service
+
+[Install]
+WantedBy=timers.target
