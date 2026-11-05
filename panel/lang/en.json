@@ -1898,5 +1898,7 @@
     "বিল সংশোধন": "Edit bills",
     "ক্যাশ পেমেন্ট মোছা": "Delete cash payments",
     "অনলাইন পেমেন্ট ট্রান্সফার": "Move online payments",
-    "আরও :n জন মিলবে বিলিং-এর সাম্প্রতিক রিসিট রাতের কপিতে এলে (তখন :pc%)": "Another :n will match once billing's recent receipts arrive in the nightly copy (then :pc%)"
+    "আরও :n জন মিলবে বিলিং-এর সাম্প্রতিক রিসিট রাতের কপিতে এলে (তখন :pc%)": "Another :n will match once billing's recent receipts arrive in the nightly copy (then :pc%)",
+    "মেলানোর হিসাব থেকে বাদ (কাস্টমার ID)": "Left out of the match (customer IDs)",
+    "অফিস বা হাউস অ্যাকাউন্ট। খাতায় থাকবে, শুধু বিলিং-এর সাথে মিলের হিসাবে ধরা হবে না।": "Office or house accounts. They stay in the ledger, only the match with billing skips them."
 }

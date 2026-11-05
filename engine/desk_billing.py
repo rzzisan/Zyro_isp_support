@@ -29,8 +29,9 @@ LOCK = 717172
 
 
 def settings(company_id: int) -> dict:
-    row = db.one("SELECT billing_mode, history_months FROM billing_settings WHERE company_id = %s", (company_id,))
-    return row or {"billing_mode": "ispdigital", "history_months": 12}
+    row = db.one("""SELECT billing_mode, history_months, coalesce(match_exclude_codes, '[]'::jsonb) AS exclude
+                    FROM billing_settings WHERE company_id = %s""", (company_id,))
+    return row or {"billing_mode": "ispdigital", "history_months": 12, "exclude": []}
 
 
 def ensure_partitions(months: int = 3) -> dict:
@@ -163,7 +164,7 @@ STEPS = [
         WHERE company_id = %(c)s AND source = 'ispdigital' AND status = 'approved' AND k.amt <> 0"""),
 
     ("balances", """INSERT INTO desk_customer_balances (customer_ref, company_id, balance, last_bill_period,
-            last_payment_on, billing_due, has_history, updated_at)
+            last_payment_on, billing_due, has_history, excluded, updated_at)
         SELECT c.id, c.company_id, coalesce(l.bal, 0), l.last_bill, l.last_pay,
                -- billing's own figure: due minus the separate advance column; billing's list leaves due empty for
                -- Inactive/Free/Personal customers, then the running due of their latest bill row
@@ -174,7 +175,7 @@ STEPS = [
                          LIMIT 1)),
                EXISTS (SELECT 1 FROM billing_customer_fetches f WHERE f.company_id = c.company_id
                        AND f.customer_header_id = c.header_id AND f.section = 'bills' AND f.fetched_at IS NOT NULL),
-               now()
+               coalesce(c.customer_code = ANY(%(exclude)s::text[]), false), now()
         FROM desk_customers c
         LEFT JOIN billing_customers b ON b.company_id = c.company_id AND b.header_id = c.header_id
         LEFT JOIN (SELECT customer_ref, sum(amount) AS bal, max(entry_date) FILTER (WHERE kind = 'bill') AS last_bill,
@@ -183,11 +184,12 @@ STEPS = [
         WHERE c.company_id = %(c)s
         ON CONFLICT (customer_ref) DO UPDATE SET balance = EXCLUDED.balance, last_bill_period = EXCLUDED.last_bill_period,
             last_payment_on = EXCLUDED.last_payment_on, billing_due = EXCLUDED.billing_due,
-            has_history = EXCLUDED.has_history, updated_at = now()"""),
+            has_history = EXCLUDED.has_history, excluded = EXCLUDED.excluded, updated_at = now()"""),
 ]
 
 STATS = """
 SELECT (SELECT ws FROM _w)::text AS window_start,
+  (SELECT count(*) FROM desk_customer_balances WHERE company_id = %(c)s AND excluded) AS excluded,
   (SELECT count(*) FROM desk_customers WHERE company_id = %(c)s) AS customers,
   (SELECT count(*) FROM desk_customers WHERE company_id = %(c)s AND status = 'Active' AND NOT is_left) AS active,
   (SELECT count(*) FROM desk_packages WHERE company_id = %(c)s) AS packages,
@@ -202,8 +204,8 @@ SELECT (SELECT ws FROM _w)::text AS window_start,
      AND make_date(b.period_year, b.period_month, 1) >= (SELECT ws FROM _w)) - (SELECT count(*) FROM _bills) AS bills_same_month,
   (SELECT count(*) FROM billing_customer_bills WHERE company_id = %(c)s AND removed_at IS NULL
      AND NOT (coalesce(period_year, 0) > 2000 AND period_month BETWEEN 1 AND 12)) AS bills_without_month,
-  (SELECT count(*) FROM desk_customer_balances WHERE company_id = %(c)s AND has_history) AS with_history,
-  (SELECT count(*) FROM desk_customer_balances WHERE company_id = %(c)s AND has_history
+  (SELECT count(*) FROM desk_customer_balances WHERE company_id = %(c)s AND has_history AND NOT excluded) AS with_history,
+  (SELECT count(*) FROM desk_customer_balances WHERE company_id = %(c)s AND has_history AND NOT excluded
      AND abs(balance - coalesce(billing_due, 0)) < 1) AS matched,
   (SELECT count(*) FROM desk_customer_balances x JOIN desk_customers c ON c.id = x.customer_ref
      JOIN (SELECT customer_header_id AS h, sum(receive_amount + discount_amount) AS amt FROM billing_daily_bills d
@@ -211,12 +213,12 @@ SELECT (SELECT ws FROM _w)::text AS window_start,
              AND NOT EXISTS (SELECT 1 FROM billing_customer_payments p WHERE p.company_id = d.company_id
                              AND p.daily_bill_id = d.daily_bill_id)
            GROUP BY 1) t ON t.h = c.header_id
-     WHERE x.company_id = %(c)s AND x.has_history AND abs(x.balance - coalesce(x.billing_due, 0)) >= 1
+     WHERE x.company_id = %(c)s AND x.has_history AND NOT x.excluded AND abs(x.balance - coalesce(x.billing_due, 0)) >= 1
        AND abs(x.balance - t.amt - coalesce(x.billing_due, 0)) < 1) AS matched_after_todays_receipts,
   (SELECT coalesce(sum(balance) FILTER (WHERE balance > 0), 0) FROM desk_customer_balances
-     WHERE company_id = %(c)s AND has_history) AS desk_due,
+     WHERE company_id = %(c)s AND has_history AND NOT excluded) AS desk_due,
   (SELECT coalesce(sum(billing_due) FILTER (WHERE billing_due > 0), 0) FROM desk_customer_balances
-     WHERE company_id = %(c)s AND has_history) AS billing_due
+     WHERE company_id = %(c)s AND has_history AND NOT excluded) AS billing_due
 """
 
 
@@ -238,7 +240,8 @@ def import_company(company_id: int, user_id: int | None = None, source: str = "t
             try:
                 with c.transaction():
                     c.execute("SET LOCAL statement_timeout = '15min'")
-                    p = {"c": company_id, "months": int(s["history_months"] or 12)}
+                    p = {"c": company_id, "months": int(s["history_months"] or 12),
+                         "exclude": [str(x).strip() for x in (s.get("exclude") or []) if str(x).strip()]}
                     rows = {}
                     for name, sql in STEPS:
                         cur = c.execute(sql, p)

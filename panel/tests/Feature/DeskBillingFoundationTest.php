@@ -76,6 +76,13 @@ class DeskBillingFoundationTest extends TestCase
             ->where('user_id', $this->owner->id)->exists());
     }
 
+    public function test_house_accounts_are_left_out_of_the_match(): void
+    {
+        $this->panel($this->owner);
+        Livewire::test(BillingRules::class)->fillForm(['match_exclude_codes' => [' 0001 ', '0001']])->call('save')->assertHasNoFormErrors();
+        $this->assertSame(['0001'], BillingSetting::where('company_id', $this->company->id)->first()->match_exclude_codes);
+    }
+
     public function test_percent_out_of_range_is_refused(): void
     {
         $this->panel($this->owner);

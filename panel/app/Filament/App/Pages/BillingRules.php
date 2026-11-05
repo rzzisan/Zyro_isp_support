@@ -10,6 +10,7 @@ use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
@@ -76,6 +77,8 @@ class BillingRules extends CompanySettingsPage
                     Placeholder::make('ledger')->label(__('Desk-এর খাতা (বিলিং থেকে কপি)'))->content(fn () => $this->ledgerText()),
                     TextInput::make('history_months')->label(__('কত মাসের বিল আর পেমেন্ট খাতায় আসবে'))->numeric()->integer()->minValue(1)->maxValue(36)->suffix(__('মাস'))->required()
                         ->helperText(__('এর আগের হিসাব প্রতিটা কাস্টমারের একটা "আগের হিসাব" সারিতে থাকবে।')),
+                    TagsInput::make('match_exclude_codes')->label(__('মেলানোর হিসাব থেকে বাদ (কাস্টমার ID)'))->placeholder('0001')
+                        ->helperText(__('অফিস বা হাউস অ্যাকাউন্ট। খাতায় থাকবে, শুধু বিলিং-এর সাথে মিলের হিসাবে ধরা হবে না।')),
                 ]),
             Section::make(__('১. মাসিক বিল'))->schema([
                 Select::make('bill_generation')->label(__('মাসিক বিল কখন তৈরি হবে'))->required()->selectablePlaceholder(false)
@@ -157,6 +160,7 @@ class BillingRules extends CompanySettingsPage
         $this->before = $record->exists ? $record->getAttributes() : [];
         $data['company_id'] = Filament::getTenant()->getKey();
         unset($data['billing_mode']);   // changes only at the cutover, not from this form
+        $data['match_exclude_codes'] = array_values(array_unique(array_filter(array_map('trim', $data['match_exclude_codes'] ?? []))));
         if (($data['activity_log_months'] ?? '') === '') {
             $data['activity_log_months'] = null;
         }
@@ -172,6 +176,7 @@ class BillingRules extends CompanySettingsPage
                 continue;
             }
             $old = $this->before[$field] ?? null;
+            $new = is_array($new) ? json_encode($new, JSON_UNESCAPED_UNICODE) : $new;
             DB::table('billing_settings_log')->insert(['company_id' => $record->company_id, 'user_id' => auth()->id(),
                 'field' => $field, 'old_value' => is_bool($old) ? ($old ? '1' : '0') : $old,
                 'new_value' => is_bool($new) ? ($new ? '1' : '0') : $new, 'created_at' => now()]);
