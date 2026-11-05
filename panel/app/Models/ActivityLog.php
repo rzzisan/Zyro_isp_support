@@ -27,6 +27,11 @@ class ActivityLog extends Model
         static::deleting(fn () => throw new LogicException('activity_logs is append-only'));
     }
 
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
