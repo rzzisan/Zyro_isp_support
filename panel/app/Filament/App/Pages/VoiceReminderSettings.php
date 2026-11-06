@@ -76,7 +76,7 @@ class VoiceReminderSettings extends CompanySettingsPage
         $data = $record->only(['enabled', 'test_mode', 'test_number', 'test_daily_max', 'reminder_on', 'reminder_flow_id', 'reminder_days',
             'due_only', 'line_off_on', 'line_off_flow_id', 'line_off_delay', 'line_off_days', 'window_from', 'window_to', 'skip_jumma',
             'max_calls', 'retry_minutes', 'max_tries', 'minute_rate', 'alt_on', 'alt_max', 'sms_saving', 'inbound_on', 'inbound_flow_id', 'inbound_delay',
-            'audio_mode', 'tts_model']);
+            'callback_on', 'callback_hours', 'audio_mode', 'tts_model']);
         $data['test_number'] = $data['test_number'] ? '0'.substr((string) $data['test_number'], 3) : null;
 
         return $data;
@@ -122,6 +122,12 @@ class VoiceReminderSettings extends CompanySettingsPage
                     Select::make('inbound_flow_id')->label(__('কোন কল ফ্লো'))->options($flows('line_off'))
                         ->placeholder(__('লাইন বন্ধের কলের ফ্লো-ই')),
                     TextInput::make('inbound_delay')->label(__('কত সেকেন্ড রিং হওয়ার পরে ধরবে'))->numeric()->minValue(0)->maxValue(10)->required(),
+                ]),
+            Section::make(__('রিমাইন্ডার কল ধরতে না পেরে কাস্টমার কল ব্যাক দিলে'))->columns(2)
+                ->description(__('রিমাইন্ডার কল ধরেননি (বা ব্যস্ত ছিলেন) এমন কাস্টমার এই সময়ের মধ্যে হটলাইনে কল ব্যাক দিলে কল ধরে তাঁর রিমাইন্ডারের মেসেজটা একবার শোনানো হয়, তারপর আগের মতো স্টাফ/বটের কাছে যায়। প্রতিটা না-ধরা রিমাইন্ডারে একবারই; এর মধ্যে কল ধরে থাকলে আর শোনানো হয় না। মেসেজের বাটন এখানে কাজ করে না। লাইন বন্ধ কাস্টমারের জন্য উপরের লাইন বন্ধের ফ্লো আগে।'))
+                ->schema([
+                    Toggle::make('callback_on')->label(__('চালু'))->inline(false),
+                    TextInput::make('callback_hours')->label(__('না-ধরা কলের কত ঘণ্টার মধ্যে কল ব্যাক'))->numeric()->minValue(1)->maxValue(168)->required(),
                 ]),
             Section::make(__('অডিও বানানো'))->columns(2)
                 ->description(__('কাস্টমারের তথ্য ({name}, {due}, {expire_date} ...) আছে এমন মেসেজের অডিও কীভাবে বানানো হবে। জোড়া লাগানো: টেমপ্লেটের লেখা একবার বানানো হয়, আর প্রতিটা টাকার অঙ্ক, তারিখ বা নাম আলাদা ছোট অডিও, যা সেই তথ্যের সব কাস্টমারের জন্য একবারই। বদলালে শুধু নতুন লেখার অডিও নতুন নিয়মে বানানো হয়।'))

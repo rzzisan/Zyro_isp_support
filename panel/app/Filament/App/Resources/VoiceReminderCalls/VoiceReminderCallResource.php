@@ -91,7 +91,8 @@ class VoiceReminderCallResource extends Resource
                 TextColumn::make('reason')->label(__('কেন বাদ / সমস্যা'))->wrap()->color('gray')
                     ->state(fn (VoiceReminderCall $r) => collect([$r->reason ?: $r->error,
                         $r->backup_sms_id ? __('কলে পাওয়া যায়নি, বিল রিমাইন্ডার SMS গেছে') : null,
-                        $r->sms_backup && $r->reached ? __('কলে জানানো হয়েছে, SMS লাগেনি') : null])->filter()->join(' · ')),
+                        $r->sms_backup && $r->reached ? __('কলে জানানো হয়েছে, SMS লাগেনি') : null,
+                        $r->callback_played_at ? __('কল ব্যাক দিয়েছেন, রিমাইন্ডার আবার শোনানো হয়েছে') : null])->filter()->join(' · ')),
             ])
             ->filters([
                 SelectFilter::make('kind')->label(__('ধরন'))->options(array_map('__', VoiceReminderCall::KINDS)),
