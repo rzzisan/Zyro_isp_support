@@ -9,6 +9,7 @@ use App\Models\BillingOption;
 use App\Models\MikrotikRouter;
 use App\Models\PppSession;
 use App\Services\Engine;
+use App\Support\MacVendor;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -275,7 +276,11 @@ class Monitoring extends Page implements HasTable
                     ->color(fn ($record) => $record->s_online ? 'success' : ($record->s_blocked ? 'warning' : 'danger'))
                     ->tooltip(fn ($record) => $record->s_blocked ? __('MikroTik-এ ব্লক প্রোফাইলে (:profile): কানেক্ট আছে, ইন্টারনেট নেই', ['profile' => $record->s_profile]) : null),
                 TextColumn::make('s_address')->label('IP')->state(fn ($record) => $record->s_online || $record->s_blocked ? $record->s_address : null)->placeholder('—')->copyable(),
-                TextColumn::make('s_mac')->label('MAC')->state(fn ($record) => $record->s_online || $record->s_blocked ? $record->s_mac : null)->placeholder('—')->toggleable(),
+                // the router's brand from its MAC (offline vendor list); the MAC itself on hover
+                TextColumn::make('s_mac')->label(__('রাউটার'))
+                    ->state(fn ($record) => $record->s_online || $record->s_blocked ? MacVendor::label($record->s_mac) : null)
+                    ->tooltip(fn ($record) => $record->s_online || $record->s_blocked ? MacVendor::hint($record->s_mac) : null)
+                    ->placeholder('—')->toggleable(),
                 TextColumn::make('s_uptime')->label('Duration')->state(fn ($record) => $record->s_online || $record->s_blocked ? $record->s_uptime : null)->placeholder('—'),
                 TextColumn::make('s_seen')->label(__('শেষ অনলাইন'))
                     ->state(fn ($record) => ! $record->s_online && ! $record->s_blocked && $record->s_seen ? Carbon::parse($record->s_seen, 'UTC')->timezone('Asia/Dhaka')->format('d M, g:i A') : null)
@@ -313,7 +318,7 @@ class Monitoring extends Page implements HasTable
                         $this->runOn($record, 'recheck', fn ($r) => ($r['online'] ?? null) === null
                             ? ['warning', __('রাউটার থেকে উত্তর আসেনি')]
                             : (($r['online'] ?? false)
-                                ? ['success', __('অনলাইন')." · {$r['uptime']} · {$r['router']}", "IP {$r['address']} · MAC {$r['caller_id']}"]
+                                ? ['success', __('অনলাইন')." · {$r['uptime']} · {$r['router']}", "IP {$r['address']} · ".__('রাউটার').' '.MacVendor::label($r['caller_id'] ?? null)." (MAC {$r['caller_id']})"]
                                 : (($r['blocked'] ?? false)
                                     ? ['warning', __('ব্লক')." ({$r['profile']}) · {$r['router']}", __('কানেক্ট আছে, ইন্টারনেট নেই')." · IP {$r['address']}"]
                                     : ['danger', __('অফলাইন')." ({$r['router']})"])));

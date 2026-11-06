@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\MikrotikRouter;
 use App\Models\PppSession;
 use App\Services\Engine;
+use App\Support\MacVendor;
 use App\Support\Menu;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -85,7 +86,8 @@ class MonitoringController extends Controller
             return CustomerController::row($c, $online) + [
                 'state' => $online ? 'online' : ($blocked ? 'blocked' : 'offline'),
                 'server' => $c->server,
-                'ip' => $live ? $c->s_address : null, 'mac' => $live ? $c->s_mac : null, 'uptime' => $live ? $c->s_uptime : null,
+                'ip' => $live ? $c->s_address : null, 'mac' => $live ? $c->s_mac : null,
+                'router_brand' => $live ? MacVendor::brand($c->s_mac) : null, 'uptime' => $live ? $c->s_uptime : null,
                 'profile' => $blocked ? $c->s_profile : null,
                 'seen_at' => $seen?->toIso8601String(),
             ];
@@ -121,7 +123,12 @@ class MonitoringController extends Controller
         abort_unless(in_array($what, ['recheck', 'traffic', 'ping'], true), 404);
         BillingCustomer::where('company_id', $company->id)->where('header_id', $headerId)->firstOrFail();
         try {
-            return response()->json(['result' => Engine::monitor($company->id, $headerId, $what)]);
+            $result = Engine::monitor($company->id, $headerId, $what);
+            if (is_array($result) && filled($result['caller_id'] ?? null)) {
+                $result['router_brand'] = MacVendor::brand($result['caller_id']);
+            }
+
+            return response()->json(['result' => $result]);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 502);
         }

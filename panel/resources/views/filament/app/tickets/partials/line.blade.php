@@ -85,7 +85,8 @@
                         <div class="ztd-row"><span>{{ __('শেষ অনলাইন') }}</span><span>{{ $dt(\Illuminate\Support\Carbon::parse($last['seen_at'], 'UTC')) }}</span></div>
                         @if (! empty($last['address']))<div class="ztd-row"><span>{{ __('শেষ IP') }}</span><span class="ztd-mono">{{ $last['address'] }}</span></div>@endif
                     @endif
-                    <div class="ztd-row"><span>{{ __('রাউটার MAC') }}</span><span class="ztd-mono">{{ $val($info['mac'] ?? null) }}</span></div>
+                    @php $routerBrand = \App\Support\MacVendor::brand($info['mac'] ?? null); @endphp
+                    <div class="ztd-row"><span>{{ __('রাউটার') }}</span><span title="{{ \App\Support\MacVendor::hint($info['mac'] ?? null) }}">@if ($routerBrand)<b>{{ $routerBrand }}</b> <span class="ztd-mono" style="opacity:.6; font-size:.75em">{{ $info['mac'] }}</span>@else<span class="ztd-mono">{{ $val($info['mac'] ?? null) }}</span>@endif</span></div>
                 </div>
                 @if ($online && (($mk['download_bytes'] ?? null) !== null || ($mk['upload_bytes'] ?? null) !== null))
                     <div class="ztd-traffic">

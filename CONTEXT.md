@@ -50,6 +50,7 @@
 - `billing_customer_*` (bills/payments/remarks/sms/change_logs/line_logs/invoices): `engine/customer_history.py`, পেজ খুললে বা রাতে। change log সারি = বদলের পরের অবস্থা।
 - `billing_tickets` (`source`: null = sync, `history`, `desk` = Desk-এর নিজের টিকিট; sync কখনো `desk` সারি ছোঁয় না)। `billing_daily_bills`, `billing_online_payments`, `billing_options` (কর্মী/ডিপার্টমেন্ট/ক্যাটাগরি/priority + ১০টা কনফিগ তালিকা, শুধু হাতে Sync)।
 - নেটওয়ার্ক: `mikrotik_routers` (RouterOS API নিজস্ব ক্লায়েন্ট `engine/mikrotik.py`, শুধু পড়া), `ppp_sessions` (+profile, blocked), `olts`/`onus`/`customer_onus` (`engine/snmp.py`, `olt_sync.py`; ড্রাইভার BDCOM, VSOL, ECOM/C-Data; BDCOM-এ GETBULK/walk দিলে SNMP বন্ধ হয়, শুধু GET; প্রতি OLT আলাদা প্রসেস)।
+- রাউটার ব্র্যান্ড: `mac_vendors` (Wireshark manuf = IEEE MA-L/M/S, সব কোম্পানির এক তালিকা), `php artisan mac-vendors:import`, মাসে একবার `zyro-mac-vendors.timer`। `App\Support\MacVendor` (longest prefix; লোকাল বিট = "র‍্যান্ডম MAC"); মনিটরিং/লাইভ বক্স/টিকিট/অ্যাপে MAC-এর জায়গায় ব্র্যান্ড, MAC hover/ছোট লেখায় (2026-11-06)।
 - লাইভ অবস্থা `engine/customers.py: live_context`: আগে MikroTik (`online_now`), MAC → নিজের OLT; বিলিং শুধু ফাঁক পূরণে (সুইচ `billing_connections.live_from_billing`, `onu_from_billing`; গণনা `billing_fallbacks`)।
 
 ## ৬. ফিচার মানচিত্র (কোথায় কী)
