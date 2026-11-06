@@ -12,6 +12,7 @@ use App\Models\Company;
 use App\Models\PppSession;
 use App\Services\Engine;
 use App\Support\CustomerProfile;
+use App\Support\MacVendor;
 use App\Support\Menu;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -247,7 +248,12 @@ class CustomerController extends Controller
             Cache::forget($key);
         }
         try {
-            return response()->json(Cache::remember($key, 60, fn () => Engine::ticketInfo($company->id, $headerId)));
+            $info = Cache::remember($key, 60, fn () => Engine::ticketInfo($company->id, $headerId));
+            if (is_array($info)) {
+                $info['mac_brand'] = MacVendor::brand($info['mac'] ?? null); // the router's brand, shown instead of the MAC
+            }
+
+            return response()->json($info);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 502);
         }

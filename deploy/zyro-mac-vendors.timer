@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh the MAC vendor list once a month (the source asks for at most weekly downloads)
+
+[Timer]
+OnCalendar=*-*-07 22:10:00 UTC
+Persistent=true
+Unit=zyro-mac-vendors.service
+
+[Install]
+WantedBy=timers.target

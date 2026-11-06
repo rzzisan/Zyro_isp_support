@@ -335,7 +335,7 @@ private fun MonitorActions(navController: NavHostController, company: String, r:
             "offline" -> listOfNotNull(offlineFor(r.seenAt, now, s)?.let { "${s.offlineLabel} $it" },
                 r.seenAt?.let { "${s.mLastOnline} ${Format.dateTime(it)}" }).joinToString(" · ").ifEmpty { s.mNeverSeen }
             "blocked" -> "${s.mBlockedHint} · ${r.profile ?: ""} · IP ${r.ip ?: ""}"
-            else -> listOfNotNull(r.uptime, r.ip?.let { "IP $it" }, r.mac?.let { "MAC $it" }).joinToString(" · ")
+            else -> listOfNotNull(r.uptime, r.ip?.let { "IP $it" }, (r.routerBrand ?: r.mac)?.let { "${s.routerBrand} $it" }).joinToString(" · ")
         }
         Text("${monitorStateLabel(r.state, s)} · $detail", fontSize = 14.sp, color = stateColor(r), fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(12.dp))
@@ -384,7 +384,7 @@ private fun checkMessage(what: String, m: Map<String, Any?>, r: MonitorRow, s: A
         }
         else -> when (m["online"]) {
             null -> s.mNoAnswer to Warn
-            true -> "${s.online} · ${str("uptime") ?: ""} · ${str("router") ?: ""}\nIP ${str("address") ?: ""} · MAC ${str("caller_id") ?: ""}" to Good
+            true -> "${s.online} · ${str("uptime") ?: ""} · ${str("router") ?: ""}\nIP ${str("address") ?: ""} · ${s.routerBrand} ${str("router_brand") ?: str("caller_id") ?: ""}" to Good
             else -> if (m["blocked"] == true) "${s.blocked} (${str("profile") ?: ""}) · ${str("router") ?: ""}\n${s.mBlockedHint}" to Warn
             else "${s.offlineLabel} (${str("router") ?: ""})" to Danger
         }

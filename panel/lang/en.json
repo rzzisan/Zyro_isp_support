@@ -2010,5 +2010,8 @@
     "কল ব্যাক দিয়েছেন, রিমাইন্ডার আবার শোনানো হয়েছে": "Called back, heard the reminder again",
     "কল ব্যাক: রিমাইন্ডার আবার শুনেছেন": "Call back: heard the reminder again",
     "রিমাইন্ডার কল ধরেননি, পরে হটলাইনে কল দিয়ে মেসেজটা আবার শুনেছেন (মেসেজের অংশ রেকর্ডিংয়ে নেই)": "Missed the reminder call, then called the hotline and heard the message again (the message is not in the recording)",
-    "রিমাইন্ডারের কল ব্যাক": "Reminder call backs"
+    "রিমাইন্ডারের কল ব্যাক": "Reminder call backs",
+    "IP / রাউটার": "IP / router",
+    "র‍্যান্ডম MAC": "Random MAC",
+    "লোকাল/র‍্যান্ডম MAC, নির্মাতা নেই": "Local/random MAC, no maker"
 }

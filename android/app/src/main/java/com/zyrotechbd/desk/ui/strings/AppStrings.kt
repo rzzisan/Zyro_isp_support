@@ -296,6 +296,7 @@ abstract class AppStrings {
     abstract val mDetails: String
     abstract val mTicket: String
     abstract val mNoAnswer: String
+    abstract val routerBrand: String
     abstract val mDown: String
     abstract val mUp: String
     abstract val mReceived: String
@@ -759,6 +760,7 @@ object BengaliStrings : AppStrings() {
     override val mDetails = "বিস্তারিত"
     override val mTicket = "টিকিট"
     override val mNoAnswer = "রাউটার থেকে উত্তর আসেনি"
+    override val routerBrand = "রাউটার"
     override val mDown = "ডাউনলোড"
     override val mUp = "আপলোড"
     override val mReceived = "এসেছে"
@@ -1219,6 +1221,7 @@ object EnglishStrings : AppStrings() {
     override val mDetails = "Details"
     override val mTicket = "Ticket"
     override val mNoAnswer = "No answer from the router"
+    override val routerBrand = "Router"
     override val mDown = "Download"
     override val mUp = "Upload"
     override val mReceived = "received"

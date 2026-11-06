@@ -363,7 +363,7 @@ fun LiveBox(info: LiveInfo) {
     if (!(mk?.get("online") == true)) {
         InfoRow(s.lastSeen, str(info.lastSeen, "seen_at")?.let { Format.dateTime(it.replace(" ", "T")).ifEmpty { it } })
     }
-    InfoRow("MAC", info.mac)
+    InfoRow(s.routerBrand, info.macBrand?.let { b -> info.mac?.let { "$b ($it)" } ?: b } ?: info.mac)
     Spacer(Modifier.height(8.dp))
     Text("ONU", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Ink)
     val onu = info.onu

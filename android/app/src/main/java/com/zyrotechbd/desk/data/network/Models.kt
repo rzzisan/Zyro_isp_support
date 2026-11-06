@@ -173,6 +173,7 @@ data class MonitorRow(
     val state: String = "offline",      // online | offline | blocked
     val ip: String? = null,
     val mac: String? = null,
+    @Json(name = "router_brand") val routerBrand: String? = null,
     val uptime: String? = null,
     val profile: String? = null,
     @Json(name = "seen_at") val seenAt: String? = null,
@@ -201,6 +202,7 @@ data class LiveInfo(
     val mikrotik: Map<String, Any?>? = null,
     val onu: Map<String, Any?>? = null,
     val mac: String? = null,
+    @Json(name = "mac_brand") val macBrand: String? = null,
     @Json(name = "last_seen") val lastSeen: Map<String, Any?>? = null,
     @Json(name = "payment_status") val paymentStatus: String? = null,
 )

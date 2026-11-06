@@ -16,7 +16,7 @@
         $rows = [
             __('MikroTik (এখন)') => $mk ? (($mk['online'] ?? false) ? __('অনলাইন · ').($mk['uptime'] ?? '').' · '.($mk['router'] ?? '')
                 : ($blocked ? __('ব্লক (:profile) · ইন্টারনেট নেই · ', ['profile' => $mk['profile'] ?? '']).($mk['router'] ?? '') : __('অফলাইন · ').($mk['router'] ?? ''))) : __('রাউটার থেকে উত্তর আসেনি'),
-            __('IP / MAC (রাউটার)') => $mk && (($mk['online'] ?? false) || $blocked) ? (($mk['address'] ?? '—').' · '.($mk['caller_id'] ?? '—')) : '—',
+            __('IP / রাউটার') => $mk && (($mk['online'] ?? false) || $blocked) ? (($mk['address'] ?? '—').' · '.($mk['caller_id'] ?? '—')) : '—',
             'PPPoE' => ($p['connectivity'] ?? '—'),
             'Uptime' => $p['uptime'] ?? '—',
             __('শেষ logout') => $p['last_logout'] ?? '—',
@@ -34,7 +34,7 @@
     <div style="display:grid; grid-template-columns: auto 1fr; gap:6px 16px; font-size:.9rem">
         @foreach ($rows as $k => $v)
             <div style="color:#6b7280">{{ $k }}</div>
-            <div style="font-weight:600; {{ $k === __('MikroTik (এখন)') ? ($online ? 'color:#059669' : ($blocked ? 'color:#d97706' : 'color:#dc2626')) : '' }}">@if ($k === 'IP' && $v !== '—')<x-router-ip :ip="$v" />@elseif ($k === __('IP / MAC (রাউটার)') && $v !== '—')<x-router-ip :ip="$mk['address'] ?? null" /> · {{ $mk['caller_id'] ?? '—' }}@else{{ $v }}@endif</div>
+            <div style="font-weight:600; {{ $k === __('MikroTik (এখন)') ? ($online ? 'color:#059669' : ($blocked ? 'color:#d97706' : 'color:#dc2626')) : '' }}">@if ($k === 'IP' && $v !== '—')<x-router-ip :ip="$v" />@elseif ($k === __('IP / রাউটার') && $v !== '—')<x-router-ip :ip="$mk['address'] ?? null" /> · <span title="{{ \App\Support\MacVendor::hint($mk['caller_id'] ?? null) }}">{{ \App\Support\MacVendor::label($mk['caller_id'] ?? null) ?? '—' }}</span>@if (\App\Support\MacVendor::brand($mk['caller_id'] ?? null)) <span style="font-weight:400; color:#9ca3af; font-size:.75rem; font-family:monospace">{{ $mk['caller_id'] }}</span>@endif@else{{ $v }}@endif</div>
         @endforeach
     </div>
     @if (! empty($live['payments']))
