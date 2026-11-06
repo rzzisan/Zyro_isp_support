@@ -44,9 +44,9 @@ class TechnicianResource extends Resource
         return __('টেকনিশিয়ান');
     }
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'সাপোর্ট';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 7;
 
     public static function canAccess(): bool
     {

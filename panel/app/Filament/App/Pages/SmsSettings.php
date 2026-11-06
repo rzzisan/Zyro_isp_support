@@ -44,9 +44,9 @@ class SmsSettings extends CompanySettingsPage
 
     protected static ?string $slug = 'sms-gateway';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'SMS ও WhatsApp';
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 10;
 
     protected function record(Company $company): Model
     {

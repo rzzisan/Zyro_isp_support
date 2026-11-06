@@ -30,9 +30,9 @@ class WalkieGroupResource extends Resource
 
     protected static ?string $slug = 'walkie-groups';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'ফোন ও কল';
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 4;
 
     public static function getNavigationLabel(): string
     {
