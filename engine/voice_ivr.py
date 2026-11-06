@@ -320,6 +320,37 @@ def _callback_replay(company_id: int, caller: str) -> str | None:
     return "replay:" + "&".join(fs)
 
 
+_marked_at, _backfilled = 0.0, False
+
+
+def mark_callback_logs() -> None:
+    """The কল লগ flag of call backs that heard their reminder again (call_logs.reminder_replay_id): the hotline row
+    of that very call (the popup's, the bot's or the staff's, whichever made it; by number, from the replay to 20 min
+    after), and for a caller who hung up before any row was made (during the message), a row of its own once the
+    call must be over. Once a minute; the first pass looks back 3 days (call backs from before the flag existed)."""
+    global _marked_at, _backfilled
+    if time.time() - _marked_at < 60:
+        return
+    _marked_at = time.time()
+    hours = 1 if _backfilled else 72
+    db.execute("update call_logs l set reminder_replay_id = m.vid, updated_at = now() from ("
+               " select distinct on (v.id) v.id as vid, c.id as lid from voice_reminder_calls v"
+               " join call_logs c on c.company_id = v.company_id and c.caller_normalized = v.number and c.channel = 'hotline'"
+               "  and c.direction = 'in' and c.reminder_replay_id is null"
+               "  and c.started_at between v.callback_played_at - interval '60 seconds' and v.callback_played_at + interval '20 minutes'"
+               " where v.callback_played_at > now() - make_interval(hours => %s)"
+               "  and not exists (select 1 from call_logs o where o.reminder_replay_id = v.id)"
+               " order by v.id, abs(extract(epoch from c.started_at - v.callback_played_at))) m where l.id = m.lid", (hours,))
+    db.execute("insert into call_logs (company_id, call_ref, caller, caller_normalized, status, started_at, ended_at, channel,"
+               " direction, outcome, outcome_text, reminder_replay_id, actions, created_at, updated_at)"
+               " select v.company_id, 'replay-' || v.id, '0' || substr(v.number, 4), v.number, 'ended', v.callback_played_at,"
+               " v.callback_played_at, 'hotline', 'in', 'hung_up', 'রিমাইন্ডার আবার শোনার সময় বা ঠিক পরে কেটে দিয়েছেন', v.id, '[]', now(), now()"
+               " from voice_reminder_calls v where v.callback_played_at between now() - make_interval(hours => %s) and now() - interval '20 minutes'"
+               " and not exists (select 1 from call_logs o where o.reminder_replay_id = v.id)"
+               " on conflict (company_id, call_ref) do nothing", (hours,))
+    _backfilled = True
+
+
 def dial_plan(uid: str) -> str:
     """GET /remind-dial: "ok:c<company>:0<number>:<ring seconds>" for zyro-remind-dial."""
     c = active.get(uid)
@@ -390,6 +421,10 @@ def run_queue() -> None:
     for r in db.all_rows("select id from voice_reminder_calls where status = 'queued' and coalesce(scheduled_at, now()) <= now()"
                          " order by scheduled_at nulls first, id limit 20"):
         start(r["id"])
+    try:
+        mark_callback_logs()
+    except Exception:
+        log.exception("call back flags on call_logs")
     # a call Asterisk never came back about (originate refused silently): give up after 2 minutes unanswered
     for uid, c in list(active.items()):
         if not c.get("answered") and not c.get("done") and time.time() - c["at"] > 120:
