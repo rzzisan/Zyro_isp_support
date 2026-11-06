@@ -50,4 +50,22 @@ class SipSetting extends Model
     {
         return static::where('company_id', $companyId)->where('enabled', true)->exists();
     }
+
+    /** Networks office phones may register from (panel → অফিস ফোন → অনুমতির IP তালিকা): [[net, note], ...]. */
+    public function officeAllowedIps(): array
+    {
+        $rows = json_decode((string) $this->office_allowed_ips, true);
+
+        return is_array($rows) ? array_values(array_filter($rows, fn ($r) => is_array($r) && filled($r['net'] ?? null))) : [];
+    }
+
+    /** An IPv4 address or network in CIDR form (10.90.90.90, 10.90.90.0/24). */
+    public static function validNet(string $net): bool
+    {
+        if (! preg_match('#^(\d{1,3}(?:\.\d{1,3}){3})(?:/(\d{1,2}))?$#', trim($net), $m)) {
+            return false;
+        }
+
+        return filter_var($m[1], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false && (! isset($m[2]) || (int) $m[2] <= 32);
+    }
 }

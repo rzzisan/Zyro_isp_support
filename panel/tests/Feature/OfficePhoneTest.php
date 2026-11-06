@@ -63,4 +63,15 @@ class OfficePhoneTest extends TestCase
         $this->actingAs($agent)->get("/app/{$this->company->slug}/office-phones")->assertForbidden();
         $this->actingAs($this->owner)->get("/app/{$this->company->slug}/office-phones")->assertOk();
     }
+
+    public function test_allowed_ip_list_is_validated_and_saved(): void
+    {
+        $this->assertTrue(\App\Models\SipSetting::validNet('10.90.90.0/24'));
+        $this->assertTrue(\App\Models\SipSetting::validNet('10.90.90.90'));
+        $this->assertFalse(\App\Models\SipSetting::validNet('10.90.90.0/33'));
+        $this->assertFalse(\App\Models\SipSetting::validNet('999.1.1.1'));
+        $s = \App\Models\SipSetting::forCompany($this->company);
+        $s->office_allowed_ips = json_encode([['net' => '10.90.90.0/24', 'note' => 'LAN'], ['net' => '']]);
+        $this->assertSame([['net' => '10.90.90.0/24', 'note' => 'LAN']], $s->officeAllowedIps());
+    }
 }

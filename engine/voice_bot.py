@@ -359,9 +359,24 @@ REG_STATES = {"Registered": "PBX: রেজিস্টার্ড", "Rejected"
               "Unregistered": "PBX: রেজিস্টার হয়নি", "Stopped": "PBX: বন্ধ"}
 
 
+NET_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?$")
+
+
+def office_nets(raw) -> list[str]:
+    """The company's allowed IP list (panel → অফিস ফোন → অনুমতির IP তালিকা, JSON [{net, note}]); OFFICE_NETS until
+    it is set. Only well-formed IPv4 addresses / CIDRs reach the Asterisk config."""
+    try:
+        rows = json.loads(raw) if raw else None
+    except ValueError:
+        rows = None
+    nets = [str(r.get("net", "")).strip() for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+    nets = [n for n in nets if NET_RE.match(n)]
+    return nets if rows is not None else [n.strip() for n in OFFICE_NETS]
+
+
 def office_rows() -> list[dict]:
     """Enabled office phones (panel → অফিস ফোন) of companies whose hotline PBX is set up (server, port, transport)."""
-    return db.all_rows("select o.*, s.server, s.port, s.transport from office_phones o"
+    return db.all_rows("select o.*, s.server, s.port, s.transport, s.office_allowed_ips from office_phones o"
                        " join sip_settings s on s.company_id = o.company_id"
                        " where o.enabled and o.pbx_password is not null and s.server is not null order by o.id")
 
@@ -377,7 +392,7 @@ def office_config() -> str:
         if not pbx_pw or not phone_pw:
             continue
         o, ph, host, port, user = f"o{r['id']}", f"ph{r['id']}", r["server"], r["port"], r["pbx_username"]
-        permits = "".join(f"permit={n.strip()}\n" for n in OFFICE_NETS)
+        permits = "".join(f"permit={n}\n" for n in office_nets(r.get("office_allowed_ips")))
         out.append(f"""
 [{o}-auth]
 type=auth

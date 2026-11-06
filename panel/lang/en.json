@@ -1995,5 +1995,12 @@
     "ফোনের পুরনো pbx.bd অ্যাকাউন্টটা মুছবেন না, শুধু বন্ধ রাখুন (বা দ্বিতীয় অ্যাকাউন্ট করে রাখুন): আমাদের সার্ভারে সমস্যা হলে সেটা আবার চালু করলেই আগের মতো চলবে। ফোন শুধু অফিসের নেটওয়ার্ক থেকে রেজিস্টার হতে পারবে।": "Don't delete the phone's old pbx.bd account, just turn it off (or keep it as a second account): if our server has trouble, turning it back on works as before. The phone can register only from the office network.",
     "আউটগোয়িং: অফিস :n": "Outgoing: office :n",
     "অফিস ফোন :n": "Office phone :n",
-    "অফিস ফোন (নিজের SIP সার্ভারে)": "Office phones (own SIP server)"
+    "অফিস ফোন (নিজের SIP সার্ভারে)": "Office phones (own SIP server)",
+    "অনুমতির IP তালিকা": "Allowed IP list",
+    "শুধু এই IP বা নেটওয়ার্ক থেকে অফিস ফোন আমাদের সার্ভারে রেজিস্টার হতে পারবে। একটা IP (যেমন 10.90.90.90) বা পুরো নেটওয়ার্ক (যেমন 10.90.90.0/24) দিন।": "Office phones can register on our server only from these IPs or networks. Enter one IP (e.g. 10.90.90.90) or a whole network (e.g. 10.90.90.0/24).",
+    "IP যোগ করুন": "Add IP",
+    "IP / নেটওয়ার্ক": "IP / network",
+    "সঠিক IP বা নেটওয়ার্ক দিন, যেমন 10.90.90.0/24": "Enter a valid IP or network, e.g. 10.90.90.0/24",
+    "কোথাকার": "Where",
+    "সেভ হয়েছে; এক মিনিটের মধ্যে চালু হবে": "Saved; it takes effect within a minute"
 }
