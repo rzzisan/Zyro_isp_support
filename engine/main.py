@@ -1180,6 +1180,29 @@ def desk_billing_disable_list(request: Request, company_id: int, day: str = "", 
     return {"started": True, "day": str(d)}
 
 
+@app.post("/internal/{company_id}/desk-line")
+async def desk_line_action(request: Request, company_id: int):
+    """লাইন বন্ধ/চালু (billing phase 3): the Desk switches the line on the MikroTik itself and reads it back.
+    {"customer": ID or PPPoE ID | "header_id": n, "action": disable|enable|deactivate|activate, "reason", "note"}."""
+    internal_key(request)
+    b = await request.json()
+    from engine import desk_line
+    who = str(b.get("customer") or "").strip()
+
+    def go():
+        kw = {"header_id": int(b["header_id"])} if b.get("header_id") else {"code": who}
+        if not kw.get("header_id") and not desk_line.find_customer(company_id, code=who):
+            kw = {"username": who}
+        return desk_line.run(company_id, str(b.get("action") or ""), reason=str(b.get("reason") or "manual"),
+                             note=b.get("note"), user_id=int(b.get("user_id") or 0) or None,
+                             actor=str(b.get("by") or "Desk"), source=str(b.get("source") or "panel"), **kw)
+    try:
+        row = await run_in_threadpool(go)
+    except desk_line.Refused as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items()}
+
+
 @app.post("/internal/{company_id}/customers/find")
 def customers_find(request: Request, company_id: int, q: str = ""):
     """Desk header search fallback: the billing header search, copying customers the desk doesn't have yet."""

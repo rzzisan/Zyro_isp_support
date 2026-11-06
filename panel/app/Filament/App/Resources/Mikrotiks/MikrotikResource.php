@@ -83,6 +83,8 @@ class MikrotikResource extends Resource
                 ->options(fn () => collect(static::billingServers())->mapWithKeys(fn ($n, $s) => [$s => "{$s} (".__(':n জন কাস্টমার', ['n' => $n]).')'])->all())
                 ->placeholder(__('পরীক্ষা করলে নিজে মিলিয়ে নেবে'))
                 ->helperText(__('বিলিং সফটওয়্যারে কাস্টমারের "Server" ঘরে যে নাম থাকে। খালি রাখলে রাউটারের identity নাম দিয়ে নিজে মেলাবে।')),
+            TextInput::make('block_profile')->label(__('ব্লক প্রোফাইল (বিল বাকিতে লাইন বন্ধ হলে)'))->placeholder('BLOCKED-PROFILE')
+                ->helperText(__('খালি রাখলে BLOCKED-PROFILE-এর মতো নামের প্রোফাইল নিজে বাছবে। Desk থেকে লাইন বন্ধ/চালু করতে API ইউজারের write অনুমতি লাগবে।')),
             Toggle::make('enabled')->label(__('চালু'))->default(true),
         ]);
     }
