@@ -57,6 +57,14 @@ class DecideTest(unittest.TestCase):
         self.assertIsNone(dd.decide(D(2026, 11, 6), cust(balance=0, bills={}, joined_on=D(2026, 11, 2)), S))
         self.assertIsNone(dd.decide(D(2026, 11, 6), cust(balance=0, bills={}, balance_from="billing"), S))
 
+    def test_billing_not_started_yet(self):
+        # a new connection whose billing starts in December: nothing owed in November, no assumed bill
+        c = cust(balance=0, bills={}, joined_on=D(2026, 10, 29), billing_start=D(2026, 12, 1))
+        self.assertIsNone(dd.decide(D(2026, 11, 6), c, S))
+        self.assertIsNone(dd.decide(D(2026, 11, 6), {**c, "balance": 520}, S))
+        self.assertEqual(dd.decide(D(2026, 12, 6), {**c, "balance": 520, "bills": {D(2026, 12, 1): 520}}, S)["reason"],
+                         "due_today")
+
     def test_not_candidates(self):
         for kw in ({"status": "Inactive"}, {"is_left": True}, {"line_state": "off"}, {"expire_day": None}, {"balance": 0},
                    {"balance": -100}):
@@ -80,9 +88,11 @@ class DecideTest(unittest.TestCase):
         for s, want in [("2026-11-20T00:00:00", D(2026, 11, 20)), ("20-11-2026", D(2026, 11, 20)),
                         ("20/11/2026", D(2026, 11, 20)), ("20-Nov-2026", D(2026, 11, 20)), ("20 Nov 2026", D(2026, 11, 20)),
                         ("Nov-20-2026", D(2026, 11, 20)), ("31-12-9999", D(9999, 12, 31)), ("01-Jan-0001", None),
-                        ("", None), (None, None), ("garbage", None), ("/Date(1763596800000)/", D(2025, 11, 20))]:
+                        ("Nov-06-26", D(2026, 11, 6)), ("Dec-31-99", D(9999, 12, 31)), ("", None), (None, None), ("garbage", None), ("/Date(1763596800000)/", D(2025, 11, 20))]:
             self.assertEqual(dd.parse_date(s), want, s)
         self.assertEqual(dd.effective_to({"EffectiveTo": "20-Nov-2026", "X": 1}), D(2026, 11, 20))
+        self.assertEqual(dd.effective_to({"EffectiveTo": "Nov-07-26", "EffectiveToRemarks": ""}), D(2026, 11, 7))
+        self.assertEqual(dd.decide(D(2026, 11, 6), cust(effective_to=dd.parse_date("Dec-31-99")), S)["reason"], "extended")
         self.assertIsNone(dd.effective_to({"X": 1}))
         self.assertIsNone(dd.effective_to(None))
 
@@ -139,6 +149,8 @@ class ListAndCompareTest(unittest.TestCase):
                              VALUES (1, %s, 'line', %s)""", (h, midnight + dt.timedelta(hours=40)))
 
     def test_list_and_compare(self):
+        logged = "SELECT count(*) AS n FROM activity_logs WHERE action = 'billing.disable_shadow'"
+        before = self.db.one(logged)["n"]          # the log is append-only: earlier runs stay
         out = dd.make_list(self.C, self.day)
         self.assertTrue(out["made"])
         r = {x["customer_code"]: x for x in self.db.all_rows(
@@ -154,4 +166,4 @@ class ListAndCompareTest(unittest.TestCase):
         # once a day: a second call only compares; no billing table was written
         self.assertFalse(dd.make_list(self.C, self.day)["made"])
         self.assertEqual(self.db.one("SELECT count(*) AS n FROM billing_customer_line_logs")["n"], 4)
-        self.assertEqual(self.db.one("""SELECT count(*) AS n FROM activity_logs WHERE action = 'billing.disable_shadow'""")["n"], 1)
+        self.assertEqual(self.db.one(logged)["n"], before + 1)

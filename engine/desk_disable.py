@@ -75,7 +75,8 @@ _MONTHS = {m.lower(): i for i, m in enumerate(calendar.month_abbr) if m}
 
 def parse_date(v) -> dt.date | None:
     """Billing's dates come in many shapes: 2026-11-20T00:00:00, 20-11-2026, 20/11/2026, 20-Nov-2026, 20 Nov 2026,
-    Nov-20-2026, /Date(1763596800000)/. Before 1900 (01-Jan-0001) is empty; 31-12-9999 is 'always'."""
+    Nov-20-2026, Nov-20-26 (EffectiveTo), /Date(1763596800000)/. Before 1900 (01-Jan-0001) is empty; 31-12-9999 and
+    Dec-31-99 are 'always' (9999-12-31)."""
     s = str(v or "").strip()
     if not s:
         return None
@@ -88,8 +89,11 @@ def parse_date(v) -> dt.date | None:
             d = dt.date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
         elif m := re.match(r"(\d{1,2})[-/ ]([A-Za-z]{3})[A-Za-z]*[-/ ,]+(\d{4})", s):
             d = dt.date(int(m.group(3)), _MONTHS[m.group(2).lower()], int(m.group(1)))
-        elif m := re.match(r"([A-Za-z]{3})[A-Za-z]*[-/ ](\d{1,2})[-/ ,]+(\d{4})", s):
-            d = dt.date(int(m.group(3)), _MONTHS[m.group(1).lower()], int(m.group(2)))
+        elif m := re.match(r"([A-Za-z]{3})[A-Za-z]*[-/ ](\d{1,2})[-/ ,]+(\d{4}|\d{2})\b", s):
+            y = int(m.group(3))
+            if len(m.group(3)) == 2:       # billing's EffectiveTo: Nov-06-26; Dec-31-99 = no end
+                y = 9999 if y == 99 else 2000 + y
+            d = dt.date(y, _MONTHS[m.group(1).lower()], int(m.group(2)))
         else:
             return None
     except (ValueError, KeyError, OverflowError, OSError):
@@ -117,6 +121,9 @@ def decide(day: dt.date, r: dict, s: dict) -> dict | None:
     ({month start: amount} of the last 3 months as the ledger has them), extended_until, last_enable, last_payment."""
     if r.get("is_left") or (r.get("status") or "") != "Active" or r.get("line_state") != "on" or not r.get("expire_day"):
         return None
+    start = r.get("billing_start")              # billing's "billing start month": no bill before it (new connection)
+    if start and start > day:
+        return None
     g = grace_days(s)
     balance = _f(r.get("balance"))
     bills = dict(r.get("bills") or {})
@@ -124,7 +131,7 @@ def decide(day: dt.date, r: dict, s: dict) -> dict | None:
     # the ledger may not have this month's bill yet (billing's bills of the month are copied over the first nights):
     # the Desk would have made it on the 1st for a customer who was Active and joined before the month
     if (r.get("balance_from") == "desk" and ps not in bills and _f(r.get("monthly_bill")) > 0
-            and (r.get("joined_on") is None or r["joined_on"] < ps)):
+            and (r.get("joined_on") is None or r["joined_on"] < ps) and not (start and start > ps)):
         bills[ps] = _f(r["monthly_bill"])
         balance += bills[ps]
     not_yet, deadline, expire_on = 0.0, None, None
@@ -180,7 +187,7 @@ lines AS (
     SELECT customer_header_id AS h, max(changed_at) AS last_enable FROM billing_customer_line_logs
     WHERE company_id = %(c)s AND action = 'enable' AND changed_at > %(at)s - interval '40 days' GROUP BY 1)
 SELECT c.id, c.customer_code, c.status, c.is_left, c.is_vip, c.line_state, c.expire_day, c.monthly_bill, c.joined_on,
-       c.extended_until, b.extra,
+       c.extended_until, b.extra, b.billing_start_month AS billing_start,
        CASE WHEN x.has_history THEN x.balance - coalesce(r.amt, 0) ELSE coalesce(x.billing_due, b.due) END AS balance,
        CASE WHEN x.has_history THEN 'desk' ELSE 'billing' END AS balance_from,
        bl.m AS bills, greatest(p.last_on, (r.last_at + interval '6 hours')::date) AS last_payment,
@@ -310,7 +317,7 @@ COMPARE = [
                              AND b.collected_at < %(d2)s) AS paid_later,
                      EXISTS (SELECT 1 FROM billing_customer_remarks r WHERE r.company_id = c.company_id
                              AND r.customer_header_id = c.header_id AND r.remarks_type ILIKE '%%effective%%'
-                             AND r.created_at >= %(d0)s - interval '35 days' AND r.created_at < %(d2)s) AS extended
+                             AND r.created_at >= %(d0)s - interval '1 day' AND r.created_at < %(d2)s) AS extended
               FROM desk_disable_shadow s2 JOIN desk_customers c ON c.id = s2.customer_ref
               LEFT JOIN _dis d ON d.customer_ref = s2.customer_ref
               LEFT JOIN billing_customer_fetches f ON f.company_id = c.company_id AND f.customer_header_id = c.header_id
