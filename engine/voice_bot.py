@@ -459,6 +459,10 @@ def sync_asterisk() -> None:
         f.write(text)
     r = subprocess.run(["asterisk", "-rx", "pjsip reload"], capture_output=True, text=True, timeout=20)
     log.info("asterisk pjsip reloaded: %s", (r.stdout or r.stderr).strip()[:200])
+    # a changed password lives in the auth object, so the registration is not redone by the reload: one the PBX refused
+    # (403, e.g. a wrong password just fixed in the panel) would wait forbidden_retry_interval (5 min) otherwise
+    for row in office_rows():
+        subprocess.run(["asterisk", "-rx", f"pjsip send register o{row['id']}-reg"], capture_output=True, text=True, timeout=20)
 
 
 # --- what the bot knows about the caller -------------------------------------------------------
