@@ -122,6 +122,7 @@ fun BillFormScreen(navController: NavHostController, company: String, headerId: 
                 receivedById = f.receivedByDefault ?: f.receivedBy.firstOrNull()?.id
                 billMonth = f.billMonth.orEmpty()
                 deskSms = f.smsDefault
+                nextBillingDate = f.nextBillingDefault
             } catch (e: Exception) {
                 error = ApiClient.errorMessage(e, s.billFormFailed, s.offline)
             }

@@ -20,6 +20,7 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
@@ -60,13 +61,35 @@ class BillActions
         }
     }
 
-    private static function defaults(array $f): array
+    private static function defaults(array $f, ?int $headerId = null): array
     {
+        $early = $headerId && $f && static::paidEarly(static::company(), $headerId, $f);
+
         return ['paid' => (float) ($f['payable'] ?? 0) ?: null, 'discount' => 0,
             'method_id' => $f['method_default'] ?? null, 'received_by_id' => $f['received_by_default'] ?? null,
-            'bill_month' => $f['bill_month'] ?? null, 'expected_payable' => $f['payable'] ?? null,
-            'desk_sms' => static::deskSmsDefault(), 'next_billing_date' => static::nextBillingDate((float) ($f['payable'] ?? 0), (float) ($f['payable'] ?? 0), 0),
+            'bill_month' => $f['bill_month'] ?? null, 'expected_payable' => $f['payable'] ?? null, 'early_payer' => $early,
+            'desk_sms' => static::deskSmsDefault(),
+            'next_billing_date' => ! $early && static::nextBillingDate((float) ($f['payable'] ?? 0), (float) ($f['payable'] ?? 0), 0),
             'next_billing_on' => now('Asia/Dhaka')->toDateString(), 'print' => true];
+    }
+
+    /**
+     * Paying before the expire date with only one month due (Zisan, 2026-11-06): the line never went off, so the
+     * customer keeps their Expire Date and "পরের বিলিং তারিখ সেট" starts off. "Before" = today is earlier than this
+     * month's expire day (bill_day, capped to the month's last day); one month = the due is at most the monthly bill.
+     */
+    public static function paidEarly(int $companyId, int $headerId, array $f, ?Carbon $today = null): bool
+    {
+        $c = BillingCustomer::where('company_id', $companyId)->where('header_id', $headerId)->first(['bill_day', 'monthly_bill']);
+        $day = (int) ($c?->bill_day ?? 0);
+        $payable = (float) ($f['payable'] ?? 0);
+        $monthly = (float) ($f['monthly'] ?? 0) ?: (float) ($c?->monthly_bill ?? 0);
+        if ($day < 1 || $payable <= 0 || $monthly <= 0 || $payable > $monthly + 0.001) {
+            return false;
+        }
+        $today = ($today ?? now('Asia/Dhaka'))->copy()->startOfDay();
+
+        return $today->day < min($day, $today->daysInMonth);
     }
 
     /**
@@ -152,7 +175,8 @@ class BillActions
     {
         $headerOf = fn ($get) => $customer ? (int) $customer->header_id : (int) $get('header_id');
         $nextDate = fn ($get, $set) => $get('expected_payable') === null ? null
-            : $set('next_billing_date', static::nextBillingDate((float) $get('expected_payable'), (float) $get('paid'), (float) $get('discount')));
+            : $set('next_billing_date', ! $get('early_payer')
+                && static::nextBillingDate((float) $get('expected_payable'), (float) $get('paid'), (float) $get('discount')));
 
         return Action::make($forRecord ? 'payBill' : 'receiveBill')->label(__('বিল নিন'))->icon(Heroicon::OutlinedBanknotes)
             ->visible(fn () => Menu::can('bills'))
@@ -172,7 +196,7 @@ class BillActions
                 }
                 $base = $forRecord ? ['header_id' => (int) $c->header_id] : [];
                 try {
-                    return $base + static::defaults(static::form((int) $c->header_id, true));
+                    return $base + static::defaults(static::form((int) $c->header_id, true), (int) $c->header_id);
                 } catch (RuntimeException) {
                     return $base + $plain;  // the info box shows the error
                 }
@@ -193,7 +217,7 @@ class BillActions
                     ->live()
                     ->afterStateUpdated(function ($state, callable $set, $livewire) {
                         [$f] = static::tryForm((int) $state ?: null);
-                        foreach (static::defaults($f ?? []) as $k => $v) {
+                        foreach (static::defaults($f ?? [], (int) $state ?: null) as $k => $v) {
                             $set($k, $v);
                         }
                         // customer picked: straight to the amount, Enter there saves
@@ -208,6 +232,7 @@ class BillActions
                             return view('filament.app.bills.form-info', ['info' => $f, 'error' => $error]);
                         }),
                     Hidden::make('expected_payable'),
+                    Hidden::make('early_payer'),
                     Grid::make(3)->schema([
                         TextInput::make('paid')->label(__('টাকা নিলেন'))->numeric()->minValue(0)->suffix(__('টাকা'))->required()->live(debounce: 400)
                             ->afterStateUpdated($nextDate)
@@ -247,7 +272,7 @@ class BillActions
                                 : __('চালু করতে: সেটিংস → SMS গেটওয়ে-তে গেটওয়ে আর "বিল পরিশোধের টেমপ্লেট" সেট করুন')),
                         Toggle::make('next_billing_date')->label(__('পরের বিলিং তারিখ সেট'))->key('nextDate')
                             ->live()->partiallyRenderComponentsAfterStateUpdated(['nextDay'])
-                            ->hintIcon('heroicon-o-information-circle', __('বিলিং-এর "Is it next billing date?" শুধু বকেয়ার ৮০%-এর বেশি নিলে নিজে চালু হয়, অগ্রিমে বন্ধ')),
+                            ->hintIcon('heroicon-o-information-circle', __('বিলিং-এর "Is it next billing date?" শুধু বকেয়ার ৮০%-এর বেশি নিলে নিজে চালু হয়, অগ্রিমে বন্ধ। মেয়াদের তারিখের আগে এক মাসের বকেয়া দিলেও বন্ধ থাকে (তারিখ একই থাকে)।')),
                     ]),
                     // billing's switch only sets today; another day is written to the customer's Expire Date after the bill
                     DatePicker::make('next_billing_on')->label(__('পরের বিলিং তারিখ'))->key('nextDay')

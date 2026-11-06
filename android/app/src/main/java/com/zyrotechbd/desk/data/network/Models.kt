@@ -237,6 +237,7 @@ data class BillForm(
     val blocked: BlockedLine? = null,
     @Json(name = "sms_ready") val smsReady: Boolean = false,
     @Json(name = "sms_default") val smsDefault: Boolean = false,
+    @Json(name = "next_billing_default") val nextBillingDefault: Boolean = true,
 )
 
 data class BillRequest(

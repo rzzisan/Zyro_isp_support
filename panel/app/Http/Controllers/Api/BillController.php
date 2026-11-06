@@ -56,6 +56,9 @@ class BillController extends Controller
         return response()->json(array_merge($f, [
             'methods' => $pairs($f['methods'] ?? []), 'received_by' => $pairs($f['received_by'] ?? []),
             'sms_ready' => $sms->billSmsReady(), 'sms_default' => $sms->bill_sms && $sms->billSmsReady(),
+            // paying before the expire date with one month due: "পরের বিলিং তারিখ সেট" starts off (BillActions::paidEarly)
+            'paid_early' => $early = BillActions::paidEarly($company->id, $headerId, $f),
+            'next_billing_default' => ! $early && BillActions::nextBillingDate((float) ($f['payable'] ?? 0), (float) ($f['payable'] ?? 0), 0),
         ]));
     }
 

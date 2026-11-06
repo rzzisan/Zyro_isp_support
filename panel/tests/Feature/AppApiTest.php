@@ -171,7 +171,8 @@ class AppApiTest extends TestCase
 
         $this->api($this->agent)->getJson($this->url('customers/3/bill-form'))->assertOk()
             ->assertJsonPath('payable', 525)->assertJsonPath('methods.0', ['id' => '71', 'name' => 'Cash'])
-            ->assertJsonPath('received_by.1', ['id' => '3', 'name' => 'Arif'])->assertJsonPath('sms_ready', false);
+            ->assertJsonPath('received_by.1', ['id' => '3', 'name' => 'Arif'])->assertJsonPath('sms_ready', false)
+            ->assertJsonPath('paid_early', false)->assertJsonPath('next_billing_default', true);
         Http::assertSent(fn ($r) => str_contains($r->url(), '/bill-form') && str_contains($r->url(), 'user_id='.$this->agent->id));
 
         $this->api($this->agent)->postJson($this->url('customers/3/bills'), ['paid' => 525, 'discount' => 0, 'method_id' => '71',

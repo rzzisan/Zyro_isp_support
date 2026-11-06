@@ -249,6 +249,31 @@ class BillCollectionTest extends TestCase
         $this->assertFalse(BillActions::nextBillingDate(0, 100, 0));
     }
 
+    public function test_next_billing_date_starts_off_when_paying_early_with_one_month_due(): void
+    {
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-06 12:00', 'Asia/Dhaka'));
+        $this->fakeEngine();
+        $this->as($this->owner);
+        $this->customer->update(['bill_day' => 10]);
+        // day 6, expire day 10, due = one month: off, and stays off while the amount changes; staff can still turn it on
+        Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])->mountAction('receiveBill')
+            ->assertSchemaStateSet(['next_billing_date' => false, 'early_payer' => true], 'mountedActionSchema0')
+            ->fillForm(['paid' => 500])->assertSchemaStateSet(['next_billing_date' => false], 'mountedActionSchema0');
+
+        $f = ['monthly' => 525, 'payable' => 525];
+        $day = fn ($d) => \Illuminate\Support\Carbon::parse("2026-11-{$d}", 'Asia/Dhaka');
+        $this->assertTrue(BillActions::paidEarly($this->company->id, 3, $f, $day('09')));
+        $this->assertFalse(BillActions::paidEarly($this->company->id, 3, $f, $day('10')));   // on the expire day
+        $this->assertFalse(BillActions::paidEarly($this->company->id, 3, $f, $day('20')));   // after it
+        $this->assertFalse(BillActions::paidEarly($this->company->id, 3, ['monthly' => 525, 'payable' => 1050], $day('06')));  // two months
+        $this->customer->update(['bill_day' => 31]);
+        $this->assertTrue(BillActions::paidEarly($this->company->id, 3, $f, \Illuminate\Support\Carbon::parse('2026-02-27')));
+        $this->assertFalse(BillActions::paidEarly($this->company->id, 3, $f, \Illuminate\Support\Carbon::parse('2026-02-28')));  // capped to Feb 28
+        $this->customer->update(['bill_day' => 2]);
+        Livewire::test(ViewCustomer::class, ['record' => $this->customer->id])->mountAction('receiveBill')
+            ->assertSchemaStateSet(['next_billing_date' => true, 'early_payer' => false], 'mountedActionSchema0');
+    }
+
     public function test_next_billing_date_can_be_picked(): void
     {
         $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-31 12:00', 'Asia/Dhaka'));
