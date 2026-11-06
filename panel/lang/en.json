@@ -2007,5 +2007,8 @@
     "রিমাইন্ডার কল ধরতে না পেরে কাস্টমার কল ব্যাক দিলে": "When a customer calls back after missing a reminder call",
     "রিমাইন্ডার কল ধরেননি (বা ব্যস্ত ছিলেন) এমন কাস্টমার এই সময়ের মধ্যে হটলাইনে কল ব্যাক দিলে কল ধরে তাঁর রিমাইন্ডারের মেসেজটা একবার শোনানো হয়, তারপর আগের মতো স্টাফ/বটের কাছে যায়। প্রতিটা না-ধরা রিমাইন্ডারে একবারই; এর মধ্যে কল ধরে থাকলে আর শোনানো হয় না। মেসেজের বাটন এখানে কাজ করে না। লাইন বন্ধ কাস্টমারের জন্য উপরের লাইন বন্ধের ফ্লো আগে।": "A customer who did not answer a reminder call (or was busy) and calls the hotline back within this time is answered and hears their reminder message once, then the call goes to staff / the bot as usual. Once per missed reminder; not if they answered a call since. The message's keys do not work here. For a customer whose line is off, the line-off flow above comes first.",
     "না-ধরা কলের কত ঘণ্টার মধ্যে কল ব্যাক": "Call back within how many hours of the missed call",
-    "কল ব্যাক দিয়েছেন, রিমাইন্ডার আবার শোনানো হয়েছে": "Called back, heard the reminder again"
+    "কল ব্যাক দিয়েছেন, রিমাইন্ডার আবার শোনানো হয়েছে": "Called back, heard the reminder again",
+    "কল ব্যাক: রিমাইন্ডার আবার শুনেছেন": "Call back: heard the reminder again",
+    "রিমাইন্ডার কল ধরেননি, পরে হটলাইনে কল দিয়ে মেসেজটা আবার শুনেছেন (মেসেজের অংশ রেকর্ডিংয়ে নেই)": "Missed the reminder call, then called the hotline and heard the message again (the message is not in the recording)",
+    "রিমাইন্ডারের কল ব্যাক": "Reminder call backs"
 }

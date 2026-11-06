@@ -149,6 +149,9 @@ class CallLogs extends Page implements HasTable
                     ->tooltip(fn (CallLog $record) => $record->outcome_text),
                 TextColumn::make('bot_flag')->label(__('ফ্লাগ'))->badge()->color('danger')
                     ->formatStateUsing(fn ($state) => __(self::FLAGS[$state] ?? $state)),
+                TextColumn::make('reminder_replay_id')->label(__('রিমাইন্ডার'))->badge()->color('info')
+                    ->formatStateUsing(fn ($state) => $state ? __('কল ব্যাক: রিমাইন্ডার আবার শুনেছেন') : null)
+                    ->tooltip(__('রিমাইন্ডার কল ধরেননি, পরে হটলাইনে কল দিয়ে মেসেজটা আবার শুনেছেন (মেসেজের অংশ রেকর্ডিংয়ে নেই)')),
                 TextColumn::make('callback_reason')->label(__('কল ব্যাক'))->wrap()->limit(80)
                     ->color(fn (CallLog $record) => $record->callback_done_at ? 'gray' : 'warning')
                     ->description(fn (CallLog $record) => $record->callback_done_at
@@ -159,6 +162,7 @@ class CallLogs extends Page implements HasTable
                 SelectFilter::make('channel')->label(__('লাইন'))
                     ->options(['hotline' => __('হটলাইন'), 'whatsapp' => 'WhatsApp', 'reminder' => __('রিমাইন্ডার')]),
                 TernaryFilter::make('bot_answered')->label(__('বট ধরেছে')),
+                TernaryFilter::make('reminder_replay_id')->label(__('রিমাইন্ডারের কল ব্যাক'))->nullable(),
                 SelectFilter::make('outcome')->label(__('ফলাফল'))
                     ->options(collect(self::OUTCOMES)->map(fn ($o) => __($o[0]))->all()),
                 TernaryFilter::make('callback')->label(__('কল ব্যাক বাকি'))
