@@ -30,9 +30,9 @@ class ReceiptSettings extends CompanySettingsPage
         return __('মানি রিসিট');
     }
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'কাস্টমার ও বিল';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 14;
 
     protected function record(Company $company): Model
     {

@@ -44,9 +44,9 @@ class CallLogs extends Page implements HasTable
 
     protected static ?string $slug = 'calls';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সাপোর্ট';
+    protected static string|\UnitEnum|null $navigationGroup = 'ফোন ও কল';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.app.call-logs';
 

@@ -36,9 +36,9 @@ class BillingSettings extends CompanySettingsPage
         return __('বিলিং সফটওয়্যার সংযোগ');
     }
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'কাস্টমার ও বিল';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 11;
 
     public static function canAccess(): bool
     {

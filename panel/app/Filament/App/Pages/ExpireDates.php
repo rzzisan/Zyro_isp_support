@@ -39,9 +39,9 @@ class ExpireDates extends Page implements HasTable
 
     protected static ?string $slug = 'expire-dates';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'কাস্টমার ও বিল';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 13;
 
     protected string $view = 'filament.app.expire-dates';
 

@@ -47,9 +47,9 @@ class OfficePhoneResource extends Resource
         return __('অফিস ফোন');
     }
 
-    protected static string|\UnitEnum|null $navigationGroup = 'সেটিংস';
+    protected static string|\UnitEnum|null $navigationGroup = 'ফোন ও কল';
 
-    protected static ?int $navigationSort = 8;
+    protected static ?int $navigationSort = 3;
 
     public static function canAccess(): bool
     {
