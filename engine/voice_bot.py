@@ -1059,9 +1059,10 @@ def office_status() -> None:
         db.execute("update office_phones set status = %s, status_at = now() where id = %s", (f"{pbx} · {phone}", r["id"]))
 
 
-def decide(ep: str, caller: str) -> str:
+def decide(ep: str, caller: str, replayed: bool = False) -> str:
     """A hotline call: "bot:<uid>:<seconds>" (rings in Desk, then the bot answers), "ring:<uid>" (rings in Desk until
-    taken) or "ring" (only rings here)."""
+    taken) or "ring" (only rings here); first "replay:<files>" for a call back after a missed reminder call (the
+    dialplan plays it and asks again with replayed=1)."""
     if not ep.startswith("c") or not ep[1:].isdigit():
         return "ring"
     s = db.one("select * from sip_settings where company_id = %s and enabled", (int(ep[1:]),))
@@ -1071,6 +1072,10 @@ def decide(ep: str, caller: str) -> str:
     ivr = voice_ivr.inbound(s["company_id"], caller, "hotline")   # line off for the bill: the line-off flow picks it up
     if ivr:
         return ivr
+    if not replayed:
+        back = voice_ivr.callback_replay(s["company_id"], caller)   # missed a reminder call: hear it once first
+        if back:
+            return back
     if s["bot_mode"] not in ("test", "live") or number in numbers(s.get("bot_blocked_numbers")) \
             or (s["bot_mode"] == "test" and number not in numbers(s.get("bot_test_numbers"))):
         return ring_only(s["company_id"], caller)   # the bot is off for this caller: staff and office phones only
@@ -1132,7 +1137,7 @@ async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         else:
             try:
                 body = await (loop.run_in_executor(pool, decide_wa, wa, caller) if wa is not None
-                              else loop.run_in_executor(pool, decide, ep, caller))
+                              else loop.run_in_executor(pool, decide, ep, caller, q.get("replayed") == "1"))
                 if body.startswith("bot:") and body.split(":")[1] in calls and not use_cascade(calls[body.split(":")[1]]):
                     uid = body.split(":")[1]
                     calls[uid]["warm_task"] = asyncio.create_task(warm_up(uid))

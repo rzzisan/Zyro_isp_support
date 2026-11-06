@@ -11,6 +11,8 @@ and the customer. No AI runs on the call; only {reconnect_message} is read out w
   in:    inbound(): a customer whose line is off for the bill calls the hotline or WhatsApp; the voice bot's /mode
          answers "ivr:<uid>:<seconds>" and the dialplan picks the call up after those seconds into zyro-remind, so
          the line-off flow runs on the caller's own call (kind inbound, package made ahead by the panel).
+  back:  callback_replay(): a customer calls the hotline back after a reminder call they missed; /mode answers
+         "replay:<files>", the dialplan plays their reminder message once, then the call goes on as usual.
   run:   agi_server() plays the steps and reads the keys (deploy/asterisk/extensions.conf, port 4574).
   staff: "স্টাফের সাথে কথা" rings Desk like a hotline call (voice_bot.calls + notify_staff; the softphone dials
          take-<uid> and the voice bot's /take puts the agent channel in AstDB zyrotake/<uid>) while the customer hears
@@ -261,6 +263,61 @@ def _inbound(company_id: int, caller: str, channel: str = "hotline") -> str | No
     act(c, "inbound", "লাইন বন্ধ কাস্টমার নিজে কল করেছেন" + (" (WhatsApp)" if channel == "whatsapp" else ""))
     log.info("inbound line-off call %s (%s, %s)", c["row_id"], channel, uid)
     return f"ivr:{uid}:{max(0, min(int(s['inbound_delay'] or 0), 10))}"
+
+
+def replay_ids(package: dict) -> list:
+    """The reminder's own message on a call back: the first step's messages that no later step plays again (the
+    default flow's first step is [the reminder, the key menu] and the menu step repeats the menu, so only the
+    reminder); when every one repeats, the first message. Keys do not work on a call back, so menus stay out."""
+    steps = [s for s in (package.get("flow") or {}).get("steps") or [] if s.get("name")]
+    if not steps:
+        return []
+    first = [str(i) for i in steps[0].get("templates") or [] if i]
+    later = {str(i) for s in steps[1:] for i in s.get("templates") or [] if i}
+    return [i for i in first if i not in later] or first[:1]
+
+
+def callback_replay(company_id: int, caller: str) -> str | None:
+    """_callback_replay(), never in the way of the usual call: any error → None."""
+    try:
+        return _callback_replay(company_id, caller)
+    except Exception:
+        log.exception("call back replay check for company %s", company_id)
+        return None
+
+
+def _callback_replay(company_id: int, caller: str) -> str | None:
+    """A customer calls the hotline back after a reminder call they did not answer: "replay:<file>&<file>" (the
+    dialplan answers, plays their reminder message, then asks /mode again and the call goes on as usual), else None.
+    Once per missed reminder: the newest reminder call to this customer (or number) within callback_hours must be
+    unanswered (no_answer/busy) and not played back yet; a later answered call or a replay already done → None."""
+    s = db.one("select callback_on, callback_hours, test_mode from voice_reminder_settings where company_id = %s", (company_id,))
+    if not s or not s["callback_on"]:
+        return None
+    number = vb().normalize(caller)
+    if not number:
+        return None
+    header = None if s["test_mode"] else _caller_line(company_id, number)
+    hours = max(1, min(int(s["callback_hours"] or 24), 168))
+    r = db.one("select id, status, package, callback_played_at from voice_reminder_calls"
+               " where company_id = %s and kind in ('reminder', 'line_off', 'test')"
+               " and (number = %s or customer_header_id = %s)"
+               " and status in ('no_answer', 'busy', 'answered', 'done')"
+               " and coalesce(ended_at, started_at, updated_at) > now() - make_interval(hours => %s)"
+               " order by coalesce(ended_at, started_at, updated_at) desc, id desc limit 1",
+               (company_id, number, header if header is not None else -1, hours))
+    if not r or r["status"] not in ("no_answer", "busy") or r["callback_played_at"]:
+        return None
+    package = json.loads(r["package"] or "{}")
+    audio = package.get("audio") or {}
+    fs = [f for f in (sound(company_id, audio[i]) for i in replay_ids(package) if i in audio) if f]
+    if not fs:
+        return None
+    if not db.one("update voice_reminder_calls set callback_played_at = now(), updated_at = now()"
+                  " where id = %s and callback_played_at is null returning id", (r["id"],)):
+        return None   # another call from the same customer took it a moment ago
+    log.info("call back from %s: replaying reminder call %s", number, r["id"])
+    return "replay:" + "&".join(fs)
 
 
 def dial_plan(uid: str) -> str:
