@@ -130,14 +130,16 @@ class CallLogs extends Page implements HasTable
                 }),
                 TextColumn::make('bot_answered')->label(__('ধরেছে'))->badge()
                     ->formatStateUsing(fn ($state, CallLog $record) => match (true) {
+                        $record->direction === 'out' && $record->office_ext => __('আউটগোয়িং: অফিস :n', ['n' => $record->office_ext]),
                         $record->direction === 'out' => __('আউটগোয়িং: :n', ['n' => $record->answeredBy?->name ?? '—']),
+                        $record->office_ext && $record->agent_seconds => __('অফিস ফোন :n', ['n' => $record->office_ext]),
                         (bool) $state => __('বট'),
                         (bool) $record->answered_by => $record->answeredBy?->name ?? __('স্টাফ'),
                         in_array($record->status, ['ringing', 'answered'], true) => __('চলছে'),
                         $record->channel === 'whatsapp' => __('মিসড'),
                         default => __('এজেন্ট / মিসড'),
                     })
-                    ->color(fn ($state, CallLog $record) => $state ? 'info' : ($record->answered_by ? 'success' : 'gray')),
+                    ->color(fn ($state, CallLog $record) => $state ? 'info' : ($record->answered_by || ($record->office_ext && $record->agent_seconds) ? 'success' : 'gray')),
                 TextColumn::make('bot_seconds')->label(__('কথা'))
                     ->state(fn (CallLog $record) => $record->bot_seconds ?: $record->agent_seconds)
                     ->formatStateUsing(fn ($state) => $state ? gmdate($state >= 3600 ? 'G:i:s' : 'i:s', (int) $state) : ''),

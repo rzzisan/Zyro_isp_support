@@ -352,8 +352,99 @@ aors={a}
     return "".join(out)
 
 
+# office IP phones may register only from the office networks (Zisan, 2026-11-06)
+OFFICE_NETS = [n for n in os.environ.get("OFFICE_NETS", "103.157.253.0/24,103.153.185.0/24").split(",") if n.strip()]
+
+
+def office_rows() -> list[dict]:
+    """Enabled office phones (panel → অফিস ফোন) of companies whose hotline PBX is set up (server, port, transport)."""
+    return db.all_rows("select o.*, s.server, s.port, s.transport from office_phones o"
+                       " join sip_settings s on s.company_id = o.company_id"
+                       " where o.enabled and o.pbx_password is not null and s.server is not null order by o.id")
+
+
+def office_config() -> str:
+    """Per office phone two endpoints: ph<id> = the phone itself (registers here over UDP, only from OFFICE_NETS,
+    dials into zyro-office-out) and o<id> = its PBX extension, registered by us in the phone's place. Calls from the PBX
+    to that extension arrive on the company's hotline endpoint c<company> (identified by the PBX's IP) with the
+    extension as the dialed number; zyro-in hands them to zyro-office-in (GET /office-in)."""
+    out = []
+    for r in office_rows():
+        pbx_pw, phone_pw = db.decrypt(r["pbx_password"]), db.decrypt(r["phone_password"])
+        if not pbx_pw or not phone_pw:
+            continue
+        o, ph, host, port, user = f"o{r['id']}", f"ph{r['id']}", r["server"], r["port"], r["pbx_username"]
+        permits = "".join(f"permit={n.strip()}\n" for n in OFFICE_NETS)
+        out.append(f"""
+[{o}-auth]
+type=auth
+auth_type=userpass
+username={user}
+password={pbx_pw}
+
+[{o}]
+type=aor
+contact=sip:{host}:{port}
+
+[{o}]
+type=endpoint
+transport=transport-udp
+context=zyro-office-in
+disallow=all
+allow=alaw,ulaw
+outbound_auth={o}-auth
+aors={o}
+from_user={user}
+from_domain={host}
+direct_media=no
+rtp_symmetric=yes
+force_rport=yes
+rewrite_contact=yes
+rtp_timeout=120
+
+[{o}-reg]
+type=registration
+transport=transport-udp
+outbound_auth={o}-auth
+server_uri=sip:{host}:{port};transport={r['transport']}
+client_uri=sip:{user}@{host}:{port}
+contact_user={user}
+retry_interval=60
+forbidden_retry_interval=300
+expiration=300
+
+[{ph}-auth]
+type=auth
+auth_type=userpass
+username={ph}
+password={phone_pw}
+
+[{ph}]
+type=aor
+max_contacts=1
+remove_existing=yes
+qualify_frequency=30
+
+[{ph}]
+type=endpoint
+transport=transport-udp
+context=zyro-office-out
+disallow=all
+allow=alaw,ulaw
+auth={ph}-auth
+aors={ph}
+direct_media=no
+rtp_symmetric=yes
+force_rport=yes
+rewrite_contact=yes
+rtp_timeout=120
+deny=0.0.0.0/0.0.0.0
+{permits}""")
+    return "".join(out)
+
+
 def sync_asterisk() -> None:
-    text = pjsip_config(settings_rows()) + wa_config() + agents_config()
+    text = pjsip_config(settings_rows()) + wa_config() + agents_config() + office_config()
     try:
         old = open(PJSIP_FILE).read()
     except OSError:
@@ -861,6 +952,90 @@ def save_recording(uid: str, info: dict) -> None:
         calls.pop(uid, None)
 
 
+def office_phone(company_id: int | None = None, ext: str | None = None, phone_ep: str | None = None) -> dict | None:
+    if phone_ep:
+        if not phone_ep.startswith("ph") or not phone_ep[2:].isdigit():
+            return None
+        return db.one("select * from office_phones where id = %s and enabled", (int(phone_ep[2:]),))
+    return db.one("select * from office_phones where company_id = %s and pbx_username = %s and enabled", (company_id, ext))
+
+
+def office_in(ep: str, ext: str, caller: str) -> str:
+    """A call from the PBX to an office phone's extension (it came in on the hotline endpoint c<company> with the
+    extension as the dialed number): "ok:<uid>:ph<id>", or "no" when it is the hotline's own extension (zyro-in goes on
+    as before). A hotline call (ring group) reuses the row the caller ID popup made."""
+    if ep.startswith("o") and ep[1:].isdigit():   # identified as the extension's own endpoint (not by IP)
+        phone = db.one("select * from office_phones where id = %s and enabled", (int(ep[1:]),))
+    elif ep.startswith("c") and ep[1:].isdigit():
+        phone = office_phone(int(ep[1:]), ext)
+    else:
+        return "no"
+    if not phone:
+        return "no"
+    uid = str(uuid.uuid4())
+    info = {"company_id": phone["company_id"], "caller": caller, "at": time.time(), "channel": "hotline",
+            "state": "office", "office": phone["pbx_username"]}
+    hotline_row(uid, info)
+    db.execute("update call_logs set office_ext = coalesce(office_ext, %s), updated_at = now() where id = %s",
+               (phone["pbx_username"], info["row_id"]))
+    calls[uid] = info
+    return f"ok:{uid}:ph{phone['id']}"
+
+
+def office_out(ep: str, to: str) -> str:
+    """An office phone dialed out: "ok:<uid>:o<id>", the call goes through its own PBX extension (recorded)."""
+    phone = office_phone(phone_ep=ep)
+    digits = re.sub(r"[^0-9*#+]", "", to or "")
+    if not phone or not digits:
+        return "no"
+    uid = str(uuid.uuid4())
+    number = normalize(digits)
+    row = db.execute("insert into call_logs (company_id, call_ref, caller, caller_normalized, status, started_at, channel,"
+                     " direction, office_ext, created_at, updated_at)"
+                     " values (%s, %s, %s, %s, 'ringing', now(), 'hotline', 'out', %s, now(), now()) returning id",
+                     (phone["company_id"], "office-" + uid, digits[:80], number, phone["pbx_username"]))
+    calls[uid] = {"company_id": phone["company_id"], "caller": digits, "at": time.time(), "state": "office",
+                  "channel": "hotline", "row_id": row["id"], "office": phone["pbx_username"]}
+    log.info("office %s calls %s", phone["pbx_username"], digits)
+    return f"ok:{uid}:o{phone['id']}"
+
+
+def office_ended(uid: str, secs: str = "", status: str = "") -> str:
+    """Hangup handler of an office phone call: talk time, answered or not, the recording."""
+    info = calls.get(uid)
+    if not info or info.get("state") != "office":
+        return "no"
+    talk = int(float(secs)) if secs.replace(".", "").isdigit() else 0
+    answered = status == "ANSWER" or talk > 0
+    db.execute("update call_logs set status = 'ended', ended_at = now(), agent_seconds = %s,"
+               " outcome = coalesce(outcome, %s), updated_at = now() where id = %s",
+               (talk or None, None if answered else "missed", info["row_id"]))
+    if answered:
+        pool.submit(save_recording, uid, info)
+    else:
+        calls.pop(uid, None)
+        try:
+            os.unlink(os.path.join(REC_SPOOL, f"{uid}.wav"))
+        except OSError:
+            pass
+    return "ok"
+
+
+def office_status() -> None:
+    """The panel's অবস্থা column: is our registration of the PBX extension up, is the phone registered here."""
+    rows = db.all_rows("select id from office_phones where enabled")
+    if not rows:
+        return
+    regs = subprocess.run(["asterisk", "-rx", "pjsip show registrations"], capture_output=True, text=True, timeout=20).stdout
+    conts = subprocess.run(["asterisk", "-rx", "pjsip show contacts"], capture_output=True, text=True, timeout=20).stdout
+    for r in rows:
+        reg = next((ln for ln in regs.splitlines() if ln.strip().startswith(f"o{r['id']}-reg/")), "")
+        pbx = "PBX: রেজিস্টার্ড" if "Registered" in reg else ("PBX: " + (reg.split()[-1] if reg.split() else "অপেক্ষা"))
+        phone_line = next((ln for ln in conts.splitlines() if f" ph{r['id']}/" in ln), "")
+        phone = "ফোন: অনলাইন" if ("Avail" in phone_line or "NonQual" in phone_line) else "ফোন: অফলাইন"
+        db.execute("update office_phones set status = %s, status_at = now() where id = %s", (f"{pbx} · {phone}", r["id"]))
+
+
 def decide(ep: str, caller: str) -> str:
     """A hotline call: "bot:<uid>:<seconds>" (rings in Desk, then the bot answers), "ring:<uid>" (rings in Desk until
     taken) or "ring" (only rings here)."""
@@ -915,6 +1090,10 @@ async def mode_server(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         routes = {"/take": (take, q.get("uid", ""), q.get("agent", "")), "/bot": (bot_turn, q.get("uid", "")),
                   "/out": (call_out, q.get("agent", ""), q.get("to", "")),
                   "/ended": (ended, q.get("uid", ""), q.get("secs", "")), "/sync": (lambda: sync_asterisk() or "ok",),
+                  # office IP phones on our Asterisk (panel → অফিস ফোন)
+                  "/office-in": (office_in, q.get("ep", ""), q.get("ext", ""), q.get("caller", "")),
+                  "/office-out": (office_out, q.get("ep", ""), q.get("to", "")),
+                  "/office-ended": (office_ended, q.get("uid", ""), q.get("secs", ""), q.get("status", "")),
                   # voice reminder calls (engine/voice_ivr.py): the panel's kick, and the zyro-remind dialplan
                   "/remind": (lambda i: voice_ivr.start(int(i)) if i.isdigit() else "no", q.get("id", "")),
                   "/remind-dial": (voice_ivr.dial_plan, q.get("uid", "")),
@@ -1543,9 +1722,13 @@ async def housekeeping() -> None:
             await asyncio.get_running_loop().run_in_executor(pool, sync_asterisk)
         except Exception:
             log.exception("asterisk sync")
+        try:
+            await asyncio.get_running_loop().run_in_executor(pool, office_status)
+        except Exception:
+            log.exception("office status")
         for uid, c in list(calls.items()):
-            # staff calls can run long; their /ended still needs the entry
-            if time.time() - c["at"] > (4 * 3600 if c.get("state") in ("taken", "out") else MAX_CALL + 300):
+            # staff and office calls can run long; their /ended still needs the entry
+            if time.time() - c["at"] > (4 * 3600 if c.get("state") in ("taken", "out", "office") else MAX_CALL + 300):
                 calls.pop(uid, None)
         await asyncio.sleep(30)
 
