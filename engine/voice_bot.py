@@ -352,8 +352,11 @@ aors={a}
     return "".join(out)
 
 
-# office IP phones may register only from the office networks (Zisan, 2026-11-06)
-OFFICE_NETS = [n for n in os.environ.get("OFFICE_NETS", "103.157.253.0/24,103.153.185.0/24").split(",") if n.strip()]
+# office IP phones may register only from the office networks (Zisan, 2026-11-06); office LAN phones reach bsol
+# routed, without NAT, from 10.90.90.x
+OFFICE_NETS = [n for n in os.environ.get("OFFICE_NETS", "103.157.253.0/24,103.153.185.0/24,10.90.90.0/24").split(",") if n.strip()]
+REG_STATES = {"Registered": "PBX: রেজিস্টার্ড", "Rejected": "PBX: প্রত্যাখ্যাত (পাসওয়ার্ড ভুল?)",
+              "Unregistered": "PBX: রেজিস্টার হয়নি", "Stopped": "PBX: বন্ধ"}
 
 
 def office_rows() -> list[dict]:
@@ -1030,7 +1033,8 @@ def office_status() -> None:
     conts = subprocess.run(["asterisk", "-rx", "pjsip show contacts"], capture_output=True, text=True, timeout=20).stdout
     for r in rows:
         reg = next((ln for ln in regs.splitlines() if ln.strip().startswith(f"o{r['id']}-reg/")), "")
-        pbx = "PBX: রেজিস্টার্ড" if "Registered" in reg else ("PBX: " + (reg.split()[-1] if reg.split() else "অপেক্ষা"))
+        state = next((w for w in REG_STATES if f" {w} " in f" {reg} "), None)
+        pbx = REG_STATES[state] if state else "PBX: অপেক্ষা"
         phone_line = next((ln for ln in conts.splitlines() if f" ph{r['id']}/" in ln), "")
         phone = "ফোন: অনলাইন" if ("Avail" in phone_line or "NonQual" in phone_line) else "ফোন: অফলাইন"
         db.execute("update office_phones set status = %s, status_at = now() where id = %s", (f"{pbx} · {phone}", r["id"]))
