@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MikrotikRouter extends Model
 {
-    protected $fillable = ['company_id', 'host', 'api_port', 'username', 'password', 'billing_server', 'enabled'];
+    protected $fillable = ['company_id', 'host', 'api_port', 'username', 'password', 'billing_server', 'block_profile', 'enabled'];
 
     protected $hidden = ['password'];
 

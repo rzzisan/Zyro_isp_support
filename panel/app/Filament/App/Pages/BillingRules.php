@@ -4,6 +4,8 @@ namespace App\Filament\App\Pages;
 
 use App\Models\BillingSetting;
 use App\Models\Company;
+use App\Models\DeskCustomerBalance;
+use App\Models\DeskLineAction;
 use App\Services\Engine;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -17,7 +19,9 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use RuntimeException;
@@ -42,7 +46,7 @@ class BillingRules extends CompanySettingsPage
         return __('বিলিং নিয়ম');
     }
 
-    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    public function getTitle(): string|Htmlable
     {
         return __('বিলিং নিয়ম (Desk-এর নিজের বিলিং)');
     }
@@ -113,6 +117,16 @@ class BillingRules extends CompanySettingsPage
                 $pct('partial_redisable_percent', __('১০. আংশিক দিয়ে চালু হলে মাসিক বিলের কত %-এর বেশি বাকি থাকলে আবার বন্ধ')),
                 TextInput::make('partial_redisable_days')->label(__('কত দিন পর'))->numeric()->integer()->minValue(1)->maxValue(30)->suffix(__('দিন'))->required(),
             ]),
+            Section::make(__('Desk থেকে MikroTik-এ লাইন বন্ধ/চালু'))
+                ->description(__('Desk নিজে রাউটারে প্রোফাইল বদলে সেশন কেটে দেয়, তারপর রাউটার আবার পড়ে যাচাই করে। হস্তান্তরের আগে বিলিং-ই মূল, তাই শুধু পরীক্ষার অ্যাকাউন্টে চালান।'))
+                ->schema([
+                    Select::make('line_control')->label(__('চালু থাকবে'))->required()->selectablePlaceholder(false)->live()
+                        ->options(collect(DeskLineAction::CONTROL)->map(fn ($l) => __($l))->all())
+                        ->disableOptionWhen(fn (string $value) => $value === 'all' && ($record->billing_mode ?? 'ispdigital') !== 'desk'),
+                    TagsInput::make('line_test_codes')->label(__('পরীক্ষার অ্যাকাউন্ট (কাস্টমার ID বা PPPoE ID)'))->placeholder('0001')
+                        ->visible(fn ($get) => $get('line_control') === 'test')
+                        ->helperText(__('শুধু এদের লাইন Desk থেকে বন্ধ/চালু করা যাবে। প্রথমে নিজের অ্যাকাউন্ট, তারপর ৫-১০ জন পাইলট।')),
+                ]),
             Section::make(__('কাজের লগ'))->schema([
                 TextInput::make('activity_log_months')->label(__('কাজের লগ কত মাস রাখা হবে'))->numeric()->integer()->minValue(1)->maxValue(120)->suffix(__('মাস'))
                     ->placeholder(__('খালি = সবসময়'))->helperText(__('পুরনো মাস archive হবে, মোছা হবে না।')),
@@ -128,7 +142,7 @@ class BillingRules extends CompanySettingsPage
         if (! $run) {
             return __('এখনো কপি হয়নি। প্রতিদিন সকাল ৭:১৫-এ নিজে হয়, বা উপরের "এখনই কপি" চাপুন।');
         }
-        $when = \Illuminate\Support\Carbon::parse($run->started_at)->timezone('Asia/Dhaka')->format('d M Y, g:i A');
+        $when = Carbon::parse($run->started_at)->timezone('Asia/Dhaka')->format('d M Y, g:i A');
         if ($run->status === 'running') {
             return __('কপি চলছে (শুরু :t)…', ['t' => $when]);
         }
@@ -148,7 +162,7 @@ class BillingRules extends CompanySettingsPage
             $lines[] = __('আরও :n জন মিলবে বিলিং-এর সাম্প্রতিক রিসিট রাতের কপিতে এলে (তখন :pc%)', ['n' => $n($s['matched_after_todays_receipts']), 'pc' => $s['match_percent_with_receipts'] ?? '—']);
         }
         $why = collect($s['mismatch_reasons'] ?? [])->sortDesc()
-            ->map(fn ($n, $r) => __(\App\Models\DeskCustomerBalance::REASONS[$r][0] ?? $r).' '.$n)->implode(', ');
+            ->map(fn ($n, $r) => __(DeskCustomerBalance::REASONS[$r][0] ?? $r).' '.$n)->implode(', ');
         if ($why !== '') {
             $lines[] = __('অমিলের কারণ: :w', ['w' => $why]);
         }
@@ -167,6 +181,10 @@ class BillingRules extends CompanySettingsPage
         $this->before = $record->exists ? $record->getAttributes() : [];
         $data['company_id'] = Filament::getTenant()->getKey();
         unset($data['billing_mode']);   // changes only at the cutover, not from this form
+        $data['line_test_codes'] = array_values(array_unique(array_filter(array_map('trim', $data['line_test_codes'] ?? []))));
+        if (($data['line_control'] ?? 'off') === 'all' && ($record->billing_mode ?? 'ispdigital') !== 'desk') {
+            $data['line_control'] = 'test';
+        }
         $data['match_exclude_codes'] = array_values(array_unique(array_filter(array_map('trim', $data['match_exclude_codes'] ?? []))));
         if (($data['activity_log_months'] ?? '') === '') {
             $data['activity_log_months'] = null;
@@ -199,6 +217,8 @@ class BillingRules extends CompanySettingsPage
                 ->url(fn () => BillingShadowBills::getUrl()),
             Action::make('disable_shadow')->label(__('বন্ধের তালিকা মিল'))->icon(Heroicon::OutlinedNoSymbol)->color('gray')
                 ->url(fn () => BillingDisableShadow::getUrl()),
+            Action::make('line_actions')->label(__('লাইন বন্ধ/চালু (MikroTik)'))->icon(Heroicon::OutlinedSignal)->color('gray')
+                ->url(fn () => BillingLineActions::getUrl()),
             Action::make('import')->label(__('এখনই কপি'))->icon(Heroicon::OutlinedArrowPath)
                 ->requiresConfirmation()
                 ->modalDescription(__('বিলিং-এর কাস্টমার, প্যাকেজ, বিল আর পেমেন্টের Desk-এ থাকা কপি থেকে খাতা নতুন করে ভরা হবে। বিলিং-এ কিছু লেখা হয় না।'))

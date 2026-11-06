@@ -224,6 +224,13 @@ class Engine
             'day' => $day, 'replace' => $replace ? 1 : 0])) ?? [];
     }
 
+    /** Phase 3: turn a line off/on on the MikroTik itself and read it back (engine/desk_line.py); returns the action row. */
+    public static function deskLine(int $companyId, string $action, array $customer, string $reason = 'manual', ?string $note = null): array
+    {
+        return static::call('post', "/internal/{$companyId}/desk-line", $customer + ['action' => $action, 'reason' => $reason,
+            'note' => $note, 'user_id' => auth()->id(), 'by' => auth()->user()?->name]) ?? [];
+    }
+
     /** বিল কালেকশন page open: the engine syncs today's bills (throttled) and returns a version that changes with them. */
     public static function liveDailyBills(int $companyId): array
     {
