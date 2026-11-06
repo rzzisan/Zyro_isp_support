@@ -29,6 +29,8 @@ use Illuminate\Support\Facades\Log;
  *            time, up to alt_max a day; then the call is settled (reached or not).
  *  backup:   customers who regularly answer (2 of their last 3 calls) get no bill reminder SMS while a call is coming
  *            (BillReminders asks coversSms); when that call is settled unreached, the SMS goes now as a backup.
+ *            Anyone a voice reminder reached this month gets no reminder SMS that month, and nobody gets it while
+ *            today's call to them is still on (calling hours); the SMS goes once that call got nobody.
  *  Test mode: the calls go to the test number (with the customer's data), test_daily_max a day.
  *  inbound:  every full pass (even while the calls are off) the line-off flow's package is made ahead for each line
  *            off for the bill (prepareInbound), so when such a customer calls the hotline or WhatsApp the flow picks
@@ -543,32 +545,51 @@ class VoiceReminders
 
     /**
      * For BillReminders: the customers (of $customers, whose expire date is $expire, SMS $n days before) who get no
-     * reminder SMS now because a call does it: regular answerers the call reaches (a call is still to come on or
-     * before that SMS day, or one for this expire date was made; if it got nobody, backup() sends the SMS).
-     * header_id => true.
+     * reminder SMS now because a call does it (header_id => true):
+     *  - heard: a voice reminder (bill or line-off call) reached them this month (Bangladesh time);
+     *  - waiting: today's reminder call to them is not over yet, inside the calling hours (the call goes before the
+     *    SMS; when it gets nobody, a later hourly run sends the SMS; once the hours are over, the SMS goes);
+     *  - regular answerers the call reaches (a call is still to come on or before that SMS day, or one for this
+     *    expire date was made; if it got nobody, backup() sends the SMS).
      */
     public static function coversSms(int $companyId, Collection $customers, Carbon $expire, int $n): array
     {
         $s = VoiceReminderSetting::where('company_id', $companyId)->first();
-        if (! $s || ! $s->enabled || $s->test_mode || ! $s->reminder_on || ! $s->reminder_flow_id || ! $s->sms_saving || $customers->isEmpty()) {
+        if (! $s || ! $s->enabled || $s->test_mode || ! $s->sms_saving || $customers->isEmpty()) {
             return [];
         }
+        $headers = $customers->pluck('header_id')->all();
+        $now = now(self::TZ);
+        $out = VoiceReminderCall::where('company_id', $companyId)->whereIn('kind', ['reminder', 'line_off'])->where('reached', true)
+            ->where('settled_at', '>=', $now->copy()->startOfMonth()->utc())->whereIn('customer_header_id', $headers)
+            ->pluck('customer_header_id')->mapWithKeys(fn ($h) => [(int) $h => true])->all();
+        if (! $s->reminder_on || ! $s->reminder_flow_id) {
+            return $out;
+        }
+        if ($now->format('H:i') < substr((string) $s->window_to, 0, 5)) {
+            foreach (VoiceReminderCall::where('company_id', $companyId)->where('kind', 'reminder')->whereNull('alt_of')
+                ->where('dedupe', 'not like', '%:test')->whereDate('ref_date', $now->toDateString())->whereNull('settled_at')
+                ->whereNotIn('status', ['skipped', 'expired', 'failed'])->whereIn('customer_header_id', $headers)
+                ->pluck('customer_header_id') as $h) {
+                $out[(int) $h] = true;
+            }
+        }
         $coming = collect(BillReminders::days($s->reminder_days))->contains(fn ($d) => $d <= $n);
-        $regular = static::regulars($companyId, $customers->pluck('header_id')->all());
+        $regular = static::regulars($companyId, $headers);
         if (! $regular) {
-            return [];
+            return $out;
         }
         $optout = DB::table('voice_optouts')->where('company_id', $companyId)->pluck('number')->flip();
         $called = $coming ? collect() : VoiceReminderCall::where('company_id', $companyId)->where('kind', 'reminder')->whereNull('alt_of')
             ->where('dedupe', 'like', 'bill:%:'.$expire->toDateString().':%')->where('dedupe', 'not like', '%:test')
             ->whereIn('customer_header_id', array_keys($regular))->pluck('customer_header_id')->flip();
-        $out = [];
         foreach ($customers as $c) {
             if (isset($regular[$c->header_id]) && (! $s->due_only || (float) $c->due > 0) && ! isset($optout[$c->mobile_normalized])
                 && ($coming || isset($called[$c->header_id]))) {
                 $out[(int) $c->header_id] = true;
             }
         }
+        ksort($out);
 
         return $out;
     }
