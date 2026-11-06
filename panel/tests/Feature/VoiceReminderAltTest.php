@@ -182,7 +182,7 @@ class VoiceReminderAltTest extends TestCase
         // customer 1 answered 2 of the last 3 calls, customer 2 only 1
         foreach ([[1, true], [1, true], [1, false], [2, true], [2, false], [2, false]] as $i => [$h, $reached]) {
             VoiceReminderCall::create(['company_id' => $this->company->id, 'kind' => 'reminder', 'customer_header_id' => $h, 'number' => '8801711000000',
-                'status' => $reached ? 'done' : 'no_answer', 'dedupe' => "old:{$i}", 'settled_at' => now()->subDays(30 - $i), 'reached' => $reached]);
+                'status' => $reached ? 'done' : 'no_answer', 'dedupe' => "old:{$i}", 'settled_at' => now()->subDays(60 - $i), 'reached' => $reached]);
         }
         $this->assertSame([1 => true], VoiceReminders::regulars($this->company->id, [1, 2]));
         $covered = VoiceReminders::coversSms($this->company->id, collect([$c, $other]), Carbon::parse('2026-10-31', 'Asia/Dhaka'), 2);
@@ -204,6 +204,31 @@ class VoiceReminderAltTest extends TestCase
         // in test mode the SMS goes as before
         $s->update(['test_mode' => true]);
         $this->assertSame([], VoiceReminders::coversSms($this->company->id, collect([$c]), Carbon::parse('2026-10-31', 'Asia/Dhaka'), 2));
+    }
+
+    public function test_no_sms_in_a_month_the_voice_reminder_was_heard_or_while_todays_call_is_on(): void
+    {
+        $this->smsReady();
+        $this->settings(['reminder_days' => '2']);
+        $heard = $this->customer(1);
+        $lastMonth = $this->customer(2);
+        $waiting = $this->customer(3);
+        $plain = $this->customer(4);
+        $call = fn (int $h, array $a) => VoiceReminderCall::create($a + ['company_id' => $this->company->id, 'kind' => 'reminder',
+            'customer_header_id' => $h, 'number' => '8801711000000', 'dedupe' => "t:{$h}:".count($a)]);
+        $call(1, ['status' => 'done', 'reached' => true, 'settled_at' => Carbon::parse('2026-10-01 09:00', 'Asia/Dhaka')->utc()]);
+        $call(2, ['status' => 'done', 'reached' => true, 'settled_at' => Carbon::parse('2026-09-30 20:00', 'Asia/Dhaka')->utc()]);
+        $call(3, ['status' => 'no_answer', 'ref_date' => '2026-10-29', 'tries' => 1]);
+        $call(4, ['status' => 'no_answer', 'reached' => false, 'settled_at' => now()->subHour(), 'ref_date' => '2026-10-29']);
+        $expire = Carbon::parse('2026-10-31', 'Asia/Dhaka');
+        $all = collect([$heard, $lastMonth, $waiting, $plain]);
+        $this->assertSame([1 => true, 3 => true], VoiceReminders::coversSms($this->company->id, $all, $expire, 2));
+
+        // after the calling hours the waiting one gets the SMS; switching SMS saving off sends to everyone
+        Carbon::setTestNow(Carbon::parse('2026-10-29 20:30', 'Asia/Dhaka'));
+        $this->assertSame([1 => true], VoiceReminders::coversSms($this->company->id, $all, $expire, 2));
+        VoiceReminderSetting::where('company_id', $this->company->id)->update(['sms_saving' => false]);
+        $this->assertSame([], VoiceReminders::coversSms($this->company->id, $all, $expire, 2));
     }
 
     public function test_next_call_goes_as_soon_as_a_line_is_free(): void
