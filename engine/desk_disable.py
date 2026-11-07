@@ -176,6 +176,9 @@ WITH recent AS (   -- receipts billing approved that the ledger doesn't have yet
                       JOIN desk_payments dp ON dp.company_id = p.company_id AND dp.source = 'ispdigital'
                            AND dp.ext_id = p.bill_header_id
                       WHERE p.company_id = d.company_id AND p.daily_bill_id = d.daily_bill_id)
+      -- phase 4b: taken on the Desk, so already in the Desk's ledger
+      AND NOT EXISTS (SELECT 1 FROM desk_payments dp WHERE dp.company_id = d.company_id AND dp.source = 'desk'
+                      AND dp.daily_bill_id = d.daily_bill_id)
     GROUP BY 1),
 bills AS (
     SELECT customer_ref, jsonb_object_agg(period_start::text, amount) AS m

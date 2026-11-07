@@ -71,6 +71,9 @@ class ViewCustomer extends ViewRecord
                 ->openUrlInNewTab(),
             BillActions::receive($c),
             ExtendActions::extend($c),
+            Action::make('ledger')->label(__('Desk খাতা'))->icon(Heroicon::OutlinedBookOpen)->color('gray')
+                ->visible(fn () => \App\Filament\App\Pages\BillingLedger::canAccess())
+                ->url(fn () => \App\Filament\App\Pages\BillingLedger::getUrl(['customer' => $c->customer_id])),
             TicketActions::newTicket($c->customer_id)->label(__('টিকিট খুলুন'))->color('gray'),
             SmsActions::send($c)->label('SMS')->color('gray'),
             WaCampaignActions::send($c)->label('WhatsApp')->color('gray'),

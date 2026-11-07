@@ -76,6 +76,7 @@ class BillController extends Controller
         ]);
         $key = static::formKey($company, $request, $headerId);
         $methodName = (Cache::get($key)['methods'] ?? [])[(string) $data['method_id']] ?? null;
+        $receivedName = (Cache::get($key)['received_by'] ?? [])[(string) $data['received_by_id']] ?? null;
         try {
             $res = Engine::receiveBill($company->id, $headerId, [
                 'paid' => (float) $data['paid'], 'discount' => (float) ($data['discount'] ?? 0),
@@ -92,6 +93,11 @@ class BillController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         } finally {
             Cache::forget($key);
+        }
+        if ($b = \App\Models\BillingCustomer::where('company_id', $company->id)->where('header_id', $headerId)->first()) {
+            \App\Support\Ledger::recordCollection($b, ['paid' => (float) $data['paid'], 'discount' => (float) ($data['discount'] ?? 0),
+                'method' => $methodName, 'trx_no' => $data['trx_no'] ?? null, 'remarks' => $data['remarks'] ?? null,
+                'received_by' => $receivedName], $res, $request->user(), 'app');
         }
         $smsNote = ($data['desk_sms'] ?? false) ? BillActions::queueBillSms($company->id, $headerId, $data, $res, $methodName) : null;
 

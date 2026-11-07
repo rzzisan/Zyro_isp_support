@@ -6,6 +6,7 @@ use App\Models\BillCollection;
 use App\Models\BillingCustomer;
 use App\Models\SmsSetting;
 use App\Services\Engine;
+use App\Support\Ledger;
 use App\Support\Menu;
 use App\Support\Sms;
 use Filament\Actions\Action;
@@ -303,6 +304,13 @@ class BillActions
                     return;
                 } finally {
                     Cache::forget('bill-form:'.static::company().':'.auth()->id().':'.$headerId);
+                }
+                // phase 4b: the same money in the Desk's own ledger (test accounts before the cutover, see Ledger)
+                if ($b = BillingCustomer::where('company_id', static::company())->where('header_id', $headerId)->first()) {
+                    Ledger::recordCollection($b, ['paid' => (float) $data['paid'], 'discount' => (float) ($data['discount'] ?? 0),
+                        'method' => $methodName, 'trx_no' => $data['trx_no'] ?? null, 'remarks' => $data['remarks'] ?? null,
+                        'received_by' => static::tryForm($headerId)[0]['received_by'][(string) $data['received_by_id']] ?? null],
+                        $res, auth()->user(), 'panel');
                 }
                 $receipt = ! empty($res['collection_id'])
                     ? route('receipts.print', ['company' => Filament::getTenant()->slug, 'collection' => $res['collection_id']]) : null;
