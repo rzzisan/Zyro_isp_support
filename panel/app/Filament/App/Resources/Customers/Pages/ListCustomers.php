@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\Customers\Pages;
 use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Models\BillingCustomer;
 use App\Services\Engine;
+use App\Support\NewConnectionForm;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -38,6 +39,8 @@ class ListCustomers extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            NewConnectionForm::action('newCustomer')->label(__('নতুন কাস্টমার'))
+                ->visible(fn () => NewConnectionForm::canCreate()),
             Action::make('syncNew')->label(__('নতুন কাস্টমার আনুন'))->icon(Heroicon::OutlinedUserPlus)->color('gray')
                 ->visible(fn () => CustomerResource::managers())
                 ->action(function () {
