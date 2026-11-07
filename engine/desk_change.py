@@ -4,7 +4,7 @@ leaves the router alone) and then the Desk sets the router's PPP secret itself a
 
   package   new PackageId / Speed (MikroTik profile) / monthly bill; the secret gets the new profile (a line that is
             off keeps its block profile and gets the new one when it is turned on)
-  left      Status Left, bill and Expire Date 0; the secret is removed and the session dropped
+  left      Status Left, bill 0 (billing's Expire Date has no 0, it stays); the secret is removed and the session dropped
   back      a Left customer comes back (Active or another status); the secret is made again with billing's password
   password  a new PPPoE password in billing and on the secret
   remove    only the router: remove a Left customer's secret that is still there (the secret check page)
@@ -49,11 +49,13 @@ def billing_changes(kind: str, p: dict) -> dict:
         return {"PackageId": str(p["package_id"]), "Speed": str(p["profile"]),
                 "MonthlyBillAmount": str(dc.bill_for(p.get("status_name") or "Active", p["monthly_bill"]))}
     if kind == "left":
-        return {"Status": str(p["status_id"]), "MonthlyBillAmount": "0", "BillingLastDate": "0"}
+        # billing's Expire Date select has no 0 (live 2026-11-07): the day stays as it was, only the bill goes to 0
+        return {"Status": str(p["status_id"]), "MonthlyBillAmount": "0"}
     if kind == "back":
         status = p.get("status_name") or "Active"
-        out = {"Status": str(p["status_id"]), "MonthlyBillAmount": str(dc.bill_for(status, p.get("monthly_bill") or 0)),
-               "BillingLastDate": str(dc.expire_for(status, p.get("expire_day") or 0))}
+        out = {"Status": str(p["status_id"]), "MonthlyBillAmount": str(dc.bill_for(status, p.get("monthly_bill") or 0))}
+        if dc.expire_for(status, p.get("expire_day") or 0):
+            out["BillingLastDate"] = str(dc.expire_for(status, p["expire_day"]))
         if p.get("package_id"):
             out.update(PackageId=str(p["package_id"]), Speed=str(p["profile"]))
         return out
