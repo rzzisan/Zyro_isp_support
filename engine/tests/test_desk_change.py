@@ -79,9 +79,10 @@ class RuleTest(unittest.TestCase):
         self.assertEqual(ch.billing_changes("package", {"package_id": 3736, "profile": "P-10_840", "monthly_bill": "840"}),
                          {"PackageId": "3736", "Speed": "P-10_840", "MonthlyBillAmount": "840"})
         self.assertEqual(ch.billing_changes("left", {"status_id": "26"}),
-                         {"Status": "26", "MonthlyBillAmount": "0", "BillingLastDate": "0"})
-        self.assertEqual(ch.billing_changes("back", {"status_id": "4", "status_name": "Free", "monthly_bill": 500,
-                                                     "expire_day": 9})["MonthlyBillAmount"], "0")
+                         {"Status": "26", "MonthlyBillAmount": "0"})     # billing's Expire Date select has no 0
+        free = ch.billing_changes("back", {"status_id": "4", "status_name": "Free", "monthly_bill": 500, "expire_day": 9})
+        self.assertEqual(free["MonthlyBillAmount"], "0")
+        self.assertNotIn("BillingLastDate", free)
         self.assertEqual(ch.billing_changes("password", {"password": PW}), {"Password": PW})
         self.assertEqual(ch.billing_changes("remove", {}), {})
 
