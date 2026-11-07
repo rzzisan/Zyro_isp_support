@@ -9,14 +9,14 @@
 | support.field_jobs | আমার কাজ (ফিল্ড টেকনিশিয়ান) | field_jobs | live | [field_jobs](support/field_jobs.md) |
 | support.force_solve | লাইন অফলাইন থাকলেও কাজ শেষ | force_solve | live | [force_solve](support/force_solve.md) |
 | support.technicians | টেকনিশিয়ান | technicians | live | [technicians](support/technicians.md) |
-| customers.list_profile | কাস্টমার তালিকা ও প্রোফাইল | customers | missing | |
-| customers.create | নতুন কাস্টমার যোগ (বিলিং-এও) | customer_create | missing | |
-| customers.change | প্যাকেজ / Left / পাসওয়ার্ড বদল | customer_change | missing | |
-| network.monitoring | অনলাইন মনিটরিং | monitoring | missing | |
+| customers.list_profile | কাস্টমার তালিকা ও প্রোফাইল | customers | live | [list_profile](customers/list_profile.md) |
+| customers.create | নতুন কাস্টমার যোগ (বিলিং-এও) | customer_create | live | [create](customers/create.md) |
+| customers.change | প্যাকেজ / Left / পাসওয়ার্ড বদল | customer_change | live | [change](customers/change.md) |
+| network.monitoring | অনলাইন মনিটরিং | monitoring | live | [monitoring](network/monitoring.md) |
 | network.mikrotik | MikroTik সংযোগ | mikrotik | live | [mikrotik](network/mikrotik.md) |
-| network.olt | OLT ও SNMP | olt | missing | |
-| network.onus | ONU মনিটরিং | onus | missing | |
-| network.onu_stock | ONU স্টক ও নতুন সংযোগ | onu_stock | missing | |
+| network.olt | OLT ও SNMP | olt | live | [olt](network/olt.md) |
+| network.onus | ONU মনিটরিং | onus | live | [onus](network/onus.md) |
+| network.onu_stock | ONU স্টক ও নতুন সংযোগ | onu_stock | live | [onu_stock](network/onu_stock.md) |
 | line.enable_disable | লাইন চালু/বন্ধ ও রেকর্ড | line_switch, line_enables | live | [enable_disable](line/enable_disable.md) |
 | billing.collect | বিল কালেকশন ও approve | bills, bill_approve | live | [collect](billing/collect.md) |
 | billing.edit_payments | বিল সংশোধন, ক্যাশ মোছা, ট্রান্সফার | bill_edit, payment_delete, payment_transfer | live | [edit_payments](billing/edit_payments.md) |
@@ -26,7 +26,7 @@
 | billing.config | বিলিং কনফিগারেশন | billing_config | live | [config](billing/config.md) |
 | billing.online_payments | অনলাইন পেমেন্ট ও bKash webhook | | live | [online_payments](billing/online_payments.md) |
 | billing.desk_ledger | Desk-এর নিজের বিলিং (নিয়ম, খাতা, মিল, বন্ধের তালিকা) | | live | [desk_ledger](billing/desk_ledger.md) |
-| sms_whatsapp.sms | SMS (পাঠানো, লগ, টেমপ্লেট, গেটওয়ে) | sms | missing | |
+| sms_whatsapp.sms | SMS (পাঠানো, লগ, টেমপ্লেট, গেটওয়ে) | sms | live | [sms](sms_whatsapp/sms.md) |
 | sms_whatsapp.wa_campaign | WhatsApp টেমপ্লেট পাঠানো | wa_campaign | missing | |
 | sms_whatsapp.whatsapp | WhatsApp সেটিং | whatsapp | missing | |
 | phone.call_logs | হটলাইন কল লগ ও রেকর্ডিং | calls | missing | |
