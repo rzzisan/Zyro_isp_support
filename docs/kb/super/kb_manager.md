@@ -17,6 +17,7 @@ code:
   - panel/resources/views/filament/super/pages/kb-management.blade.php
   - panel/app/Models/KbRouteOverride.php
   - panel/app/Models/KbKeywordOverride.php
+  - panel/database/migrations/2026_11_07_000006_kb_route_overrides.php
 updated: 2026-11-07
 ---
 
