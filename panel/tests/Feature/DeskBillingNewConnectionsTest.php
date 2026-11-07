@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\App\Pages\BillingNewConnections;
 use App\Filament\App\Pages\BillingRules;
+use App\Filament\App\Resources\Customers\Pages\ListCustomers;
 use App\Models\BillingSetting;
 use App\Models\Company;
 use App\Models\User;
@@ -97,6 +98,33 @@ class DeskBillingNewConnectionsTest extends TestCase
         Http::assertSent(fn ($r) => str_ends_with(parse_url($r->url(), PHP_URL_PATH), "/internal/{$this->company->id}/new-connection")
             && $r['username'] === 'zyrotest5.t2' && $r['server_name'] === 'CLN-3' && $r['package_name'] === '20 Mbps_1260'
             && $r['status_name'] === 'Active' && $r['joined'] === '2026-11-07' && $r['user_id'] === $this->owner->id);
+    }
+
+    public function test_customer_list_button_only_with_the_permission(): void
+    {
+        $this->fakeEngine();
+        $this->actingAs($this->agent);
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($this->company);
+        Livewire::test(ListCustomers::class)->assertActionHidden('newCustomer');
+
+        DB::table('company_user')->where('company_id', $this->company->id)->where('user_id', $this->agent->id)
+            ->update(['permissions' => json_encode(['customers', 'customer_create'])]);
+        $this->actingAs($this->agent);
+        Livewire::test(ListCustomers::class)->assertActionVisible('newCustomer')
+            ->callAction('newCustomer', [
+                'name' => 'Agent Test', 'mobile' => '01777858289', 'zone_id' => '84', 'server_id' => '4',
+                'package_id' => '3737', 'profile' => 'P-5_525', 'monthly_bill' => 1260, 'status_id' => '1',
+                'connection_type_id' => '76', 'customer_type_id' => '5', 'username' => 'zyrotest5.t3',
+                'password' => bin2hex(random_bytes(5)), 'joined' => '2026-11-07', 'bill_start' => '12/2026', 'expire_day' => 9,
+            ])
+            ->assertHasNoActionErrors();
+        Http::assertSent(fn ($r) => str_ends_with(parse_url($r->url(), PHP_URL_PATH), "/internal/{$this->company->id}/new-connection")
+            && $r['username'] === 'zyrotest5.t3' && $r['user_id'] === $this->agent->id);
+        $this->get('/app/'.$this->company->slug.'/billing-new-connections')->assertOk();
+
+        $this->actingAs($this->owner);
+        Livewire::test(ListCustomers::class)->assertActionVisible('newCustomer');
     }
 
     public function test_off_switch_disables_the_button(): void
