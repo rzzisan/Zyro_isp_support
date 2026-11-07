@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\DeskCustomerBalance;
 use App\Models\DeskLineAction;
 use App\Services\Engine;
+use App\Support\Ledger;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -91,7 +92,16 @@ class BillingRules extends CompanySettingsPage
             ]),
             Section::make(__('৩. বিল সংশোধন, ক্যাশ পেমেন্ট মোছা, অনলাইন পেমেন্ট ট্রান্সফার'))
                 ->description(__('মালিক সবসময় পারবেন। অন্য কাউকে দিতে টিম বা পারমিশন গ্রুপ পেজে "বিল সংশোধন", "ক্যাশ পেমেন্ট মোছা", "অনলাইন পেমেন্ট ট্রান্সফার" টিক দিন। অনলাইন পেমেন্ট কখনো মোছা যাবে না, শুধু অন্য ID-তে ট্রান্সফার।'))
-                ->schema([]),
+                ->schema([
+                    Select::make('ledger_control')->label(__('Desk-এর নিজের খাতায় লেখা (বিল নিন ফর্মের পেমেন্ট, বাতিল, ট্রান্সফার, বিল সংশোধন)'))
+                        ->required()->selectablePlaceholder(false)->live()
+                        ->options(collect(Ledger::CONTROL)->map(fn ($l) => __($l))->all())
+                        ->disableOptionWhen(fn (string $value) => $value === 'all' && ($record->billing_mode ?? 'ispdigital') !== 'desk')
+                        ->helperText(__('বিল নিন ফর্ম আগের মতোই বিলিং-এ বিল জমা দেয়; সাথে Desk-এর খাতায়ও পেমেন্ট লেখে, আর রাতের কপি সেটা দ্বিতীয়বার গোনে না। হস্তান্তরের আগে বিলিং থেকে কপি করা পেমেন্ট বিলিং-এই ঠিক করতে হবে।')),
+                    TagsInput::make('ledger_test_codes')->label(__('খাতার পরীক্ষার অ্যাকাউন্ট (কাস্টমার ID বা PPPoE ID)'))->placeholder('0001')
+                        ->visible(fn ($get) => $get('ledger_control') === 'test')
+                        ->helperText(__('এদের হিসাব বিলিং-এর সাথে মেলানো থেকে বাদ রাখুন (উপরের "মেলানোর হিসাব থেকে বাদ")।')),
+                ]),
             Section::make(__('৪-৫. বিল নেওয়া আর Expire Date'))->columns(2)->schema([
                 Toggle::make('desk_auto_approve')->label(__('৪. Desk-এ নেওয়া বিল সাথে সাথে approve'))->columnSpanFull(),
                 Toggle::make('expire_on_payment')->label(__('৫. পেমেন্টে Expire Date বদলাবে'))->columnSpanFull(),
@@ -189,6 +199,10 @@ class BillingRules extends CompanySettingsPage
         $data['company_id'] = Filament::getTenant()->getKey();
         unset($data['billing_mode']);   // changes only at the cutover, not from this form
         $data['line_test_codes'] = array_values(array_unique(array_filter(array_map('trim', $data['line_test_codes'] ?? []))));
+        $data['ledger_test_codes'] = array_values(array_unique(array_filter(array_map('trim', $data['ledger_test_codes'] ?? []))));
+        if (($data['ledger_control'] ?? 'off') === 'all' && ($record->billing_mode ?? 'ispdigital') !== 'desk') {
+            $data['ledger_control'] = 'test';
+        }
         if (($data['line_control'] ?? 'off') === 'all' && ($record->billing_mode ?? 'ispdigital') !== 'desk') {
             $data['line_control'] = 'test';
         }
@@ -224,6 +238,8 @@ class BillingRules extends CompanySettingsPage
                 ->url(fn () => BillingShadowBills::getUrl()),
             Action::make('disable_shadow')->label(__('বন্ধের তালিকা মিল'))->icon(Heroicon::OutlinedNoSymbol)->color('gray')
                 ->url(fn () => BillingDisableShadow::getUrl()),
+            Action::make('ledger')->label(__('Desk খাতা'))->icon(Heroicon::OutlinedBookOpen)->color('gray')
+                ->url(fn () => BillingLedger::getUrl()),
             Action::make('extensions')->label(__('সময় বাড়ানো'))->icon(Heroicon::OutlinedCalendarDays)->color('gray')
                 ->url(fn () => BillingExtensions::getUrl()),
             Action::make('line_actions')->label(__('লাইন বন্ধ/চালু (MikroTik)'))->icon(Heroicon::OutlinedSignal)->color('gray')

@@ -137,17 +137,17 @@ STEPS = [
     ("payments_gone", """DELETE FROM desk_payments d WHERE d.company_id = %(c)s AND d.source = 'ispdigital'
         AND NOT EXISTS (SELECT 1 FROM _pays s WHERE s.bill_header_id = d.ext_id AND s.paid_on = d.paid_on)"""),
     ("payments", """INSERT INTO desk_payments (company_id, customer_ref, paid_on, amount, discount, method, gateway, trx_id,
-            receipt_no, received_by, status, is_online, source, ext_id, note, created_at, updated_at)
+            receipt_no, received_by, status, is_online, source, ext_id, note, daily_bill_id, created_at, updated_at)
         SELECT %(c)s, s.customer_ref, s.paid_on, s.paid, s.discount, s.method,
                CASE WHEN s.is_online THEN lower(coalesce(s.method_short, s.method)) END, s.trx_no, s.money_receipt_no,
                s.received_by, CASE WHEN s.is_canceled THEN 'canceled' ELSE 'approved' END, s.is_online, 'ispdigital',
-               s.bill_header_id, s.remarks, now(), now()
+               s.bill_header_id, s.remarks, s.daily_bill_id, now(), now()
         FROM _pays s
         ON CONFLICT (company_id, source, ext_id, paid_on) DO UPDATE SET customer_ref = EXCLUDED.customer_ref,
             amount = EXCLUDED.amount, discount = EXCLUDED.discount, method = EXCLUDED.method,
             gateway = EXCLUDED.gateway, trx_id = EXCLUDED.trx_id, receipt_no = EXCLUDED.receipt_no,
             received_by = EXCLUDED.received_by, status = EXCLUDED.status, is_online = EXCLUDED.is_online,
-            note = EXCLUDED.note, updated_at = now()"""),
+            note = EXCLUDED.note, daily_bill_id = EXCLUDED.daily_bill_id, updated_at = now()"""),
 
     # everything before the window, as one row per customer (all of billing's bills minus approved receipts)
     ("ledger_opening", """INSERT INTO desk_ledger_entries (company_id, customer_ref, entry_date, kind, amount, source,
@@ -172,7 +172,40 @@ STEPS = [
             source, source_ref)
         SELECT company_id, customer_ref, paid_on, k.kind, -k.amt, id, 'ispdigital', k.pre || ext_id
         FROM desk_payments, LATERAL (VALUES ('payment', amount, 'pay:'), ('discount', discount, 'disc:')) k(kind, amt, pre)
-        WHERE company_id = %(c)s AND source = 'ispdigital' AND status = 'approved' AND k.amt <> 0"""),
+        WHERE company_id = %(c)s AND source = 'ispdigital' AND status = 'approved' AND k.amt <> 0
+          -- phase 4b: the same money taken on the Desk is already in the ledger as the Desk's own payment
+          AND NOT (daily_bill_id IS NOT NULL AND EXISTS (SELECT 1 FROM desk_payments dp WHERE dp.company_id = %(c)s
+                   AND dp.source = 'desk' AND dp.daily_bill_id = desk_payments.daily_bill_id))"""),
+
+    # phase 4b, while billing is the master: a Desk payment whose bill billing deleted is canceled (reverse rows), a
+    # pending one billing approved is approved (the Desk's own rows are never deleted, only reversed)
+    ("desk_pay_deleted_ledger", """INSERT INTO desk_ledger_entries (company_id, customer_ref, entry_date, kind, amount,
+            payment_ref, source, source_ref, note)
+        SELECT p.company_id, p.customer_ref, (now() AT TIME ZONE 'Asia/Dhaka')::date, 'adjustment', k.amt, p.id, 'desk',
+               k.pre || p.id, 'বিলিং-এ বিলটা মোছা হয়েছে'
+        FROM desk_payments p
+        JOIN billing_daily_bills d ON d.company_id = p.company_id AND d.daily_bill_id = p.daily_bill_id,
+             LATERAL (VALUES (p.amount, 'dpay-cancel:'), (p.discount, 'dpay-cancel-disc:')) k(amt, pre)
+        WHERE p.company_id = %(c)s AND p.source = 'desk' AND p.status = 'approved' AND d.is_deleted AND k.amt <> 0
+        ON CONFLICT DO NOTHING"""),
+    ("desk_pay_deleted", """UPDATE desk_payments p SET status = 'canceled', cancel_reason = 'বিলিং-এ বিলটা মোছা হয়েছে',
+            canceled_at = now(), updated_at = now()
+        FROM billing_daily_bills d
+        WHERE p.company_id = %(c)s AND p.source = 'desk' AND p.status IN ('approved', 'pending')
+          AND d.company_id = p.company_id AND d.daily_bill_id = p.daily_bill_id AND d.is_deleted"""),
+    ("desk_pay_approved_ledger", """INSERT INTO desk_ledger_entries (company_id, customer_ref, entry_date, kind, amount,
+            payment_ref, source, source_ref)
+        SELECT p.company_id, p.customer_ref, (now() AT TIME ZONE 'Asia/Dhaka')::date, k.kind, -k.amt, p.id, 'desk', k.pre || p.id
+        FROM desk_payments p
+        JOIN billing_daily_bills d ON d.company_id = p.company_id AND d.daily_bill_id = p.daily_bill_id,
+             LATERAL (VALUES ('payment', p.amount, 'dpay:'), ('discount', p.discount, 'dpay-disc:')) k(kind, amt, pre)
+        WHERE p.company_id = %(c)s AND p.source = 'desk' AND p.status = 'pending' AND d.is_approved AND NOT d.is_deleted
+          AND k.amt <> 0
+        ON CONFLICT DO NOTHING"""),
+    ("desk_pay_approved", """UPDATE desk_payments p SET status = 'approved', updated_at = now()
+        FROM billing_daily_bills d
+        WHERE p.company_id = %(c)s AND p.source = 'desk' AND p.status = 'pending'
+          AND d.company_id = p.company_id AND d.daily_bill_id = p.daily_bill_id AND d.is_approved AND NOT d.is_deleted"""),
 
     ("balances", """INSERT INTO desk_customer_balances (customer_ref, company_id, balance, last_bill_period,
             last_payment_on, billing_due, has_history, excluded, updated_at)
@@ -205,6 +238,8 @@ STEPS = [
         WHERE d.company_id = %(c)s AND d.is_approved AND NOT d.is_deleted AND d.collected_at > now() - interval '3 days'
           AND NOT EXISTS (SELECT 1 FROM billing_customer_payments p WHERE p.company_id = d.company_id
                           AND p.daily_bill_id = d.daily_bill_id)
+          AND NOT EXISTS (SELECT 1 FROM desk_payments dp WHERE dp.company_id = d.company_id AND dp.source = 'desk'
+                          AND dp.daily_bill_id = d.daily_bill_id)
         GROUP BY 1"""),
     # phase 1: what doesn't match, a likely reason, and since which morning
     ("mismatch", """UPDATE desk_customer_balances x SET
@@ -251,6 +286,8 @@ SELECT (SELECT ws FROM _w)::text AS window_start,
            WHERE d.company_id = %(c)s AND d.is_approved AND NOT d.is_deleted AND d.collected_at > now() - interval '3 days'
              AND NOT EXISTS (SELECT 1 FROM billing_customer_payments p WHERE p.company_id = d.company_id
                              AND p.daily_bill_id = d.daily_bill_id)
+             AND NOT EXISTS (SELECT 1 FROM desk_payments dp WHERE dp.company_id = d.company_id AND dp.source = 'desk'
+                             AND dp.daily_bill_id = d.daily_bill_id)
            GROUP BY 1) t ON t.h = c.header_id
      WHERE x.company_id = %(c)s AND x.has_history AND NOT x.excluded AND abs(x.balance - coalesce(x.billing_due, 0)) >= 1
        AND abs(x.balance - t.amt - coalesce(x.billing_due, 0)) < 1) AS matched_after_todays_receipts,
