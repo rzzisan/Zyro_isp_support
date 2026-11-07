@@ -22,6 +22,26 @@ import httpx
 log = logging.getLogger("zyro-engine")
 
 SECRET_FIELDS = {"Password", "LoginPassword"}
+PPPOE_PROTOCOL_ID = 30   # /customer/add ProtocolId "PPPOE" (the only protocol in use)
+NEW_CUSTOMER_SELECTS = ("ServerId", "ZoneId", "ConnectionTypeId", "PackageId", "CustomerTypeId", "Status",
+                        "DistrictId", "ThanaId")
+
+
+def hidden_value(page: str, name: str) -> str | None:
+    """The value of a named <input> in a page (the form tokens)."""
+    tag = re.search(r'<input[^>]*name="%s"[^>]*>' % re.escape(name), page)
+    v = re.search(r'value="([^"]*)"', tag.group(0)) if tag else None
+    return html.unescape(v.group(1)) if v else None
+
+
+def parse_selects(page: str, names) -> dict:
+    """{select name: [{"id", "name"}]} for the named <select>s of a page, without the empty "--Select--" option."""
+    out = {}
+    for name in names:
+        m = re.search(r'<select[^>]*name="%s"[^>]*>(.*?)</select>' % re.escape(name), page, re.S | re.I)
+        opts = re.findall(r'<option[^>]*value="([^"]*)"[^>]*>(.*?)</option>', m.group(1), re.S | re.I) if m else []
+        out[name] = [{"id": v, "name": html.unescape(re.sub(r"<[^>]+>", "", t)).strip()} for v, t in opts if v.strip()]
+    return out
 
 
 def browser_headers(base_url: str) -> dict:
@@ -512,6 +532,56 @@ class ISPDigital:
         if r.status_code not in (301, 302, 303):
             raise BillingRefused(f"billing did not save the customer (HTTP {r.status_code})")
         return {**out, "saved": True}
+
+    # --- write: new customer (billing phase 5, /customer/add) ----------------------------
+    def new_customer_options(self) -> dict:
+        """The new customer form's fixed lists: {select name: [{"id", "name"}]} (Server, Zone, Package, ...)."""
+        return parse_selects(self.page("/customer/add"), NEW_CUSTOMER_SELECTS)
+
+    def server_profiles(self, server_id: int, protocol_id: int = PPPOE_PROTOCOL_ID) -> list[str]:
+        """The MikroTik profiles billing offers as Speed for a server (its own AJAX: a JSON string of <option>s)."""
+        data = self._get("/Mikrotik/GetProfilesDropDownById", {"id": int(server_id), "protocolId": int(protocol_id)})
+        return [html.unescape(v) for v in re.findall(r"value=['\"]([^'\"]+)['\"]", str(data or ""))]
+
+    def zone_subzones(self, zone_id: int) -> list[dict]:
+        data = self._get(f"/Config/GetZoneWiseSubZone/{int(zone_id)}")
+        rows = data.get("data") if isinstance(data, dict) else data
+        return [{"id": str(r.get("Id")), "name": r.get("Name")} for r in rows or [] if isinstance(r, dict)]
+
+    def subzone_boxes(self, subzone_id: int) -> list[dict]:
+        data = self._get(f"/Config/GetSubZoneWiseBox/{int(subzone_id)}")
+        rows = data.get("data") if isinstance(data, dict) else data
+        return [{"id": str(r.get("Id")), "name": r.get("Name")} for r in rows or [] if isinstance(r, dict)]
+
+    def package_bill(self, package_id: int) -> float:
+        """The package's monthly bill as billing fills it in (a plain number)."""
+        return _num(self._get(f"/Customer/GetPackageWiseMonthlyBill/{int(package_id)}"))
+
+    def username_taken(self, username: str) -> bool:
+        """Billing's own check while typing the PPPoE UserName: true = already used (Left customers included)."""
+        return self._get("/Customer/CheckUserName", {"term": username.strip()}) is True
+
+    def create_customer(self, fields: dict) -> int:
+        """Submit the new customer form once and return the new CustomerHeaderId. A fresh GET gives the one-time
+        FormSubmissionToken; success is only the 302 to /Billing/ConnectionCharge?queryCustomerId={header}.
+        `fields` holds the PPPoE password: it is posted and never logged or returned."""
+        page = self.page("/customer/add")
+        tokens = {n: hidden_value(page, n) for n in ("__RequestVerificationToken", "FormSubmissionToken")}
+        if not all(tokens.values()):
+            raise RuntimeError("billing's new customer form was not as expected (no form token)")
+        data = {**{k: "" if v is None else str(v) for k, v in fields.items()}, **tokens, "ModulePermissionId": "1"}
+        files = {n: ("", b"", "application/octet-stream") for n in ("File", "NationalIdFile", "RegistrationFormFile")}
+        with self._lock:
+            r = self._client.post("/Customer/Add", data=data, files=files, timeout=90,
+                                  headers={"Referer": f"{self.base_url}/customer/add"})
+        location = r.headers.get("location", "")
+        if "Account/Login" in location:
+            self._logged_in = False
+            raise LoginError("billing session expired, the customer was not created")
+        m = re.search(r"queryCustomerId=(\d+)", location)
+        if r.status_code not in (301, 302, 303) or not m:
+            raise BillingRefused(f"billing did not create the customer (HTTP {r.status_code})")
+        return int(m.group(1))
 
 
 def receive_payload(form: dict, paid: float, discount: float, method_id: str, received_by_id: str, remarks: str = "",

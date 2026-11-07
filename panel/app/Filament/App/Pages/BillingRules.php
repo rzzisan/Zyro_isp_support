@@ -5,6 +5,7 @@ namespace App\Filament\App\Pages;
 use App\Models\BillingSetting;
 use App\Models\Company;
 use App\Models\DeskCustomerBalance;
+use App\Models\DeskConnection;
 use App\Models\DeskLineAction;
 use App\Services\Engine;
 use App\Support\Ledger;
@@ -144,6 +145,15 @@ class BillingRules extends CompanySettingsPage
                         ->visible(fn ($get) => $get('line_control') === 'test')
                         ->helperText(__('শুধু এদের লাইন Desk থেকে বন্ধ/চালু করা যাবে। প্রথমে নিজের অ্যাকাউন্ট, তারপর ৫-১০ জন পাইলট।')),
                 ]),
+            Section::make(__('Desk থেকে নতুন সংযোগ (বিলিং-এও তৈরি)'))
+                ->description(__('নতুন সংযোগ পাতার ফর্ম সেভ করলে কাস্টমার বিলিং-এ তৈরি হয় (বিলিং-ই রাউটারে PPP secret বানায়), তারপর Desk রাউটার পড়ে যাচাই করে। হস্তান্তরের আগে প্রথমে শুধু পরীক্ষার username দিয়ে চালান।'))
+                ->schema([
+                    Select::make('connection_control')->label(__('চালু থাকবে'))->required()->selectablePlaceholder(false)->live()
+                        ->options(collect(DeskConnection::CONTROL)->map(fn ($l) => __($l))->all()),
+                    TextInput::make('connection_test_prefix')->label(__('পরীক্ষার username যেভাবে শুরু হবে'))->maxLength(40)->placeholder('zyrotest')
+                        ->visible(fn ($get) => $get('connection_control') === 'test')
+                        ->helperText(__('শুধু এভাবে শুরু হওয়া PPPoE username-এর সংযোগ বিলিং-এ পাঠানো যাবে।')),
+                ]),
             Section::make(__('কাজের লগ'))->schema([
                 TextInput::make('activity_log_months')->label(__('কাজের লগ কত মাস রাখা হবে'))->numeric()->integer()->minValue(1)->maxValue(120)->suffix(__('মাস'))
                     ->placeholder(__('খালি = সবসময়'))->helperText(__('পুরনো মাস archive হবে, মোছা হবে না।')),
@@ -206,6 +216,7 @@ class BillingRules extends CompanySettingsPage
         if (($data['line_control'] ?? 'off') === 'all' && ($record->billing_mode ?? 'ispdigital') !== 'desk') {
             $data['line_control'] = 'test';
         }
+        $data['connection_test_prefix'] = trim((string) ($data['connection_test_prefix'] ?? '')) ?: null;
         $data['match_exclude_codes'] = array_values(array_unique(array_filter(array_map('trim', $data['match_exclude_codes'] ?? []))));
         if (($data['activity_log_months'] ?? '') === '') {
             $data['activity_log_months'] = null;
@@ -242,6 +253,8 @@ class BillingRules extends CompanySettingsPage
                 ->url(fn () => BillingLedger::getUrl()),
             Action::make('waivers')->label(__('বিল মাফ'))->icon(Heroicon::OutlinedReceiptRefund)->color('gray')
                 ->visible(fn () => BillingWaivers::canAccess())->url(fn () => BillingWaivers::getUrl()),
+            Action::make('new_connections')->label(__('নতুন সংযোগ'))->icon(Heroicon::OutlinedUserPlus)->color('gray')
+                ->url(fn () => BillingNewConnections::getUrl()),
             Action::make('extensions')->label(__('সময় বাড়ানো'))->icon(Heroicon::OutlinedCalendarDays)->color('gray')
                 ->url(fn () => BillingExtensions::getUrl()),
             Action::make('line_actions')->label(__('লাইন বন্ধ/চালু (MikroTik)'))->icon(Heroicon::OutlinedSignal)->color('gray')
