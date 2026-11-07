@@ -43,19 +43,6 @@ class OnuStockDashboard extends Page
 
     public string $period = 'month';
 
-    /** Preview of the new design (?design=new) until Zisan picks one; kept across Livewire updates. */
-    public bool $minimal = false;
-
-    public function mount(): void
-    {
-        $this->minimal = request()->query('design') === 'new';
-    }
-
-    public function getView(): string
-    {
-        return $this->minimal ? 'filament.app.onu-stock-dashboard-minimal' : $this->view;
-    }
-
     public static function getNavigationLabel(): string
     {
         return __('ONU ও স্টক ড্যাশবোর্ড');
@@ -104,7 +91,7 @@ class OnuStockDashboard extends Page
     }
 
     /**
-     * Extra numbers for the modern design: change vs the previous period, ONU / connection activity over time
+     * Extra numbers for the page: change vs the previous period, ONU / connection activity over time
      * (by day, week or month), and for every stock line how long it lasts at the last 30 days' pace.
      */
     public function insights(array $r): array

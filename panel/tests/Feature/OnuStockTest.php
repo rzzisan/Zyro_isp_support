@@ -327,7 +327,7 @@ class OnuStockTest extends TestCase
         $this->actingAs($this->owner)->get("/app/{$this->company->slug}/onu-stock-dashboard")->assertForbidden();
     }
 
-    public function test_dashboard_minimal_design_preview(): void
+    public function test_dashboard_trend_and_days_of_cover(): void
     {
         $b = $this->brand('Aurora', 5);
         foreach (range(1, 3) as $i) {
@@ -338,9 +338,8 @@ class OnuStockTest extends TestCase
         $page = new \App\Filament\App\Pages\OnuStockDashboard;
         $x = $page->insights($page->report());
         $this->assertSame([2, 3, 20], [$x['lines'][0]['qty'], $x['lines'][0]['used30'], $x['lines'][0]['days']]); // 2 left, 3 used in 30 days
-        Livewire::withQueryParams(['design' => 'new'])->test(\App\Filament\App\Pages\OnuStockDashboard::class)
+        Livewire::test(\App\Filament\App\Pages\OnuStockDashboard::class)
             ->assertSee('কাজের ধারা')->assertSee('Aurora')->assertSee('দিন চলবে')
             ->call('setPeriod', 'all')->assertSee('কাজের ধারা')->call('setPeriod', '90')->assertSee('কাজের ধারা');
-        $this->actingAs($this->owner)->get("/app/{$this->company->slug}/onu-stock-dashboard")->assertOk()->assertDontSee('কাজের ধারা');
     }
 }
