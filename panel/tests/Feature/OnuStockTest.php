@@ -72,9 +72,26 @@ class OnuStockTest extends TestCase
         $this->company->update(['modules' => ['onu']]);
         $agent = User::factory()->create();
         $this->company->users()->attach($agent, ['role' => 'agent']);
-        $this->actingAs($agent)->get("/app/{$this->company->slug}/stock-products")->assertForbidden(); // agents: off until cutover
-        \App\Models\Membership::where('user_id', $agent->id)->update(['permissions' => json_encode(['inbox', 'onu_stock'])]);
-        $this->actingAs($agent)->get("/app/{$this->company->slug}/stock-products")->assertOk();
+        $this->actingAs($agent)->get("/app/{$this->company->slug}/stock-products")->assertOk(); // agents have it by default
+        \App\Models\Membership::where('user_id', $agent->id)->update(['permissions' => json_encode(['inbox'])]);
+        $this->actingAs($agent)->get("/app/{$this->company->slug}/stock-products")->assertForbidden();
+    }
+
+    public function test_technician_on_onu_records_cannot_be_deleted(): void
+    {
+        $b = $this->brand();
+        $used = Technician::create(['company_id' => $this->company->id, 'name' => 'Arif', 'active' => false]);
+        $free = Technician::create(['company_id' => $this->company->id, 'name' => 'Free', 'active' => false]);
+        $a = OnuAssignment::create(['company_id' => $this->company->id, 'assigned_at' => now(), 'brand_id' => $b->id, 'mac_raw' => 'x',
+            'purpose' => 'Warranty', 'customer_kind' => 'other']);
+        $a->technicians()->sync([$used->id]);
+        $this->as($this->owner);
+        Livewire::test(\App\Filament\App\Resources\Technicians\Pages\ManageTechnicians::class)
+            ->callAction(TestAction::make('delete')->table($used))
+            ->callAction(TestAction::make('delete')->table($free));
+        $this->assertTrue($used->fresh() !== null);
+        $this->assertNull($free->fresh());
+        $this->assertSame([$used->id], $a->technicians()->pluck('technicians.id')->all());
     }
 
     public function test_mac_and_customer_ids_are_normalized(): void
@@ -271,5 +288,17 @@ class OnuStockTest extends TestCase
             ->map(fn ($r) => json_encode(['t' => $r[0], 'r' => $r[1]], JSON_UNESCAPED_UNICODE))->join("\n"));
         $this->artisan('onu:import', $args)->assertSuccessful();
         $this->assertSame(1, OnuAssignment::count());
+
+        // old staff deleted in the Desk and added again by hand with a number: found by the billing employee, not duplicated;
+        // an ONU entered in the Desk is kept and does not break the stock check
+        $arif->delete();
+        $again = Technician::create(['company_id' => $this->company->id, 'name' => 'Arif Hossain', 'wa_number' => '8801711000777', 'billing_employee_id' => '3']);
+        OnuAssignment::create(['company_id' => $this->company->id, 'assigned_at' => now(), 'brand_id' => OnuBrand::sole()->id, 'mac_raw' => 'AD45CC154512',
+            'purpose' => 'Warranty', 'customer_kind' => 'other']);
+        $this->artisan('onu:import', $args)->expectsOutputToContain('made in the Desk (assignments)     1')
+            ->doesntExpectOutputToContain('MISMATCH')->assertSuccessful();
+        $this->assertSame(1, Technician::where('billing_employee_id', '3')->count());
+        $this->assertEqualsCanonicalizing(['Arif Hossain', 'Arzu'], $a->fresh()->technicians->pluck('name')->all());
+        $this->assertSame(2, OnuAssignment::count());
     }
 }

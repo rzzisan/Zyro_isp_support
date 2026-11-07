@@ -100,7 +100,11 @@ class OnuImport extends Command
         }
         foreach ($map['staff'] ?? [] as $name => $m) {
             if (! empty($m['new'])) {
-                $t = Technician::firstOrCreate(['company_id' => $this->cid, 'name' => $name], [
+                // already in the Desk (maybe added again by hand, with a number): same billing employee, else same name
+                $t = (filled($m['billing_employee_id'] ?? null)
+                        ? Technician::where('company_id', $this->cid)->where('billing_employee_id', $m['billing_employee_id'])->orderBy('id')->first() : null)
+                    ?? Technician::where('company_id', $this->cid)->whereRaw('lower(name) = lower(?)', [$name])->orderBy('id')->first()
+                    ?? Technician::create(['company_id' => $this->cid, 'name' => $name,
                     'wa_number' => null, 'active' => false, 'notify_tickets' => false, 'can_switch_lines' => false,
                     'billing_employee_id' => $m['billing_employee_id'] ?? null, 'billing_employee_name' => $m['billing_employee_name'] ?? null,
                     'note' => 'পুরনো ONU অ্যাপ থেকে',
@@ -292,12 +296,18 @@ class OnuImport extends Command
             'product_stock_logs' => StockMovement::class] as $t => $model) {
             $check("rows $t", count($data[$t] ?? []), $model::where('company_id', $this->cid)->whereNotNull('legacy_id')->count());
         }
+        // stock of the imported rows only; entries made in the Desk itself are listed apart (they change the Desk's stock)
         $out = collect($data['onu_assignments'] ?? [])->countBy('brand_name');
-        $stock = Onu::stock($this->cid);
         foreach ($data['brands'] ?? [] as $b) {
             $in = collect($data['stock_entries'] ?? [])->where('brand_id', $b['id'])->sum('quantity');
             $new = OnuBrand::where('company_id', $this->cid)->where('legacy_id', $b['id'])->value('id');
-            $check('stock '.$b['name'], $in - ($out[$b['name']] ?? 0), $stock[$new]['left'] ?? 'x');
+            $newLeft = OnuStockEntry::where('company_id', $this->cid)->whereNotNull('legacy_id')->where('brand_id', $new)->sum('quantity')
+                - OnuAssignment::where('company_id', $this->cid)->whereNotNull('legacy_id')->where('brand_id', $new)->count();
+            $check('stock '.$b['name'], $in - ($out[$b['name']] ?? 0), $newLeft);
+        }
+        foreach ([OnuAssignment::class => 'assignments', OnuStockEntry::class => 'stock entries', NewConnection::class => 'connections',
+            StockMovement::class => 'stock movements'] as $model => $label) {
+            $this->report["made in the Desk ($label)"] = $model::where('company_id', $this->cid)->whereNull('legacy_id')->count();
         }
         $check('total due', number_format(collect($data['new_connections'] ?? [])->sum(fn ($r) => (float) $r['due_amount']), 2, '.', ''),
             number_format((float) NewConnection::where('company_id', $this->cid)->whereNotNull('legacy_id')->sum('due'), 2, '.', ''));

@@ -136,7 +136,18 @@ class TechnicianResource extends Resource
             ->headerActions([CreateAction::make()->label(__('টেকনিশিয়ান যোগ করুন'))
                 ->mutateDataUsing(fn (array $data) => [...static::withEmployeeName($data), 'company_id' => Filament::getTenant()->getKey()])])
             ->recordActions([EditAction::make()->mutateDataUsing(fn (array $data, Technician $record) => static::withEmployeeName($data, $record)),
-                DeleteAction::make()]);
+                // deleting would silently drop the person from old ONU / connection / stock records (cascade / set null)
+                DeleteAction::make()->before(function (Technician $record, DeleteAction $action) {
+                    $used = \Illuminate\Support\Facades\DB::table('onu_assignment_technician')->where('technician_id', $record->id)->count()
+                        + \App\Models\NewConnection::where(fn ($q) => $q->where('order_taker_id', $record->id)->orWhere('money_with_id', $record->id))->count()
+                        + \App\Models\ConnectionPayment::where('collected_by_id', $record->id)->count()
+                        + \App\Models\StockMovement::where('technician_id', $record->id)->count();
+                    if ($used > 0) {
+                        \Filament\Notifications\Notification::make()->danger()->title(__('ডিলিট করা যাবে না'))
+                            ->body(__('ONU, নতুন সংযোগ বা মালের :n টা রেকর্ডে এই নাম আছে। ডিলিট না করে "চালু" বন্ধ করুন।', ['n' => $used]))->send();
+                        $action->cancel();
+                    }
+                })]);
     }
 
     public static function getEloquentQuery(): Builder

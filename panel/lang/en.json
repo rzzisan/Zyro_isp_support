@@ -2141,5 +2141,6 @@
     "যে মাসে লাইন একবারও চালু হয়নি (হাতে, বট বা সময় বাড়িয়ে) আর কোনো টাকা আসেনি, সে মাসের বিল শূন্য। আংশিক পেমেন্টের মাস আর আগের বকেয়া থাকে। মাস শেষে প্রতি রাতে দেখা হয়।": "A month in which the line was never turned on (by hand, by the bot or by an extension) and no money came has its bill set to zero. A month with a partial payment and older dues stay. Checked every night after the month ends.",
     "শুরুর বকেয়া": "Opening due",
     "শেষ বকেয়া": "Closing due",
-    "হিসাব বিবরণী": "Statement"
+    "হিসাব বিবরণী": "Statement",
+    "ONU, নতুন সংযোগ বা মালের :n টা রেকর্ডে এই নাম আছে। ডিলিট না করে \"চালু\" বন্ধ করুন।": "This name is on :n ONU, new connection or stock records. Turn \"Active\" off instead of deleting."
 }
