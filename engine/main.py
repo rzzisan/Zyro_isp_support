@@ -1203,6 +1203,51 @@ async def desk_line_action(request: Request, company_id: int):
     return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items()}
 
 
+@app.get("/internal/{company_id}/new-connection/lists")
+def new_connection_lists(request: Request, company_id: int, kind: str = "options", id: int = 0, name: str = ""):
+    """নতুন সংযোগ (billing phase 5) form lists from billing's own new customer form: kind=options (Server, Zone,
+    Package, ...), profiles (Speed of a Server), subzones (of a Zone), boxes (of a Sub Zone), bill (a Package's
+    monthly bill), username (taken?), password (a new one, shown once in the form)."""
+    t = internal_tenant(request, company_id)
+    from engine import desk_connection
+    api = tenants.billing(t)
+    fn = {
+        "options": lambda: api.new_customer_options(),
+        "profiles": lambda: {"profiles": api.server_profiles(id)},
+        "subzones": lambda: {"items": api.zone_subzones(id)},
+        "boxes": lambda: {"items": api.subzone_boxes(id)},
+        "bill": lambda: {"bill": api.package_bill(id)},
+        "username": lambda: {"taken": api.username_taken(name)},
+        "password": lambda: {"password": desk_connection.new_password()},
+    }.get(kind)
+    if not fn:
+        raise HTTPException(status_code=400, detail="unknown list")
+    return billing_call(fn)
+
+
+@app.post("/internal/{company_id}/new-connection")
+async def new_connection(request: Request, company_id: int):
+    """নতুন সংযোগ (billing phase 5): send one new connection to billing with the member's billing login, then read
+    the router's secret back. Body: the form (desk_customer.REQUIRED keys + names), user_id, by. 409 = refused."""
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    from engine import desk_connection
+    from engine.customer_sync import find_in_billing
+    user_id = int(b.pop("user_id", 0) or 0) or None
+    actor = str(b.pop("by", "") or "Desk")
+    source = str(b.pop("source", "") or "panel")
+
+    def go():
+        api = tenants.billing_for_user(t, user_id, owner_fallback=True) if user_id else tenants.billing(t)
+        return desk_connection.run(company_id, b, api=api, user_id=user_id, actor=actor, source=source,
+                                   sync=lambda username: find_in_billing(t, username))
+    try:
+        row = await run_in_threadpool(go)
+    except (desk_connection.Refused, tenants.NoBillingLogin) as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items() if k != "form"}
+
+
 @app.post("/internal/{company_id}/customers/find")
 def customers_find(request: Request, company_id: int, q: str = ""):
     """Desk header search fallback: the billing header search, copying customers the desk doesn't have yet."""

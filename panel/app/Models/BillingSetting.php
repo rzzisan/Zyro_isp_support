@@ -17,7 +17,7 @@ class BillingSetting extends Model
         'online_expire' => true, 'mikrotik_retries' => 3, 'enable_min_percent' => 90,
         'partial_redisable_percent' => 40, 'partial_redisable_days' => 3, 'history_months' => 12, 'activity_log_months' => null,
         'match_exclude_codes' => [], 'line_control' => 'off', 'line_test_codes' => [], 'extend_max_days' => 10, 'extend_per_month' => 1,
-        'ledger_control' => 'off', 'ledger_test_codes' => [],
+        'ledger_control' => 'off', 'ledger_test_codes' => [], 'connection_control' => 'off', 'connection_test_prefix' => 'zyrotest',
     ];
 
     public const MODES = ['ispdigital' => 'বিলিং সফটওয়্যার মূল (এখন)', 'shadow' => 'ছায়া: Desk পাশাপাশি হিসাব করে', 'desk' => 'Desk মূল'];
