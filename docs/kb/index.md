@@ -40,3 +40,4 @@
 | settings.team | টিম, রোল, পারমিশন গ্রুপ | team | live | [team](settings/team.md) |
 | settings.account | পাসওয়ার্ড, কুইক অ্যাক্সেস, ভাষা, কাজের লগ | | live | [account](settings/account.md) |
 | app.android | Desk Android অ্যাপ | | live | [android](app/android.md) |
+| super.kb_manager | AI সাপোর্ট KB ও রাউটিং (সুপার-অ্যাডমিন) |  | live | [kb_manager](super/kb_manager.md) |
