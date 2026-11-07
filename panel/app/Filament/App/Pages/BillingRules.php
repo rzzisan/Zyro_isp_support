@@ -240,6 +240,8 @@ class BillingRules extends CompanySettingsPage
                 ->url(fn () => BillingDisableShadow::getUrl()),
             Action::make('ledger')->label(__('Desk খাতা'))->icon(Heroicon::OutlinedBookOpen)->color('gray')
                 ->url(fn () => BillingLedger::getUrl()),
+            Action::make('waivers')->label(__('বিল মাফ'))->icon(Heroicon::OutlinedReceiptRefund)->color('gray')
+                ->visible(fn () => BillingWaivers::canAccess())->url(fn () => BillingWaivers::getUrl()),
             Action::make('extensions')->label(__('সময় বাড়ানো'))->icon(Heroicon::OutlinedCalendarDays)->color('gray')
                 ->url(fn () => BillingExtensions::getUrl()),
             Action::make('line_actions')->label(__('লাইন বন্ধ/চালু (MikroTik)'))->icon(Heroicon::OutlinedSignal)->color('gray')

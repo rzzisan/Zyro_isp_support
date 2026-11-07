@@ -75,6 +75,11 @@ class BillingLedger extends Page implements HasTable
         return [
             Action::make('bills')->label(__('বিল ও সংশোধন'))->icon(Heroicon::OutlinedDocumentText)->color('gray')
                 ->url(fn () => BillingLedgerBills::getUrl($this->customer ? ['customer' => $this->customer] : [])),
+            Action::make('statement')->label(__('হিসাব বিবরণী'))->icon(Heroicon::OutlinedDocumentChartBar)->color('gray')
+                ->visible(fn () => filled($this->customer) && DeskCustomer::where('company_id', Filament::getTenant()->getKey())->where('customer_code', $this->customer)->exists())
+                ->url(fn () => route('customers.statement', ['company' => Filament::getTenant(), 'code' => $this->customer]), true),
+            Action::make('waivers')->label(__('বিল মাফ'))->icon(Heroicon::OutlinedReceiptRefund)->color('gray')
+                ->url(fn () => BillingWaivers::getUrl()),
             Action::make('all')->label(__('সব কাস্টমার'))->color('gray')->visible(fn () => filled($this->customer))
                 ->url(fn () => static::getUrl()),
         ];
@@ -121,6 +126,9 @@ class BillingLedger extends Page implements HasTable
                 SelectFilter::make('status')->label(__('অবস্থা'))->options(collect(DeskPayment::STATUSES)->map(fn ($s) => __($s[0]))->all()),
             ])
             ->recordActions([
+                Action::make('receipt')->label(__('রিসিট'))->icon(Heroicon::OutlinedPrinter)->color('gray')
+                    ->visible(fn (DeskPayment $r) => in_array($r->status, ['approved', 'pending'], true))
+                    ->url(fn (DeskPayment $r) => route('desk-payments.receipt', ['company' => Filament::getTenant(), 'payment' => $r->id]), true),
                 Action::make('cancel')->label(__('বাতিল'))->icon(Heroicon::OutlinedXMark)->color('danger')
                     ->visible(fn (DeskPayment $r) => Ledger::canCancel($r, auth()->user()))
                     ->schema([Textarea::make('reason')->label(__('কেন বাতিল'))->required()->rows(2)->maxLength(1000)])
