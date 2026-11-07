@@ -67,12 +67,12 @@ def _norm(name: str | None) -> str:
 
 
 def router_for(company_id: int, server_name: str | None) -> dict | None:
-    """The Desk's router for billing's Server (CLN-3 = billing_server CLN_3 or name CLN-3)."""
+    """The Desk's router for billing's Server (CLN-3 = billing_server CLN_3 or the router's identity CLN-3)."""
     want = _norm(server_name)
     if not want:
         return None
     for r in db.all_rows("SELECT * FROM mikrotik_routers WHERE company_id = %s AND enabled ORDER BY id", (company_id,)):
-        if want in (_norm(r.get("billing_server")), _norm(r.get("name"))):
+        if want in (_norm(r.get("billing_server")), _norm(r.get("identity"))):
             return r
     return None
 

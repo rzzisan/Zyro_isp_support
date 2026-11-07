@@ -85,7 +85,7 @@ class RunTest(unittest.TestCase):
         db.execute("""INSERT INTO billing_settings (company_id, connection_control, connection_test_prefix)
                       VALUES (%s, 'test', 'zyrotest') ON CONFLICT (company_id) DO UPDATE
                       SET connection_control = 'test', connection_test_prefix = 'zyrotest'""", (self.company,))
-        db.execute("""INSERT INTO mikrotik_routers (company_id, name, host, api_port, username, password, enabled, billing_server)
+        db.execute("""INSERT INTO mikrotik_routers (company_id, identity, host, api_port, username, password, enabled, billing_server)
                       VALUES (%s, 'CLN-3', '10.0.0.3', 8728, 'api', 'x', true, 'CLN_3')""", (self.company,))
 
     def run_it(self, api, secret=None, **kw):

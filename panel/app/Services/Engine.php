@@ -234,8 +234,8 @@ class Engine
     /** Phase 5 নতুন সংযোগ form lists from billing: options | profiles | subzones | boxes | bill | username | password. */
     public static function newConnectionList(int $companyId, string $kind, int $id = 0, string $name = ''): array
     {
-        return static::call('get', "/internal/{$companyId}/new-connection/lists?".http_build_query(['kind' => $kind,
-            'id' => $id, 'name' => $name])) ?? [];
+        return static::call('get', "/internal/{$companyId}/new-connection/lists", ['kind' => $kind, 'id' => $id,
+            'name' => $name]) ?? [];
     }
 
     /** Phase 5: send one new connection to billing with the member's billing login; returns the desk_connections row. */
