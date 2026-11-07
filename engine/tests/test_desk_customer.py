@@ -61,6 +61,22 @@ class DefaultsTest(unittest.TestCase):
         self.assertEqual(dc.bill_for("Inactive", None), 0)
 
 
+class BillingFormTest(unittest.TestCase):
+    def test_active_payload(self):
+        out = dc.billing_form(form(profile="P-5_525"))
+        self.assertEqual(out["MobileNumber"], "8801777858289")
+        self.assertEqual(out["Speed"], "P-5_525")
+        self.assertEqual(out["MonthlyBill"], 520)
+        self.assertEqual(out["BillingLastDate"], 9)
+        self.assertEqual(out["JoiningDate"], "12/2026")
+        self.assertEqual(out["Protocol"], "PPPoE")
+
+    def test_free_has_zero_bill_and_expire(self):
+        out = dc.billing_form(form(status="Free", profile="P-5_525"))
+        self.assertEqual(out["MonthlyBill"], 0)
+        self.assertEqual(out["BillingLastDate"], 0)
+
+
 class SecretTest(unittest.TestCase):
     def test_no_secret_active_creates(self):
         self.assertEqual(dc.secret_actions(None, {"status": "active", "profile": "20M"}), ["create"])

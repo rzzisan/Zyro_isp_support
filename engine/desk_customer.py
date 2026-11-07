@@ -71,6 +71,32 @@ def validate_new(form: dict) -> list[str]:
     return errors
 
 
+def billing_form(form: dict) -> dict:
+    """The POST /Customer/Add fields for a validated new connection (plan 2.4খ field names). Only the fields the
+    billing form needs; the password is passed through and must never be logged by the caller.
+    Monthly bill and expire follow the status rule, Speed is the package's MikroTik profile, and the joining date is
+    the billing's own "Joining Date" (MM/YYYY), which is the bill start month."""
+    status = form.get("status") or ""
+    return {
+        "CustomerName": (form.get("name") or "").strip(),
+        "MobileNumber": digits(form.get("mobile")),
+        "Zone": form.get("zone"),
+        "SubZone": form.get("sub_zone") or "",
+        "Server": form.get("router"),
+        "Protocol": "PPPoE",
+        "ConnectionType": form.get("connection_type"),
+        "Package": form.get("package"),
+        "MonthlyBill": bill_for(status, form.get("monthly_bill")),
+        "Speed": form.get("profile") or "",
+        "CustomerType": form.get("customer_type"),
+        "Status": status,
+        "UserName": (form.get("username") or "").strip(),
+        "Password": form.get("password") or "",
+        "JoiningDate": form.get("bill_start"),
+        "BillingLastDate": expire_for(status, form.get("expire_day")),
+    }
+
+
 def secret_actions(current: dict | None, want: dict) -> list[str]:
     """What must change on a router's PPP secret to match the customer's status (plan 2.7).
     current: the secret as the router has it ({"profile", "disabled"}) or None when there is no secret.
