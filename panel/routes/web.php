@@ -78,6 +78,20 @@ Route::get('/print/{company:slug}/bill/{dailyBill}', function (\App\Models\Compa
     return \App\Support\Receipts::dailyBill($company, Auth::user(), $dailyBill, $request->query('w'), $request->query('print') !== '0');
 })->middleware('web')->name('bills.receipt');
 
+// money receipt of a payment in the Desk's own ledger (billing phase 4c), same layout; members with the bills menu
+Route::get('/print/{company:slug}/desk-payment/{payment}', function (\App\Models\Company $company, int $payment, \Illuminate\Http\Request $request) {
+    abort_unless(\App\Support\Menu::allows(Auth::user(), $company, 'bills'), 403);
+
+    return \App\Support\Receipts::deskPayment($company, $payment, $request->query('w'), $request->query('print') !== '0');
+})->middleware('web')->name('desk-payments.receipt');
+
+// one customer's statement from the Desk's own ledger (?from=&to=, default the last 6 months); members with the customers menu
+Route::get('/print/{company:slug}/statement/{code}', function (\App\Models\Company $company, string $code, \Illuminate\Http\Request $request) {
+    abort_unless(\App\Support\Menu::allows(Auth::user(), $company, 'customers'), 403);
+
+    return \App\Support\Statement::view($company, $code, $request->query('from'), $request->query('to'), $request->query('print') === '1');
+})->middleware('web')->name('customers.statement');
+
 // বিল কালেকশন page, every 5 s while open and visible: has anything changed? (tiny JSON; the page refreshes only then)
 Route::get('/live/{company:slug}/daily-bills', function (\App\Models\Company $company) {
     abort_unless(\App\Support\Menu::allows(Auth::user(), $company, 'bills'), 403);

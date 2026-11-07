@@ -6,11 +6,13 @@ use App\Models\BillCollection;
 use App\Models\BillingCustomer;
 use App\Models\BillingDailyBill;
 use App\Models\Company;
+use App\Models\DeskPayment;
 use App\Models\Membership;
 use App\Models\ReceiptSetting;
 use App\Models\User;
 use App\Services\Engine;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The thermal money receipt (print.receipt) of a Desk collection or of a synced billing bill. The panel prints it in
@@ -74,5 +76,31 @@ class Receipts
         return view('print.receipt', ['company' => $company, 'c' => $c, 'settings' => $settings, 'width' => static::width($settings, $w),
             'customer' => $d->customer_header_id ? BillingCustomer::where('company_id', $company->id)->where('header_id', $d->customer_header_id)->first() : null,
             'receiptNo' => $d->money_receipt_no ?: 'B-'.$d->daily_bill_id, 'autoPrint' => $autoPrint]);
+    }
+
+    /**
+     * A payment in the Desk's own ledger (billing phase 4c), same layout. Payable is the balance before this payment:
+     * the ledger up to the payment's day, with this payment's own rows added back once it is approved. Receipt number
+     * billing's (copied payments) or the Desk's, else "DP-{id}".
+     */
+    public static function deskPayment(Company $company, int $payment, mixed $w = null, bool $autoPrint = true): View
+    {
+        $p = DeskPayment::with('customer')->where('company_id', $company->id)->whereIn('status', ['approved', 'pending'])->findOrFail($payment);
+        $upTo = (float) DB::table('desk_ledger_entries')->where('company_id', $company->id)->where('customer_ref', $p->customer_ref)
+            ->where('entry_date', '<=', $p->paid_on->toDateString())->sum('amount');
+        $paid = (float) $p->amount;
+        $disc = (float) $p->discount;
+        $cu = $p->customer;
+        $c = new BillCollection(['customer_id' => $cu?->customer_code, 'customer_name' => $cu?->name, 'username' => $cu?->username,
+            'payable' => max(0, round($upTo + ($p->status === 'approved' ? $paid + $disc : 0), 2)),
+            'paid' => $paid, 'discount' => $disc, 'payment_method' => trim(($p->method ?? '').($p->trx_id ? ' '.$p->trx_id : '')),
+            'received_by' => $p->received_by, 'money_receipt_no' => $p->receipt_no]);
+        $c->created_at = $p->paid_at ?? $p->created_at ?? $p->paid_on;
+        $c->mobile = $cu?->mobile;
+        $settings = ReceiptSetting::forCompany($company);
+
+        return view('print.receipt', ['company' => $company, 'c' => $c, 'settings' => $settings, 'width' => static::width($settings, $w),
+            'customer' => $cu ? BillingCustomer::where('company_id', $company->id)->where('header_id', $cu->header_id)->first() : null,
+            'receiptNo' => $p->receipt_no ?: 'DP-'.$p->id, 'autoPrint' => $autoPrint]);
     }
 }

@@ -4,17 +4,19 @@ namespace App\Filament\App\Resources\Customers\Pages;
 
 use App\Filament\App\BillActions;
 use App\Filament\App\ExtendActions;
+use App\Filament\App\Pages\BillingLedger;
 use App\Filament\App\Resources\Conversations\ConversationResource;
 use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Filament\App\Resources\Customers\Widgets\CustomerHistoryStatus;
 use App\Filament\App\Resources\Customers\Widgets\CustomerLiveInfo;
 use App\Filament\App\SmsActions;
-use App\Filament\App\WaCampaignActions;
 use App\Filament\App\TicketActions;
+use App\Filament\App\WaCampaignActions;
 use App\Models\BillingCustomer;
+use App\Models\DeskCustomer;
 use App\Models\SipSetting;
-use App\Support\Menu;
 use App\Services\Engine;
+use App\Support\Menu;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ViewRecord;
@@ -72,8 +74,11 @@ class ViewCustomer extends ViewRecord
             BillActions::receive($c),
             ExtendActions::extend($c),
             Action::make('ledger')->label(__('Desk খাতা'))->icon(Heroicon::OutlinedBookOpen)->color('gray')
-                ->visible(fn () => \App\Filament\App\Pages\BillingLedger::canAccess())
-                ->url(fn () => \App\Filament\App\Pages\BillingLedger::getUrl(['customer' => $c->customer_id])),
+                ->visible(fn () => BillingLedger::canAccess())
+                ->url(fn () => BillingLedger::getUrl(['customer' => $c->customer_id])),
+            Action::make('statement')->label(__('হিসাব বিবরণী'))->icon(Heroicon::OutlinedDocumentChartBar)->color('gray')
+                ->visible(fn () => DeskCustomer::where('company_id', $c->company_id)->where('customer_code', $c->customer_id)->exists())
+                ->url(fn () => route('customers.statement', ['company' => Filament::getTenant(), 'code' => $c->customer_id]), true),
             TicketActions::newTicket($c->customer_id)->label(__('টিকিট খুলুন'))->color('gray'),
             SmsActions::send($c)->label('SMS')->color('gray'),
             WaCampaignActions::send($c)->label('WhatsApp')->color('gray'),

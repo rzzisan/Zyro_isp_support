@@ -18,6 +18,8 @@ import refuses to run.
   ... --shadow-bills --period 2026-12 [--replace]   make one month's shadow bills by hand (and compare)
   ... --disable-shadow                phase 2, hourly: at the disable hour today's "would turn off" list, then compare
   ... --disable-list [--day 2026-11-06] [--replace]  make one day's list by hand (engine/desk_disable.py)
+  ... --waive [--period 2026-11]      phase 4c: whom the Desk waives for an ended month (engine/desk_waive.py); the
+                                      nightly --shadow does the last month by itself
 
 Phase 1 (ছায়া হিসাব), still read-only: every copy also notes which customers' due doesn't match billing, why and since
 when (desk_customer_balances.diff / mismatch_reason / mismatch_since). On the 1st the Desk makes its own monthly bills
@@ -528,6 +530,7 @@ def main() -> None:
     ap.add_argument("--disable-shadow", action="store_true", help="phase 2 hourly: today's disable list + compare")
     ap.add_argument("--disable-list", action="store_true", help="make one day's disable list (with --day)")
     ap.add_argument("--day", help="YYYY-MM-DD (Bangladesh), default today")
+    ap.add_argument("--waive", action="store_true", help="phase 4c: whom the Desk waives for an ended month (--period)")
     a = ap.parse_args()
     if a.partitions:
         log.info("partitions: %s", ensure_partitions(a.months))
@@ -561,6 +564,16 @@ def main() -> None:
                 log.info("disable shadow company %s: %s", cid, json.dumps(res, default=str))
             except Exception:
                 log.exception("disable shadow failed for company %s", cid)
+    if a.waive or a.shadow:
+        # after the copy the line logs are fresh: the waive rule for the last month (also once the Desk is the master)
+        from engine import desk_waive
+        for cid in [a.company] if a.company else companies():
+            try:
+                res = (desk_waive.make(cid, dt.date.fromisoformat(a.period + "-01"), source="console")
+                       if a.waive and a.period else desk_waive.nightly(cid))
+                log.info("waive company %s: %s", cid, json.dumps(res, default=str))
+            except Exception:
+                log.exception("waive failed for company %s", cid)
     if a.verify_log:
         print(json.dumps(activity.verify(a.company), default=str))
 
