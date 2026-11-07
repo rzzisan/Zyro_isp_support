@@ -117,6 +117,13 @@ class BillingRules extends CompanySettingsPage
                 $pct('partial_redisable_percent', __('১০. আংশিক দিয়ে চালু হলে মাসিক বিলের কত %-এর বেশি বাকি থাকলে আবার বন্ধ')),
                 TextInput::make('partial_redisable_days')->label(__('কত দিন পর'))->numeric()->integer()->minValue(1)->maxValue(30)->suffix(__('দিন'))->required(),
             ]),
+            Section::make(__('১১. সাময়িক সময় বাড়ানো'))->columns(2)
+                ->description(__('কাস্টমার পেজের "সময় বাড়ান" বোতাম। টিম বা পারমিশন গ্রুপ পেজে "বিলের সময় বাড়ানো" টিক দেওয়া সদস্য এই সীমার মধ্যে পারবেন, মালিক সীমার বাইরেও।'))
+                ->schema([
+                    TextInput::make('extend_max_days')->label(__('একবারে সর্বোচ্চ কত দিন'))->numeric()->integer()->minValue(1)->maxValue(62)->suffix(__('দিন'))->required(),
+                    TextInput::make('extend_per_month')->label(__('একজনকে মাসে কতবার'))->numeric()->integer()->minValue(0)->maxValue(10)->suffix(__('বার'))->required()
+                        ->helperText(__('০ = সীমা নেই')),
+                ]),
             Section::make(__('Desk থেকে MikroTik-এ লাইন বন্ধ/চালু'))
                 ->description(__('Desk নিজে রাউটারে প্রোফাইল বদলে সেশন কেটে দেয়, তারপর রাউটার আবার পড়ে যাচাই করে। হস্তান্তরের আগে বিলিং-ই মূল, তাই শুধু পরীক্ষার অ্যাকাউন্টে চালান।'))
                 ->schema([
@@ -217,6 +224,8 @@ class BillingRules extends CompanySettingsPage
                 ->url(fn () => BillingShadowBills::getUrl()),
             Action::make('disable_shadow')->label(__('বন্ধের তালিকা মিল'))->icon(Heroicon::OutlinedNoSymbol)->color('gray')
                 ->url(fn () => BillingDisableShadow::getUrl()),
+            Action::make('extensions')->label(__('সময় বাড়ানো'))->icon(Heroicon::OutlinedCalendarDays)->color('gray')
+                ->url(fn () => BillingExtensions::getUrl()),
             Action::make('line_actions')->label(__('লাইন বন্ধ/চালু (MikroTik)'))->icon(Heroicon::OutlinedSignal)->color('gray')
                 ->url(fn () => BillingLineActions::getUrl()),
             Action::make('import')->label(__('এখনই কপি'))->icon(Heroicon::OutlinedArrowPath)

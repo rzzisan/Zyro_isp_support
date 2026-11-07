@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.ConfirmationNumber
@@ -82,6 +83,7 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
     var liveError by remember { mutableStateOf<String?>(null) }
     var liveLoading by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
+    var extending by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf("service") }
 
     fun loadLive(fresh: Boolean) {
@@ -212,6 +214,20 @@ fun CustomerDetailScreen(navController: NavHostController, company: String, head
                         SmallAction(s.newTicket, Icons.Filled.ConfirmationNumber, Modifier.fillMaxWidth()) {
                             navController.navigate(Routes.newTicket(c.headerId))
                         }
+                    }
+                    d.extension?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text("${s.extendedTill}: ${Format.date(it.until)}" + (it.reason?.let { r -> " · $r" } ?: ""),
+                            fontSize = 13.sp, color = Muted)
+                    }
+                    if (d.can.extend) {
+                        Spacer(Modifier.height(8.dp))
+                        SmallAction(s.extendTime, Icons.Filled.CalendarMonth, Modifier.fillMaxWidth()) { extending = true }
+                    }
+                    if (extending) ExtendDialog(company, c, d.extension, onDismiss = { extending = false }) { ext ->
+                        extending = false
+                        detail = d.copy(extension = ext)
+                        load()
                     }
                 }
             }

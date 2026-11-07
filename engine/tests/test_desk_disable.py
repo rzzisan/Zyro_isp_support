@@ -109,7 +109,7 @@ class ListAndCompareTest(unittest.TestCase):
         cls.ps = cls.day.replace(day=1)
         e = cls.day - dt.timedelta(days=1)     # expired yesterday -> deadline today (next_day)
         with db.conn() as c:
-            for t in ("desk_disable_shadow", "desk_customer_balances", "desk_bills", "desk_payments", "desk_customers",
+            for t in ("desk_extensions", "desk_disable_shadow", "desk_customer_balances", "desk_bills", "desk_payments", "desk_customers",
                       "desk_billing_runs", "billing_settings", "billing_customer_line_logs", "billing_customer_fetches",
                       "billing_customer_payments", "billing_daily_bills", "billing_customer_remarks", "billing_customers"):
                 c.execute(f"DELETE FROM {t}")
@@ -167,3 +167,32 @@ class ListAndCompareTest(unittest.TestCase):
         self.assertFalse(dd.make_list(self.C, self.day)["made"])
         self.assertEqual(self.db.one("SELECT count(*) AS n FROM billing_customer_line_logs")["n"], 4)
         self.assertEqual(self.db.one(logged)["n"], before + 1)
+
+    def test_extensions_end_and_keep(self):
+        """Phase 4a: an active extension keeps the line on through its date; a passed one or a paid-up customer ends."""
+        db = self.db
+        refs = {r["customer_code"]: r["id"] for r in db.all_rows("SELECT id, customer_code FROM desk_customers")}
+        db.execute("DELETE FROM desk_extensions")
+        ins = """INSERT INTO desk_extensions (company_id, customer_ref, customer_code, until, given_on, days, reason, created_at)
+                 VALUES (1, %s, %s, %s, %s, 3, 'test', now() - interval '1 hour')"""
+        db.execute(ins, (refs["0202"], "0202", self.day + dt.timedelta(days=2), self.day))     # stays
+        db.execute(ins, (refs["0206"], "0206", self.day - dt.timedelta(days=1), self.day))     # date passed
+        db.execute(ins, (refs["0205"], "0205", self.day + dt.timedelta(days=2), self.day))     # nothing due
+        db.execute("UPDATE desk_customer_balances SET updated_at = now()")
+        db.execute("UPDATE desk_customers SET extended_until = %s WHERE id = %s", (self.day - dt.timedelta(days=1), refs["0206"]))
+        out = dd.end_extensions(self.C, self.day)
+        self.assertEqual((out["ended"], out["paid"]), (1, 1))
+        st = {r["customer_code"]: r["status"] for r in db.all_rows("SELECT customer_code, status FROM desk_extensions")}
+        self.assertEqual(st, {"0202": "active", "0206": "ended", "0205": "paid"})
+        ext = {r["customer_code"]: r["extended_until"] for r in db.all_rows(
+            "SELECT customer_code, extended_until FROM desk_customers WHERE customer_code IN ('0202', '0205', '0206')")}
+        self.assertEqual(ext, {"0202": self.day + dt.timedelta(days=2), "0205": None, "0206": None})
+        # the list keeps 0202 on (extended) instead of turning it off
+        dd.make_list(self.C, self.day, replace=True)
+        r = db.one("""SELECT decision, reason FROM desk_disable_shadow s JOIN desk_customers c ON c.id = s.customer_ref
+                      WHERE c.customer_code = '0202' AND s.day = %s""", (self.day,))
+        self.assertEqual((r["decision"], r["reason"]), ("keep", "extended"))
+        db.execute("DELETE FROM desk_extensions")
+        db.execute("UPDATE desk_customers SET extended_until = NULL")
+        db.execute("DELETE FROM desk_disable_shadow")      # test_list_and_compare makes the day's list itself
+        db.execute("DELETE FROM desk_billing_runs")

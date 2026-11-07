@@ -319,6 +319,14 @@ abstract class AppStrings {
     abstract val lineOnAsk: String
     abstract val lineOffAsk: String
     abstract val lineOnHint: String
+    abstract val extendTime: String
+    abstract val extendUntil: String
+    abstract val extendReason: String
+    abstract val extendReasonHint: String
+    abstract val extendEnableLine: String
+    abstract val extendGive: String
+    abstract val extendedTill: String
+    abstract val extendRules: String
     abstract val lineOffHint: String
     abstract val turnOn: String
     abstract val turnOff: String
@@ -783,6 +791,14 @@ object BengaliStrings : AppStrings() {
     override val lineOnAsk = "লাইন চালু করবেন?"
     override val lineOffAsk = "লাইন বন্ধ করবেন?"
     override val lineOnHint = "বিলিং-এ লাইন Enable হবে।"
+    override val extendTime = "সময় বাড়ান"
+    override val extendUntil = "কোন তারিখ পর্যন্ত লাইন চালু থাকবে"
+    override val extendReason = "কারণ"
+    override val extendReasonHint = "যেমন: ২০ তারিখে বেতন পেলে দেবেন"
+    override val extendEnableLine = "লাইন এখন বন্ধ আছে, চালু করে দিন"
+    override val extendGive = "সময় দিন"
+    override val extendedTill = "সময় বাড়ানো আছে"
+    override val extendRules = "এই তারিখ পর্যন্ত বকেয়া থাকলেও লাইন বন্ধ হবে না। তারিখ পার হলে বা পুরো বিল দিলে নিজে থেকে উঠে যাবে।"
     override val lineOffHint = "বিলিং-এ লাইন Disable হবে, কাস্টমারের ইন্টারনেট বন্ধ হয়ে যাবে।"
     override val turnOn = "চালু করুন"
     override val turnOff = "বন্ধ করুন"
@@ -1244,6 +1260,14 @@ object EnglishStrings : AppStrings() {
     override val lineOnAsk = "Turn the line on?"
     override val lineOffAsk = "Turn the line off?"
     override val lineOnHint = "The line will be enabled in billing."
+    override val extendTime = "Extend time"
+    override val extendUntil = "Keep the line on until"
+    override val extendReason = "Reason"
+    override val extendReasonHint = "e.g. will pay after salary on the 20th"
+    override val extendEnableLine = "The line is off now, turn it on"
+    override val extendGive = "Extend"
+    override val extendedTill = "Time extended"
+    override val extendRules = "The line stays on until this date even with a due. It ends by itself after the date or when the full bill is paid."
     override val lineOffHint = "The line will be disabled in billing; the customer's internet stops."
     override val turnOn = "Turn on"
     override val turnOff = "Turn off"
