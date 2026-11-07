@@ -11,6 +11,13 @@ ZyroDesk-এর নিজের AI সাপোর্ট এজেন্ট (স
 - KB গ্রাহক ও AI-এর জন্য, তাই **গোপন কিছু নয়**: পাসওয়ার্ড, key, টোকেন, সার্ভারের IP/লগইন, কোনো কোম্পানির কাস্টমারের তথ্য কখনো নয়।
 - এক ফাইল এক ফিচার, ছোট (~৩-৬ KB)। বড় হলে ভাগ করে `related` দিয়ে লিংক।
 
+## দুটি অংশ (track)
+KB দুই ধরনের পাঠকের জন্য, `track` মেটাডেটা দিয়ে আলাদা:
+- `track: user` (ডিফল্ট): যারা ZyroDesk ব্যবহার করেন এবং নিয়মিত কাস্টমার। ফিচার কীভাবে কাজ করে, কীভাবে করবেন, সমস্যা নির্ণয়। ফাইল `docs/kb/<module>/<feature>.md`।
+- `track: sales`: যারা এখনো ZyroDesk কেনেননি। মার্কেটিং ও সেলসের জন্য: ফিচার কী সমস্যা সমাধান করে, কাদের জন্য, সুবিধা, কী নেই (সৎভাবে), সাধারণ আপত্তির উত্তর। ফাইল `docs/kb/sales/<feature>.md`, `module` হিসেবে `sales`।
+- একটা ফিচারের দুটো ফাইল থাকতে পারে (একটা user, একটা sales); দুটোই `related` দিয়ে যুক্ত।
+- `track: sales` ফাইলে কোনো গোপন তথ্য, কাস্টমারের নাম, বা দাম/অফার যা বদলায় তা লেখা হবে না; দাম ও প্যাকেজ প্রজেক্ট ডেটাবেস থেকে আসবে।
+
 ## জায়গা ও নাম
 `docs/kb/<module>/<feature>.md`, যেমন `docs/kb/billing/collect.md`। `id` = `<module>.<feature>` (যেমন `billing.collect`)।
 মডিউল প্যানেলের মেনু গ্রুপ ধরে: `support`, `customers`, `billing`, `network`, `sms_whatsapp`, `phone`, `bot_ai`, `settings`, `app`, `super`।
@@ -25,6 +32,7 @@ title: বিল নেওয়া
 module: billing
 menu: bills                 # app/Support/Menu.php-এর key (অনুমতি মেলাতে); না থাকলে বাদ
 status: live                # live / beta / planned / removed (সেলসে শুধু live "আছে" বলা হয়)
+track: user                 # user (ডিফল্ট) / sales
 plans: [all]                # কোন প্যাকেজে
 audience: [owner, admin, agent]
 keywords: [বিল, পেমেন্ট, বকেয়া, approve, রিসিট, payment, due]
