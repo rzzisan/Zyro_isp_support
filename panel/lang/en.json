@@ -2197,5 +2197,13 @@
     "শেষ হয়ে গেছে: :n টা": "Out of stock: :n",
     "ONU ব্র্যান্ড": "ONU brands",
     "স্টকে": "In stock",
-    "ONU দেওয়ার কারণ": "Why ONUs were given"
+    "ONU দেওয়ার কারণ": "Why ONUs were given",
+    "দামের": "worth",
+    "কাজের ধারা": "Activity",
+    "এই সময়ে কোনো কাজ নেই": "No activity in this period",
+    "আগে যেটা শেষ হবে সেটা আগে": "what runs out first, first",
+    "গত ৩০ দিনে ব্যবহার হয়নি": "Not used in the last 30 days",
+    "~:d দিন চলবে": "lasts ~:d days",
+    "৩০ দিনে :u টা": ":u in 30 days",
+    "ONU · সংযোগ · বাকি": "ONU · connections · due"
 }

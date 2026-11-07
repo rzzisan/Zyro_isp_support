@@ -43,7 +43,7 @@ class OnuStockDashboard extends Page
 
     public string $period = 'month';
 
-    /** Preview of the minimal design (?design=new) until Zisan picks one; kept across Livewire updates. */
+    /** Preview of the new design (?design=new) until Zisan picks one; kept across Livewire updates. */
     public bool $minimal = false;
 
     public function mount(): void
@@ -87,6 +87,87 @@ class OnuStockDashboard extends Page
             'all' => [null, null],
             default => [$now->copy()->startOfMonth(), null],
         };
+    }
+
+    /** The same-length period just before (for the change badges), null for "all". */
+    private function previousRange(): ?array
+    {
+        $now = Carbon::now(self::TZ);
+
+        return match ($this->period) {
+            'last_month' => [$now->copy()->subMonthsNoOverflow(2)->startOfMonth(), $now->copy()->subMonthNoOverflow()->startOfMonth()],
+            '90' => [$now->copy()->startOfDay()->subDays(179), $now->copy()->startOfDay()->subDays(89)],
+            'all' => null,
+            // this month so far vs the same days of last month
+            default => [$now->copy()->subMonthNoOverflow()->startOfMonth(), $now->copy()->subMonthNoOverflow()->addSecond()],
+        };
+    }
+
+    /**
+     * Extra numbers for the modern design: change vs the previous period, ONU / connection activity over time
+     * (by day, week or month), and for every stock line how long it lasts at the last 30 days' pace.
+     */
+    public function insights(array $r): array
+    {
+        $c = (int) Filament::getTenant()->getKey();
+        $prev = $this->previousRange();
+        $pct = function (float $now, ?float $before) {
+            if ($before === null) {
+                return null;
+            }
+
+            return $before > 0 ? (int) round(($now - $before) * 100 / $before) : ($now > 0 ? 100 : 0);
+        };
+        $prevGiven = $prev ? OnuAssignment::where('company_id', $c)->where('assigned_at', '>=', $prev[0]->copy()->utc())
+            ->where('assigned_at', '<', $prev[1]->copy()->utc())->count() : null;
+        $prevConn = $prev ? NewConnection::where('company_id', $c)->where('connected_on', '>=', $prev[0]->toDateString())
+            ->where('connected_on', '<', $prev[1]->toDateString())->count() : null;
+
+        // activity buckets
+        [$from, $until] = $this->range();
+        $now = Carbon::now(self::TZ);
+        $unit = match ($this->period) { '90' => 'week', 'all' => 'month', default => 'day' };
+        $start = $from ?? Carbon::parse(OnuAssignment::where('company_id', $c)->min('assigned_at') ?? $now, 'UTC')->timezone(self::TZ);
+        $end = ($until ?? $now->copy()->addDay())->copy();
+        $fmt = ['day' => 'YYYY-MM-DD', 'week' => 'IYYY-IW', 'month' => 'YYYY-MM'][$unit];
+        $given = OnuAssignment::where('company_id', $c)->where('assigned_at', '>=', $start->copy()->utc())->where('assigned_at', '<', $end->copy()->utc())
+            ->selectRaw("to_char(assigned_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Dhaka', '$fmt') k, count(*) n")->groupBy('k')->pluck('n', 'k');
+        $conns = NewConnection::where('company_id', $c)->where('connected_on', '>=', $start->toDateString())->where('connected_on', '<', $end->toDateString())
+            ->selectRaw("to_char(connected_on, '$fmt') k, count(*) n")->groupBy('k')->pluck('n', 'k');
+        $buckets = [];
+        for ($d = $start->copy()->startOf($unit === 'week' ? 'week' : $unit); $d < $end && count($buckets) < 400; $d->add(1, $unit)) {
+            $k = $d->format(['day' => 'Y-m-d', 'week' => 'o-W', 'month' => 'Y-m'][$unit]);
+            $buckets[] = ['label' => $d->format(['day' => 'd M', 'week' => 'd M', 'month' => 'M Y'][$unit]),
+                'given' => (int) ($given[$k] ?? 0), 'conn' => (int) ($conns[$k] ?? 0)];
+        }
+        if ($this->period === 'month') {   // no empty bars for the rest of the month
+            $buckets = array_slice($buckets, 0, (int) $now->format('j'));
+        }
+
+        // pace over the last 30 days -> days of cover
+        $since = $now->copy()->startOfDay()->subDays(30);
+        $onuPace = OnuAssignment::where('company_id', $c)->where('assigned_at', '>=', $since->copy()->utc())->groupBy('brand_id')
+            ->selectRaw('brand_id, count(*) n')->pluck('n', 'brand_id');
+        $brandIds = OnuBrand::where('company_id', $c)->pluck('id', 'name');
+        $itemPace = StockMovement::where('company_id', $c)->where('type', 'out')->where('moved_on', '>=', $since->toDateString())
+            ->groupBy('product_id')->selectRaw('product_id, sum(quantity) n')->pluck('n', 'product_id');
+        $productIds = StockProduct::where('company_id', $c)->pluck('id', 'name');
+        $cover = fn (int $qty, float $used30) => $used30 > 0 ? (int) floor($qty / ($used30 / 30)) : null;
+        $lines = collect([
+            ...$r['brands']->where('left', '>', 0)->map(fn ($b) => ['name' => $b['name'], 'qty' => $b['left'], 'onu' => true,
+                'used30' => (int) ($onuPace[$brandIds[$b['name']] ?? 0] ?? 0)]),
+            ...$r['products']->where('stock', '>', 0)->map(fn ($p) => ['name' => $p['name'], 'qty' => $p['stock'], 'onu' => false,
+                'used30' => (int) ($itemPace[$productIds[$p['name']] ?? 0] ?? 0)]),
+        ])->map(fn ($l) => [...$l, 'days' => $cover($l['qty'], $l['used30'])])
+            // what runs out first comes first; lines nobody used in 30 days go last
+            ->sortBy(fn ($l) => [$l['days'] === null ? 1 : 0, $l['days'] ?? 0, -$l['qty']])->values();
+
+        return [
+            'given_change' => $pct((float) $r['onu_out_p'], $prevGiven === null ? null : (float) $prevGiven),
+            'conn_change' => $pct((float) $r['conn']->n, $prevConn === null ? null : (float) $prevConn),
+            'buckets' => $buckets, 'unit' => $unit, 'lines' => $lines,
+            'max_bucket' => max(1, ...array_map(fn ($b) => max($b['given'], $b['conn']), $buckets ?: [['given' => 0, 'conn' => 0]])),
+        ];
     }
 
     public function report(): array

@@ -329,11 +329,18 @@ class OnuStockTest extends TestCase
 
     public function test_dashboard_minimal_design_preview(): void
     {
-        $this->brand('Aurora', 5);
+        $b = $this->brand('Aurora', 5);
+        foreach (range(1, 3) as $i) {
+            OnuAssignment::create(['company_id' => $this->company->id, 'assigned_at' => now()->subDays($i), 'brand_id' => $b->id, 'mac_raw' => 'x'.$i,
+                'purpose' => 'Warranty', 'customer_kind' => 'other']);
+        }
         $this->as($this->owner);
+        $page = new \App\Filament\App\Pages\OnuStockDashboard;
+        $x = $page->insights($page->report());
+        $this->assertSame([2, 3, 20], [$x['lines'][0]['qty'], $x['lines'][0]['used30'], $x['lines'][0]['days']]); // 2 left, 3 used in 30 days
         Livewire::withQueryParams(['design' => 'new'])->test(\App\Filament\App\Pages\OnuStockDashboard::class)
-            ->assertSee('নতুন ডিজাইনের preview')->assertSee('Aurora')
-            ->call('setPeriod', 'all')->assertSee('নতুন ডিজাইনের preview');
-        $this->actingAs($this->owner)->get("/app/{$this->company->slug}/onu-stock-dashboard")->assertOk()->assertDontSee('নতুন ডিজাইনের preview');
+            ->assertSee('কাজের ধারা')->assertSee('Aurora')->assertSee('দিন চলবে')
+            ->call('setPeriod', 'all')->assertSee('কাজের ধারা')->call('setPeriod', '90')->assertSee('কাজের ধারা');
+        $this->actingAs($this->owner)->get("/app/{$this->company->slug}/onu-stock-dashboard")->assertOk()->assertDontSee('কাজের ধারা');
     }
 }
