@@ -37,6 +37,7 @@ class Menu
         'bill_extend' => ['বিলের সময় বাড়ানো (কারণ লিখে)', false, false],
         // billing phase 5: the new customer form sends the customer to billing (the owner always; others only when ticked)
         'customer_create' => ['নতুন কাস্টমার যোগ (বিলিং-এও তৈরি)', false, false],
+        'customer_change' => ['কাস্টমারের প্যাকেজ / Left / পাসওয়ার্ড বদল (বিলিং-এও)', false, false],
         'sms' => ['SMS (পাঠানো, লগ, টেমপ্লেট)', false, false],
         'wa_campaign' => ['WhatsApp টেমপ্লেট পাঠানো ও লগ', false, false],
         'voice_reminder' => ['ভয়েস রিমাইন্ডার (টেমপ্লেট, কল ফ্লো, সেটিংস)', false, true],
@@ -70,7 +71,7 @@ class Menu
     public const EXPLICIT = ['field_jobs'];
 
     /** Never part of a role's defaults: the owner ticks them per member or group. */
-    public const NOT_DEFAULT = ['bill_approve', 'bill_edit', 'payment_delete', 'payment_transfer', 'bill_extend', 'customer_create'];
+    public const NOT_DEFAULT = ['bill_approve', 'bill_edit', 'payment_delete', 'payment_transfer', 'bill_extend', 'customer_create', 'customer_change'];
 
     public static function defaults(string $role): array
     {

@@ -224,6 +224,22 @@ def find_in_billing(t, q: str) -> dict:
     return {"header_ids": [hid for hid, _ in hits if hid in have or hid in synced], "synced": synced}
 
 
+def refresh_one(t, header_id: int, username: str) -> bool:
+    """Copy one customer again from billing (after a Desk change: package, Left / back), Left list included."""
+    api = tenants.billing(t)
+    rows = [r for r in _search(api, "/Customer/AjaxCustomerList", username) if int(r["CustomerHeaderId"]) == int(header_id)]
+    if rows:
+        bill = next((b for b in _search(api, "/Billing/AjaxCustomerBillList", username)
+                     if int(b["CustomerHeaderId"]) == int(header_id)), None)
+        db.execute(UPSERT, row_for(t.company_id, rows[0], bill))
+        return True
+    rows = [r for r in _search(api, "/Customer/AjaxLeftCustomerList", username) if int(r["CustomerHeaderId"]) == int(header_id)]
+    if rows:
+        db.execute(UPSERT, row_for(t.company_id, rows[0], None, left=True))
+        return True
+    return False
+
+
 def backfill_last_payments(t, limit: int | None = None) -> dict:
     """Customers whose last payment was before this bill month have no PaymentDate in the bill list: read their
     payment history (newest first) and keep the latest real receipt's date. Read-only on billing."""

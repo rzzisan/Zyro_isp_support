@@ -4,15 +4,17 @@ namespace App\Filament\App\Pages;
 
 use App\Models\BillingSetting;
 use App\Models\Company;
-use App\Models\DeskCustomerBalance;
 use App\Models\DeskConnection;
+use App\Models\DeskCustomerBalance;
 use App\Models\DeskLineAction;
 use App\Services\Engine;
 use App\Support\Ledger;
+use App\Support\NewConnectionForm;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
@@ -153,6 +155,19 @@ class BillingRules extends CompanySettingsPage
                     TextInput::make('connection_test_prefix')->label(__('পরীক্ষার username যেভাবে শুরু হবে'))->maxLength(40)->placeholder('zyrotest')
                         ->visible(fn ($get) => $get('connection_control') === 'test')
                         ->helperText(__('শুধু এভাবে শুরু হওয়া PPPoE username-এর সংযোগ বিলিং-এ পাঠানো যাবে।')),
+                    Repeater::make('username_prefixes')->label(__('এলাকা অনুযায়ী PPPoE username-এর শুরু'))->columns(2)->defaultItems(0)
+                        ->addActionLabel(__('এলাকা যোগ করুন'))
+                        ->helperText(__('নতুন সংযোগ ফর্মে Zone বাছলে username নিজে থেকে বসবে: শুরু + নামের প্রথম শব্দ + পরের কাস্টমার ID (যেমন bp.rahim6071)। বদলানো যায়।'))
+                        ->schema([
+                            Select::make('zone_id')->label(__('Zone'))->required()->searchable()->options(function () {
+                                try {
+                                    return NewConnectionForm::opts('ZoneId');
+                                } catch (\Throwable) {   // engine or billing down: the saved zones still show by id
+                                    return [];
+                                }
+                            }),
+                            TextInput::make('prefix')->label(__('শুরু'))->required()->maxLength(20)->regex('/^[A-Za-z0-9._@-]+$/')->placeholder('bp.'),
+                        ]),
                 ]),
             Section::make(__('কাজের লগ'))->schema([
                 TextInput::make('activity_log_months')->label(__('কাজের লগ কত মাস রাখা হবে'))->numeric()->integer()->minValue(1)->maxValue(120)->suffix(__('মাস'))
@@ -217,6 +232,8 @@ class BillingRules extends CompanySettingsPage
             $data['line_control'] = 'test';
         }
         $data['connection_test_prefix'] = trim((string) ($data['connection_test_prefix'] ?? '')) ?: null;
+        $data['username_prefixes'] = collect($data['username_prefixes'] ?? [])->filter(fn ($r) => filled($r['zone_id'] ?? null) && filled(trim((string) ($r['prefix'] ?? ''))))
+            ->map(fn ($r) => ['zone_id' => (string) $r['zone_id'], 'prefix' => trim((string) $r['prefix'])])->unique('zone_id')->values()->all();
         $data['match_exclude_codes'] = array_values(array_unique(array_filter(array_map('trim', $data['match_exclude_codes'] ?? []))));
         if (($data['activity_log_months'] ?? '') === '') {
             $data['activity_log_months'] = null;
@@ -255,6 +272,8 @@ class BillingRules extends CompanySettingsPage
                 ->visible(fn () => BillingWaivers::canAccess())->url(fn () => BillingWaivers::getUrl()),
             Action::make('new_connections')->label(__('নতুন সংযোগ'))->icon(Heroicon::OutlinedUserPlus)->color('gray')
                 ->url(fn () => BillingNewConnections::getUrl()),
+            Action::make('secret_check')->label(__('PPP secret যাচাই'))->icon(Heroicon::OutlinedShieldCheck)->color('gray')
+                ->url(fn () => BillingSecretCheck::getUrl()),
             Action::make('extensions')->label(__('সময় বাড়ানো'))->icon(Heroicon::OutlinedCalendarDays)->color('gray')
                 ->url(fn () => BillingExtensions::getUrl()),
             Action::make('line_actions')->label(__('লাইন বন্ধ/চালু (MikroTik)'))->icon(Heroicon::OutlinedSignal)->color('gray')

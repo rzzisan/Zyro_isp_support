@@ -518,9 +518,21 @@ class ISPDigital:
             return out
         if expect_day is not None and out["before"] != int(expect_day):
             raise DayChanged(out["before"])
+        self.post_edit_form(header_id, form, {"BillingLastDate": str(int(day))})
+        return {**out, "saved": True}
+
+    def post_edit_form(self, header_id: int, form: dict, replace: dict) -> None:
+        """Post the edit form exactly as billing showed it, with only `replace` {field: value} changed (a field the form
+        lacks is refused). "Mikrotik Impact" is never sent: billing then leaves the router alone and the Desk sets it."""
+        names = {n for n, _ in form["fields"]}
+        missing = [k for k in replace if k not in names]
+        if missing:
+            raise BillingRefused("ফর্মে ঘর নেই: " + ", ".join(missing))
         data: dict[str, list[str]] = {}
         for n, v in form["fields"]:
-            data.setdefault(n, []).append(str(int(day)) if n == "BillingLastDate" else v)
+            if n in NEVER_POST:
+                continue
+            data.setdefault(n, []).append(str(replace[n]) if n in replace else v)
         files = [(n, ("", b"", "application/octet-stream")) for n in form["files"]]
         with self._lock:
             r = self._client.post(form["action"], data=data, files=files, timeout=60, headers={
@@ -528,10 +540,24 @@ class ISPDigital:
         location = r.headers.get("location", "")
         if "Account/Login" in location:
             self._logged_in = False
-            raise LoginError("billing session expired, the expire date was not saved")
+            raise LoginError("billing session expired, nothing was saved")
         if r.status_code not in (301, 302, 303):
             raise BillingRefused(f"billing did not save the customer (HTTP {r.status_code})")
-        return {**out, "saved": True}
+
+    def change_customer(self, header_id: int, replace: dict, expect: dict | None = None) -> dict:
+        """Billing phase 5 changes (package, Left / back, password) through the edit form: checks the form like
+        set_expire_day, refuses a value billing's own select doesn't offer, posts only `replace`. Returns the form's
+        values before (the caller must not log Password)."""
+        form = self.edit_form(header_id)
+        problems = edit_form_problems(form, expect or {})
+        for k, v in replace.items():
+            opts = form["options"].get(k)
+            if opts is not None and str(v) not in opts:
+                problems.append(f"{k} = {v} বিলিং-এর তালিকায় নেই")
+        if problems:
+            raise BillingRefused("ফর্ম মেলেনি: " + ", ".join(problems))
+        self.post_edit_form(header_id, form, replace)
+        return dict(form["values"])
 
     # --- write: new customer (billing phase 5, /customer/add) ----------------------------
     def new_customer_options(self) -> dict:
