@@ -27,14 +27,14 @@
 | billing.online_payments | অনলাইন পেমেন্ট ও bKash webhook | | live | [online_payments](billing/online_payments.md) |
 | billing.desk_ledger | Desk-এর নিজের বিলিং (নিয়ম, খাতা, মিল, বন্ধের তালিকা) | | live | [desk_ledger](billing/desk_ledger.md) |
 | sms_whatsapp.sms | SMS (পাঠানো, লগ, টেমপ্লেট, গেটওয়ে) | sms | live | [sms](sms_whatsapp/sms.md) |
-| sms_whatsapp.wa_campaign | WhatsApp টেমপ্লেট পাঠানো | wa_campaign | missing | |
-| sms_whatsapp.whatsapp | WhatsApp সেটিং | whatsapp | missing | |
-| phone.call_logs | হটলাইন কল লগ ও রেকর্ডিং | calls | missing | |
-| phone.softphone | WhatsApp কল ধরা ও কাস্টমারকে কল | phone | missing | |
-| phone.office_phones | অফিস ফোন (নিজের SIP) | office_phones | missing | |
-| phone.voice_reminder | ভয়েস বিল রিমাইন্ডার | voice_reminder | missing | |
-| phone.voice_bot | হটলাইন ভয়েস বট | | missing | |
-| phone.walkie_chat | ওয়াকি-টকি ও টিম চ্যাট | | missing | |
+| sms_whatsapp.wa_campaign | WhatsApp টেমপ্লেট পাঠানো | wa_campaign | live | [wa_campaign](sms_whatsapp/wa_campaign.md) |
+| sms_whatsapp.whatsapp | WhatsApp সেটিং | whatsapp | live | [whatsapp](sms_whatsapp/whatsapp.md) |
+| phone.call_logs | হটলাইন কল লগ ও রেকর্ডিং | calls | live | [call_logs](phone/call_logs.md) |
+| phone.softphone | WhatsApp কল ধরা ও কাস্টমারকে কল | phone | live | [softphone](phone/softphone.md) |
+| phone.office_phones | অফিস ফোন (নিজের SIP) | office_phones | live | [office_phones](phone/office_phones.md) |
+| phone.voice_reminder | ভয়েস বিল রিমাইন্ডার | voice_reminder | live | [voice_reminder](phone/voice_reminder.md) |
+| phone.voice_bot | হটলাইন ভয়েস বট | | live | [voice_bot](phone/voice_bot.md) |
+| phone.walkie_chat | ওয়াকি-টকি ও টিম চ্যাট | | live | [walkie_chat](phone/walkie_chat.md) |
 | bot_ai.bot | WhatsApp বট সেটিংস ও FAQ | bot | live | [bot](bot_ai/bot.md) |
 | bot_ai.ai_keys | AI key, কোন কাজে কোন key, AI খরচ | ai_keys | missing | |
 | settings.team | টিম, রোল, পারমিশন গ্রুপ | team | missing | |
