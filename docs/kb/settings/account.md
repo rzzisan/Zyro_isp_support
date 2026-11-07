@@ -5,7 +5,7 @@ module: settings
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [পাসওয়ার্ড বদল, password, আমার প্রোফাইল, ভাষা, language, বাংলা, English, কাজের লগ, activity log, আমার বিলিং লগইন, বিলিং লগইন ভুল, লগ আউট]
+keywords: [পাসওয়ার্ড বদল, password, আমার প্রোফাইল, ভাষা, language, বাংলা, English, কাজের লগ, activity log, আমার বিলিং লগইন, বিলিং লগইন ভুল, লগ আউট, password change, profile, Bangla, logout, billing login]
 related:
   - id: settings.team
     when: নতুন সদস্য বা অনুমতি বদলাতে

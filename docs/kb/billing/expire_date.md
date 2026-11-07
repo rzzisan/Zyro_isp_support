@@ -6,7 +6,7 @@ menu: billing
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [মেয়াদ, Expire Date, মেয়াদ বদল, বিলের তারিখ, bill day, বন্ধ লাইন বিল দিয়ে চালু, পেমেন্টের দিন, মেয়াদ বদলে গেছে, বিলের দিন কেন বদলাল]
+keywords: [মেয়াদ, Expire Date, মেয়াদ বদল, বিলের তারিখ, bill day, বন্ধ লাইন বিল দিয়ে চালু, পেমেন্টের দিন, মেয়াদ বদলে গেছে, বিলের দিন কেন বদলাল, expiry date, change expiry, bill date, payment day, line reopen]
 related:
   - id: line.enable_disable
     when: লাইন বন্ধ থেকে চালু হওয়ার পর মেয়াদ বদলানোর কারণ জানতে

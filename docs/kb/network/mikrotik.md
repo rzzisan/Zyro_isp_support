@@ -6,7 +6,7 @@ menu: mikrotik
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [MikroTik, রাউটার, router, API, সংযোগ, PPPoE, secret, profile, ব্লক profile, BLOCKED, সেশন, active, রাউটার অফলাইন, রাউটার উত্তর দেয় না, রিমোট পোর্ট, ব্যাকআপ, রাউটার পড়া যাচ্ছে না]
+keywords: [MikroTik, রাউটার, router, API, সংযোগ, PPPoE, secret, profile, ব্লক profile, BLOCKED, সেশন, active, রাউটার অফলাইন, রাউটার উত্তর দেয় না, রিমোট পোর্ট, ব্যাকআপ, রাউটার পড়া যাচ্ছে না, blocked profile, session, router offline, remote port, backup]
 related:
   - id: network.monitoring
     when: কোন রাউটার বা কাস্টমার অনলাইন বা অফলাইন দেখাচ্ছে তা দেখতে

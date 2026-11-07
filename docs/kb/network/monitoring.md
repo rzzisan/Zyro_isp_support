@@ -6,7 +6,7 @@ menu: monitoring
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [মনিটরিং, monitoring, অনলাইন, অফলাইন, কে অনলাইন, সার্ভার কার্ড, IP, uptime, শেষ অনলাইন, ট্রাফিক, পিং, রি-চেক, ফিল্টার, কতজন অফলাইন]
+keywords: [মনিটরিং, monitoring, অনলাইন, অফলাইন, কে অনলাইন, সার্ভার কার্ড, IP, uptime, শেষ অনলাইন, ট্রাফিক, পিং, রি-চেক, ফিল্টার, কতজন অফলাইন, online, offline, who is online, server card, last online, traffic, ping, recheck, filter]
 related:
   - id: network.mikrotik
     when: রাউটার থেকে তথ্য না এলে বা সার্ভার কার্ড ভুল দেখালে

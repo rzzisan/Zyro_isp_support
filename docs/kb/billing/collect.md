@@ -6,7 +6,7 @@ menu: bills
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [বিল নেওয়া, বিল নিন, বিল কালেকশন, পেমেন্ট, বকেয়া, রিসিট, approve, অ্যাপ্রুভ, pending, অগ্রিম, advance, পরের বিলিং তারিখ, কতদিন ব্লক, বিল দেওয়া হয়েছে কিন্তু বকেয়া]
+keywords: [বিল নেওয়া, বিল নিন, বিল কালেকশন, পেমেন্ট, বকেয়া, রিসিট, approve, অ্যাপ্রুভ, pending, অগ্রিম, advance, পরের বিলিং তারিখ, কতদিন ব্লক, বিল দেওয়া হয়েছে কিন্তু বকেয়া, bill collection, collect bill, payment, due, receipt, next billing date, block days]
 related:
   - id: line.enable_disable
     when: বিল নেওয়ার পরও লাইন চালু না হলে

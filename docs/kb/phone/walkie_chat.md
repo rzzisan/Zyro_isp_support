@@ -5,7 +5,7 @@ module: phone
 status: beta
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [ওয়াকি-টকি, walkie, walkie talkie, টিম চ্যাট, team chat, গ্রুপ কথা, ভয়েস মেসেজ, কথা বলা, মাইক, চ্যাট মুছে যায়, টিমের সাথে কথা, রেকর্ড]
+keywords: [ওয়াকি-টকি, walkie, walkie talkie, টিম চ্যাট, team chat, গ্রুপ কথা, ভয়েস মেসেজ, কথা বলা, মাইক, চ্যাট মুছে যায়, টিমের সাথে কথা, রেকর্ড, voice message, mic, notification, delete chat, group talk, record]
 related:
   - id: phone.softphone
     when: টিমের কথা না, কাস্টমারের কল দরকার হলে

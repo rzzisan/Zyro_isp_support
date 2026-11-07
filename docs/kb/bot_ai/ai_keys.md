@@ -6,7 +6,7 @@ menu: ai_keys
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [AI key, API key, Claude, Gemini, Groq, কী, সীমা, quota, লিমিট শেষ, খরচ, AI খরচ, cache, কোন কাজে কোন key, fallback, TTS, ভয়েস key]
+keywords: [AI key, API key, Claude, Gemini, Groq, কী, সীমা, quota, লিমিট শেষ, খরচ, AI খরচ, cache, কোন কাজে কোন key, fallback, TTS, ভয়েস key, limit, cost, usage, text to speech, key limit reached]
 related:
   - id: bot_ai.bot
     when: বট উত্তর দিচ্ছে না বা AI-র কারণে ভুল উত্তর আসছে

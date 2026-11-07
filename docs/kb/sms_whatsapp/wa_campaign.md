@@ -6,7 +6,7 @@ menu: wa_campaign
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [WhatsApp পাঠান, টেমপ্লেট, template, ক্যাম্পেইন, campaign, বাল্ক মেসেজ, ফিল্টার, প্রাপক, পৌঁছায়নি, delivered, read, 131026, 131049, মেটা, paused, আবার চালু, ইনবক্স]
+keywords: [WhatsApp পাঠান, টেমপ্লেট, template, ক্যাম্পেইন, campaign, বাল্ক মেসেজ, ফিল্টার, প্রাপক, পৌঁছায়নি, delivered, read, 131026, 131049, মেটা, paused, আবার চালু, ইনবক্স, WhatsApp send, bulk message, filter, recipient, not delivered, Meta, resume, inbox]
 related:
   - id: sms_whatsapp.whatsapp
     when: টেমপ্লেট অনুমোদন, নম্বর বা অ্যাকাউন্ট সেটিং নিয়ে প্রশ্ন

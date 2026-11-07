@@ -6,7 +6,7 @@ menu: team
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [টিম, সদস্য, রোল, owner, admin, agent, অনুমতি, permission, পারমিশন গ্রুপ, মেনু অনুমতি, নতুন সদস্য, কর্মী, অ্যাক্সেস নেই, বিলিং লগইন দেওয়া]
+keywords: [টিম, সদস্য, রোল, owner, admin, agent, অনুমতি, permission, পারমিশন গ্রুপ, মেনু অনুমতি, নতুন সদস্য, কর্মী, অ্যাক্সেস নেই, বিলিং লগইন দেওয়া, team, member, role, permission group, menu access, new member, staff, no access]
 related:
   - id: settings.account
     when: নিজের পাসওয়ার্ড, ভাষা বা বিলিং লগইন বদলাতে

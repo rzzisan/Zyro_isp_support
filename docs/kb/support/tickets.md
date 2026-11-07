@@ -6,7 +6,7 @@ menu: tickets
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [টিকিট, অভিযোগ, complain, ticket, খোলা, assign, অ্যাসাইন, Solve, সমাধান, সমাধান হয়নি, অটো assign, ফলো-আপ, প্রিন্ট, ডুপ্লিকেট টিকিট, নম্বর, টিকিট কেন খুলল না]
+keywords: [টিকিট, অভিযোগ, complain, ticket, খোলা, assign, অ্যাসাইন, Solve, সমাধান, সমাধান হয়নি, অটো assign, ফলো-আপ, প্রিন্ট, ডুপ্লিকেট টিকিট, নম্বর, টিকিট কেন খুলল না, complaint, ticket open, resolved, not resolved, auto assign, follow-up, print, duplicate ticket, number]
 related:
   - id: support.inbox
     when: টিকিট কাস্টমারের চ্যাট থেকে এসেছে বা চ্যাট থেকে Solve করতে হলে

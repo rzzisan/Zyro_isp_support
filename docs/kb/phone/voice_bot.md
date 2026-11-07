@@ -5,7 +5,7 @@ module: phone
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [ভয়েস বট, voice bot, হটলাইন বট, কল বট, IVR, কল ধরে উত্তর, বট কথা বলছে, কল শেষ, কলব্যাক, টিকিট কলে, লাইন চালু কলে, কল বট কেন উত্তর দিল না, ইংরেজি কল, বাংলা কল]
+keywords: [ভয়েস বট, voice bot, হটলাইন বট, কল বট, IVR, কল ধরে উত্তর, বট কথা বলছে, কল শেষ, কলব্যাক, টিকিট কলে, লাইন চালু কলে, কল বট কেন উত্তর দিল না, ইংরেজি কল, বাংলা কল, hotline bot, call bot, answer call, callback, ticket by call, English call, Bangla call]
 related:
   - id: phone.call_logs
     when: বট কল ধরে কী করেছে তা দেখতে

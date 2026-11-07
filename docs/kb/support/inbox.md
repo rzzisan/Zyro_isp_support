@@ -6,7 +6,7 @@ menu: inbox
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [ইনবক্স, চ্যাট, WhatsApp, মেসেজ, রিপ্লাই, উত্তর দেওয়া, assign, অ্যাসাইন, বট থামানো, বট বন্ধ, মিউট, মেসেজ ডিলিট, সিগনেচার, নোটিফিকেশন, বেল, কাস্টমারের চ্যাট, লাইভ অবস্থা]
+keywords: [ইনবক্স, চ্যাট, WhatsApp, মেসেজ, রিপ্লাই, উত্তর দেওয়া, assign, অ্যাসাইন, বট থামানো, বট বন্ধ, মিউট, মেসেজ ডিলিট, সিগনেচার, নোটিফিকেশন, বেল, কাস্টমারের চ্যাট, লাইভ অবস্থা, inbox, chat, message, reply, mute, stop bot, delete message, signature, notification, bell, live status]
 related:
   - id: bot_ai.bot
     when: বট কেন উত্তর দিচ্ছে বা দিচ্ছে না, বা বট থামাতে হবে

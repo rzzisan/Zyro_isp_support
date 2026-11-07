@@ -5,7 +5,7 @@ module: billing
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [খাতা, ledger, বকেয়া মিল, due match, বিলিং মেলানো, শ্যাডো, shadow, বিল মাফ, waive, বন্ধের তালিকা শ্যাডো, cutover, বিলিং নিয়ম, অমিল, mismatch, খাতার ব্যালেন্স]
+keywords: [খাতা, ledger, বকেয়া মিল, due match, বিলিং মেলানো, শ্যাডো, shadow, বিল মাফ, waive, বন্ধের তালিকা শ্যাডো, cutover, বিলিং নিয়ম, অমিল, mismatch, খাতার ব্যালেন্স, billing reconcile, billing rules, ledger balance]
 related:
   - id: billing.edit_payments
     when: খাতায় ভুল সারি বা উল্টো সারি নিয়ে প্রশ্ন

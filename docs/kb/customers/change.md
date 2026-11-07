@@ -6,7 +6,7 @@ menu: customer_change
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [প্যাকেজ বদল, package, Left, বন্ধ কাস্টমার, ফেরত, পাসওয়ার্ড বদল, PPPoE পাসওয়ার্ড, secret, বিলিং-এ বদল, বিলিং secret check, secret মেলেনি]
+keywords: [প্যাকেজ বদল, package, Left, বন্ধ কাস্টমার, ফেরত, পাসওয়ার্ড বদল, PPPoE পাসওয়ার্ড, secret, বিলিং-এ বদল, বিলিং secret check, secret মেলেনি, package change, plan change, left customer, refund, password change, billing secret check, customer status]
 related:
   - id: customers.list_profile
     when: কাস্টমারের বর্তমান তথ্য দেখতে হলে
