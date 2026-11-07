@@ -8,13 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * A ready SMS text. general: picked in the SMS form; bill_paid / ticket_open / ticket_solved: sent by the Desk after
  * "বিল নিন", a new ticket, a solved ticket; bill_reminder: before the expire date (sms:bill-reminders) — the one chosen
- * in the gateway settings. Placeholders:
+ * in the gateway settings; welcome: after a new connection from the Desk (never carries the PPPoE password). Placeholders:
  * App\Support\Sms::placeholders().
  */
 class SmsTemplate extends Model
 {
     public const TYPES = ['general' => 'সাধারণ', 'bill_paid' => 'বিল পরিশোধ', 'ticket_open' => 'টিকিট খোলা',
-        'ticket_solved' => 'টিকিট সমাধান', 'bill_reminder' => 'বিল রিমাইন্ডার'];
+        'ticket_solved' => 'টিকিট সমাধান', 'bill_reminder' => 'বিল রিমাইন্ডার', 'welcome' => 'নতুন সংযোগে স্বাগতম'];
 
     /** type => [name, body] of the template every company starts with */
     public const DEFAULTS = [
@@ -22,6 +22,7 @@ class SmsTemplate extends Model
         'ticket_open' => ['টিকিট খোলা', 'প্রিয় {name}, আপনার অভিযোগ গ্রহণ করা হয়েছে। টিকিট নং {ticket_no}, সমস্যা: {problem}। আমাদের টেকনিশিয়ান দ্রুত যোগাযোগ করবেন। {company}'],
         'ticket_solved' => ['টিকিট সমাধান', 'প্রিয় {name}, আপনার টিকিট {ticket_no} এর সমস্যার সমাধান হয়েছে। কোনো সমস্যা থাকলে জানাবেন। {company}'],
         'bill_reminder' => ['বিল রিমাইন্ডার', 'প্রিয় {name}, আপনার ইন্টারনেট সংযোগের মেয়াদ {expire_date} তারিখে শেষ হবে। বকেয়া {due} টাকা। নিরবচ্ছিন্ন সেবার জন্য সময়মতো বিল পরিশোধ করুন। {company}'],
+        'welcome' => ['নতুন সংযোগে স্বাগতম', 'প্রিয় {name}, {company}-এ স্বাগতম। আপনার কাস্টমার ID {id}, PPPoE {username}, প্যাকেজ {package}, মাসিক বিল {monthly} টাকা। প্রতি মাসের {expire_day} তারিখের মধ্যে বিল দিন। ধন্যবাদ।'],
     ];
 
     /** sms_settings columns per event type: [on/off, template id] */
@@ -30,6 +31,7 @@ class SmsTemplate extends Model
         'ticket_open' => ['ticket_open_sms', 'ticket_open_template_id'],
         'ticket_solved' => ['ticket_solved_sms', 'ticket_solved_template_id'],
         'bill_reminder' => ['reminder_sms', 'reminder_template_id'],
+        'welcome' => ['welcome_sms', 'welcome_template_id'],
     ];
 
     protected $guarded = [];

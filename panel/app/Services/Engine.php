@@ -245,6 +245,19 @@ class Engine
             'by' => auth()->user()?->name]) ?? [];
     }
 
+    /** Phase 5: package / left / back / password / remove for one customer (engine/desk_change.py). */
+    public static function customerChange(int $companyId, string $kind, int $headerId, array $params): array
+    {
+        return static::call('post', "/internal/{$companyId}/customer-change", ['kind' => $kind, 'header_id' => $headerId,
+            'params' => $params, 'user_id' => auth()->id(), 'by' => auth()->user()?->name]) ?? [];
+    }
+
+    /** Phase 5 secret check: the routers' PPP secrets against billing's customers (no passwords). */
+    public static function secretAudit(int $companyId): array
+    {
+        return static::call('get', "/internal/{$companyId}/secret-audit") ?? [];
+    }
+
     /** বিল কালেকশন page open: the engine syncs today's bills (throttled) and returns a version that changes with them. */
     public static function liveDailyBills(int $companyId): array
     {

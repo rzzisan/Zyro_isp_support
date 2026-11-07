@@ -1248,6 +1248,38 @@ async def new_connection(request: Request, company_id: int):
     return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items() if k != "form"}
 
 
+@app.post("/internal/{company_id}/customer-change")
+async def customer_change(request: Request, company_id: int):
+    """Billing phase 5: package change, Left / back, password, removing a Left customer's secret (engine/desk_change.py),
+    with the member's billing login. Body: kind, header_id, params, user_id, by. 409 = refused, nothing changed."""
+    t = internal_tenant(request, company_id)
+    b = await request.json()
+    from engine import desk_change
+    from engine.customer_sync import refresh_one
+    user_id = int(b.get("user_id", 0) or 0) or None
+    actor = str(b.get("by", "") or "Desk")
+    header_id = int(b.get("header_id") or 0)
+
+    def go():
+        api = tenants.billing_for_user(t, user_id, owner_fallback=True) if user_id else tenants.billing(t)
+        return desk_change.run(company_id, str(b.get("kind") or ""), header_id, b.get("params") or {}, api=api,
+                               user_id=user_id, actor=actor, source=str(b.get("source") or "panel"),
+                               sync=lambda username: refresh_one(t, header_id, username))
+    try:
+        row = await run_in_threadpool(go)
+    except (desk_change.Refused, tenants.NoBillingLogin) as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items() if k != "detail"}
+
+
+@app.get("/internal/{company_id}/secret-audit")
+def secret_audit(request: Request, company_id: int):
+    """Billing phase 5 secret check: every router's PPP secrets against billing's customers (no passwords)."""
+    internal_tenant(request, company_id)
+    from engine import desk_change
+    return desk_change.audit(company_id)
+
+
 @app.post("/internal/{company_id}/customers/find")
 def customers_find(request: Request, company_id: int, q: str = ""):
     """Desk header search fallback: the billing header search, copying customers the desk doesn't have yet."""

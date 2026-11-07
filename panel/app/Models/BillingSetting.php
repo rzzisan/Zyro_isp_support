@@ -17,14 +17,14 @@ class BillingSetting extends Model
         'online_expire' => true, 'mikrotik_retries' => 3, 'enable_min_percent' => 90,
         'partial_redisable_percent' => 40, 'partial_redisable_days' => 3, 'history_months' => 12, 'activity_log_months' => null,
         'match_exclude_codes' => [], 'line_control' => 'off', 'line_test_codes' => [], 'extend_max_days' => 10, 'extend_per_month' => 1,
-        'ledger_control' => 'off', 'ledger_test_codes' => [], 'connection_control' => 'off', 'connection_test_prefix' => 'zyrotest',
+        'ledger_control' => 'off', 'ledger_test_codes' => [], 'connection_control' => 'off', 'username_prefixes' => [], 'connection_test_prefix' => 'zyrotest',
     ];
 
     public const MODES = ['ispdigital' => 'বিলিং সফটওয়্যার মূল (এখন)', 'shadow' => 'ছায়া: Desk পাশাপাশি হিসাব করে', 'desk' => 'Desk মূল'];
 
     protected function casts(): array
     {
-        return ['match_exclude_codes' => 'array', 'line_test_codes' => 'array', 'ledger_test_codes' => 'array', 'waive_off_month' => 'boolean', 'desk_auto_approve' => 'boolean', 'expire_on_payment' => 'boolean',
+        return ['match_exclude_codes' => 'array', 'username_prefixes' => 'array', 'line_test_codes' => 'array', 'ledger_test_codes' => 'array', 'waive_off_month' => 'boolean', 'desk_auto_approve' => 'boolean', 'expire_on_payment' => 'boolean',
             'expire_keep_if_early' => 'boolean', 'auto_line' => 'boolean', 'online_expire' => 'boolean'];
     }
 

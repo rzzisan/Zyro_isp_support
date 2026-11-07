@@ -4,10 +4,14 @@ namespace Tests\Feature;
 
 use App\Filament\App\Pages\BillingNewConnections;
 use App\Filament\App\Pages\BillingRules;
+use App\Filament\App\Pages\BillingSecretCheck;
 use App\Filament\App\Resources\Customers\Pages\ListCustomers;
+use App\Filament\App\Resources\Customers\Pages\ViewCustomer;
+use App\Models\BillingCustomer;
 use App\Models\BillingSetting;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\NewConnectionForm;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -64,6 +68,16 @@ class DeskBillingNewConnectionsTest extends TestCase
                     'username' => ['taken' => false],
                     default => ['items' => []],
                 });
+            }
+
+            if (str_contains($r->url(), '/customer-change')) {
+                return Http::response(['status' => 'done', 'note' => 'ok', 'kind' => $r['kind']]);
+            }
+            if (str_contains($r->url(), '/secret-audit')) {
+                return Http::response(['routers' => [['id' => 1, 'identity' => 'CLN-3', 'ok' => true, 'error' => null, 'secrets' => 2]],
+                    'missing' => [], 'extra' => [['username' => 'stray', 'router' => 'CLN-3', 'profile' => 'default', 'disabled' => false]],
+                    'left_present' => [['header_id' => 16056, 'code' => '6054', 'username' => 'zyrotest01', 'name' => 'T', 'router' => 'CLN-3', 'profile' => 'P-5_525']],
+                    'profile_mismatch' => []]);
             }
 
             return Http::response(['status' => 'done', 'customer_code' => '6070', 'header_id' => 16100,
@@ -145,5 +159,59 @@ class DeskBillingNewConnectionsTest extends TestCase
         $s = BillingSetting::where('company_id', $this->company->id)->first();
         $this->assertSame('test', $s->connection_control);
         $this->assertSame('zyro', $s->connection_test_prefix);
+    }
+
+    private function customer(): BillingCustomer
+    {
+        return BillingCustomer::create(['company_id' => $this->company->id, 'header_id' => 16063, 'customer_id' => '6061',
+            'username' => 'zyrotest5.phase5', 'name' => 'Zyro Phase5 Test', 'status' => 'Active', 'server' => 'CLN-3',
+            'speed' => 'P-5_525', 'package' => '20 Mbps_1260', 'package_id' => 3737, 'monthly_bill' => 1260]);
+    }
+
+    public function test_change_package_and_password_go_to_the_engine(): void
+    {
+        $this->fakeEngine();
+        $c = $this->customer();
+        $this->actingAs($this->owner);
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($this->company);
+        Livewire::test(ViewCustomer::class, ['record' => $c->getRouteKey()])
+            ->assertActionVisible('changePackage')
+            ->callAction('changePackage', ['package_id' => '3737', 'profile' => 'P-5_525', 'monthly_bill' => 1260])
+            ->assertHasNoActionErrors();
+        Http::assertSent(fn ($r) => str_ends_with(parse_url($r->url(), PHP_URL_PATH), "/internal/{$this->company->id}/customer-change")
+            && $r['kind'] === 'package' && $r['header_id'] === 16063 && $r['params']['profile'] === 'P-5_525');
+
+        $this->actingAs($this->agent);
+        Livewire::test(ViewCustomer::class, ['record' => $c->getRouteKey()])->assertActionHidden('changePackage');
+    }
+
+    public function test_secret_check_page_owner_only(): void
+    {
+        $this->fakeEngine();
+        $base = '/app/'.$this->company->slug;
+        $this->actingAs($this->agent)->get($base.'/billing-secret-check')->assertForbidden();
+        $this->actingAs($this->owner)->get($base.'/billing-secret-check')->assertOk();
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($this->company);
+        Livewire::test(BillingSecretCheck::class)->call('runAudit')->assertSee('zyrotest01')->assertSee('stray')
+            ->call('removeSecret', 16056);
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/customer-change') && $r['kind'] === 'remove' && $r['header_id'] === 16056);
+    }
+
+    public function test_username_suggestion_from_the_zone_prefix(): void
+    {
+        $this->assertSame('bp.rahim6071', NewConnectionForm::usernameSuggestion('bp.', 'Rahim Uddin', 6071));
+        $this->assertSame('bp.7', NewConnectionForm::usernameSuggestion('bp.', 'মোঃ রহিম', 7));
+        $this->fakeEngine();
+        $this->customer();
+        $this->actingAs($this->owner);
+        Filament::setCurrentPanel('app');
+        Filament::setTenant($this->company);
+        $this->assertSame(6062, NewConnectionForm::nextCustomerId());
+        Livewire::test(BillingRules::class)->fillForm(['connection_control' => 'test', 'connection_test_prefix' => 'zyro',
+            'username_prefixes' => [['zone_id' => '84', 'prefix' => 'bp.']]])->call('save')->assertHasNoFormErrors();
+        $this->assertSame([['zone_id' => '84', 'prefix' => 'bp.']], BillingSetting::where('company_id', $this->company->id)->first()->username_prefixes);
+        $this->assertSame('bp.', NewConnectionForm::zonePrefix('84'));
     }
 }

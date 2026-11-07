@@ -68,6 +68,7 @@ class SmsSettings extends CompanySettingsPage
         'ticket_open' => 'টিকিট খুললে',
         'ticket_solved' => 'টিকিট সমাধান হলে',
         'bill_reminder' => 'বিল রিমাইন্ডার (মেয়াদ শেষের আগে)',
+        'welcome' => 'নতুন সংযোগ হলে (স্বাগতম)',
     ];
 
     /** On/off and template of every event; a missing template defaults to the company's first one of that type. */

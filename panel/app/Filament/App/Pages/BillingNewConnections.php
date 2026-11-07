@@ -65,6 +65,8 @@ class BillingNewConnections extends Page implements HasTable
         return [
             Action::make('rules')->label(__('বিলিং নিয়ম'))->icon(Heroicon::OutlinedCog6Tooth)->color('gray')
                 ->visible(fn () => BillingRules::canAccess())->url(fn () => BillingRules::getUrl()),
+            Action::make('secrets')->label(__('PPP secret যাচাই'))->icon(Heroicon::OutlinedShieldCheck)->color('gray')
+                ->visible(fn () => BillingSecretCheck::canAccess())->url(fn () => BillingSecretCheck::getUrl()),
             NewConnectionForm::action('create')->visible(fn () => NewConnectionForm::canCreate()),
         ];
     }

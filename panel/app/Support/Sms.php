@@ -55,6 +55,12 @@ class Sms
         'time' => 'সময়',
     ];
 
+    /** Only in the welcome SMS after a new connection (never the password). */
+    public const WELCOME_PLACEHOLDERS = [
+        'expire_day' => 'মাসের বিলের শেষ দিন',
+        'date' => 'তারিখ',
+    ];
+
     /** Only in a bill reminder (filled by sms:bill-reminders). */
     public const REMINDER_PLACEHOLDERS = [
         'expire_date' => 'মেয়াদ শেষের তারিখ',
@@ -71,6 +77,7 @@ class Sms
             'bill_paid' => self::BILL_PLACEHOLDERS + $out,
             'ticket_open', 'ticket_solved' => self::TICKET_PLACEHOLDERS + $out,
             'bill_reminder' => self::REMINDER_PLACEHOLDERS + $out,
+            'welcome' => self::WELCOME_PLACEHOLDERS + $out,
             default => $out,
         });
     }
@@ -86,7 +93,7 @@ class Sms
 
     private static function eventOnly(): array
     {
-        return self::BILL_PLACEHOLDERS + self::TICKET_PLACEHOLDERS + self::REMINDER_PLACEHOLDERS;
+        return self::BILL_PLACEHOLDERS + self::TICKET_PLACEHOLDERS + self::REMINDER_PLACEHOLDERS + self::WELCOME_PLACEHOLDERS;
     }
 
     private static array $companyNames = [];
@@ -316,6 +323,23 @@ class Sms
 
         return $c ? static::queue($companyId, $userId, 'ticket', $body, [$to => $c], [], [], $extra)
             : static::queue($companyId, $userId, 'ticket', $body, [], [$to], [], $extra);
+    }
+
+    /**
+     * After a new connection from the Desk: queue the welcome SMS (the template chosen in the gateway settings) to the
+     * customer. The PPPoE password is never a placeholder. Null when it can't go (settings not ready, no valid mobile).
+     */
+    public static function welcome(int $companyId, ?int $userId, BillingCustomer $c, array $extra = []): ?SmsCampaign
+    {
+        $s = SmsSetting::forCompany($companyId);
+        $mobile = static::mobile($c->mobile_normalized ?: $c->mobile);
+        if (! $s->eventReady('welcome') || ! $mobile) {
+            return null;
+        }
+        $body = (string) SmsTemplate::whereKey($s->welcome_template_id)->value('body');
+        $extra = ['expire_day' => (string) ($extra['expire_day'] ?? ''), 'date' => now('Asia/Dhaka')->format('d/m/Y')];
+
+        return static::queue($companyId, $userId, 'welcome', $body, [$mobile => $c], [], [], $extra);
     }
 
     /**

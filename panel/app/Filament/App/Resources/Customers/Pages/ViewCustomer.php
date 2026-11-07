@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\Customers\Pages;
 
 use App\Filament\App\BillActions;
+use App\Filament\App\CustomerChangeActions;
 use App\Filament\App\ExtendActions;
 use App\Filament\App\Pages\BillingLedger;
 use App\Filament\App\Resources\Conversations\ConversationResource;
@@ -73,6 +74,7 @@ class ViewCustomer extends ViewRecord
                 ->openUrlInNewTab(),
             BillActions::receive($c),
             ExtendActions::extend($c),
+            CustomerChangeActions::group($c),
             Action::make('ledger')->label(__('Desk খাতা'))->icon(Heroicon::OutlinedBookOpen)->color('gray')
                 ->visible(fn () => BillingLedger::canAccess())
                 ->url(fn () => BillingLedger::getUrl(['customer' => $c->customer_id])),
