@@ -134,12 +134,15 @@ class BillingNewConnections extends Page implements HasTable
                 })
                 ->schema([
                     Tabs::make()->tabs([
-                        Tab::make(__('বাধ্যতামূলক'))->columns(2)->schema([
+                        Tab::make(__('মূল তথ্য'))->columns(2)->schema([
                             TextInput::make('name')->label(__('নাম'))->required()->maxLength(150),
                             TextInput::make('mobile')->label(__('মোবাইল'))->required()->tel()->regex('/^(\+?88)?01\d{9}$/')
                                 ->helperText(__('01XXXXXXXXX')),
                             Select::make('zone_id')->label(__('Zone'))->required()->options(fn () => $this->opts('ZoneId'))->live()
                                 ->afterStateUpdated(fn ($set) => $set('sub_zone_id', null)),
+                            Select::make('sub_zone_id')->label(__('Sub Zone'))->placeholder(__('ঐচ্ছিক'))->options(fn ($get) => $this->remote('subzones', $get('zone_id')))->live()
+                                ->afterStateUpdated(fn ($set) => $set('box_id', null)),
+                            Select::make('box_id')->label(__('Box'))->placeholder(__('ঐচ্ছিক'))->options(fn ($get) => $this->remote('boxes', $get('sub_zone_id'))),
                             Select::make('server_id')->label(__('রাউটার (Server)'))->required()->options(fn () => $this->opts('ServerId'))->live()
                                 ->afterStateUpdated(fn ($set) => $set('profile', null)),
                             Select::make('package_id')->label(__('প্যাকেজ'))->required()->searchable()->options(fn () => $this->opts('PackageId'))->live()
@@ -175,9 +178,6 @@ class BillingNewConnections extends Page implements HasTable
                                 ->required(fn ($get) => ! $this->noBill($get('status_id'))),
                         ]),
                         Tab::make(__('অন্যান্য (ঐচ্ছিক)'))->columns(2)->schema([
-                            Select::make('sub_zone_id')->label(__('Sub Zone'))->options(fn ($get) => $this->remote('subzones', $get('zone_id')))->live()
-                                ->afterStateUpdated(fn ($set) => $set('box_id', null)),
-                            Select::make('box_id')->label(__('Box'))->options(fn ($get) => $this->remote('boxes', $get('sub_zone_id'))),
                             TextInput::make('phone')->label(__('ফোন'))->maxLength(20),
                             TextInput::make('address')->label(__('ঠিকানা'))->maxLength(300),
                             Select::make('district_id')->label(__('জেলা'))->options(fn () => $this->opts('DistrictId')),
