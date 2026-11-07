@@ -6,9 +6,9 @@
 |---|---|---|---|---|
 | support.inbox | ইনবক্স (WhatsApp চ্যাট, assign, বট থামানো) | inbox | live | [inbox](support/inbox.md) |
 | support.tickets | টিকিট (খোলা, assign, Solve, অটো assign) | tickets | live | [tickets](support/tickets.md) |
-| support.field_jobs | আমার কাজ (ফিল্ড টেকনিশিয়ান) | field_jobs | missing | |
-| support.force_solve | লাইন অফলাইন থাকলেও কাজ শেষ | force_solve | missing | |
-| support.technicians | টেকনিশিয়ান | technicians | missing | |
+| support.field_jobs | আমার কাজ (ফিল্ড টেকনিশিয়ান) | field_jobs | live | [field_jobs](support/field_jobs.md) |
+| support.force_solve | লাইন অফলাইন থাকলেও কাজ শেষ | force_solve | live | [force_solve](support/force_solve.md) |
+| support.technicians | টেকনিশিয়ান | technicians | live | [technicians](support/technicians.md) |
 | customers.list_profile | কাস্টমার তালিকা ও প্রোফাইল | customers | missing | |
 | customers.create | নতুন কাস্টমার যোগ (বিলিং-এও) | customer_create | missing | |
 | customers.change | প্যাকেজ / Left / পাসওয়ার্ড বদল | customer_change | missing | |
@@ -19,13 +19,13 @@
 | network.onu_stock | ONU স্টক ও নতুন সংযোগ | onu_stock | missing | |
 | line.enable_disable | লাইন চালু/বন্ধ ও রেকর্ড | line_switch, line_enables | live | [enable_disable](line/enable_disable.md) |
 | billing.collect | বিল কালেকশন ও approve | bills, bill_approve | live | [collect](billing/collect.md) |
-| billing.edit_payments | বিল সংশোধন, ক্যাশ মোছা, ট্রান্সফার | bill_edit, payment_delete, payment_transfer | missing | |
-| billing.extend | বিলের সময় বাড়ানো | bill_extend | missing | |
+| billing.edit_payments | বিল সংশোধন, ক্যাশ মোছা, ট্রান্সফার | bill_edit, payment_delete, payment_transfer | live | [edit_payments](billing/edit_payments.md) |
+| billing.extend | বিলের সময় বাড়ানো | bill_extend | live | [extend](billing/extend.md) |
 | billing.expire_date | মেয়াদ (Expire Date) বদল | | live | [expire_date](billing/expire_date.md) |
 | billing.connection | বিলিং সংযোগ ও sync | billing | live | [connection](billing/connection.md) |
-| billing.config | বিলিং কনফিগারেশন | billing_config | missing | |
-| billing.online_payments | অনলাইন পেমেন্ট ও bKash webhook | | missing | |
-| billing.desk_ledger | Desk-এর নিজের বিলিং (নিয়ম, খাতা, মিল, বন্ধের তালিকা) | | missing | |
+| billing.config | বিলিং কনফিগারেশন | billing_config | live | [config](billing/config.md) |
+| billing.online_payments | অনলাইন পেমেন্ট ও bKash webhook | | live | [online_payments](billing/online_payments.md) |
+| billing.desk_ledger | Desk-এর নিজের বিলিং (নিয়ম, খাতা, মিল, বন্ধের তালিকা) | | live | [desk_ledger](billing/desk_ledger.md) |
 | sms_whatsapp.sms | SMS (পাঠানো, লগ, টেমপ্লেট, গেটওয়ে) | sms | missing | |
 | sms_whatsapp.wa_campaign | WhatsApp টেমপ্লেট পাঠানো | wa_campaign | missing | |
 | sms_whatsapp.whatsapp | WhatsApp সেটিং | whatsapp | missing | |
