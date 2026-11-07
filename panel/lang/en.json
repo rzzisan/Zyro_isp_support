@@ -2187,5 +2187,15 @@
     "দাম :p · মোট :v": "Price :p · worth :v",
     "এই সময়ে কেনা :i · দেওয়া :o": "Period: bought :i · given :o",
     "মাল": "Item",
-    "এই সময়ে ইন :i · বিতরণ :o": "Period: in :i · out :o"
+    "এই সময়ে ইন :i · বিতরণ :o": "Period: in :i · out :o",
+    "নতুন ডিজাইনের preview": "New design preview",
+    "আগের ডিজাইন": "Old design",
+    "ONU স্টকে": "ONUs in stock",
+    "ONU দেওয়া": "ONUs given",
+    "কেনা :n": "bought :n",
+    "মোট বাকি": "Total due",
+    "শেষ হয়ে গেছে: :n টা": "Out of stock: :n",
+    "ONU ব্র্যান্ড": "ONU brands",
+    "স্টকে": "In stock",
+    "ONU দেওয়ার কারণ": "Why ONUs were given"
 }

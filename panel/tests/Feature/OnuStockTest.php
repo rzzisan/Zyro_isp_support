@@ -326,4 +326,14 @@ class OnuStockTest extends TestCase
         $this->company->update(['modules' => []]);
         $this->actingAs($this->owner)->get("/app/{$this->company->slug}/onu-stock-dashboard")->assertForbidden();
     }
+
+    public function test_dashboard_minimal_design_preview(): void
+    {
+        $this->brand('Aurora', 5);
+        $this->as($this->owner);
+        Livewire::withQueryParams(['design' => 'new'])->test(\App\Filament\App\Pages\OnuStockDashboard::class)
+            ->assertSee('নতুন ডিজাইনের preview')->assertSee('Aurora')
+            ->call('setPeriod', 'all')->assertSee('নতুন ডিজাইনের preview');
+        $this->actingAs($this->owner)->get("/app/{$this->company->slug}/onu-stock-dashboard")->assertOk()->assertDontSee('নতুন ডিজাইনের preview');
+    }
 }

@@ -43,6 +43,19 @@ class OnuStockDashboard extends Page
 
     public string $period = 'month';
 
+    /** Preview of the minimal design (?design=new) until Zisan picks one; kept across Livewire updates. */
+    public bool $minimal = false;
+
+    public function mount(): void
+    {
+        $this->minimal = request()->query('design') === 'new';
+    }
+
+    public function getView(): string
+    {
+        return $this->minimal ? 'filament.app.onu-stock-dashboard-minimal' : $this->view;
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('ONU ও স্টক ড্যাশবোর্ড');
