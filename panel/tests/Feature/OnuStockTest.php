@@ -301,4 +301,29 @@ class OnuStockTest extends TestCase
         $this->assertEqualsCanonicalizing(['Arif Hossain', 'Arzu'], $a->fresh()->technicians->pluck('name')->all());
         $this->assertSame(2, OnuAssignment::count());
     }
+
+    public function test_dashboard_shows_all_stock(): void
+    {
+        $b = $this->brand('Aurora', 5);
+        $t = Technician::create(['company_id' => $this->company->id, 'name' => 'Rifat', 'active' => false]);
+        $a = OnuAssignment::create(['company_id' => $this->company->id, 'assigned_at' => now(), 'brand_id' => $b->id, 'mac_raw' => 'x',
+            'purpose' => 'Warranty', 'customer_kind' => 'other']);
+        $a->technicians()->sync([$t->id]);
+        NewConnection::create(['company_id' => $this->company->id, 'connected_on' => now('Asia/Dhaka')->toDateString(), 'name' => 'Rafi',
+            'connection_type' => 'নতুন লাইন', 'total' => 2000, 'deposit' => 1500, 'due' => 500, 'order_taker_id' => $t->id, 'money_with_id' => $t->id]);
+        $p = StockProduct::create(['company_id' => $this->company->id, 'name' => 'splitter 1:8']);
+        $p->move('in', 4, ['moved_on' => now('Asia/Dhaka')->toDateString(), 'unit_price' => 100]);
+        $this->as($this->owner);
+        $page = Livewire::test(\App\Filament\App\Pages\OnuStockDashboard::class);
+        $r = $page->instance()->report();
+        $this->assertSame([4, 3400.0, 1, 1], [$r['onu_left'], $r['onu_value'], $r['onu_out_p'], (int) $r['conn']->n]);
+        $this->assertSame(['Rifat', 1, 1, 1500.0, 500.0], [$r['staff'][0]['name'], $r['staff'][0]['onu'], $r['staff'][0]['conn'],
+            $r['staff'][0]['deposit'], $r['staff'][0]['due']]);
+        $this->assertSame([4, 4, 400.0], [$r['products'][0]['stock'], $r['products'][0]['in_p'], $r['products'][0]['spent_p']]);
+        $page->assertSee('Aurora')->assertSee('splitter 1:8')->call('setPeriod', 'last_month')->assertOk();
+        $this->assertSame(0, $page->instance()->report()['onu_out_p']);
+        $this->actingAs($this->owner)->get("/app/{$this->company->slug}/onu-stock-dashboard")->assertOk();
+        $this->company->update(['modules' => []]);
+        $this->actingAs($this->owner)->get("/app/{$this->company->slug}/onu-stock-dashboard")->assertForbidden();
+    }
 }
