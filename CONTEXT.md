@@ -75,7 +75,7 @@
 - অনলাইন পেমেন্ট `/online-payments` (bKash/Nagad webhook + PayBill, Desk সেটেল করে না)। bKash মার্চেন্ট webhook সরাসরি Desk-এ (`engine/bkash_webhook.py`, URL `/pay/bkash/webhook/{slug}`, SNS signature যাচাই, নিজে জমা + লাইন চালু) — কোড আছে, **লাইভ সুইচ বন্ধ**; চালুর ক্রম আর্কাইভে।
 - মেয়াদ বদল (`engine/expire_dates.py`, সেটিংস → মেয়াদ বদল): বন্ধ লাইন বিল দিয়ে চালু হলে Expire Date = পেমেন্টের দিন (≥৮৫%, সর্বোচ্চ ২৮); bulk চালান শুধু Owner; `expire_auto` সুইচ।
 - লাইন চালু/বন্ধ রেকর্ড `line_enables`। বিকল্প নম্বর `customer_alt_numbers` (রাতে rebuild, স্টাফ যোগ/সরান)।
-- ONU স্টক ও নতুন সংযোগ (মডিউল `onu`, শুধু Century Link; পুরনো zisan.me/onu থেকে import `php artisan onu:import`; cutover দিন বাকি)।
+- ONU স্টক ও নতুন সংযোগ (মডিউল `onu`, শুধু Century Link)। **Cutover 2026-11-07**: পুরনো zisan.me/onu-এর MySQL ইউজার `onu_user` শুধু SELECT (ফেরাতে `GRANT ALL ON onu_management_db.* TO 'onu_user'@'localhost'`), `header.php`-এ লাল নোটিশ (আসল ফাইল ও শেষ export zisan.me `/root/onu-cutover/`); শেষ `onu:import`: 1153 বরাদ্দ, 768 সংযোগ, বাকি ৳40,799.92, ALL CHECKS OK; Desk-এ নিজে করা ১টা বরাদ্দ (ID 2271) রাখা। `onu_stock` agent ডিফল্ট চালু। বাগ ঠিক: নম্বরহীন পুরনো টেকনিশিয়ান Desk-এ মুছলে ONU/সংযোগের কর্মী মুছে যেত, এখন রেকর্ডে থাকা টেকনিশিয়ান ডিলিট হয় না; import billing employee id/নাম দিয়ে পুরনো টেকনিশিয়ান খোঁজে।
 
 **SMS**
 - Desk সরাসরি গেটওয়ে দিয়ে (`engine/sms.py`, `engine/sms_gateways/`): Khudebarta (`http://portal.khudebarta.com:3775`) আর Bulk SMS Dhaka (IP whitelist লাগে), মূল + ব্যাকআপ, ৬ ঘণ্টার পুরনো SMS বাতিল। টেমপ্লেট ধরন general/bill_paid/ticket_open/ticket_solved/bill_reminder। `sms_settings.enabled` বন্ধ = কিছুই যায় না। বিলিংকে সবসময় SMS বন্ধ পাঠানো হয়।
@@ -118,7 +118,7 @@
 - Gemini key-এর billing tier বাড়ানো; Bulk SMS Dhaka IP whitelist/key/লাইভ টেস্ট (সফল উত্তরের ফরম্যাট মেলানো বাকি)।
 - bKash webhook লাইভ চালু (nginx `/pay/`, সেটিং, bKash-কে URL, ১০ টাকার টেস্ট)।
 - WhatsApp কল লাইভ মোড; Display name আবার জমা।
-- ONU স্টকের cutover দিন; পুরনো zisan.me/onu-এর web root-এ DB dump/.git খোলা (নিরাপত্তা)।
+- পুরনো zisan.me/onu-এর web root-এ DB dump/.git খোলা (নিরাপত্তা)।
 - CLN_4 MikroTik ব্যাকআপ (ssh/ftp-এ 10.85.1.13/32 যোগ বা RouterOS 7.13+)।
 - বটের FAQ উত্তর (অফিস সময়, Wi-Fi পাসওয়ার্ড, রাউটার লগইন নীতি, ৫৫০ টাকা 20Mbps + Bongo অফার, FTP লিংক)।
 - টিকিট 2556/3564/3697 ডুপ্লিকেট; ওয়াকি-টকি ও টিম চ্যাট টেস্ট; ভয়েস রিমাইন্ডার লাইভ চালু।
