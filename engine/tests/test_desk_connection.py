@@ -3,18 +3,20 @@ migrations (skipped without one); billing and the router are fakes, nothing leav
   ENGINE_DATABASE_URL=postgresql://postgres@127.0.0.1:5544/zyro_test PYTHONPATH=. .venv/bin/python -m unittest engine.tests.test_desk_connection
 """
 import os
+import secrets
 import unittest
 
 from engine import desk_connection as dn
 
 URL = os.environ.get("ENGINE_DATABASE_URL", "")
+PW = secrets.token_urlsafe(9)   # made up per run: the test checks it is never stored
 
 
 def form(**kw):
     base = {"name": "Zyro Phase5 Test", "mobile": "+8801777858289", "server_id": "4", "server_name": "CLN-3",
             "zone_id": "84", "connection_type_id": "76", "package_id": "3737", "package_name": "20 Mbps_1260",
             "profile": "P-5_525", "monthly_bill": "1260", "customer_type_id": "5", "status_id": "1",
-            "status_name": "Active", "username": "zyrotest5.t1", "password": "Secret-Pw-123", "joined": "2026-11-07",
+            "status_name": "Active", "username": "zyrotest5.t1", "password": PW, "joined": "2026-11-07",
             "bill_start": "12/2026", "expire_day": "9"}
     base.update(kw)
     return base
@@ -99,11 +101,11 @@ class RunTest(unittest.TestCase):
         self.assertEqual(row["customer_code"], "6070")
         self.assertEqual(row["secret_profile"], "P-5_525")
         self.assertFalse(row["secret_disabled"])
-        self.assertEqual(api.posts[0]["Password"], "Secret-Pw-123")
+        self.assertEqual(api.posts[0]["Password"], PW)
         self.assertEqual(api.posts[0]["MobileNumber"], "01777858289")
         dump = str(self.db.all_rows("SELECT * FROM desk_connections")) + str(
             self.db.all_rows("SELECT changes, note FROM activity_logs WHERE subject_type = 'desk_connection'"))
-        self.assertNotIn("Secret-Pw-123", dump)
+        self.assertNotIn(PW, dump)
 
     def test_secret_missing_is_check(self):
         row = self.run_it(FakeBilling(), None)

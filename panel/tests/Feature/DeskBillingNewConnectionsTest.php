@@ -91,7 +91,7 @@ class DeskBillingNewConnectionsTest extends TestCase
                 'name' => 'Zyro Phase5 Test', 'mobile' => '01777858289', 'zone_id' => '84', 'server_id' => '4',
                 'package_id' => '3737', 'profile' => 'P-5_525', 'monthly_bill' => 1260, 'status_id' => '1',
                 'connection_type_id' => '76', 'customer_type_id' => '5', 'username' => 'zyrotest5.t2',
-                'password' => 'Abc12345xy', 'joined' => '2026-11-07', 'bill_start' => '12/2026', 'expire_day' => 9,
+                'password' => bin2hex(random_bytes(5)), 'joined' => '2026-11-07', 'bill_start' => '12/2026', 'expire_day' => 9,
             ])
             ->assertHasNoActionErrors();
         Http::assertSent(fn ($r) => str_ends_with(parse_url($r->url(), PHP_URL_PATH), "/internal/{$this->company->id}/new-connection")

@@ -2,17 +2,18 @@
   PYTHONPATH=. python3 -m unittest engine.tests.test_desk_customer
 """
 import datetime as dt
+import secrets
 import unittest
 
 from engine import desk_customer as dc
 
 
 def form(**kw):
-    # the values sent for billing's test customer 16063 (2026-11-07), password made up
+    # the values sent for billing's test customer 16063 (2026-11-07); a random password per run
     base = {"name": "Zyro Phase5 Test", "mobile": "01777858289", "server_id": "4", "zone_id": "84",
             "connection_type_id": "76", "package_id": "3737", "profile": "P-5_525", "monthly_bill": "1260",
             "customer_type_id": "5", "status_id": "1", "status_name": "Active", "username": "zyrotest5.phase5",
-            "password": "x7Yq2", "joined": "2026-11-07", "bill_start": "12/2026", "expire_day": "9",
+            "password": secrets.token_urlsafe(8), "joined": "2026-11-07", "bill_start": "12/2026", "expire_day": "9",
             "remarks": "Zyro Phase5 TEST - safe to delete"}
     base.update(kw)
     return base
