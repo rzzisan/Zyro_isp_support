@@ -29,6 +29,13 @@
         .zr-chip { border: 1px solid var(--z-border); border-radius: 999px; padding: 3px 12px; font-size: .82rem; }
         .zr-bad { color: #dc2626; font-weight: 700; }
         .zr-ok { color: #16a34a; font-weight: 700; }
+        .zr-stock { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; padding: 4px 16px 14px; }
+        .zr-item { position: relative; border: 1px solid var(--z-border); border-left: 4px solid #16a34a; border-radius: 12px; padding: 10px 12px; }
+        .zr-item-onu { border-left-color: var(--z-accent); }
+        .zr-item-name { font-weight: 600; font-size: .9rem; padding-right: 44px; line-height: 1.3; }
+        .zr-item-big { font-size: 1.7rem; font-weight: 700; margin: 2px 0; }
+        .zr-item-big small { font-size: .8rem; font-weight: 500; color: var(--z-muted); margin-left: 4px; }
+        .zr-tag { position: absolute; top: 8px; right: 8px; font-size: .7rem; border: 1px solid var(--z-border); border-radius: 999px; padding: 1px 8px; color: var(--z-muted); }
     </style>
 
     <div class="zr-tabs">
@@ -48,6 +55,38 @@
             <div class="zr-sub">{{ __(':n জনের কাছে', ['n' => $n($r['due_all']->n)]) }} · {{ __('এই সময়ে আদায় :p', ['p' => $tk($r['paid']->paid)]) }}</div></div>
         <div class="zr-card"><b>{{ __('অন্যান্য মাল') }}</b><div class="zr-big">{{ $n($r['items_total']) }}</div>
             <div class="zr-sub">@if ($r['items_out']){{ __(':n টা শেষ হয়ে গেছে', ['n' => $r['items_out']]) }}@else{{ __('সবগুলো স্টকে আছে') }}@endif</div></div>
+    </div>
+
+    @php
+        $onuIn = $r['brands']->where('left', '>', 0);
+        $itemsIn = $r['products']->where('stock', '>', 0)->sortByDesc('stock');
+    @endphp
+    <div class="zr-box">
+        <h3><span>{{ __('স্টকে যা আছে') }} <span class="zr-note">{{ __('শুধু যেগুলোর স্টক আছে') }}</span></span>
+            <a href="{{ $url(\App\Filament\App\Resources\StockProducts\StockProductResource::class) }}">{{ __('স্টক ইন / বিতরণ') }} →</a></h3>
+        @if ($onuIn->isEmpty() && $itemsIn->isEmpty())
+            <div class="zr-chips"><span class="zr-note">{{ __('এখন কোনো কিছুর স্টক নেই') }}</span></div>
+        @else
+            <div class="zr-stock">
+                @foreach ($onuIn as $b)
+                    <div class="zr-item zr-item-onu">
+                        <span class="zr-tag">ONU</span>
+                        <div class="zr-item-name">{{ $b['name'] }}</div>
+                        <div class="zr-item-big">{{ $n($b['left']) }}<small>{{ __('টা') }}</small></div>
+                        <div class="zr-sub">{{ __('দাম :p · মোট :v', ['p' => number_format($b['price']), 'v' => $tk($b['value'])]) }}</div>
+                        <div class="zr-sub">{{ __('এই সময়ে কেনা :i · দেওয়া :o', ['i' => $n($b['in_p']), 'o' => $n($b['out_p'])]) }}</div>
+                    </div>
+                @endforeach
+                @foreach ($itemsIn as $p)
+                    <div class="zr-item">
+                        <span class="zr-tag">{{ __('মাল') }}</span>
+                        <div class="zr-item-name">{{ $p['name'] }}</div>
+                        <div class="zr-item-big">{{ $n($p['stock']) }}<small>{{ __('টা') }}</small></div>
+                        <div class="zr-sub">{{ __('এই সময়ে ইন :i · বিতরণ :o', ['i' => $n($p['in_p']), 'o' => $n($p['out_p'])]) }}</div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
     </div>
 
     <div class="zr-box">
@@ -78,25 +117,6 @@
     </div>
 
     <div class="zr-grid">
-        <div class="zr-box">
-            <h3>{{ __('অন্যান্য মাল') }} <a href="{{ $url(\App\Filament\App\Resources\StockProducts\StockProductResource::class) }}">{{ __('স্টক ইন / বিতরণ') }} →</a></h3>
-            <table class="zr-t">
-                <tr><th>{{ __('প্রোডাক্ট') }}</th><th class="num">{{ __('স্টকে আছে') }}</th><th class="num">{{ __('এই সময়ে ইন') }}</th>
-                    <th class="num">{{ __('এই সময়ে বিতরণ') }}</th><th class="num">{{ __('কেনার খরচ') }}</th></tr>
-                @forelse ($r['products'] as $p)
-                    <tr>
-                        <td>{{ $p['name'] }}</td>
-                        <td class="num {{ $p['stock'] > 0 ? 'zr-ok' : 'zr-bad' }}">{{ $n($p['stock']) }}</td>
-                        <td class="num">{{ $n($p['in_p']) }}</td>
-                        <td class="num">{{ $n($p['out_p']) }}</td>
-                        <td class="num">{{ $p['spent_p'] ? number_format($p['spent_p']) : '—' }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="5" class="zr-note">{{ __('এখনো কোনো প্রোডাক্ট নেই') }}</td></tr>
-                @endforelse
-            </table>
-        </div>
-
         <div class="zr-box">
             <h3>{{ __('ONU কেন দেওয়া হয়েছে (এই সময়ে)') }}</h3>
             <div class="zr-chips">

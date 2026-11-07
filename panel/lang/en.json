@@ -2179,5 +2179,13 @@
     "মাল নিয়েছেন": "Items taken",
     "সংযোগের অর্ডার": "Connection orders",
     "জমার টাকা তাঁর কাছে": "Payments with them",
-    "বাকি (তাঁর ভাগে)": "Due (theirs)"
+    "বাকি (তাঁর ভাগে)": "Due (theirs)",
+    "স্টকে যা আছে": "In stock",
+    "শুধু যেগুলোর স্টক আছে": "only what has stock",
+    "এখন কোনো কিছুর স্টক নেই": "Nothing in stock now",
+    "টা": "pcs",
+    "দাম :p · মোট :v": "Price :p · worth :v",
+    "এই সময়ে কেনা :i · দেওয়া :o": "Period: bought :i · given :o",
+    "মাল": "Item",
+    "এই সময়ে ইন :i · বিতরণ :o": "Period: in :i · out :o"
 }
