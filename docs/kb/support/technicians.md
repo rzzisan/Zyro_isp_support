@@ -6,7 +6,7 @@ menu: technicians
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [টেকনিশিয়ান, technician, নম্বর যোগ, WhatsApp নম্বর, টেকনিশিয়ান বট, অফিস সাপোর্ট নম্বর, বিলিং কর্মী যুক্ত, লাইন চালু বট, টিকিট মেসেজ, অ্যাসাইন হলে WhatsApp]
+keywords: [টেকনিশিয়ান, technician, নম্বর যোগ, WhatsApp নম্বর, টেকনিশিয়ান বট, অফিস সাপোর্ট নম্বর, বিলিং কর্মী যুক্ত, লাইন চালু বট, টিকিট মেসেজ, অ্যাসাইন হলে WhatsApp, WhatsApp number, technician bot, office support number, billing staff, line on bot, ticket message, assigned WhatsApp]
 related:
   - id: support.field_jobs
     when: টেকনিশিয়ান কাজের তালিকা দেখতে না পেলে

@@ -6,7 +6,7 @@ menu: onus
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [ONU, ONU MAC, ONU খোঁজা, পোর্ট, EPON, অনলাইন ONU, dBm, সিগন্যাল, হারানো ONU, MAC খোঁজা, কাস্টমার ONU, বরাদ্দ ONU]
+keywords: [ONU, ONU MAC, ONU খোঁজা, পোর্ট, EPON, অনলাইন ONU, dBm, সিগন্যাল, হারানো ONU, MAC খোঁজা, কাস্টমার ONU, বরাদ্দ ONU, MAC, find ONU, port, online ONU, signal, lost ONU, assigned ONU, search MAC]
 related:
   - id: network.olt
     when: OLT-এর তথ্য বা সিঙ্ক বুঝতে

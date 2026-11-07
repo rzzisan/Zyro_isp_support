@@ -6,7 +6,7 @@ menu: force_solve
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [force solve, জোর করে শেষ, অফলাইন, লাইন অফলাইন, কাজ শেষ হচ্ছে না, কারণ লিখে শেষ, Solve আটকাচ্ছে, ব্লক লাইন, সমাধান করা যাচ্ছে না]
+keywords: [force solve, জোর করে শেষ, অফলাইন, লাইন অফলাইন, কাজ শেষ হচ্ছে না, কারণ লিখে শেষ, Solve আটকাচ্ছে, ব্লক লাইন, সমাধান করা যাচ্ছে না, force close, offline, line offline, job not closing, reason, blocked line, cannot solve]
 related:
   - id: support.field_jobs
     when: ফিল্ড টেকনিশিয়ান কাজ শেষ করতে পারছেন না

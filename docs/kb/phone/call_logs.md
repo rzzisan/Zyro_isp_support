@@ -6,7 +6,7 @@ menu: calls
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [কল লগ, call log, কল রেকর্ড, রেকর্ডিং, হটলাইন, মিসড কল, ধরা হয়নি, কে ধরেছে, MP3, ফলাফল, outcome, কল কেন ধরল না, CDR, কল রিপোর্ট]
+keywords: [কল লগ, call log, কল রেকর্ড, রেকর্ডিং, হটলাইন, মিসড কল, ধরা হয়নি, কে ধরেছে, MP3, ফলাফল, outcome, কল কেন ধরল না, CDR, কল রিপোর্ট, call record, recording, hotline, missed call, answered, who answered, call report]
 related:
   - id: phone.softphone
     when: কল ধরা বা কাস্টমারকে কল দেওয়ার কাজ

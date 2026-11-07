@@ -6,7 +6,7 @@ menu: customers
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [কাস্টমার, customer, তালিকা, প্রোফাইল, খোঁজা, সার্চ, ID, PPPoE, মোবাইল, লাইভ অবস্থা, CSV, ট্যাব, বিকল্প নম্বর, বকেয়া, Left, পাসওয়ার্ড দেখা]
+keywords: [কাস্টমার, customer, তালিকা, প্রোফাইল, খোঁজা, সার্চ, ID, PPPoE, মোবাইল, লাইভ অবস্থা, CSV, ট্যাব, বিকল্প নম্বর, বকেয়া, Left, পাসওয়ার্ড দেখা, list, profile, search, live status, password, balance, alternate number, tab, export]
 related:
   - id: customers.change
     when: প্যাকেজ, Left বা PPPoE পাসওয়ার্ড বদলাতে হলে

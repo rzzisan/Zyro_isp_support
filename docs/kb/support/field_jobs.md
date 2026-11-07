@@ -6,7 +6,7 @@ menu: field_jobs
 status: live
 plans: [all]
 audience: [agent]
-keywords: [আমার কাজ, ফিল্ড, টেকনিশিয়ান, field, কাজ শেষ, টিকিট কাজ, লোকেশন, পজ, pause, কাজের তালিকা, অ্যাপে কাজ, কাস্টমারের চ্যাট]
+keywords: [আমার কাজ, ফিল্ড, টেকনিশিয়ান, field, কাজ শেষ, টিকিট কাজ, লোকেশন, পজ, pause, কাজের তালিকা, অ্যাপে কাজ, কাস্টমারের চ্যাট, my jobs, technician, job done, ticket job, location, job list, app job, customer chat]
 related:
   - id: support.tickets
     when: টিকিট অ্যাসাইন বা Solve নিয়ে প্রশ্ন

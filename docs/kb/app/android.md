@@ -5,7 +5,7 @@ module: app
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [অ্যাপ, Android, APK, ডাউনলোড, আপডেট, ইনস্টল হচ্ছে না, লগইন, নোটিফিকেশন, FCM, প্রিন্টার, ব্লুটুথ, রসিদ প্রিন্ট, অ্যাপে কল]
+keywords: [অ্যাপ, Android, APK, ডাউনলোড, আপডেট, ইনস্টল হচ্ছে না, লগইন, নোটিফিকেশন, FCM, প্রিন্টার, ব্লুটুথ, রসিদ প্রিন্ট, অ্যাপে কল, app, install, update, login, notification, printer, Bluetooth, receipt print, call in app, download]
 related:
   - id: billing.collect
     when: অ্যাপে বিল নেওয়া বা রসিদ প্রিন্ট করতে

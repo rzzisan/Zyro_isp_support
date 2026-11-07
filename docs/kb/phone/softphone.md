@@ -6,7 +6,7 @@ menu: phone
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [সফটফোন, softphone, কল ধরা, কল দেওয়া, WhatsApp কল, কল বাজছে, কল ধরতে পারছি না, অ্যাপে কল, ব্রাউজারে কল, ডিউটি, কল আইকন, ফোনে কল, কাস্টমারকে কল]
+keywords: [সফটফোন, softphone, কল ধরা, কল দেওয়া, WhatsApp কল, কল বাজছে, কল ধরতে পারছি না, অ্যাপে কল, ব্রাউজারে কল, ডিউটি, কল আইকন, ফোনে কল, কাস্টমারকে কল, call answer, call make, WhatsApp call, call ringing, app call, browser call, duty, call icon, phone call, call customer]
 related:
   - id: phone.call_logs
     when: কলটা কে ধরেছে বা রেকর্ড কোথায়

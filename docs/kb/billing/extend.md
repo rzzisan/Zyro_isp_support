@@ -6,7 +6,7 @@ menu: bill_extend
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [সময় বাড়ান, সময় বাড়ানো, extend, তারিখ বাড়ানো, বকেয়া থাকা সত্ত্বেও লাইন চালু, সময় দেওয়া, extension, মাসে কতবার, একসাথে সময়, বন্ধের তালিকা থেকে সময়]
+keywords: [সময় বাড়ান, সময় বাড়ানো, extend, তারিখ বাড়ানো, বকেয়া থাকা সত্ত্বেও লাইন চালু, সময় দেওয়া, extension, মাসে কতবার, একসাথে সময়, বন্ধের তালিকা থেকে সময়, extend time, date extension, line on despite due, monthly limit, bulk extend]
 related:
   - id: line.enable_disable
     when: সময় বাড়ানোর পরও লাইন বন্ধ থাকলে

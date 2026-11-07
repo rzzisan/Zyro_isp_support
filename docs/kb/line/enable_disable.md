@@ -6,7 +6,7 @@ menu: line_switch
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [লাইন চালু, লাইন বন্ধ, চালু করুন, বন্ধ করুন, ইন্টারনেট নেই, সংযোগ নেই, enable, disable, block, ব্লক, BLOCKED, প্রোফাইল, সেশন, রেকর্ড, বিল দিয়েছি কিন্তু লাইন চালু হয়নি, অটো বন্ধ]
+keywords: [লাইন চালু, লাইন বন্ধ, চালু করুন, বন্ধ করুন, ইন্টারনেট নেই, সংযোগ নেই, enable, disable, block, ব্লক, BLOCKED, প্রোফাইল, সেশন, রেকর্ড, বিল দিয়েছি কিন্তু লাইন চালু হয়নি, অটো বন্ধ, line on, line off, no internet, profile, session, record, auto off]
 related:
   - id: billing.collect
     when: বিল নেওয়ার পর লাইন চালু না হলে প্রথমে বিলটা approve হয়েছে কি না দেখতে

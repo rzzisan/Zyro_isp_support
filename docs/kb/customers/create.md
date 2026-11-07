@@ -6,7 +6,7 @@ menu: customer_create
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [নতুন কাস্টমার, নতুন সংযোগ, নতুন গ্রাহক, কাস্টমার যোগ, ID, username, PPPoE, স্বাগতম SMS, ONU, সংযোগ ফি, প্যাকেজ, কাস্টমার তৈরি হয়নি, নতুন কানেকশন]
+keywords: [নতুন কাস্টমার, নতুন সংযোগ, নতুন গ্রাহক, কাস্টমার যোগ, ID, username, PPPoE, স্বাগতম SMS, ONU, সংযোগ ফি, প্যাকেজ, কাস্টমার তৈরি হয়নি, নতুন কানেকশন, new customer, new connection, add customer, create customer, connection fee, welcome SMS, package]
 related:
   - id: customers.change
     when: নতুন কাস্টমার তৈরির পর প্যাকেজ বা পাসওয়ার্ড বদলাতে হলে

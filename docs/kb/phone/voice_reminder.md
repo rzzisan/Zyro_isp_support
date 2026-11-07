@@ -6,7 +6,7 @@ menu: voice_reminder
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [ভয়েস রিমাইন্ডার, voice reminder, রিমাইন্ডার কল, বিল রিমাইন্ডার কল, কল দিয়ে মনে করানো, কলব্যাক, না ধরা, বিকল্প নম্বর, SMS সাশ্রয়, ভয়েস টেমপ্লেট, রিপোর্ট, বাটন]
+keywords: [ভয়েস রিমাইন্ডার, voice reminder, রিমাইন্ডার কল, বিল রিমাইন্ডার কল, কল দিয়ে মনে করানো, কলব্যাক, না ধরা, বিকল্প নম্বর, SMS সাশ্রয়, ভয়েস টেমপ্লেট, রিপোর্ট, বাটন, reminder call, bill reminder call, callback, unanswered, alternate number, SMS saving, voice template, report, button]
 related:
   - id: sms_whatsapp.sms
     when: রিমাইন্ডার SMS কেন যায়নি বা কেন দুবার

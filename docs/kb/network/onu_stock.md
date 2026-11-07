@@ -6,7 +6,7 @@ menu: onu_stock
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [ONU স্টক, স্টক, বরাদ্দ, ONU বরাদ্দ, স্টিকার, brand, ব্র্যান্ড, নতুন সংযোগ স্টক, মালের হিসাব, অন্যান্য মাল, connection payment, জমা, ONU শেষ, স্টক কম]
+keywords: [ONU স্টক, স্টক, বরাদ্দ, ONU বরাদ্দ, স্টিকার, brand, ব্র্যান্ড, নতুন সংযোগ স্টক, মালের হিসাব, অন্যান্য মাল, connection payment, জমা, ONU শেষ, স্টক কম, ONU stock, stock, allocation, sticker, inventory, low stock]
 related:
   - id: customers.create
     when: নতুন সংযোগের ONU বরাদ্দ করতে হলে

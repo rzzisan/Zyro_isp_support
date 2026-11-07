@@ -6,7 +6,7 @@ menu: billing
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [বিলিং সংযোগ, বিলিং সফটওয়্যার, ISP Digital, SoftifyBD, লগইন, বিলিং পাসওয়ার্ড, সংযোগ পরীক্ষা, সংযোগ হয়নি, সুইচ, লাইভ স্ট্যাটাস, MAC, ONU পাওয়ার, টিকিট বিলিং-এ, sync, সাপোর্ট তালিকা, বিলিং নিয়ম]
+keywords: [বিলিং সংযোগ, বিলিং সফটওয়্যার, ISP Digital, SoftifyBD, লগইন, বিলিং পাসওয়ার্ড, সংযোগ পরীক্ষা, সংযোগ হয়নি, সুইচ, লাইভ স্ট্যাটাস, MAC, ONU পাওয়ার, টিকিট বিলিং-এ, sync, সাপোর্ট তালিকা, বিলিং নিয়ম, billing connection, billing software, login, billing password, connection test, live status, ONU power, support list, billing rules, switch]
 related:
   - id: billing.collect
     when: বিলিং লগইন ভুল হলে বিল নেওয়া বা approve আটকায়

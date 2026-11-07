@@ -6,7 +6,7 @@ menu: office_phones
 status: beta
 plans: [all]
 audience: [owner, admin]
-keywords: [অফিস ফোন, IP ফোন, SIP ফোন, deskphone, টেবিল ফোন, এক্সটেনশন, ফোন রেজিস্টার, ফোন অনলাইন, অফিসের ফোনে কল, অফিস থেকে কল, পাইলট]
+keywords: [অফিস ফোন, IP ফোন, SIP ফোন, deskphone, টেবিল ফোন, এক্সটেনশন, ফোন রেজিস্টার, ফোন অনলাইন, অফিসের ফোনে কল, অফিস থেকে কল, পাইলট, office phone, IP phone, SIP phone, desk phone, extension, phone register, phone online, pilot]
 related:
   - id: phone.softphone
     when: ব্রাউজার বা অ্যাপে কল ধরা হলে

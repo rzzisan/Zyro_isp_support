@@ -6,7 +6,7 @@ menu: whatsapp
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [WhatsApp সেটিং, নম্বর, WhatsApp নম্বর, Meta, ওয়েবহুক, webhook, অ্যাকাউন্ট, টোকেন, display name, নাম জমা, কল সেটিং, calling, বার্তা সীমা, মেসেজ লিমিট, সংযোগ বিচ্ছিন্ন]
+keywords: [WhatsApp সেটিং, নম্বর, WhatsApp নম্বর, Meta, ওয়েবহুক, webhook, অ্যাকাউন্ট, টোকেন, display name, নাম জমা, কল সেটিং, calling, বার্তা সীমা, মেসেজ লিমিট, সংযোগ বিচ্ছিন্ন, WhatsApp settings, number, WhatsApp number, account, token, call settings, message limit, disconnected]
 related:
   - id: sms_whatsapp.wa_campaign
     when: টেমপ্লেট পাঠানো বন্ধ বা টেমপ্লেট তালিকা খালি থাকলে

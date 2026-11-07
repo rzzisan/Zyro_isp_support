@@ -6,7 +6,7 @@ menu: bot
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [বট, বট সেটিংস, বট মোড, চুপ মোড, চালু মোড, allowlist, FAQ, প্রশ্ন উত্তর, স্বাক্ষর, সিগনেচার, অতিরিক্ত নির্দেশনা, মূল নির্দেশনা, প্রম্পট, টেকনিশিয়ান বট, ভয়েস উত্তর, আর কী নির্দেশনা পায়, self reconnect, লাইন চালু বট]
+keywords: [বট, বট সেটিংস, বট মোড, চুপ মোড, চালু মোড, allowlist, FAQ, প্রশ্ন উত্তর, স্বাক্ষর, সিগনেচার, অতিরিক্ত নির্দেশনা, মূল নির্দেশনা, প্রম্পট, টেকনিশিয়ান বট, ভয়েস উত্তর, আর কী নির্দেশনা পায়, self reconnect, লাইন চালু বট, bot, chatbot, bot settings, bot mode, silent mode, signature, system prompt, technician bot, voice answer]
 related:
   - id: bot_ai.ai_keys
     when: বট উত্তর দিচ্ছে না বা AI সীমায় আটকেছে, key বা প্রোভাইডার নিয়ে প্রশ্ন

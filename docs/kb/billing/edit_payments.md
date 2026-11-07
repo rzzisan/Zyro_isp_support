@@ -6,7 +6,7 @@ menu: bill_edit
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [বিল সংশোধন, বিল বাতিল, ভুল বিল, ক্যাশ বাতিল, পেমেন্ট মোছা, ভুল কাস্টমারে টাকা, ট্রান্সফার, অনলাইন পেমেন্ট ট্রান্সফার, খাতা, উল্টো সারি, adjustment, reverse, payment_delete, payment_transfer, bill_edit]
+keywords: [বিল সংশোধন, বিল বাতিল, ভুল বিল, ক্যাশ বাতিল, পেমেন্ট মোছা, ভুল কাস্টমারে টাকা, ট্রান্সফার, অনলাইন পেমেন্ট ট্রান্সফার, খাতা, উল্টো সারি, adjustment, reverse, payment_delete, payment_transfer, bill_edit, bill edit, bill cancel, wrong bill, cash cancel, payment delete, transfer, ledger]
 related:
   - id: billing.collect
     when: বিল নেওয়ার সময় ভুল হয়েছে এবং নতুন বিল নিতে হবে কি না

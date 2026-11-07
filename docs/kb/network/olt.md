@@ -6,7 +6,7 @@ menu: olt
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [OLT, SNMP, ONU, BDCOM, EPON, সিগন্যাল, dBm, পাওয়ার, MAC, ONU খুঁজে পাচ্ছি না, OLT অফলাইন, সিঙ্ক, ডিস্ট্যান্স, রেজিস্টার্ড]
+keywords: [OLT, SNMP, ONU, BDCOM, EPON, সিগন্যাল, dBm, পাওয়ার, MAC, ONU খুঁজে পাচ্ছি না, OLT অফলাইন, সিঙ্ক, ডিস্ট্যান্স, রেজিস্টার্ড, signal, power, sync, distance, registered, offline OLT]
 related:
   - id: network.onus
     when: ONU তালিকা, MAC খোঁজা, বা ONU অফলাইন দেখালে

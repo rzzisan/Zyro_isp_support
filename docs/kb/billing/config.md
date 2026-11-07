@@ -6,7 +6,7 @@ menu: billing_config
 status: live
 plans: [all]
 audience: [owner, admin]
-keywords: [বিলিং কনফিগারেশন, তালিকা, জোন, সাব জোন, বক্স, প্যাকেজ, জেলা, উপজেলা, সংযোগের ধরন, কাস্টমার স্ট্যাটাস, সাপোর্ট তালিকা, সমস্যার ধরন, ডিপার্টমেন্ট, ক্যাটাগরি, priority, কর্মী তালিকা, Sync]
+keywords: [বিলিং কনফিগারেশন, তালিকা, জোন, সাব জোন, বক্স, প্যাকেজ, জেলা, উপজেলা, সংযোগের ধরন, কাস্টমার স্ট্যাটাস, সাপোর্ট তালিকা, সমস্যার ধরন, ডিপার্টমেন্ট, ক্যাটাগরি, priority, কর্মী তালিকা, Sync, billing config, list, zone, sub zone, box, package, district, upazila, connection type, customer status, support list, issue type, department, category, staff list]
 related:
   - id: support.tickets
     when: টিকিটের সমস্যার ধরন, কর্মী বা ডিপার্টমেন্টের তালিকা বদলাতে হলে

@@ -6,7 +6,7 @@ menu: sms
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [SMS, এসএমএস, মেসেজ, টেমপ্লেট, গেটওয়ে, Khudebarta, খুদেবার্তা, Bulk SMS Dhaka, ব্যালেন্স, SMS যায়নি, SMS লগ, বিল রিমাইন্ডার, পরিশোধ SMS, টিকিট SMS, বাংলা SMS, ব্যাকআপ গেটওয়ে, খরচ]
+keywords: [SMS, এসএমএস, মেসেজ, টেমপ্লেট, গেটওয়ে, Khudebarta, খুদেবার্তা, Bulk SMS Dhaka, ব্যালেন্স, SMS যায়নি, SMS লগ, বিল রিমাইন্ডার, পরিশোধ SMS, টিকিট SMS, বাংলা SMS, ব্যাকআপ গেটওয়ে, খরচ, gateway, template, balance, SMS not sent, SMS log, bill reminder, payment SMS, ticket SMS, Bangla SMS, backup gateway, cost]
 related:
   - id: billing.collect
     when: বিল পরিশোধের SMS কখন যায়

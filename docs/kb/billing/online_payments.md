@@ -6,7 +6,7 @@ menu: bills
 status: live
 plans: [all]
 audience: [owner, admin, agent]
-keywords: [অনলাইন পেমেন্ট, bKash, বিকাশ, Nagad, নগদ, webhook, PayBill, পেমেন্ট রিকোয়েস্ট, TrxID, ট্রানজেকশন, টাকা এসেছে কিন্তু বকেয়া, settled, সেটেল, অচেনা পেমেন্ট, বিলিং-এ জমা দিন]
+keywords: [অনলাইন পেমেন্ট, bKash, বিকাশ, Nagad, নগদ, webhook, PayBill, পেমেন্ট রিকোয়েস্ট, TrxID, ট্রানজেকশন, টাকা এসেছে কিন্তু বকেয়া, settled, সেটেল, অচেনা পেমেন্ট, বিলিং-এ জমা দিন, online payment, payment request, transaction, unknown payment, deposit]
 related:
   - id: billing.edit_payments
     when: অনলাইন টাকা ভুল কাস্টমারের ID-তে এসেছে
