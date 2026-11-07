@@ -36,7 +36,7 @@
 | phone.voice_bot | হটলাইন ভয়েস বট | | live | [voice_bot](phone/voice_bot.md) |
 | phone.walkie_chat | ওয়াকি-টকি ও টিম চ্যাট | | live | [walkie_chat](phone/walkie_chat.md) |
 | bot_ai.bot | WhatsApp বট সেটিংস ও FAQ | bot | live | [bot](bot_ai/bot.md) |
-| bot_ai.ai_keys | AI key, কোন কাজে কোন key, AI খরচ | ai_keys | missing | |
-| settings.team | টিম, রোল, পারমিশন গ্রুপ | team | missing | |
-| settings.account | পাসওয়ার্ড, কুইক অ্যাক্সেস, ভাষা, কাজের লগ | | missing | |
-| app.android | Desk Android অ্যাপ | | missing | |
+| bot_ai.ai_keys | AI key, কোন কাজে কোন key, AI খরচ | ai_keys | live | [ai_keys](bot_ai/ai_keys.md) |
+| settings.team | টিম, রোল, পারমিশন গ্রুপ | team | live | [team](settings/team.md) |
+| settings.account | পাসওয়ার্ড, কুইক অ্যাক্সেস, ভাষা, কাজের লগ | | live | [account](settings/account.md) |
+| app.android | Desk Android অ্যাপ | | live | [android](app/android.md) |
