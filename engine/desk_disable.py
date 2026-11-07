@@ -229,6 +229,8 @@ def make_list(company_id: int, day: dt.date | None = None, replace: bool = False
     if s["billing_mode"] == "desk":
         raise RuntimeError("Desk is the billing master: lines are turned off by the real job, not the shadow")
     day = day or bd_now().date()
+    if not made(company_id, day) or replace:
+        end_extensions(company_id, day)
     if made(company_id, day) and not replace:
         return {"made": False, **compare(company_id, day)}
     run = db.one("""INSERT INTO desk_billing_runs (company_id, kind, status, user_id, started_at)
@@ -354,11 +356,48 @@ def compare(company_id: int, day: dt.date) -> dict:
     return st
 
 
+# --- সময় বাড়ানো (phase 4a, plan 2.2 #11) ---------------------------------------------------------------------------------
+END_EXTENSIONS = [
+    # the date passed: the line was kept on through `until`, from the next day the normal rules apply again
+    ("ended", """UPDATE desk_extensions SET status = 'ended', ended_at = now(), end_note = 'তারিখ পার'
+        WHERE company_id = %(c)s AND status = 'active' AND until < %(today)s"""),
+    # nothing due any more, as a copy made after the extension shows it (the full bill came)
+    ("paid", """UPDATE desk_extensions e SET status = 'paid', ended_at = now(), end_note = 'পুরো বিল দিয়েছেন'
+        FROM desk_customer_balances b
+        WHERE e.company_id = %(c)s AND e.status = 'active' AND b.customer_ref = e.customer_ref
+          AND b.updated_at > e.created_at
+          AND (CASE WHEN b.has_history THEN b.balance ELSE coalesce(b.billing_due, b.balance) END) <= 0"""),
+    # desk_customers.extended_until = the active extension's date (or none), what the list reads
+    ("sync", """UPDATE desk_customers c SET extended_until = a.until, updated_at = now()
+        FROM (SELECT c2.id, (SELECT e.until FROM desk_extensions e WHERE e.company_id = c2.company_id
+                             AND e.customer_ref = c2.id AND e.status = 'active' ORDER BY e.id DESC LIMIT 1) AS until
+              FROM desk_customers c2 WHERE c2.company_id = %(c)s
+                AND (c2.extended_until IS NOT NULL OR EXISTS (SELECT 1 FROM desk_extensions e WHERE e.company_id = c2.company_id
+                     AND e.customer_ref = c2.id AND e.status = 'active'))) a
+        WHERE c.id = a.id AND c.extended_until IS DISTINCT FROM a.until"""),
+]
+
+
+def end_extensions(company_id: int, today: dt.date | None = None) -> dict:
+    """End the extensions whose date passed or whose customer paid up, and keep desk_customers.extended_until in step."""
+    today = today or bd_now().date()
+    out = {}
+    with db.conn() as c:
+        with c.transaction():
+            for name, sql in END_EXTENSIONS:
+                out[name] = c.execute(sql, {"c": company_id, "today": today}).rowcount
+    if out.get("ended") or out.get("paid"):
+        activity.record(company_id, "billing.extend_end", actor="system", source="timer",
+                        note=f"সময় বাড়ানো শেষ: তারিখ পার {out['ended']} জন, পুরো বিল দিয়েছেন {out['paid']} জন")
+    return out
+
+
 def hourly(company_id: int, now: dt.datetime | None = None) -> dict:
-    """The hourly timer: at (or after) the company's disable hour make today's list once; then compare the last days."""
+    """The hourly timer: end passed extensions; at (or after) the company's disable hour make today's list once; then
+    compare the last days."""
     now = now or bd_now()
     s = settings(company_id)
-    out = {}
+    out = {"extensions": end_extensions(company_id, now.date())}
     if s["billing_mode"] == "desk":
         return out
     today = now.date()

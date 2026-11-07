@@ -70,6 +70,9 @@ interface ApiService {
     @POST("c/{company}/customers/{headerId}/line")
     suspend fun switchLine(@Path("company") company: String, @Path("headerId") headerId: Long, @Body request: LineRequest): LineResult
 
+    @POST("c/{company}/customers/{headerId}/extend")
+    suspend fun extendTime(@Path("company") company: String, @Path("headerId") headerId: Long, @Body request: ExtendRequest): ExtendResult
+
     @GET("c/{company}/monitoring")
     suspend fun monitoring(
         @Path("company") company: String,

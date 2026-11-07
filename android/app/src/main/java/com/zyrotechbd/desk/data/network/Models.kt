@@ -132,7 +132,16 @@ data class Ticket(
     @Json(name = "solved_by") val solvedBy: String? = null,
 )
 
-data class Permissions(val bill: Boolean = false, val line: Boolean = false)
+data class Permissions(val bill: Boolean = false, val line: Boolean = false, val extend: Boolean = false)
+
+/** সময় বাড়ানো: the line stays on until [until] although a bill is due (billing phase 4a). */
+data class Extension(val until: String, val reason: String? = null, val by: String? = null,
+                     @Json(name = "given_on") val givenOn: String? = null)
+
+data class ExtendRequest(val until: String, val reason: String, @Json(name = "enable_line") val enableLine: Boolean = false)
+
+data class ExtendResult(val extension: Extension? = null, val message: String? = null,
+                        @Json(name = "line_action") val lineAction: String? = null)
 
 /** One card of billing's customer details (service, network or personal tab). */
 data class ProfileSection(val tab: String, val title: String, val rows: List<ProfileRow> = emptyList())
@@ -150,6 +159,7 @@ data class CustomerDetail(
     @Json(name = "details_fetched_at") val detailsFetchedAt: String? = null,
     val history: List<Ticket> = emptyList(),
     @Json(name = "line_logs") val lineLogs: List<LineLog> = emptyList(),
+    val extension: Extension? = null,
 )
 
 data class LineRequest(val on: Boolean)

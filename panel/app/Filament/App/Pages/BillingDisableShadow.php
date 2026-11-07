@@ -4,6 +4,11 @@ namespace App\Filament\App\Pages;
 
 use App\Models\BillingCustomer;
 use App\Models\DeskDisableShadow;
+use App\Support\Extensions;
+use Filament\Actions\BulkAction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
+use Illuminate\Database\Eloquent\Collection;
 use App\Services\Engine;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -92,6 +97,8 @@ class BillingDisableShadow extends Page implements HasTable
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('extensions')->label(__('সময় বাড়ানো'))->icon(Heroicon::OutlinedCalendarDays)->color('gray')
+                ->url(fn () => BillingExtensions::getUrl()),
             Action::make('make')->label(__('আজকের তালিকা বানান'))->icon(Heroicon::OutlinedArrowPath)->color('gray')
                 ->schema([Toggle::make('replace')->label(__('আগে বানানো থাকলে মুছে আবার বানান (এখনকার হিসাব দিয়ে)'))])
                 ->modalDescription(__('Desk-এর খাতা আর নিয়ম দিয়ে আজ কার লাইন বন্ধ হত, তার তালিকা হবে আর বিলিং-এর বন্ধের সাথে মেলানো হবে। কারো লাইন বন্ধ হয় না।'))
@@ -155,6 +162,35 @@ class BillingDisableShadow extends Page implements HasTable
                         'mismatch' => $query->whereIn('result', ['desk_only', 'billing_only']),
                         default => $query->where('result', $data['value']),
                     }),
+            ])
+            // plan 2.2 #11: the overdue lines staff keep on on purpose (partial payment, pay later) get a date with a
+            // reason, so the Desk keeps them on too instead of turning them all off at the cutover
+            ->toolbarActions([
+                BulkAction::make('extend')->label(__('সময় দিন'))->icon(Heroicon::OutlinedCalendarDays)->color('warning')
+                    ->schema([
+                        DatePicker::make('until')->label(__('কোন তারিখ পর্যন্ত লাইন চালু থাকবে'))->required()->native(false)
+                            ->displayFormat('d M Y')->minDate(Extensions::today()->addDay()),
+                        Textarea::make('reason')->label(__('কারণ'))->required()->rows(2)->maxLength(1000)
+                            ->placeholder(__('যেমন: আংশিক দিয়েছেন, মাসের শেষে দেবেন')),
+                    ])
+                    ->modalDescription(__('বাছাই করা কাস্টমারদের এই তারিখ পর্যন্ত সময় দেওয়া হবে (আগের বাড়ানো তারিখ থাকলে বদলে যাবে)। কারো লাইন চালু/বন্ধ হয় না, বিলিং-এ কিছু লেখা হয় না।'))
+                    ->action(function (Collection $records, array $data) {
+                        $company = Filament::getTenant();
+                        $until = Carbon::parse($data['until'], 'Asia/Dhaka')->startOfDay();
+                        $ok = 0;
+                        $fail = [];
+                        foreach ($records->loadMissing('customer')->pluck('customer')->filter()->unique('id') as $c) {
+                            try {
+                                Extensions::give($company, $c, $until, (string) $data['reason'], auth()->user(), 'bulk');
+                                $ok++;
+                            } catch (Throwable $e) {
+                                $fail[] = $c->customer_code.': '.$e->getMessage();
+                            }
+                        }
+                        Notification::make()->{$fail ? 'warning' : 'success'}()
+                            ->title(__(':n জনকে :d পর্যন্ত সময় দেওয়া হলো', ['n' => $ok, 'd' => $until->format('d M Y')]))
+                            ->body($fail ? implode("\n", array_slice($fail, 0, 10)) : null)->send();
+                    })->deselectRecordsAfterCompletion(),
             ]);
     }
 }

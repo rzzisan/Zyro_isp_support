@@ -12,10 +12,12 @@ use App\Models\Company;
 use App\Models\PppSession;
 use App\Services\Engine;
 use App\Support\CustomerProfile;
+use App\Support\Extensions;
 use App\Support\MacVendor;
 use App\Support\Menu;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
@@ -185,8 +187,43 @@ class CustomerController extends Controller
             'line_logs' => BillingCustomerLineLog::where('company_id', $company->id)->where('customer_header_id', $headerId)
                 ->orderByDesc('changed_at')->orderByDesc('id')->limit(15)->get()
                 ->map(fn ($l) => ['at' => $l->changed_at?->toIso8601String(), 'action' => $l->action, 'remarks' => $l->remarks, 'by' => $l->changed_by]),
+            'extension' => $this->extension($company, $c),
             'can' => ['bill' => Menu::allows($request->user(), $company, 'bills') && \App\Models\Membership::mayUseBilling($request->user(), $company),
-                'line' => $this->canSwitch($request, $company, $c)]]);
+                'line' => $this->canSwitch($request, $company, $c),
+                'extend' => ! $c->gone_at && ! $c->is_left && Extensions::canExtend($request->user(), $company)]]);
+    }
+
+    /** The customer's active সময় বাড়ানো, if any (billing phase 4a). */
+    private function extension(Company $company, BillingCustomer $c): ?array
+    {
+        $d = Extensions::deskCustomer($c);
+        $e = $d ? Extensions::active($company->id, $d->id) : null;
+
+        return $e ? ['until' => $e->until->format('Y-m-d'), 'reason' => $e->reason, 'by' => $e->user?->name,
+            'given_on' => $e->given_on->format('Y-m-d')] : null;
+    }
+
+    /** সময় বাড়ান (billing phase 4a, plan 2.2 #11): body until=Y-m-d, reason, enable_line (the line is off: turn it on). */
+    public function extend(Request $request, Company $company, int $headerId): JsonResponse
+    {
+        abort_unless(Extensions::canExtend($request->user(), $company), 403);
+        $data = $request->validate(['until' => ['required', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000'],
+            'enable_line' => ['sometimes', 'boolean']]);
+        $c = BillingCustomer::where('company_id', $company->id)->where('header_id', $headerId)->firstOrFail();
+        $d = Extensions::deskCustomer($c);
+        if (! $d) {
+            return response()->json(['message' => __('এই কাস্টমার এখনো Desk-এর খাতায় আসেনি')], 422);
+        }
+        try {
+            $e = Extensions::give($company, $d, Carbon::parse($data['until'], 'Asia/Dhaka')->startOfDay(), $data['reason'],
+                $request->user(), 'manual', 'app', (bool) ($data['enable_line'] ?? false));
+        } catch (RuntimeException $ex) {
+            return response()->json(['message' => $ex->getMessage()], 422);
+        }
+
+        return response()->json(['extension' => $this->extension($company, $c), 'line_action' => $e->line_action,
+            'message' => __(':d পর্যন্ত সময় দেওয়া হলো', ['d' => $e->until->format('d M Y')])
+                .($e->line_action ? '। '.__(\App\Models\DeskExtension::LINE[$e->line_action] ?? $e->line_action) : '')]);
     }
 
     /** Copy billing's details and history for this customer now (the panel's customer page does this on open); runs in the background. */

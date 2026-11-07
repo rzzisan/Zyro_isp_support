@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\Customers\Pages;
 
 use App\Filament\App\BillActions;
+use App\Filament\App\ExtendActions;
 use App\Filament\App\Resources\Conversations\ConversationResource;
 use App\Filament\App\Resources\Customers\CustomerResource;
 use App\Filament\App\Resources\Customers\Widgets\CustomerHistoryStatus;
@@ -69,6 +70,7 @@ class ViewCustomer extends ViewRecord
                     'dial' => $c->mobile, 'name' => "{$c->name} (ID {$c->customer_id})"]))
                 ->openUrlInNewTab(),
             BillActions::receive($c),
+            ExtendActions::extend($c),
             TicketActions::newTicket($c->customer_id)->label(__('টিকিট খুলুন'))->color('gray'),
             SmsActions::send($c)->label('SMS')->color('gray'),
             WaCampaignActions::send($c)->label('WhatsApp')->color('gray'),

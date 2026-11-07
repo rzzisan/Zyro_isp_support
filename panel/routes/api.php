@@ -39,6 +39,7 @@ Route::prefix('v1')->group(function () {
             Route::post('customers/{headerId}/refresh', [CustomerController::class, 'refresh'])->whereNumber('headerId')->middleware('throttle:30,1');
             Route::get('customers/{headerId}/refresh', [CustomerController::class, 'historyStatus'])->whereNumber('headerId');
             Route::post('customers/{headerId}/line', [CustomerController::class, 'line'])->whereNumber('headerId')->middleware('throttle:20,1');
+            Route::post('customers/{headerId}/extend', [CustomerController::class, 'extend'])->whereNumber('headerId')->middleware('throttle:30,1');
             Route::get('customers/{headerId}/bill-form', [BillController::class, 'form'])->whereNumber('headerId');
             Route::post('customers/{headerId}/bills', [BillController::class, 'store'])->whereNumber('headerId')->middleware('throttle:30,1');
             Route::get('daily-bills', [BillController::class, 'dailyBills']);

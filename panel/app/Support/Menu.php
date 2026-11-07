@@ -34,6 +34,7 @@ class Menu
         'bill_edit' => ['বিল সংশোধন', false, false],
         'payment_delete' => ['ক্যাশ পেমেন্ট মোছা', false, false],
         'payment_transfer' => ['অনলাইন পেমেন্ট ট্রান্সফার', false, false],
+        'bill_extend' => ['বিলের সময় বাড়ানো (কারণ লিখে)', false, false],
         'sms' => ['SMS (পাঠানো, লগ, টেমপ্লেট)', false, false],
         'wa_campaign' => ['WhatsApp টেমপ্লেট পাঠানো ও লগ', false, false],
         'voice_reminder' => ['ভয়েস রিমাইন্ডার (টেমপ্লেট, কল ফ্লো, সেটিংস)', false, true],
@@ -68,7 +69,7 @@ class Menu
     public const EXPLICIT = ['field_jobs'];
 
     /** Never part of a role's defaults: the owner ticks them per member or group. */
-    public const NOT_DEFAULT = ['bill_approve', 'bill_edit', 'payment_delete', 'payment_transfer'];
+    public const NOT_DEFAULT = ['bill_approve', 'bill_edit', 'payment_delete', 'payment_transfer', 'bill_extend'];
 
     public static function defaults(string $role): array
     {
