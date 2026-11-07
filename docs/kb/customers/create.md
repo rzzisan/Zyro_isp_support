@@ -52,7 +52,7 @@ updated: 2026-11-07
 | জমা হচ্ছে না | `connection_control` | `off` বা `test` তালিকায় নেই | সুইচ যাচাই করুন |
 | "unsure" | বিলিংয়ে কাস্টমার আছে কি না | উত্তর হারানো | বিলিং দেখে ঠিক করুন |
 | সংযোগ যাচাই ব্যর্থ | রাউটারের অবস্থা | secret বা রাউটার সমস্যা | [network.mikrotik](../network/mikrotik.md) দেখুন |
-| ONU বরাদ্দ নেই | ONU স্টক | স্টক শেষ | [network.onu_stock](../onu/stock.md) দেখুন |
+| ONU বরাদ্দ নেই | ONU স্টক | স্টক শেষ | [network.onu_stock](../network/onu_stock.md) দেখুন |
 
 ## সীমা ও যা নেই
 - পুরনো কাস্টমার নতুন করে তৈরি হয় না।
